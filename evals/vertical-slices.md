@@ -22,13 +22,17 @@ Prefer embedding it into the first thin vertical outcome where practical.
 Family case (manual): start from an issue that has five open sub-issues, one of them
 labelled `needs-decision`, and a closed one. Expected: all five open sub-issues are read
 from GitHub in stage 2 and enter the same grilling (the pending one gets its own solution
-round, the four decided ones are confirmed together in one question); the plan holds the
+round, the four decided ones are confirmed together in one question, unless the code shows a
+child's approach is still open, which then gets its own round with the reason); the plan holds the
 parent and the five children with `parent` set, the closed one stays out; every issue body
 carries `## Camadas da fatia` with each layer handled, delegated to a named sub-issue, or
-not touched with a reason; stage 6 offers stacked branches (recommended) and recommends a
-concurrency equal to the number of children with disjoint `ownership`.
+not touched with a reason; stage 6 opens under the standing authorization with no concurrency,
+stacking or authorization question, and its announcement stacks each child that depends on the
+parent on the parent's branch and sets a concurrency equal to the number of children with
+disjoint `ownership`.
 
-Reject: planning only the parent; "children after the parent's merge" as the default;
+Reject: planning only the parent; "children after the parent's merge" as the default; a
+concurrency or stacking question when stage 6 opens;
 a sub-issue that is only "the API part"; a layer missing from the table; the pending
 sub-issue left out of the grilling; claiming `validate-plan` checked the layers.
 

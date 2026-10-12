@@ -215,6 +215,16 @@ leaves open (a `browserTest` with only accounts, say): tell the user in one line
 build files and CI for actual verification commands. Never echo credentials or
 full settings.
 
+`inspect` goes to the network: with a `repository` it reads every issue through `gh api`,
+with a `project` it reads the board through `gh project view`, and with `roads` it calls
+the RoadS endpoint. These are reads, never writes, but they are network calls made by
+the helper, not by you, so the command line alone does not show them. When the session
+must stay off the network or off GitHub (an offline rehearsal, a fixture, a sandbox
+without `gh` auth), run it on a copy of the config with `repository`, `project` and `roads`
+set to `null`, kept outside the project, and say so in one line; read the issues from
+the source the session was given instead. An `unavailable` source in its output is a
+failed read, never a sign that nothing was attempted.
+
 When `.frontlights/config.json` is absent, create it before any issue work: take
 `repository` from the Git remote (or `null` without one) and resolve `project`
 as `references/issues.md` describes, then run `inspect` with it. Report the

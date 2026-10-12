@@ -1,14 +1,14 @@
-# <One observable outcome>
+# <Um resultado observável>
 
-PRD: <approved revision/link>
+PRD: <revisão aprovada ou link>
 
-## Outcome
+## Resultado
 
-## Boundaries and non-goals
+## Limites e fora de escopo
 
-## Acceptance criteria
+## Critérios de aceitação
 
-- [ ] <observable result>
+- [ ] <resultado observável>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.
@@ -16,21 +16,21 @@ Evidência que fecha: <teste, medição ou diff revisado>`), nunca numa seção 
 esta seção conta para fechar a issue, e a issue só fecha com a pendência tratada,
 concluída e marcada com evidência.
 
-## Approach and conventions
+## Abordagem e convenções
 
-Chosen approach (rejected alternatives in the PRD or discovery log) and the
-project conventions to follow, with example paths. Any approved break of the
-pattern is named here with its reason.
+Abordagem escolhida (as alternativas rejeitadas ficam no PRD ou no registro de descoberta)
+e as convenções do projeto a seguir, com caminhos de exemplo. Toda quebra de padrão
+aprovada é nomeada aqui com o motivo.
 
-## Seams under test
+## Seams sob teste
 
-- <public interface> — <acceptance behavior observed there>
+- <interface pública> — <comportamento de aceitação observado ali>
 
-Only these seams receive tests. A missing or wrong seam goes back to the user.
+Só estes seams recebem testes. Seam ausente ou errado volta ao usuário.
 
-## Test expectations
+## Expectativas de teste
 
-Focused regression, broader integration and actual type-check commands.
+Regressão focada, integração mais ampla e os comandos reais de checagem de tipos.
 
 ## Camadas da fatia
 
@@ -81,12 +81,13 @@ nunca deste texto: aqui não entram login, senha nem URL.
 com `não` vira pergunta. O teste assistido é um por lote de trabalho, antes da revisão, não um por
 issue nem por branch.
 
-## Dependencies
+## Dependências
 
 Depends on: none
 Parent: none
 
-Replace `none` with canonical #issue links after approved publication.
+Troque `none` pelos links canônicos #issue depois da publicação aprovada. `Depends on:` e
+`Parent:` são marcadores lidos pelos scripts e ficam como estão.
 
 `Parent` é a issue de origem de uma sub-issue (parte da mesma fatia, achado de revisão
 ou de conferência); `none` numa issue de topo. Toda issue de topo entra no quadro;
@@ -94,19 +95,19 @@ sub-issue entra só pelo pai, que mostra o progresso das filhas. `Parent` é
 pertencimento, não dependência: uma filha que precisa do código do pai também o lista
 em `Depends on`, e na etapa 6 ela pode ser empilhada na branch dele, sem esperar o merge.
 
-## Ownership and contention
+## Propriedade e contenção
 
-Files/components, generated files, migrations, ports, shared test services.
+Arquivos e componentes, arquivos gerados, migrations, portas, serviços de teste compartilhados.
 
-## Vertical slice check
+## Verificação da fatia vertical
 
-What works end to end, and how a reviewer can observe it. A prerequisite must
-name its working seam, test and dependent consumer.
+O que funciona de ponta a ponta e como um revisor observa isso. Um pré-requisito
+nomeia o seam que funciona, o teste e o consumidor que depende dele.
 
-## Risks and session size
+## Riscos e tamanho da sessão
 
-## Evidence checkpoints
+## Pontos de evidência
 
-Timestamp, branch/PR, exact HEAD/diff hashes, commands/results, independent review,
-remaining blockers and next action. GitHub remains canonical; local evidence links
-are not separate tickets. Do not close automatically.
+Data e hora, branch/PR, hashes exatos de `HEAD` e do diff, comandos e resultados, revisão
+independente, bloqueios restantes e próximo passo. O GitHub continua a fonte oficial; links
+de evidência local não são tickets à parte. Não fechar automaticamente.

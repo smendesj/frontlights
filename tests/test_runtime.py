@@ -60,9 +60,10 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertLess(grilling.index('## 2. Project conventions'), grilling.index('## 3. Solution round'))
         stage3 = (skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0]
         self.assertIn('never skips the solution round', stage3)
-        for template in ('discovery.md', 'issue.md', 'prd.md'):
+        for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Abordagem e convenções'),
+                                  ('prd.md', 'onventions')):
             with self.subTest(template=template):
-                self.assertIn('onventions', (ROOT / 'templates' / template).read_text(encoding='utf-8'))
+                self.assertIn(heading, (ROOT / 'templates' / template).read_text(encoding='utf-8'))
 
     def test_learning_reference_defines_when_to_explain_how_to_check_and_what_to_record(self):
         text = (ROOT / 'skills' / 'frontlights' / 'references' / 'learning.md').read_text(encoding='utf-8')

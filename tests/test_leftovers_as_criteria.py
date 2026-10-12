@@ -250,7 +250,7 @@ class SkillAndDevelopmentTests(unittest.TestCase):
 class TemplateAndCloseoutTests(unittest.TestCase):
     def test_the_issue_template_tells_where_the_leftovers_go_without_adding_a_criterion(self):
         template = read('templates', 'issue.md')
-        note = ' '.join(section(template, 'Acceptance criteria').split())
+        note = ' '.join(section(template, 'Critérios de aceitação').split())
         for phrase in ('Pendência (achado da revisão)', 'Evidência que fecha', 'nunca numa seção à parte',
                        'só esta seção conta para fechar a issue', 'tratada, concluída e marcada com evidência'):
             with self.subTest(phrase=phrase):
@@ -259,7 +259,7 @@ class TemplateAndCloseoutTests(unittest.TestCase):
 
     def test_a_leftover_written_as_the_recipe_says_is_counted_and_blocks_the_closeout_until_ticked(self):
         template = read('templates', 'issue.md')
-        body = template.replace('- [ ] <observable result>\n', '- [x] Behavior\n' + LEFTOVER)
+        body = template.replace('- [ ] <resultado observável>\n', '- [x] Behavior\n' + LEFTOVER)
         self.assertEqual(closeout.scan(body), ((1, 2), 0))
         self.assertEqual(closeout.scan(body.replace('- [ ] Pendência', '- [x] Pendência')), ((2, 2), 0))
         # the prefix the recipe tells the session to write is the one the template shows
