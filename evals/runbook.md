@@ -19,8 +19,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    escopo, and that nothing in it was not decided in the interview; approve its exact revision and
    inspect the proposed issues. Decline one publication approval; confirm no issues were written.
    Approve the final plan.
-4. Run the horizontal-ticket input from `vertical-slices.md`; inspect the revised
-   vertical outcomes before publication. Record the actual transcript and judgment.
+4. Run the horizontal-ticket input from `vertical-slices.md`; confirm the numbered list of the
+   slices and the quiz come before the body, inspect the revised vertical outcomes (one box per
+   slice with Entrega, Seams, Camadas and Depende de) before publication, and confirm the
+   published issue shows the x/y of its boxes. Record the actual transcript and judgment.
 5. Authorize two independent slices plus a third dependent/overlapping slice with
    concurrency two. Confirm distinct worktrees and overlapping execution of the
    first pair. Confirm the third waits for verified integration and no slot overrun.

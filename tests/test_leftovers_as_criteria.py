@@ -259,7 +259,9 @@ class TemplateAndCloseoutTests(unittest.TestCase):
 
     def test_a_leftover_written_as_the_recipe_says_is_counted_and_blocks_the_closeout_until_ticked(self):
         template = read('skills', 'frontlights', 'templates', 'issue.md')
-        body = template.replace('- [ ] <resultado observável>\n', '- [x] Behavior\n' + LEFTOVER)
+        box = '- [ ] S1. <resultado observável de ponta a ponta desta slice>\n'
+        self.assertIn(box, template)   # the slice box of the template is the one a session ticks
+        body = template.replace(box, '- [x] S1. Behavior\n' + LEFTOVER)
         self.assertEqual(closeout.scan(body), ((1, 2), 0))
         self.assertEqual(closeout.scan(body.replace('- [ ] Pendência', '- [x] Pendência')), ((2, 2), 0))
         # the prefix the recipe tells the session to write is the one the template shows

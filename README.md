@@ -642,7 +642,8 @@ Verificação de atualização da skill (sem pergunta; mostra o comando de atual
 quando há versão nova no GitHub) →
 pedido e dimensionamento → inspeção → entrevista de decisões → corpo da issue escrito sem nova
 entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
-plano de issues verticais aprovado e publicado → autorização permanente de
+slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
+antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
@@ -660,6 +661,11 @@ do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedido
 próprio Claude Code não são do Frontlights e continuam valendo.
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
+As slices da issue são os critérios de aceitação: uma caixa por slice, em ordem de dependência,
+com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
+e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
+só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
+contrair, e todo critério falha no commit de partida.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
 lê as filhas no GitHub e leva todas na mesma execução (entrevista, plano e implementação),
 nunca só o pai. A fatia vertical é a issue mais as filhas, e juntas elas cobrem todas as
@@ -715,7 +721,9 @@ compara a evidência salva na hora da revisão independente com a atual e sai co
 commit, edição ou arquivo novo depois dela.
 
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
-(`parent: 3`), ainda é só proposta. O planejador escolhe o
+(`parent: 3`), ainda é só proposta. As issues 1 e 3 trazem `slices` (a segunda slice depende da
+primeira); o `validate-plan` confere `delivers`, seams, camadas e a ordem das dependências. O
+planejador escolhe o
 maior conjunto seguro de issues prontas, respeita o trabalho em andamento e verifica
 sobreposição de caminhos sem distinguir maiúsculas de minúsculas, para compatibilidade
 com Windows. Ele recomenda um lote; a skill distribui o trabalho entre os agentes

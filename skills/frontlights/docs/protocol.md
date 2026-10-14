@@ -8,7 +8,7 @@
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código e registrar decisões | Resultado, limites e escolhas aprovados |
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
-| Plano de issues | Propor entregas e dependências | Plano e corpos das issues mostrados; aprovação das gravações específicas |
+| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro), mostrar a lista numerada com o quiz e depois o corpo completo | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração e revisão independente |
 | Espera do merge | Ler o estado das PRs abertas (`closeout.py merge-status`) e oferecer o merge da PR pronta; só com o "Sim" o merge é feito | Resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
@@ -241,7 +241,12 @@ registrar o estado da issue. Não copie tokens, credenciais ou dados privados al
 ao trabalho. Atualizações de situação no GitHub exigem autorização própria; salvar
 um ponto de retomada local não concede essa permissão.
 
-O formato de `plan.json` segue `examples/plan.json`. O campo opcional `parent` de uma
+O formato de `plan.json` segue `examples/plan.json`. O campo opcional `slices` de uma issue
+lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `id`, `title`,
+`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers` e `depends_on`; o
+`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, ou com dependência
+inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
+`vertical_check`, porque as slices trazem os dois. O campo opcional `parent` de uma
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
 plano com o próprio número), o que permite conferir o vínculo sem rede. O limite de
 100 filhas conta só as do plano; antes de publicar, confira `subIssuesSummary.total` do

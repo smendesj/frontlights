@@ -7,6 +7,16 @@
       "title": "Save and reload one observation",
       "outcome": "User can save an observation and see it after reload",
       "acceptance": ["Saved text survives reload", "Invalid text produces an actionable error"],
+      "slices": [
+        {"id": "S1", "title": "Save one observation and see it after reload",
+         "delivers": "Type a text, save, reload the view and see the same text",
+         "seams": ["POST /observations", "GET /observations/{id}", "the observation form"],
+         "layers": ["Tela", "API", "Banco e migração", "Testes"], "depends_on": []},
+        {"id": "S2", "title": "Reject invalid text with an actionable error",
+         "delivers": "Save an empty text and read the error that says what to fix",
+         "seams": ["POST /observations", "the observation form"],
+         "layers": ["Tela", "API", "Testes"], "depends_on": ["S1"]}
+      ],
       "tests": ["UI save/reload through API and temporary storage", "Invalid-input regression"],
       "ownership": ["src/observations", "tests/observations"],
       "dependencies": [],
@@ -37,6 +47,16 @@
       "title": "Edit an observation with conflict feedback",
       "outcome": "User can edit saved text without silently overwriting concurrent changes",
       "acceptance": ["An accepted edit survives reload", "Stale edits display a conflict"],
+      "slices": [
+        {"id": "S1", "title": "Edit a saved observation",
+         "delivers": "Edit the saved text, reload and see the new text",
+         "seams": ["PUT /observations/{id}", "the observation form"],
+         "layers": ["Tela", "API", "Banco e migração", "Testes"], "depends_on": []},
+        {"id": "S2", "title": "Show a conflict for a stale edit",
+         "delivers": "Edit the same observation in a stale second tab and read the conflict",
+         "seams": ["PUT /observations/{id}", "the observation form"],
+         "layers": ["Tela", "API", "Testes"], "depends_on": ["S1"]}
+      ],
       "tests": ["Edit and reload", "Two clients editing the same revision"],
       "ownership": ["src/observations", "tests/observations"],
       "dependencies": [1],

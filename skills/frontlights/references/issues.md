@@ -6,14 +6,67 @@ Use `templates/issue.md` and `examples/plan.json`. Before publication, temporary
 integer IDs are proposal IDs only; remap every dependency to real GitHub numbers
 after creation and verify links. Local status is always a timestamped snapshot.
 
-Each issue must have outcome, boundaries/non-goals, observable acceptance,
-approach and conventions to follow, seams under test, tests, dependency IDs, concrete ownership (or `*` when unknown), risks and a
-session-sized end-to-end demonstration. Do not split by UI/API/database layers.
+Each issue must have outcome, boundaries/non-goals, approach and conventions to follow,
+seams under test, tests, dependency IDs, concrete ownership (or `*` when unknown), risks and
+its slices: the acceptance criteria, one box per slice, each with what it delivers end to end
+(the section below). Do not split by UI/API/database layers.
 For an observation editor, prefer "save one observation and see it after reload"
 with UI/API/storage/tests in one slice, then "edit with conflict feedback", then
 "filter observations". If the proposal starts as database/backend/frontend
 tickets, correct it yourself before presenting it; no extra user prompt needed.
 A genuine prerequisite must expose a working seam tested by a named consumer.
+
+## Slices as acceptance criteria
+
+A slice is a **tracer bullet**: a narrow but complete path through every layer the
+behavior needs (screen, API, database, tests, and the project's own), demonstrable or
+verifiable on its own, sized for one TDD loop and one checkpoint of stage 6. Horizontal
+cuts (all the schema in one, all the API in another) are corrected before anything is
+shown. Prefactoring, when the change needs it ("make the change easy, then make the easy
+change"), is the first slice and blocks the others. A wide refactor, one mechanical change
+whose blast radius covers the codebase so that no vertical slice lands green, is the
+declared exception: cut it as expand (add the new form beside the old), migrate (call sites
+in batches sized by blast radius, each batch a slice blocked by the expand) and contract
+(delete the old form, blocked by every batch).
+
+The slices are the acceptance criteria of the issue: one box per slice, in dependency order,
+blockers first, so the first can start at once. Each box is one observable, end-to-end
+result, and right below it, in sub-items without a box, Entrega (what can be demoed when it
+is done), Seams (the public interfaces where the behavior is observed), Camadas (the layers
+it touches) and Depende de (the earlier slices that release it, or "nenhuma"):
+
+```markdown
+- [ ] S1. <observable, end-to-end result>
+  - Entrega: <what can be demoed when it is done>
+  - Seams: <public interfaces>
+  - Camadas: <layers it touches>
+  - Depende de: nenhuma
+```
+
+Every criterion fails at the base commit: name the observation that would show it false
+and confirm it is false at the commit the work starts from; a criterion already true before
+the work, one that only another slice can satisfy, or one that restates the request is not
+a criterion. A leftover from a review joins the same section as one more box (Follow-ups).
+The x/y GitHub shows for the issue is the progress of the slices, and the summary of the
+roadmap counts them as the parts of the delivery.
+
+Record the slices in `plan.json` under `slices` of each issue (`examples/plan.json`): `id`
+(`S1`, `S2`, ...), `title`, `delivers`, `seams`, `layers` and `depends_on` (ids that come
+earlier in the list). `validate-plan` refuses a slice without `delivers`, with an unknown,
+later or repeated dependency, or without seams and layers; with `slices` present,
+`acceptance` and `vertical_check` are optional, because the slices carry both.
+
+**The quiz comes before the body.** Show the numbered list of the slices first, each with
+its title, "Depende de" and what it delivers, and ask with `AskUserQuestion` whether the
+granularity is right (too coarse, too fine), whether the dependencies are real (each slice
+depends only on what truly gates it) and whether any slice should merge or split; iterate
+until the user approves the breakdown. A slice with no answer to "what can be demoed when
+this is done?" is horizontal: fix it before the quiz, with no extra question. Only then show
+the complete body under the show-before-approval rule.
+
+**One write per issue.** The approval of the plan names the writes, one write per issue: a
+creation (or one append to an existing body) with its boxes and board values, then a reread
+of GitHub that confirms the body, the number of boxes and the board values.
 
 ## The slice: an issue with its sub-issues, across every layer
 
@@ -93,7 +146,7 @@ case. `to-development` writes tests only at these seams, so approving the issue
 approves them; name them in the approval table too.
 
 Run `frontlights.py validate-plan --plan <plan.json> --config <.frontlights/config.json>`;
-this checks structure, DAG, board fields, labels, body lines and `parent` links (see Follow-ups), not semantic verticality. Review every vertical demonstration manually. Check
+this checks structure, DAG, the slices of each issue, board fields, labels, body lines and `parent` links (see Follow-ups), not semantic verticality. Review every vertical demonstration manually. Check
 missing cross-layer tests, hidden sequencing, generated/shared files, migrations,
 ports, shared services, dependency cycles and context size. Add dependencies or
 shared ownership for resources that cannot safely run together. Split oversized

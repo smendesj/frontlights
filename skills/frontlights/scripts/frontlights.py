@@ -359,6 +359,40 @@ def board_resolution(plan, project):
 
 
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
+SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
+
+
+def slices_of(issue):
+    """The slices of an issue, validated: one acceptance-criteria box each, in dependency order (blockers
+    first), every one with what it delivers, its seams and its layers. None when the issue has no `slices`,
+    in which case it keeps `acceptance` and `vertical_check`."""
+    slices = issue.get('slices')
+    if slices is None:
+        return None
+    label = issue['id']
+    require(isinstance(slices, list) and slices, f'{label}: slices precisa ser uma lista com ao menos uma slice')
+    seen = []
+    for item in slices:
+        require(isinstance(item, dict),
+                f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers e depends_on')
+        sid = item.get('id')
+        require(isinstance(sid, str) and SLICE_ID_RULE.match(sid),
+                f'{label}: slice com id inválido {sid!r}: use um rótulo curto sem espaço, como S1')
+        require(sid not in seen, f'{label}: slice repetida {sid}')
+        require(nonempty(item.get('title')), f'{label}: slice {sid}: falta title')
+        require(nonempty(item.get('delivers')),
+                f'{label}: slice {sid}: falta delivers (o que dá para demonstrar quando ela termina)')
+        for field in ('seams', 'layers'):
+            require(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)')
+        deps = item.get('depends_on')
+        require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
+                f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')
+        for dep in deps:
+            require(dep != sid, f'{label}: slice {sid} depende de {sid}, ela mesma')
+            require(dep in seen,
+                    f'{label}: slice {sid} depende de {dep}, que não existe ou vem depois dela: bloqueadoras primeiro')
+        seen.append(sid)
+    return slices
 
 
 def validate_plan(plan, project=None):
@@ -373,9 +407,10 @@ def validate_plan(plan, project=None):
         require(isinstance(issue, dict) and number(issue.get('id')), 'positive integer issue id required')
         require(issue['id'] not in ids, 'duplicate issue id')
         ids.add(issue['id'])
-        for field in ('title', 'outcome', 'vertical_check'):
+        sliced = slices_of(issue) is not None   # the slices carry the acceptance and the demonstration
+        for field in ('title', 'outcome') + (() if sliced else ('vertical_check',)):
             require(nonempty(issue.get(field)), f'{issue["id"]}: missing {field}')
-        for field in ('acceptance', 'tests', 'ownership', 'non_goals', 'risks'):
+        for field in (() if sliced else ('acceptance',)) + ('tests', 'ownership', 'non_goals', 'risks'):
             require(strings(issue.get(field)), f'{issue["id"]}: missing {field}')
         for path in issue['ownership']:
             relative(path)

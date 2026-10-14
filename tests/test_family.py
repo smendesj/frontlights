@@ -163,7 +163,7 @@ class FamilyRulesTextTests(unittest.TestCase):
                 self.assertIn(phrase, issues)
         skill = read('skills', 'frontlights', 'SKILL.md')
         self.assertIn('field-by-field trace', flat(section(skill, '4. Issue') or ''))
-        self.assertIn('only after reading every layer', flat(section(skill, '5. Issue-plan approval and publication') or ''))
+        self.assertIn('only after reading every layer', flat(section(skill, '5. Slices and publication') or ''))
         self.assertIn('trace table', flat(read('skills', 'frontlights', 'references', 'issue.md')))
         self.assertIn('effect in the back and the database', flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
 

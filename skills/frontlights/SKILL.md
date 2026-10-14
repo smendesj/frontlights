@@ -278,21 +278,29 @@ the work touches a screen, the body shows the field-by-field trace to the back a
 database (`references/issues.md`) before it is approved. This approval does not authorize live
 issue writes: the GitHub write is the approval of stage 5.
 
-## 5. Issue-plan approval and publication
+## 5. Slices and publication
 
-Read `references/issues.md`. Propose vertical slices and the dependency graph.
-Each slice (an issue with its sub-issues) covers every layer the requirement
-needs, and records the layers analysed and, for each one not touched, why. The
-slice is defined only after reading every layer (front end, back end, migrations and
-schema, tests, documentation) and tracing each screen field, button or action to its
-consumer in the back and its column in the database; a layer is "not touched" only
-with that evidence, and an inconclusive trace blocks the approval of the plan until
-it is proven (`references/issues.md`). Show
-the complete plan and every issue body under the show-before-approval rule,
-then ask approval for the plan and the named GitHub writes. Publish only after
-approval and verify returned issue links, bodies and dependencies by rereading
-GitHub. If permissions block writes, preserve the approved draft and identify
-the exact blocked operation.
+Read `references/issues.md`. Cut the approved body into slices: each one a tracer bullet, a
+narrow but complete path through every layer the behavior needs, demonstrable on its own and
+sized for one TDD loop and one checkpoint. Prefactoring, when there is any, is the first slice
+and blocks the others; a wide refactor is the declared exception, cut as expand, migrate in
+batches and contract. Each slice becomes one acceptance-criteria box of the issue, in
+dependency order, blockers first, with the sub-items Entrega, Seams, Camadas and Depende de,
+and every criterion fails at the base commit. The issue (with the sub-issues it already has)
+covers every layer the requirement needs and records the layers analysed and, for each one
+not touched, why; the layers are known only after reading every layer (front end, back end,
+migrations and schema, tests, documentation) and tracing each screen field, button or action
+to its consumer in the back and its column in the database; a layer is "not touched" only
+with that evidence, and an inconclusive trace blocks the approval of the plan until it is
+proven (`references/issues.md`). Show first the numbered list of the slices (title, depends
+on, what it delivers) and ask the quiz with `AskUserQuestion`: is the granularity right, are
+the dependencies real, should any slice merge or split; a slice with no answer to "what can
+be demoed" is horizontal and goes back to the cut without an extra question. Then show the
+complete body of every issue under the show-before-approval rule and ask approval for the
+plan and the named GitHub writes: one write per issue. Publish only after approval and
+verify by rereading GitHub: the body, the boxes (the x/y the issue list shows) and the board
+values. If permissions block writes, preserve the approved draft and identify the exact
+blocked operation.
 
 These publication rules cover every issue the session creates, on any path and
 at any stage: every top-level issue joins the board; a sub-issue joins only through its parent.

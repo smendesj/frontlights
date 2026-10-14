@@ -35,7 +35,18 @@ O que foi recusado, com o motivo. São as linhas mais úteis da página.
 
 ## Critérios de aceitação
 
-- [ ] <resultado observável>
+As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice, com o
+resultado observável de ponta a ponta, e logo abaixo os sub-itens sem caixa. Prefactoring,
+quando houver, é a primeira slice e nomeia o seam que funciona, o teste e o consumidor que
+depende dele; refatoração larga é a exceção declarada: expandir, migrar por lotes e contrair,
+cada passo uma slice. Todo critério falha no commit de partida; o que já é verdadeiro antes
+do trabalho não é critério. Cada caixa fecha só com evidência.
+
+- [ ] S1. <resultado observável de ponta a ponta desta slice>
+  - Entrega: <o que dá para demonstrar quando ela termina>
+  - Seams: <interfaces públicas em que o comportamento é observado>
+  - Camadas: <as camadas que ela toca>
+  - Depende de: <slices anteriores, ou nenhuma>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.
@@ -109,11 +120,6 @@ em `Depends on`, e na etapa 6 ela pode ser empilhada na branch dele, sem esperar
 ## Propriedade e contenção
 
 Arquivos e componentes, arquivos gerados, migrations, portas, serviços de teste compartilhados.
-
-## Verificação da fatia vertical
-
-O que funciona de ponta a ponta e como um revisor observa isso. Um pré-requisito
-nomeia o seam que funciona, o teste e o consumidor que depende dele.
 
 ## Riscos e dependências
 
