@@ -20,6 +20,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontli
 import serve  # noqa: E402
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts' / 'serve.py'
+MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_serve_ports: o módulo sobe processos e portas de verdade. '
+                       'Rode a suíte sem a variável antes da revisão independente e do PR.')
+
+
+def load_tests(loader, tests, pattern):
+    """Marcação da suíte rápida (issue 25): com FRONTLIGHTS_SUITE=rapida o módulo inteiro vira um único teste
+    pulado, com o motivo; qualquer outro valor, ou a ausência da variável, carrega tudo como sempre."""
+    if os.environ.get('FRONTLIGHTS_SUITE') != 'rapida':
+        return tests
+    pulado = type('ModuloPulado', (unittest.TestCase,),
+                  {'test_serve_ports': unittest.skip(MOTIVO_SUITE_RAPIDA)(lambda self: None)})
+    return unittest.TestSuite([pulado('test_serve_ports')])
+
+
 PASSWORD = 'senha-fake'
 LOGIN = 'usuario1@exemplo.test'
 

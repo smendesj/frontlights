@@ -28,6 +28,20 @@ import checks  # noqa: E402
 import serve  # noqa: E402
 
 SERVE = SCRIPTS / 'serve.py'
+MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_checks_integration: o módulo sobe processos e portas de '
+                       'verdade. Rode a suíte sem a variável antes da revisão independente e do PR.')
+
+
+def load_tests(loader, tests, pattern):
+    """Marcação da suíte rápida (issue 25): com FRONTLIGHTS_SUITE=rapida o módulo inteiro vira um único teste
+    pulado, com o motivo; qualquer outro valor, ou a ausência da variável, carrega tudo como sempre."""
+    if os.environ.get('FRONTLIGHTS_SUITE') != 'rapida':
+        return tests
+    pulado = type('ModuloPulado', (unittest.TestCase,),
+                  {'test_checks_integration': unittest.skip(MOTIVO_SUITE_RAPIDA)(lambda self: None)})
+    return unittest.TestSuite([pulado('test_checks_integration')])
+
+
 AUTO_SUPPORTED = hasattr(serve, 'PORT_AUTO')  # o serve da #11 aceita port "auto"
 PASSWORD = 'senha-fake-123'
 LOGIN = 'usuario1@exemplo.test'

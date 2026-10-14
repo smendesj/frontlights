@@ -305,6 +305,14 @@ escrever no GitHub, mesclar, ampliar o escopo); uma pergunta que ele encontre vo
 de um subagente é afirmação, não evidência: a sessão lê o diff e repete os comandos medidos antes de contar,
 e o revisor nunca é o autor.
 
+**Rodadas de teste.** Por slice, rodam os módulos que a slice toca e a verificação de tipos; a suíte
+rápida é a forma de conferir o todo entre slices, quando o projeto tem uma (no repositório do Frontlights,
+`FRONTLIGHTS_SUITE=rapida` faz o `python -m unittest discover -s tests` pular os módulos de portas do
+`serve` e de integração do `checks`, cada um relatado como pulado com o motivo que cita a variável;
+qualquer outro valor, ou a ausência dela, roda tudo); antes da revisão independente e do PR, a suíte
+inteira sem a variável, uma vez, obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede,
+e a CI do GitHub deste repositório não define a variável.
+
 ## Ponto de retomada e continuação
 
 Escreva o documento de passagem de contexto com `templates/handoff.md` e execute:
