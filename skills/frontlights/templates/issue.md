@@ -17,7 +17,8 @@ A solução do ponto de vista de quem usa: o que passa a acontecer e a medida de
 
 A abordagem escolhida; as alternativas rejeitadas, cada uma com o motivo; as convenções do
 projeto que a abordagem segue, nomeadas pelo padrão (os caminhos ficam na propriedade e no
-rastreio), e toda quebra de padrão aprovada, com o motivo e o custo; interfaces, contratos, esquema e decisões de arquitetura. A prosa das
+rastreio), e toda quebra de padrão aprovada, com o motivo e o custo; interfaces, contratos,
+esquema e decisões de arquitetura. A prosa das
 decisões não cita arquivo nem trecho de código, porque envelhece; a exceção é um trecho de
 protótipo que registra uma decisão melhor do que a prosa, cortado ao essencial e dito como tal.
 

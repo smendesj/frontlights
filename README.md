@@ -256,7 +256,8 @@ nova. O lote inteiro é decidido numa única pergunta.
 
 O Frontlights não cria sub-issues: uma família que já existe (filhas publicadas antes
 desta regra) continua lida, trabalhada e fechada como antes, filhas antes dos pais, e o
-`validate-plan` recusa uma issue proposta com `parent` ou `parent_external`. No
+`validate-plan` recusa uma issue proposta com `parent` ou `parent_external`, ou sem o `url`
+dela. No
 `plan.json`, uma filha já publicada leva `parent` com o id do pai, que precisa estar no
 mesmo plano, e dispensa `project_fields`; o `validate-plan` recusa `parent` igual ao
 próprio id, pai fora do plano, mais de 100 filhas por pai no plano e mais de 8 níveis de

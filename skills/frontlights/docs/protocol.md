@@ -31,7 +31,8 @@ remover dados de teste pelos endpoints do produto, comentar nas issues e marcar 
 evidência. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
 apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
-da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
+da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR,
+fechar issue, mexer no quadro, implantar ou publicar
 em produção, editar uma migration já registrada, escrever na branch base ou protegida, ligar
 configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando
@@ -258,7 +259,7 @@ inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance`
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
 plano com o próprio número), o que permite conferir o vínculo sem rede; ele só cabe numa
 filha já publicada de uma família que já existe, porque uma issue proposta com `parent`
-ou `parent_external` é recusada: nunca se cria sub-issue nova. O limite de
+ou `parent_external`, ou sem o `url` dela, é recusada: nunca se cria sub-issue nova. O limite de
 100 filhas conta só as do plano; antes de publicar, confira `subIssuesSummary.total` do
 pai no GitHub para não passar de 100. Sem `parent`, nada muda. Uma sub-issue de uma issue já
 publicada que não está no plano leva `parent_external` (o número do pai) no lugar de `parent`: não

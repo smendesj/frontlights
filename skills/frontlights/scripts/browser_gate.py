@@ -6,7 +6,7 @@ that changes what they see on the screen?
 browser run (`skills/frontlights/references/browser-testing.md`) covers the visible change. It reads the
 Git diff, not the plan's text, so a screen change the plan forgot to declare is still caught.
 
-One batch is one decision: the roots are the worktrees of every slice the session finished and means to
+One batch is one decision: the roots are the worktrees of every issue the session finished and means to
 deliver together (the issue, its sub-issues, and any other issue authorized in the same run). The gate
 finds the visible changes of each root and compares them with the record of the watched run kept for the
 whole batch (`.frontlights/issues/<lead>/browser/result.json`), never one record per branch.
@@ -15,11 +15,11 @@ Inputs: `--root` (repeatable) the worktrees, `--base` the approved base of the b
 branch), the same for every root, `--config` the project's `.frontlights/config.json` (its
 `browserTest.frontPaths` names the visible paths; absent, a conservative default applies, and an absent
 config also silences `unconfigured`), `--toca` what the plan's `Toca o frontend:` says (`sim`, `nao` or
-`ausente`; `sim` when any slice of the batch says it), `--record` the result.json (it may not exist).
+`ausente`; `sim` when any issue of the batch says it), `--record` the result.json (it may not exist).
 
-What a root changes. Each root is measured from the commit it shares with the base, except a slice stacked on
+What a root changes. Each root is measured from the commit it shares with the base, except an issue stacked on
 another branch, which the caller names with `--stacked <its branch>=<the branch its PR targets>` (what the
-stacking authorization already records as its base): that slice is measured from the commit it shares with
+stacking authorization already records as its base): that issue is measured from the commit it shares with
 that branch, so only its own changes count and an API-only child stacked on a parent that changes the screen
 is not a visible root. Without `--stacked` every root is measured from the base.
 Committed, staged, edited and new files count; files the repository ignores and any `.frontlights` folder
@@ -59,7 +59,7 @@ that does not exist), with a `reason` and an `action`:
 `roots` in the output maps each visible root (its branch, or `detached:<folder name>`) to the hash of its
 own non-test, non-document changes; the session copies it into the record as `lote.roots` when it records
 the user's answer, and the gate compares it later. `by_root` lists the visible files of every root, so the
-session can compare each slice with its own plan, and `stacked_on` names the branch each stacked slice is
+session can compare each issue with its own plan, and `stacked_on` names the branch each stacked issue is
 measured from. Roots with no visible change are listed in `other_roots` and never make a record stale:
 when one of them changes behavior the `Fluxo:` exercises, the session asks again by hand.
 """
@@ -261,7 +261,7 @@ def locate(root):
 
 def reference_of(place, base, stacked):
     """The commit a root is measured from: the one it shares with the branch its PR targets, which is the base
-    unless the caller says the slice is stacked on another branch."""
+    unless the caller says the issue is stacked on another branch."""
     target = stacked.get(place['label'], base)
     return git(place['top'], 'merge-base', target, place['head']).decode().strip()
 
@@ -303,7 +303,7 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
     labels = [place['label'] for place in places]
     if len(set(labels)) != len(labels):
         raise ValueError('two --root entries are on the same branch (or the same worktree folder name when detached): a '
-                         'batch lists each slice once')
+                         'batch lists each issue once')
     stacked = dict(stacked or {})
     unknown = sorted(set(stacked) - set(labels))
     if unknown:
@@ -378,13 +378,13 @@ def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--root', action='append', required=True, help='worktree of a slice of the batch; repeatable')
+    parser.add_argument('--root', action='append', required=True, help='worktree of an issue of the batch; repeatable')
     parser.add_argument('--base', required=True, help='approved base of the batch, the same for every root')
     parser.add_argument('--config', help="the project's .frontlights/config.json (browserTest.frontPaths, browserTest)")
     parser.add_argument('--toca', choices=sorted(k for k in TOCA if k), help="the plan's `Toca o frontend:`")
     parser.add_argument('--record', help='the batch result.json (may not exist yet)')
     parser.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
-                        help='a stacked slice and the branch its PR targets; repeatable')
+                        help='the branch of a stacked issue and the branch its PR targets; repeatable')
     args = parser.parse_args()
     try:
         result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked)

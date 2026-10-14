@@ -2,8 +2,9 @@
 
 Read the recorded authorization, current GitHub issues and `docs/security.md`.
 Stage 6 runs under the standing authorization (`SKILL.md`, stage 6): the session
-fills the issue IDs, concurrency, stacking, worktree base, verification commands,
-monitoring arrangement and stop conditions itself, announces them in one block and
+fills the issue IDs, the branch and the order of the slices of each issue, concurrency,
+stacking (a family that already exists), worktree base, verification commands, monitoring
+arrangement and stop conditions itself, announces them in one block and
 records the charter without asking. A decision the standing authorization does not
 cover (a new product decision, an operation on its denied list, a scope change)
 goes back to the coordinator's `AskUserQuestion`. Never infer permission for any
