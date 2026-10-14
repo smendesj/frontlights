@@ -1,18 +1,23 @@
-"""Runner paralelo da suíte com fila serial (issue 27, S1).
+"""Runner paralelo da suíte com fila serial, prazo por módulo e erro de infraestrutura (issue 27, S1 e S2).
 
 Seams: a linha de comando de `tests/suite.py` (`--tests-dir`, `--serial`, `--workers`, `--module-timeout`, `--list`),
 observada por subprocess sobre uma pasta temporária de módulos falsos que o próprio teste escreve: o que sai no
 stdout (cabeçalho, uma linha por módulo, saída completa dos que falharam, total no formato do unittest), o código
 de saída, os instantes gravados pelos módulos marcadores (fila serial e limite de trabalhadores) e a variável
-`FRONTLIGHTS_SUITE` repassada aos filhos. Nada aqui roda a suíte real: sobre a pasta `tests/` só se usa `--list`.
+`FRONTLIGHTS_SUITE` repassada aos filhos. S2: o prazo por módulo (`--module-timeout`) com a árvore morta e a saída
+parcial, os erros de infraestrutura (módulo que não importa, filho sem a linha `Ran`, crash) com saída 2, e o
+Ctrl+Break que mata os filhos (PIDs gravados pelos módulos falsos, conferidos depois). Nada aqui roda a suíte
+real: sobre a pasta `tests/` só se usa `--list`.
 """
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -69,6 +74,81 @@ class Marca(unittest.TestCase):
         Path(__file__).with_suffix('.json').write_text(json.dumps(record), encoding='utf-8')
 """
 
+# Imprime, com flush, e dorme bem mais do que o prazo que o teste dá ao runner.
+SLEEPS = """
+import time
+import unittest
+
+
+class Dorme(unittest.TestCase):
+    def test_dorme(self):
+        print('antes de dormir', flush=True)
+        time.sleep(10)
+"""
+
+BROKEN_IMPORT = """
+import unittest
+import no_such_module_xyz
+
+
+class Quebrado(unittest.TestCase):
+    def test_nunca_roda(self):
+        pass
+"""
+
+BROKEN_SYNTAX = """
+import unittest
+
+
+class Quebrado(unittest.TestCase)
+    def test_nunca_roda(self):
+        pass
+"""
+
+EMPTY_CLASS = """
+import unittest
+
+
+class SemTestes(unittest.TestCase):
+    def ajuda(self):
+        pass
+"""
+
+CRASH = """
+import os
+import unittest
+
+
+class Cai(unittest.TestCase):
+    def test_cai(self):
+        os._exit(3)
+"""
+
+EMPTY_EXIT0 = """
+import os
+os._exit(0)
+"""
+
+# Sobe um neto que dorme 60 s (grupo próprio, sem janela), grava os dois PIDs num JSON ao lado e dorme 30 s.
+SPAWNS_GRANDCHILD = """
+import json
+import os
+import subprocess
+import sys
+import time
+import unittest
+from pathlib import Path
+
+
+class Neto(unittest.TestCase):
+    def test_sobe_neto_e_dorme(self):
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        neto = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], creationflags=flags)
+        record = {'child': os.getpid(), 'grandchild': neto.pid}
+        Path(__file__).with_suffix('.json').write_text(json.dumps(record), encoding='utf-8')
+        time.sleep(30)
+"""
+
 # Nomeia os módulos que `unittest.TestLoader().discover` carrega de uma pasta, sem rodar nada.
 DISCOVERED_MODULES = r"""
 import json, sys, unittest
@@ -82,6 +162,28 @@ def walk(suite):
 walk(unittest.TestLoader().discover(sys.argv[1]))
 print(json.dumps(sorted(modules)))
 """
+
+
+def pid_alive(pid):
+    """Como serve.pid_alive: OpenProcess + GetExitCodeProcess == STILL_ACTIVE (259). Só Windows."""
+    import ctypes
+    kernel = ctypes.windll.kernel32
+    kernel.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        ok = kernel.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+        return bool(ok) and code.value == 259
+    finally:
+        kernel.CloseHandle(ctypes.c_void_p(handle))
+
+
+def kill_pids(pids):
+    """Limpeza dos testes: mata cada PID com a árvore, sem confiar na saída do taskkill."""
+    for pid in pids:
+        subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], capture_output=True, timeout=60)
 
 
 def environment(value):
@@ -247,6 +349,136 @@ class ListTests(unittest.TestCase):
         serial = [name for _, kind, name in entries if kind == 'serial']
         self.assertEqual(serial, list(SERIAL_REAL))
         self.assertNotIn('Ran ', completed.stdout)
+
+
+class SleepersTests(FakeFolderTests):
+    """Base: pastas com dorminhocos; a limpeza mata os PIDs gravados (e o runner), para nunca deixar neto vivo."""
+
+    def recorded_pids(self, path, names):
+        pids = []
+        for name in names:
+            record_file = path / f'{name}.json'
+            if record_file.exists():
+                record = json.loads(record_file.read_text(encoding='utf-8'))
+                pids.extend([record['child'], record['grandchild']])
+        return pids
+
+    def folder_with_cleanup(self, modules):
+        path = self.folder(modules)
+        self.addCleanup(lambda: kill_pids(self.recorded_pids(path, modules)))
+        return path
+
+    def module_lines(self, stdout, name):
+        return [line for line in stdout.splitlines() if line.startswith('[') and f' {name} ' in line]
+
+
+class ModuleTimeoutTests(SleepersTests):
+    """Seam: `--module-timeout` com um módulo que dorme além do prazo."""
+
+    def test_a_module_past_the_timeout_is_killed_and_its_partial_output_is_shown_with_exit_two(self):
+        path = self.folder_with_cleanup({'test_sleeps': SLEEPS, 'test_passa': PASSES})
+        started = time.monotonic()
+        completed = self.run_suite(path, [], extra=['--module-timeout', '1'])
+        wall = time.monotonic() - started
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertLess(wall, 8, f'o runner levou {wall:.1f} s para matar um módulo com prazo de 1 s')
+        self.assertIn('antes de dormir', completed.stdout)
+        self.assertIn(f'Rode sozinho: python -m unittest discover -s {path} -p test_sleeps.py', completed.stdout)
+        self.assertNotIn('-p test_passa.py', completed.stdout)
+        lines = self.module_lines(completed.stdout, 'test_sleeps')
+        self.assertEqual(len(lines), 1, completed.stdout)
+        self.assertIn('prazo de 1.0 s estourado', lines[0])
+        self.assertNotIn('Ran ?', lines[0])
+
+    def test_the_whole_process_tree_of_a_timed_out_module_is_dead_after_the_runner_ends(self):
+        path = self.folder_with_cleanup({'test_neto': SPAWNS_GRANDCHILD})
+        completed = self.run_suite(path, [], extra=['--module-timeout', '2'])
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        pids = self.recorded_pids(path, ['test_neto'])
+        self.assertEqual(len(pids), 2, 'o módulo falso não chegou a gravar os PIDs')
+        time.sleep(0.5)
+        alive = [pid for pid in pids if pid_alive(pid)]
+        self.assertEqual(alive, [], f'processos vivos depois do runner: {alive} (filho, neto) = {pids}')
+
+
+class InfrastructureErrorTests(FakeFolderTests):
+    """Seam: saída 2 quando o filho não importa, não deixa a linha `Ran` ou cai; `Ran 0 tests` é aceito."""
+
+    def test_a_module_that_does_not_import_is_an_infrastructure_error_with_its_traceback_at_the_end(self):
+        for name, source in (('test_broken_import', BROKEN_IMPORT), ('test_broken_syntax', BROKEN_SYNTAX)):
+            with self.subTest(module=name):
+                path = self.folder({name: source, 'test_passa': PASSES})
+                completed = self.run_suite(path, [])
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn('Failed to import test module', completed.stdout)
+                self.assertIn('Traceback', completed.stdout)
+                self.assertIn(f'Rode sozinho: python -m unittest discover -s {path} -p {name}.py', completed.stdout)
+                self.assertNotIn('-p test_passa.py', completed.stdout)
+
+    def test_a_child_without_the_ran_line_is_an_infrastructure_error_whatever_its_exit_code(self):
+        for name, source in (('test_crash', CRASH), ('test_empty_exit0', EMPTY_EXIT0)):
+            with self.subTest(module=name):
+                path = self.folder({name: source, 'test_passa': PASSES})
+                completed = self.run_suite(path, [])
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertIn(f'-p {name}.py', completed.stdout)
+                self.assertNotIn('-p test_passa.py', completed.stdout)
+
+    def test_a_module_with_zero_tests_counts_zero_and_is_not_an_error(self):
+        path = self.folder({'test_vazio': EMPTY_CLASS, 'test_passa': PASSES})
+        completed = self.run_suite(path, [])
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertRegex(completed.stdout, r'\nRan 2 tests in \d+\.\d{3}s\n\nOK\n')
+        lines = [line for line in completed.stdout.splitlines() if line.startswith('[') and ' test_vazio ' in line]
+        self.assertEqual(len(lines), 1, completed.stdout)
+        self.assertIn('Ran 0', lines[0])
+
+    def test_infrastructure_wins_over_a_product_failure_without_hiding_it(self):
+        path = self.folder({'test_falha': FAILS, 'test_broken_import': BROKEN_IMPORT})
+        completed = self.run_suite(path, [])
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('falha de proposito do modulo falso', completed.stdout)
+        self.assertIn('Failed to import test module', completed.stdout)
+        self.assertIn('-p test_falha.py', completed.stdout)
+        self.assertIn('-p test_broken_import.py', completed.stdout)
+        self.assertRegex(completed.stdout, r'\nFAILED \(failures=1, infraestrutura=1\)\n')
+
+
+@unittest.skipUnless(os.name == 'nt', 'CTRL_BREAK_EVENT e grupos de processos só existem no Windows')
+class InterruptTests(SleepersTests):
+    """Seam: Ctrl+Break no runner mata os filhos e os netos antes de sair com 130."""
+
+    def test_ctrl_break_kills_every_child_and_grandchild_and_exits_with_130(self):
+        names = ('test_neto_a', 'test_neto_b')
+        path = self.folder_with_cleanup({name: SPAWNS_GRANDCHILD for name in names})
+        runner = subprocess.Popen([sys.executable, str(SUITE), '--tests-dir', str(path), '--serial', '',
+                                   '--workers', '2', '--module-timeout', '60'],
+                                  cwd=str(ROOT), env=environment(None), stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        self.addCleanup(lambda: kill_pids([runner.pid]))
+        deadline = time.monotonic() + 15
+        while len(self.recorded_pids(path, names)) < 4 and time.monotonic() < deadline:
+            time.sleep(0.1)
+        pids = self.recorded_pids(path, names)
+        self.assertEqual(len(pids), 4, f'os módulos falsos não gravaram os 4 PIDs em 15 s: {pids}')
+        try:
+            os.kill(runner.pid, signal.CTRL_BREAK_EVENT)
+        except OSError as error:
+            kill_pids([runner.pid])
+            self.skipTest(f'sem console para o CTRL_BREAK_EVENT ({error}); a issue prevê demonstração manual')
+        try:
+            raw, _ = runner.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            kill_pids([runner.pid])
+            self.fail('o runner não terminou em 15 s depois do Ctrl+Break')
+        output = raw.decode('utf-8', errors='replace')
+        time.sleep(0.5)
+        alive = [pid for pid in pids if pid_alive(pid)]
+        self.assertEqual(alive, [], f'processos vivos depois do Ctrl+Break: {alive} de {pids}\n{output}')
+        self.assertNotEqual(runner.returncode, 3221225786, 'o runner morreu pelo CTRL_BREAK sem tratar\n' + output)
+        self.assertEqual(runner.returncode, 130, output)
+        self.assertIn('Interrompido', output)
 
 
 if __name__ == '__main__':

@@ -1,9 +1,14 @@
-"""Runner paralelo da suíte de testes do Frontlights (issue 27).
+"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1 e S2).
 
 Roda cada módulo `test_*.py` da pasta como um processo filho (`python -m unittest discover -s <pasta> -p <arquivo>`,
 o mesmo modo da suíte inteira, que respeita o `load_tests` da suíte rápida): os módulos sensíveis da lista SERIAL
 vão numa fila serial, um por vez e na ordem da lista; os demais, num pool de processos. O primeiro serial roda
 sozinho; quando termina, o pool e o resto da fila seguem ao mesmo tempo. Só biblioteca padrão; só Windows.
+
+Cada módulo tem um prazo (`--module-timeout`): estourado, a árvore inteira do filho é morta e a saída parcial fica
+registrada. Prazo estourado, módulo que não importa e filho que termina sem a linha `Ran N tests` são erros de
+infraestrutura: a suíte sai com 2, que prevalece sobre o 1 das falhas de produto sem escondê-las. `Ran 0 tests`
+é aceito e conta zero. Ctrl+C ou Ctrl+Break mata todos os filhos vivos antes de sair com 130.
 
 Uso: python tests/suite.py [--tests-dir PASTA] [--serial a,b,c] [--workers N] [--module-timeout S] [--list]
 """
@@ -11,14 +16,19 @@ import argparse
 import locale
 import os
 import re
+import signal
 import subprocess
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 
 VARIABLE = 'FRONTLIGHTS_SUITE'
+INTERRUPTED = 130
+POLL_SECONDS = 0.2  # a thread principal nunca bloqueia sem prazo: é assim que o Ctrl+C/Ctrl+Break chega a ela
+KILL_WAIT_SECONDS = 5
+IMPORT_FAILURE = re.compile(r'unittest\.loader\._FailedTest|Failed to import test module')
 
 # Fila serial, nesta ordem (nome do módulo, motivo). Tudo o que não está aqui vai para o pool.
 SERIAL = (
@@ -31,7 +41,7 @@ SERIAL = (
 )
 
 RAN_LINE = re.compile(r'^Ran (\d+) tests? in [\d.]+s$', re.MULTILINE)
-VERDICT_LINE = re.compile(r'^(OK|FAILED)(?: \((.*)\))?$')
+VERDICT_LINE = re.compile(r'^(OK|FAILED|NO TESTS RAN)(?: \((.*)\))?$')  # NO TESTS RAN: 3.12+ com zero testes
 COUNT_KEYS = ('failures', 'errors', 'skipped', 'expected failures', 'unexpected successes')
 
 
@@ -73,7 +83,8 @@ def parse(argv):
     parser.add_argument('--workers', type=positive_int, default=default_workers(),
                         help='trabalhadores do pool (padrão: max(1, cpu_count - 2))')
     parser.add_argument('--module-timeout', type=positive_float, default=900,
-                        help='prazo por módulo, em segundos (padrão: 900; ainda sem efeito nesta versão)')
+                        help='prazo por módulo, em segundos; estourado, a árvore do filho é morta e a suíte sai '
+                             'com 2 (padrão: 900)')
     parser.add_argument('--list', action='store_true', help='só lista os módulos e a ordem, sem rodar nada')
     return parser.parse_args(argv)
 
@@ -133,21 +144,38 @@ def print_list(current):
 # --- um módulo por processo filho ---------------------------------------------------------------------------
 
 class Outcome:
-    """O que um módulo deixou: tempo de parede, código de saída, saída completa e as contagens lidas dela."""
+    """O que um módulo deixou: tempo de parede, código de saída, saída (completa ou parcial) e as contagens lidas
+    dela. `problem` é o erro de infraestrutura, quando há; `passed` só vale sem problema e com veredito OK."""
 
-    def __init__(self, name, kind, wall, returncode, output):
+    def __init__(self, name, kind, wall, returncode, output, timed_out=None):
         self.name = name
         self.kind = kind
         self.wall = wall
         self.returncode = returncode
         self.output = output
+        self.timed_out = timed_out  # o prazo, em segundos, quando ele estourou
         ran = RAN_LINE.search(output)
         self.ran = int(ran.group(1)) if ran else None
         self.verdict, self.counts = read_verdict(output)
-        # Sem a linha `Ran` ou sem veredito reconhecido, o módulo conta como falha. S2: isso vira erro de
-        # infraestrutura (saída 2), junto com o prazo por módulo.
-        self.passed = returncode == 0 and self.ran is not None and self.verdict is not None \
-            and self.verdict.startswith('OK')
+        self.problem = self.infrastructure_problem()
+        if self.problem is not None:
+            self.passed = False
+        elif self.ran == 0:
+            self.passed = returncode in (0, 5)  # 3.11: rc 0 e `OK`; 3.12+: rc 5 e `NO TESTS RAN`
+        else:
+            self.passed = returncode == 0 and self.verdict.startswith('OK')
+
+    def infrastructure_problem(self):
+        """O motivo pelo qual o módulo não chegou a dar um veredito de produto, ou None."""
+        if self.timed_out is not None:
+            return f'prazo de {self.timed_out:.1f} s estourado'
+        if IMPORT_FAILURE.search(self.output):
+            return 'o módulo não importou'
+        if self.ran is None:
+            return f'sem a linha "Ran N tests" (código de saída {self.returncode})'
+        if self.verdict is None:
+            return f'sem veredito do unittest (código de saída {self.returncode})'
+        return None
 
 
 def read_verdict(output):
@@ -178,48 +206,186 @@ def command_for(tests_dir, name):
     return [sys.executable, '-m', 'unittest', 'discover', '-s', str(tests_dir), '-p', f'{name}.py']
 
 
-def run_module(current, name, kind, root):
-    """Roda um módulo como processo filho e devolve o Outcome. S2 acrescenta aqui o prazo e o kill."""
+def pid_alive(pid):
+    """OpenProcess + GetExitCodeProcess == STILL_ACTIVE (259), como serve.pid_alive: o código de saída do taskkill
+    não é prova de morte."""
+    import ctypes
+    kernel = ctypes.windll.kernel32
+    kernel.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        ok = kernel.GetExitCodeProcess(ctypes.c_void_p(handle), ctypes.byref(code))
+        return bool(ok) and code.value == 259
+    finally:
+        kernel.CloseHandle(ctypes.c_void_p(handle))
+
+
+def kill_tree(process):
+    """Mata o filho com a árvore inteira (`taskkill /T /F`) e confirma a morte do filho pela API. Devolve True
+    quando ele morreu. Limite conhecido: um neto cujo pai já morreu fica fora do `/T` (sem Job Object aqui);
+    a leitora daemon garante que ele não prende o runner, só a saída parcial."""
+    try:
+        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        process.kill()
+    except OSError:
+        pass
+    deadline = time.monotonic() + KILL_WAIT_SECONDS
+    while pid_alive(process.pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return not pid_alive(process.pid)
+
+
+class Reader(threading.Thread):
+    """Lê o pipe do filho num buffer: o que o filho já imprimiu está lá mesmo se um neto segurar o pipe aberto."""
+
+    def __init__(self, stream):
+        super().__init__(name='leitora', daemon=True)
+        self.stream = stream
+        self.buffer = bytearray()
+
+    def run(self):
+        try:
+            while True:
+                chunk = self.stream.read1(65536)
+                if not chunk:
+                    break
+                self.buffer += chunk
+        except (OSError, ValueError):
+            pass
+
+
+def run_module(current, name, kind, root, timeout, live, stopping):
+    """Roda um módulo como processo filho, em grupo próprio (o Ctrl+Break do console não chega nele: quem o mata é
+    o runner), e devolve o Outcome. Passado o prazo, mata a árvore e guarda a saída parcial. `live` é o registro
+    dos filhos vivos, para o abort; `stopping` encerra a espera quando a suíte foi interrompida."""
     started = time.monotonic()
     process = subprocess.Popen(command_for(current.tests_dir, name), cwd=str(root), env=dict(os.environ),
-                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    raw, _ = process.communicate()
-    return Outcome(name, kind, time.monotonic() - started, process.returncode, decode(raw))
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
+    reader = Reader(process.stdout)
+    reader.start()
+    live.add(name, process)
+    timed_out = None
+    try:
+        deadline = started + timeout
+        while True:
+            try:
+                process.wait(timeout=max(0.0, min(POLL_SECONDS, deadline - time.monotonic())))
+                break
+            except subprocess.TimeoutExpired:
+                if stopping.is_set():
+                    if process.poll() is None:
+                        kill_tree(process)
+                    process.wait()
+                    break
+                if time.monotonic() >= deadline:
+                    timed_out = timeout
+                    kill_tree(process)
+                    process.wait()
+                    break
+    finally:
+        live.remove(name)
+    reader.join(KILL_WAIT_SECONDS)
+    output = decode(bytes(reader.buffer))
+    return Outcome(name, kind, time.monotonic() - started, process.returncode, output, timed_out)
+
+
+class Live:
+    """Os filhos vivos, por nome, sob trava: o abort mata cada um com a árvore."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.processes = {}
+
+    def add(self, name, process):
+        with self.lock:
+            self.processes[name] = process
+
+    def remove(self, name):
+        with self.lock:
+            self.processes.pop(name, None)
+
+    def kill_all(self):
+        with self.lock:
+            processes = list(self.processes.values())
+        killed = 0
+        for process in processes:
+            try:
+                kill_tree(process)
+            finally:
+                killed += 1
+        return killed
 
 
 # --- escalonamento ------------------------------------------------------------------------------------------
 
 class Run:
-    """Roda o plano: o primeiro serial sozinho; depois o pool e o resto da fila serial ao mesmo tempo."""
+    """Roda o plano: o primeiro serial sozinho; depois o pool e o resto da fila serial ao mesmo tempo. Os filhos
+    rodam em threads; a thread principal só espera com prazo (POLL_SECONDS), para o Ctrl+C/Ctrl+Break chegar."""
 
-    def __init__(self, current, root):
+    def __init__(self, current, root, timeout):
         self.current = current
         self.root = root
+        self.timeout = timeout
         self.lock = threading.Lock()
         self.outcomes = {}
+        self.live = Live()
+        self.stopping = threading.Event()
+        self.executor = None
 
     def one(self, name, kind):
-        outcome = run_module(self.current, name, kind, self.root)
+        if self.stopping.is_set():
+            return None
+        outcome = run_module(self.current, name, kind, self.root, self.timeout, self.live, self.stopping)
         with self.lock:
             self.outcomes[name] = outcome
-            print(module_line(outcome), flush=True)
+            if not self.stopping.is_set():
+                print(module_line(outcome), flush=True)
         return outcome
 
-    def serial_rest(self, names):
-        for name in names:
-            self.one(name, 'serial')
+    def serial_queue(self, names, first_done):
+        try:
+            for name in names:
+                if self.stopping.is_set():
+                    break
+                self.one(name, 'serial')
+                first_done.set()
+        finally:
+            first_done.set()
 
     def execute(self):
-        serial = list(self.current.serial)
-        if serial:
-            self.one(serial[0], 'serial')
-        rest = threading.Thread(target=self.serial_rest, args=(serial[1:],), name='fila-serial')
-        rest.start()
-        with ThreadPoolExecutor(max_workers=self.current.workers, thread_name_prefix='pool') as pool:
-            for future in [pool.submit(self.one, name, 'pool') for name in self.current.pool]:
-                future.result()
-        rest.join()
+        first_done = threading.Event()
+        queue = threading.Thread(target=self.serial_queue, args=(list(self.current.serial), first_done),
+                                 name='fila-serial')
+        queue.start()
+        while not first_done.wait(POLL_SECONDS):
+            pass
+        self.executor = ThreadPoolExecutor(max_workers=self.current.workers, thread_name_prefix='pool')
+        futures = [self.executor.submit(self.one, name, 'pool') for name in self.current.pool]
+        pending = set(futures)
+        while pending:
+            _, pending = wait(pending, timeout=POLL_SECONDS)
+        while queue.is_alive():
+            queue.join(POLL_SECONDS)
+        self.executor.shutdown(wait=False)
+        for future in futures:
+            future.result()  # relança um erro inesperado da thread, em vez de um KeyError adiante
         return [self.outcomes[name] for name, _ in self.current.entries()]
+
+    def abort(self):
+        """Interrupção: nada mais começa, todo filho vivo morre com a árvore. Devolve quantos foram mortos."""
+        self.stopping.set()
+        try:
+            return self.live.kill_all()
+        finally:
+            if self.executor is not None:
+                self.executor.shutdown(wait=False, cancel_futures=True)
 
 
 # --- saída --------------------------------------------------------------------------------------------------
@@ -238,14 +404,22 @@ def print_header(current):
 
 
 def module_line(outcome):
-    ran = f'Ran {outcome.ran}' if outcome.ran is not None else 'Ran ?'
-    verdict = outcome.verdict if outcome.verdict is not None else f'(sem veredito; saída {outcome.returncode})'
-    return f'[{outcome.kind:<6}] {outcome.name:<34} {outcome.wall:7.1f}s  {ran:<9} {verdict}'
+    head = f'[{outcome.kind:<6}] {outcome.name:<34} {outcome.wall:7.1f}s  '
+    if outcome.problem is not None:
+        return head + f'infraestrutura: {outcome.problem}'
+    return head + f'{f"Ran {outcome.ran}":<9} {outcome.verdict}'
+
+
+def counted(outcomes):
+    """Os módulos cujas contagens entram no total: um erro de infraestrutura não rodou de verdade (o `Ran 1` e o
+    `errors=1` de um módulo que não importou são do carregador, não do produto)."""
+    return [outcome for outcome in outcomes if outcome.problem is None]
 
 
 def summary_line(outcomes):
-    """O resultado somado, no formato do unittest: os zeros ficam de fora."""
-    totals = {key: sum(outcome.counts.get(key, 0) for outcome in outcomes) for key in COUNT_KEYS}
+    """O resultado somado, no formato do unittest, mais `infraestrutura=N` (módulos): os zeros ficam de fora."""
+    totals = {key: sum(outcome.counts.get(key, 0) for outcome in counted(outcomes)) for key in COUNT_KEYS}
+    problems = sum(1 for outcome in outcomes if outcome.problem is not None)
     failed = any(not outcome.passed for outcome in outcomes)
     infos = []
     if failed:
@@ -256,6 +430,8 @@ def summary_line(outcomes):
     for key in ('skipped', 'expected failures', 'unexpected successes'):
         if totals[key]:
             infos.append(f'{key}={totals[key]}')
+    if problems:
+        infos.append(f'infraestrutura={problems}')
     verdict = 'FAILED' if failed else 'OK'
     return verdict + (f' ({", ".join(infos)})' if infos else '')
 
@@ -265,7 +441,13 @@ def print_failures(current, outcomes):
         if outcome.passed:
             continue
         print('=' * 70)
-        print(f'{outcome.name} ({outcome.kind}): saída completa, código de saída {outcome.returncode}')
+        if outcome.timed_out is not None:
+            print(f'{outcome.name} ({outcome.kind}): infraestrutura: {outcome.problem}, árvore de processos morta; '
+                  'saída parcial')
+        elif outcome.problem is not None:
+            print(f'{outcome.name} ({outcome.kind}): infraestrutura: {outcome.problem}; saída completa')
+        else:
+            print(f'{outcome.name} ({outcome.kind}): saída completa, código de saída {outcome.returncode}')
         print('-' * 70)
         print(outcome.output.rstrip('\n'))
         print(f'Rode sozinho: python -m unittest discover -s {current.shown_dir} -p {outcome.name}.py')
@@ -273,11 +455,21 @@ def print_failures(current, outcomes):
 
 
 def print_total(outcomes, wall):
-    ran = sum(outcome.ran or 0 for outcome in outcomes)
+    ran = sum(outcome.ran or 0 for outcome in counted(outcomes))
     print('-' * 70)
     print(f'Ran {ran} test{"" if ran == 1 else "s"} in {wall:.3f}s')
     print()
+    problems = [outcome for outcome in outcomes if outcome.problem is not None]
+    if problems:
+        print('Infraestrutura: ' + '; '.join(f'{outcome.name} ({outcome.problem})' for outcome in problems))
     print(summary_line(outcomes), flush=True)
+
+
+def exit_code(outcomes):
+    """2 (infraestrutura) prevalece sobre 1 (falha de produto); 0 só com tudo verde."""
+    if any(outcome.problem is not None for outcome in outcomes):
+        return 2
+    return 0 if all(outcome.passed for outcome in outcomes) else 1
 
 
 # --- principal ----------------------------------------------------------------------------------------------
@@ -300,14 +492,30 @@ def main(argv=None):
         print_list(current)
         return 0
     root = Path(__file__).resolve().parents[1]
+    install_break_handler()
     print_header(current)
     started = time.monotonic()
-    outcomes = Run(current, root).execute()
+    run = Run(current, root, options.module_timeout)
+    try:
+        outcomes = run.execute()
+    except KeyboardInterrupt:
+        killed = run.abort()
+        print(f'\nInterrompido: {killed} módulo{"" if killed == 1 else "s"} morto{"" if killed == 1 else "s"} '
+              f'(com as árvores de processos); nada foi somado.', flush=True)
+        return INTERRUPTED
     wall = time.monotonic() - started
     print()
     print_failures(current, outcomes)
     print_total(outcomes, wall)
-    return 0 if all(outcome.passed for outcome in outcomes) else 1
+    return exit_code(outcomes)
+
+
+def install_break_handler():
+    """Ctrl+Break (SIGBREAK, só Windows) vira KeyboardInterrupt na thread principal, como o Ctrl+C."""
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, interrupt)
 
 
 if __name__ == '__main__':
