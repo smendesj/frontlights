@@ -51,6 +51,16 @@ per issue, of the whole diff, before the PR, and the full suite runs once there.
 stacked wave and the family integration below apply only to a family that already exists (an
 issue with sub-issues published before this rule), never to the slices of one issue.
 
+**Which tests run when.** Per slice, run the test modules the slice touches and the type checks;
+the fast suite is how the whole is checked between slices, when the project has one. In the
+Frontlights repository it is `FRONTLIGHTS_SUITE=rapida`: it makes `python -m unittest discover -s
+tests` skip the modules that start real processes and ports (`tests.test_serve_ports` and
+`tests.test_checks_integration`), each one reported as skipped with a reason that names the
+variable; any other value, or no variable, runs everything. Before the independent review and
+before the PR, run the whole suite without the variable, once, with or without CI in the project:
+a project without CI has no other net, and the CI of this repository never sets the variable
+either.
+
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
 sub-item of its box and more indented than it, the line `- Bloqueada: <what is missing and from

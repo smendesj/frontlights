@@ -28,6 +28,20 @@ import checks  # noqa: E402
 import serve  # noqa: E402
 
 SERVE = SCRIPTS / 'serve.py'
+MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_checks_integration: o módulo sobe processos e portas '
+                       'de verdade. Rode a suíte sem a variável antes da revisão independente e do PR.')
+
+
+def load_tests(loader, tests, pattern):
+    """Marcação da suíte rápida (issue 25): com FRONTLIGHTS_SUITE=rapida o módulo inteiro vira um único teste
+    pulado, com o motivo; qualquer outro valor, ou a ausência da variável, carrega tudo como sempre."""
+    if os.environ.get('FRONTLIGHTS_SUITE') != 'rapida':
+        return tests
+    pulado = type('ModuloPulado', (unittest.TestCase,),
+                  {'test_checks_integration': unittest.skip(MOTIVO_SUITE_RAPIDA)(lambda self: None)})
+    return unittest.TestSuite([pulado('test_checks_integration')])
+
+
 AUTO_SUPPORTED = hasattr(serve, 'PORT_AUTO')  # o serve da #11 aceita port "auto"
 PASSWORD = 'senha-fake-123'
 LOGIN = 'usuario1@exemplo.test'
@@ -111,7 +125,13 @@ class IntegrationTestCase(unittest.TestCase):
         (self.tmp / 'recorder.py').write_text(RECORDER, encoding='utf-8')
         self.config = self.tmp / 'config.json'
         self.ports = {'api': free_port(), 'web': free_port()}
-        self.addCleanup(self.serve, 'stop')
+        self.addCleanup(self.stop_if_registered)
+
+    def stop_if_registered(self):
+        """Limpeza: `serve stop` só quando ficou o registro da issue 12 (sem registro não há o que derrubar; os
+        dorminhocos de `live_pid` e `write_registry` têm limpeza própria)."""
+        if serve.registry_path(self.root, 12).is_file():
+            self.serve('stop')
 
     def process(self, name):
         port = self.ports[name]
@@ -569,8 +589,9 @@ class UserSecretMaskTest(IntegrationTestCase):
 
 
 def port_is_open(port):
+    """Uma porta aberta responde na hora; uma fechada custa o timeout inteiro no Windows, por isso ele é curto."""
     with socket.socket() as sock:
-        sock.settimeout(1)
+        sock.settimeout(0.2)
         return sock.connect_ex(('127.0.0.1', port)) == 0
 
 
@@ -584,9 +605,10 @@ class SmokeAutostartTest(IntegrationTestCase):
         for port in self.ports.values():
             for _ in range(50):
                 if not port_is_open(port):
-                    break
+                    break  # fechada: a sonda do laço já provou, sem sondar de novo
                 time.sleep(0.1)
-            self.assertFalse(port_is_open(port), port)
+            else:
+                self.assertFalse(port_is_open(port), port)
 
     def test_without_registry_it_starts_passes_and_tears_down_what_it_started(self):
         self.smoke_config()
@@ -652,7 +674,7 @@ class SmokeAutostartTest(IntegrationTestCase):
         sleeper.write_text('import time\ntime.sleep(60)\n', encoding='utf-8')
         port = self.ports['web']
         unhealthy = {'name': 'web', 'argv': [sys.executable, str(sleeper)], 'port': port,
-                     'health': f'http://127.0.0.1:{port}/health?k={PASSWORD}', 'timeoutSeconds': 2}
+                     'health': f'http://127.0.0.1:{port}/health?k={PASSWORD}', 'timeoutSeconds': 0.5}
         self.write_config({'smoke': {'paths': ['/'], 'target': 'web'}}, processes=[self.process('api'), unhealthy])
         code, result = self.run_check('smoke')
         self.assertEqual(code, 3, result)
@@ -830,9 +852,10 @@ class SmokeHelpers:
         for port in self.ports.values():
             for _ in range(50):
                 if not port_is_open(port):
-                    break
+                    break  # fechada: a sonda do laço já provou, sem sondar de novo
                 time.sleep(0.1)
-            self.assertFalse(port_is_open(port), port)
+            else:
+                self.assertFalse(port_is_open(port), port)
 
     def registry_file(self):
         return self.root / '.frontlights' / 'serve' / '12.json'
@@ -2307,13 +2330,17 @@ class StopRetryTest(SmokeHelpers, IntegrationTestCase):
             lock.mkdir(parents=True, exist_ok=True)  # diretório no lugar do arquivo: o serve não consegue usar a trava
             return real(root, issue)
 
-        begin = time.monotonic()
-        code, result = self.smoke_with(stop)
-        elapsed = time.monotonic() - begin
+        # o serve gasta RESERVE_LOCK_SECONDS por tentativa nesse caso (20 s de verdade): o mesmo desenho, em 6 s
+        # por tentativa e 2 s de prazo do retry, com o limite na mesma fórmula (2 tentativas + 1 - prazo)
+        with mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 6), mock.patch.object(checks, 'STOP_RETRY_SECONDS', 2):
+            begin = time.monotonic()
+            code, result = self.smoke_with(stop)
+            elapsed = time.monotonic() - begin
+            limit = 2 * serve.RESERVE_LOCK_SECONDS + 1 - checks.STOP_RETRY_SECONDS
         self.assertEqual((code, result['infrastructure']['kind']), (3, 'serve_stop_failed'), result)
         self.assertTrue(any('Rode `serve stop`' in w for w in result['warnings']), result)
-        self.assertEqual(len(calls), 1)  # a tentativa do serve já passou do prazo de 10 s: não se repete
-        self.assertLess(elapsed, 2 * 20 + 1 - 10)
+        self.assertEqual(len(calls), 1)  # a tentativa do serve já passou do prazo do retry: não se repete
+        self.assertLess(elapsed, limit)
         lock.rmdir()
         self.assertEqual(self.serve('stop').returncode, 0)
 
@@ -2447,11 +2474,15 @@ class UrlEncodedSecretFormsTest(IntegrationTestCase):
         names = ("quote safe=''", "quote_plus safe='/'", "quote safe='' minúsculo", "quote safe='@'",
                  "quote_plus safe='@'", "quote safe='' dupla safe=''", "quote safe='' minúsculo dupla safe=''")
         chosen = [forms[name] for name in names] + list(self.REPORTED[:3])
+        # a recusa de conexão é simulada no opener (cada recusa real custa ~2 s no Windows): `fetch_status` monta a
+        # mesma mensagem de `connection_failed`, com a mesma URL
+        recusada = urllib.error.URLError(ConnectionRefusedError(10061, 'conexão recusada'))
         for encoded in chosen:
             with self.subTest(form=encoded):
                 self.write_registry(f'http://127.0.0.1:{free_port()}/health')
                 self.write_config({'smoke': {'paths': [f'/{encoded}'], 'target': 'api'}}, users=users)
-                code, result = self.run_check('smoke')
+                with mock.patch.object(urllib.request.OpenerDirector, 'open', side_effect=recusada):
+                    code, result = self.run_check('smoke')
                 self.assertEqual((code, result['infrastructure']['kind']), (3, 'connection_failed'), result)
                 record_text = (self.root / '.frontlights' / 'issues' / '12' / 'checks' / 'smoke.json'
                                ).read_text(encoding='utf-8')
