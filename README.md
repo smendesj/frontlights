@@ -735,7 +735,6 @@ python skills/frontlights/scripts/frontlights.py schedule --plan skills/frontlig
 python skills/frontlights/scripts/frontlights.py context --used 85000 --reserve 15000
 python skills/frontlights/scripts/frontlights.py update-check
 python -m unittest discover -s tests -v
-python tests/suite.py
 python -m compileall -q skills/frontlights/scripts tests
 ```
 
@@ -752,8 +751,8 @@ prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 n
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
 slice, rode os módulos que a slice toca; antes da revisão independente e do PR, a suíte inteira sem a
 variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover -s tests -v`: o runner não
-encurta a suíte inteira. A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo
-`discover`.
+deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
+pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`

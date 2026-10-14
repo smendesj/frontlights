@@ -313,9 +313,9 @@ cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra 
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os cinco
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
 Fica para o fim, antes da revisão independente e do PR, a suíte inteira sem a variável, uma vez, pelo
-`python -m unittest discover -s tests -v` (o runner não a encurta), obrigatória com ou sem CI no projeto:
-onde não há CI ela é a única rede; a CI do GitHub deste repositório roda o mesmo `discover` e não define
-a variável.
+`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
+obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede; a CI do GitHub deste
+repositório roda o mesmo `discover` e não define a variável.
 
 ## Ponto de retomada e continuação
 

@@ -62,9 +62,9 @@ variable; any other value, or no variable, runs everything. The runner runs the 
 parallel and the five sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Before the independent review and before the PR, run the whole
 suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
-without CI in the project: the runner does not make the whole suite shorter, a project without CI
-has no other net, and the CI of this repository runs the same `discover` and never sets the
-variable either.
+without CI in the project: the runner does not make the whole suite faster than `discover`, a
+project without CI has no other net, and the CI of this repository runs the same `discover` and
+never sets the variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
