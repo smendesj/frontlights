@@ -97,6 +97,27 @@ fits, in the `preview` of the approve option. A summary or a file path alone is
 not showing it. If none of these is possible, record the approval as pending
 and stop.
 
+**Fan out.** Every stage runs its independent pieces at once, one subagent per piece and as
+many as there are pieces, launched in one message (several `Agent` calls, in Claude Code) and
+refilled as each one lands: the read-only helpers of stages 0 to 2 (`update-check`, the
+`status` reads, `candidates`, `inspect`, the sub-issue reads) in one go, a read whose inputs
+a later answer changed run again; code reading, conventions, the field-by-field trace and
+research, one subagent per area or layer; in stage 6 the highest safe number of independent
+issues, each in its own worktree with its own agent, and, inside an issue, the legwork around
+the open slice: the next slice's reading, the broader suite, the type checks, the watched
+run's driver and the independent reviewer (`references/development.md`, "Dispatch and
+ownership"). Waiting is for a real dependency only: an approval not yet given, a `Depende de`,
+a file two pieces would both edit, or a shared resource (a port, a database, a reservation
+folder, a generated file; test modules that share one run one at a time). A piece of a couple
+of tool calls stays inline. When the host cannot run subagents, say so in one line and report
+the capacity limit instead of serializing in silence. This session is the only coordinator: it
+alone asks (`AskUserQuestion`), approves, writes GitHub, runs a denied operation and records
+the handoff. Each brief is bounded (outcome, owned paths, tests, the rules of its stage: test
+data, masked secrets, the user's language) and names what the worker never does (ask the
+user, edit outside its paths, write GitHub, merge, widen the scope); a question it hits comes
+back to this session's tool. A worker's report is a claim: the session reads the diff and
+reruns the measured commands before it counts as evidence.
+
 ## 0. Update check (no questions)
 
 Before inspecting the project, run the read-only `python
@@ -335,8 +356,9 @@ exposing secrets. Do not disable hooks or request bypass mode.
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
 implementation authorization question. Each issue gets one branch, one worktree and one PR, and
-its slices are worked in order, in dependency order, one at a time; parallelism only between
-issues, the highest safe number of independent issues whose files do not overlap. Stacking and the
+its slices are worked in order, in dependency order, one at a time; slice parallelism only between
+issues, the highest safe number of independent issues whose files do not overlap, while the legwork
+around the open slice fans out (the Fan out rule above). Stacking and the
 family integration apply only to a family that already exists (an issue with sub-issues published
 before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap

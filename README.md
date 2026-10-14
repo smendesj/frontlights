@@ -653,8 +653,8 @@ implementação, anunciada sem pergunta → desenvolvimento orientado a testes (
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo
-só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
+Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com slices em
+paralelo só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
 e começa. Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
@@ -669,6 +669,17 @@ produção e apagar o que não for dado de teste viram, cada um, uma pergunta pr
 assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
 do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do
 próprio Claude Code não são do Frontlights e continuam valendo.
+
+**Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
+não depende de outra coisa, com tantos subagentes quantas forem as partes: as leituras do início da
+sessão, a leitura do código e o rastreio por camada na entrevista e no plano, as issues independentes na
+implementação (cada uma na própria worktree) e, dentro de uma issue, o trabalho em volta da slice aberta
+(leitura para a próxima, suíte ampla, verificação de tipos, teste assistido e revisão independente),
+enquanto as slices continuam em ordem, uma por vez, na branch da issue. Só espera o que depende de verdade:
+uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
+As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
+só; o relato de um subagente é conferido antes de virar evidência.
+
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
 As slices da issue são os critérios de aceitação: uma caixa por slice, em ordem de dependência,

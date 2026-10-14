@@ -63,7 +63,10 @@ Before proposing any approach, read the code around the change and record its
 established conventions, each with one or two example paths: module and file
 structure, naming, error handling, configuration, persistence, dependencies and
 libraries already in use, test layout and style, and documentation language.
-Read `CONTEXT.md`, ADRs and project instructions when they exist.
+Read `CONTEXT.md`, ADRs and project instructions when they exist. Fan the reading out: one
+read-only subagent per area the change touches (front end, API, persistence, tests,
+documentation), launched in one message, each reporting the conventions it found with example
+paths; the interview itself stays in this session.
 
 The existing pattern is the default. It may be broken only when it is concretely
 worse for this problem (it cannot express the need, it causes a known defect, or

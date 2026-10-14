@@ -43,7 +43,9 @@ measured commands), the tick of its box: capture the body, tick that line only, 
 `closeout.py tick-check` before and after the write, and leave a short comment on the issue with
 the commit and the commands. The session may end in the middle of an issue: the handoff names
 the slice in progress and the slices already ticked, and a fresh session resumes at the first
-open box, in order. Parallelism is between issues only. The watched run stays one per batch,
+open box, in order. Slices run in parallel between issues only; inside an issue, the fan-out rule of
+`SKILL.md` keeps the agents busy around the open slice (Dispatch and ownership, below). The watched
+run stays one per batch,
 when the last slice that changes the screen closes its loop; the independent review stays one
 per issue, of the whole diff, before the PR, and the full suite runs once there. Stacking, the
 stacked wave and the family integration below apply only to a family that already exists (an
@@ -82,12 +84,30 @@ the announcement goes back to the user through `AskUserQuestion`.
 Refresh the plan from GitHub and run `frontlights.py schedule --plan <file> --limit
 <approved-limit>`. The result is a recommendation, not proof of authority. Start
 all eligible non-conflicting issues up to the ceiling with supported generic
-subagents or separate supported sessions. Give each a bounded outcome, owned
-paths, tests, checkpoint path and no authority to expand scope. Tell workers they
-share the codebase and must preserve others' changes. Hide internal worker names.
-If concurrent sessions/tools are unavailable, report the capacity limitation.
-Do not silently serialize for convenience. Isolate ports, databases and test data
-as well as Git. Recompute readiness and refill free slots after each completion.
+subagents or separate supported sessions, all launched in one message. Give each a
+bounded outcome, owned paths, tests, checkpoint path, the rules of the stage it serves
+(test data, masked secrets, the user's language) and no authority to expand scope. A
+worker never calls `AskUserQuestion`, writes GitHub, merges or runs a denied operation:
+it reports the question or the write it needs, and this session asks or does it under
+the stage's approval. Tell workers they share the codebase and must preserve others'
+changes. Hide internal worker names. If concurrent sessions/tools are unavailable,
+report the capacity limitation. Do not silently serialize for convenience. Isolate
+ports, databases and test data as well as Git. Recompute readiness and refill free
+slots after each completion. A worker's report is a claim: read the diff and rerun the
+commands it names before it counts as evidence.
+
+**Fan out inside an issue.** The slices of one issue go one at a time, on its one branch, and
+the agents around the open slice do not wait for it. While one worker runs the TDD loop of
+the open slice in the issue's worktree, dispatch in the same message read-only workers that
+prepare the next slice (the code at its seams, the conventions, a draft of its first red
+test, reported as text the implementer rewrites in its own loop) and, when the loop closes,
+run at once the broader suite, the type checks and the other measured commands that share no
+resource (a test module that shares a port, a database or a reservation folder with another
+runs one at a time, as the project's own rules say). The independent reviewer and the driver
+of the watched run are workers of their own, dispatched together with whatever else is ready;
+the reviewer is never the implementer. Only one worker edits the issue's worktree at a time,
+and only it commits there: the readers edit nothing, and a worker that needs a file outside
+its owned paths stops and reports.
 
 An issue is `verified` for dependency readiness only when its acceptance evidence
 is current and its required changes are present in the dependent issue's approved

@@ -17,7 +17,8 @@
 
 A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
 pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
-slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo só entre issues;
+slices de cada issue em ordem, numa branch e um PR por issue, com slices em paralelo só entre issues (o
+trabalho em volta da slice aberta sai em paralelo, regra do paralelismo abaixo);
 empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
 publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
 de cada uma, o repositório, a concorrência, o empilhamento quando há família, a base das
@@ -285,6 +286,24 @@ custo limitado. Ele não altera situações, inicia agentes nem reserva recursos
 A única sessão coordenadora registra o trabalho em execução antes da próxima
 distribuição. Não use múltiplos coordenadores para o mesmo lote. Recalcule o plano
 após conclusões ou descobertas.
+
+**Paralelismo.** Em toda etapa, o trabalho que não depende de outro sai ao mesmo tempo, um subagente por
+parte e tantos quantas forem as partes, lançados numa única mensagem e repostos à medida que terminam: as
+leituras das etapas 0 a 2 de uma vez; a leitura do código, as convenções, o rastreio campo a campo e a
+pesquisa, um subagente por área ou camada; na etapa 6, o maior número seguro de issues independentes, cada
+uma na própria worktree com o próprio agente, e, dentro de uma issue, o trabalho em volta da slice aberta
+(leitura para a próxima slice, suíte ampla, verificação de tipos, condutor do teste assistido e revisor
+independente), enquanto as slices continuam em ordem, uma por vez, na branch única da issue. Só espera o
+que depende de verdade: uma aprovação ainda não dada, um `Depende de`, um arquivo que duas partes
+editariam ou um recurso compartilhado (porta, banco, pasta de reservas, arquivo gerado; módulos de teste
+que dividem um deles rodam um por vez). Sem subagentes no ambiente, a sessão avisa numa linha e registra o
+limite de capacidade, nunca serializa em silêncio. A sessão coordenadora é uma só: só ela pergunta
+(`AskUserQuestion`), aprova, escreve no GitHub, roda uma operação negada e grava o handoff. Cada subagente
+recebe um brief delimitado (resultado, caminhos próprios, testes, as regras da etapa: dados de teste,
+segredos mascarados, idioma do usuário) e o que nunca faz (perguntar ao usuário, editar fora dos caminhos,
+escrever no GitHub, mesclar, ampliar o escopo); uma pergunta que ele encontre volta para a sessão. O relato
+de um subagente é afirmação, não evidência: a sessão lê o diff e repete os comandos medidos antes de contar,
+e o revisor nunca é o autor.
 
 ## Ponto de retomada e continuação
 

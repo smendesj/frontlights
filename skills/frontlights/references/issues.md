@@ -111,7 +111,9 @@ or tests (Follow-ups below) is narrow by nature and is exempt: it lists only the
 layers it touches.
 
 **Define the issue's layers only after reading every layer.** The layers table is a
-conclusion from reading, never a guess. Before proposing the issue, read everything it
+conclusion from reading, never a guess. Fan the reading out: one read-only subagent per
+layer, or per screen for the trace, launched in one message, each reporting what it read with
+`file:line`; the table and the cut stay in this session. Before proposing the issue, read everything it
 can touch: in the front end the components, services, models, routes and specs; in
 the back end the controllers, services, contracts and DTOs, repositories, mappings and
 validators; the migrations and the database schema; the tests; the documentation; and

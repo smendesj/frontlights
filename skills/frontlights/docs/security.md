@@ -27,6 +27,13 @@ momento. A decisão está escrita no Frontlights, não no `.frontlights/config.j
 repositório clonado não consiga ligá-la nem ampliá-la. É uma regra da skill, não uma barreira: os
 pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights não os altera.
 
+**Subagentes.** O paralelismo (`docs/protocol.md`) não cria autoridade: um subagente trabalha sob as
+mesmas permissões nativas da sessão, e o "Sim" de uma operação negada vale para a sessão coordenadora que
+o perguntou, nunca para um agente que a execute por ela. O brief diz o que o agente nunca faz (perguntar ao
+usuário, escrever no GitHub, mesclar, rodar operação negada, editar fora dos caminhos dele), e isso é regra
+da skill, não barreira: os pedidos de permissão do Claude Code continuam valendo para cada agente, e o
+relato dele é conferido pela sessão (diff lido, comandos repetidos) antes de virar evidência.
+
 O comando `authorize` verifica uma operação estruturada em relação à autorização
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.

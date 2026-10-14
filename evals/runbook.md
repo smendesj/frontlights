@@ -189,6 +189,14 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     agora", and confirm the new `start` is the exact instant the Wednesday numbers were collected (not a midnight), that the
     collectors received `--start`/`--end`, that work done on Wednesday after that instant appears in the Friday numbers, and
     that after the Friday summary is sent the RoadS list shows both summaries and the week's presentation.
+25. Fan-out in every stage (`evals/fan-out.md`). On a disposable issue with three slices (S2 and S3 depending on
+    S1) in a project whose suite has two modules sharing a port reservation folder, confirm the session launches
+    the read-only helpers of stages 0 to 2 in one message, one reading subagent per layer before the solution
+    round, and in stage 6 one implementer in the issue's worktree with, in the same message, read-only workers
+    preparing S2; when S1 closes its loop the broader modules run at once except the two that share the folder,
+    which run one after the other; the reviewer is a different agent from the implementer and the session reruns
+    the commands the workers report; no worker asks the user, writes GitHub or edits outside its paths; and a
+    host without subagents is reported as a capacity limit in one line.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact
