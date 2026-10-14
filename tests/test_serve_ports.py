@@ -137,7 +137,11 @@ class PortsTestCase(unittest.TestCase):
         self.touched = [(self.root, 11)]
 
     def stop_everything(self):
+        """Um `serve stop` por (root, issue) tocado, só onde ficou um registro: sem registro não há processo a
+        derrubar (os casos que deixam filho vivo sem registro têm limpeza própria)."""
         for root, issue in self.touched:
+            if not (Path(root) / '.frontlights' / 'serve' / f'{issue}.json').exists():
+                continue
             subprocess.run([sys.executable, str(SCRIPT), 'stop', '--config', str(self.config), '--root', str(root),
                             '--issue', str(issue)], capture_output=True, timeout=120)
 
@@ -216,7 +220,7 @@ class IgnoredPortTest(PortsTestCase):
         ignoring = self.base / 'ignoring_server.py'
         ignoring.write_text(IGNORING_SERVER, encoding='utf-8')
         fixed = free_port()
-        bad = self.auto('api', argv_port=False, timeoutSeconds=2)
+        bad = self.auto('api', argv_port=False, timeoutSeconds=0.5)
         bad['argv'] = [sys.executable, str(ignoring), str(fixed)]
         self.write_config([self.auto('web'), bad])
         done = self.serve('start')
@@ -379,11 +383,7 @@ class RealConcurrencyTest(GitPortsCase):
         self.write_config([self.auto('web-api'), self.auto('worker', argv_port=False)])
         trees = [self.make_worktree(f'wt{number}') for number in range(self.STARTS)]
         for round_number in range(self.ROUNDS):
-            runs = []
-            for number, tree in enumerate(trees):
-                issue = 100 + number
-                self.touched.append((tree, issue))
-                runs.append(self.serve_in_background(issue, root=tree))
+            runs = [self.serve_in_background(100 + number, root=tree) for number, tree in enumerate(trees)]
             outputs = [run.communicate(timeout=240) for run in runs]
             codes = [run.returncode for run in runs]
             self.assertEqual(codes, [0] * self.STARTS, f'rodada {round_number}: {outputs}')
@@ -393,8 +393,13 @@ class RealConcurrencyTest(GitPortsCase):
             self.assertEqual(len(set(ports)), len(ports), ports)
             for entry in entries:
                 self.assertEqual(fetch(entry['url']).split('|')[0], str(entry['port']))
-            for number, tree in enumerate(trees):
-                self.assertEqual(self.serve('stop', 100 + number, root=tree).returncode, 0, self.last.stdout)
+            # os stops rodam em paralelo (um por worktree), como os starts
+            stops = [subprocess.Popen(self.command('stop', 100 + number, root=tree), stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True, encoding='utf-8')
+                     for number, tree in enumerate(trees)]
+            stop_outputs = [stop.communicate(timeout=120) for stop in stops]
+            for stop, (out, err) in zip(stops, stop_outputs):
+                self.assertEqual(stop.returncode, 0, out + err)
             self.assertEqual(list(self.shared.glob('*.json')), [])
             with serve.reservation_lock(self.shared):  # a leaked lock would refuse here after the deadline
                 pass
@@ -434,7 +439,14 @@ sys.path.insert(0, sys.argv[1])
 import serve
 
 directory, marker, log = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
-start_at, loops = float(sys.argv[5]), int(sys.argv[6])
+go, loops = Path(sys.argv[5]), int(sys.argv[6])
+print('ready', flush=True)
+while True:  # o teste grava o instante de largada em `go` quando todos os workers disseram `ready`
+    try:
+        start_at = float(go.read_text(encoding='utf-8'))
+        break
+    except (OSError, ValueError):
+        time.sleep(0.0005)
 while time.time() < start_at:
     time.sleep(0.0005)
 for _ in range(loops):
@@ -585,10 +597,14 @@ class ReserveLockTest(PortsTestCase):
                 old(lock, 3600)
             elif number % 3 == 1:  # a lock file with a fresh live pid in it
                 lock.write_text(str(os.getpid()), encoding='utf-8')
-            start_at = time.time() + 2.5
+            go = self.base / 'go'
+            go.unlink(missing_ok=True)
             runs = [subprocess.Popen([sys.executable, '-c', WORKER, str(SCRIPT.parent), str(self.ports), str(marker),
-                                      str(log), str(start_at), str(loops)], stderr=subprocess.PIPE, text=True)
-                    for _ in range(workers)]
+                                      str(log), str(go), str(loops)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                     text=True) for _ in range(workers)]
+            for run in runs:  # todos prontos e girando antes de marcar a largada, 0,2 s à frente
+                self.assertEqual(run.stdout.readline().strip(), 'ready', f'rodada {number}')
+            go.write_text(str(time.time() + 0.2), encoding='utf-8')
             errors = [run.communicate(timeout=120)[1] for run in runs]
             self.assertEqual([run.returncode for run in runs], [0] * workers, errors)
             outcome = log.read_bytes()
@@ -623,7 +639,7 @@ class ReservationRulesTest(GitPortsCase):
         self.ports.mkdir(parents=True)
         (self.ports / f'{port}.json').write_text(json.dumps({'issue': 5, 'process': 'old', 'root': 'x',
                                                              'pid': dead_pid()}), encoding='utf-8')
-        barrier = threading.Barrier(2, timeout=1.5)
+        barrier = threading.Barrier(2, timeout=0.5)
         real = serve.reservation_live
 
         def meet(path):
@@ -1225,30 +1241,41 @@ class MalformedAnswerTest(PortsTestCase):
         server = FakeHttpServer(self.PAYLOADS[0])
         self.addCleanup(server.close)
         child = types.SimpleNamespace(poll=lambda: None, returncode=None)
-        item = {'name': 'web', 'health': f'http://127.0.0.1:{server.port}/', 'timeoutSeconds': 1}
+        item = {'name': 'web', 'health': f'http://127.0.0.1:{server.port}/', 'timeoutSeconds': 0.2}
         with self.assertRaises(serve.Refusal) as caught:
             serve.wait_healthy(child, item)
         self.assertIn('não ficou saudável', str(caught.exception))
         self.assertEqual(caught.exception.process, 'web')
 
 
-# Tries to take the issue lock of issue 11 and, when it wins, holds it for argv[3] seconds.
+# Disputa a trava da issue 11 (avisa `trying` antes) e, quando vence, a segura até o arquivo argv[3] existir
+# (no máximo 60 s).
 COMPETITOR = r"""import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
 import serve
 
 sys.stdout.reconfigure(encoding='utf-8')
+print('trying', flush=True)
 try:
     lock = serve.acquire_lock(sys.argv[2], 11)
 except serve.Refusal as refusal:
     print('refused ' + str(refusal), flush=True)
     sys.exit(0)
 print('won', flush=True)
-time.sleep(float(sys.argv[3]))
+release, limit = Path(sys.argv[3]), time.monotonic() + 60
+while not release.exists() and time.monotonic() < limit:
+    time.sleep(0.02)
 serve.release_lock(lock)
 """
+
+
+def desfecho(run):
+    """Linha de desfecho de um COMPETITOR (`won` ou `refused ...`): a primeira só avisa que ele vai disputar."""
+    first = run.stdout.readline().strip()
+    return run.stdout.readline().strip() if first == 'trying' else first
 
 
 class IssueLockCase(PortsTestCase):
@@ -1273,12 +1300,20 @@ class IssueLockTest(IssueLockCase):
             if os.path.basename(str(path)) == '11.lock' and not competitors:
                 # right before the stale lock is removed, another start/stop of the issue competes for it
                 competitor = subprocess.Popen([sys.executable, '-c', COMPETITOR, str(SCRIPT.parent), str(self.root),
-                                               '4'], stdout=subprocess.PIPE, text=True, encoding='utf-8')
+                                               str(self.base / 'solta')], stdout=subprocess.PIPE, text=True,
+                                              encoding='utf-8')
                 competitors.append(competitor)
-                reader = threading.Thread(target=lambda: lines.append(competitor.stdout.readline().strip()),
-                                          daemon=True)
+                disputando = threading.Event()
+
+                def ler():
+                    if competitor.stdout.readline().strip() == 'trying':
+                        disputando.set()
+                    lines.append(competitor.stdout.readline().strip())
+
+                reader = threading.Thread(target=ler, daemon=True)
                 reader.start()
-                reader.join(3)  # time enough for it to win, if nothing stops it
+                self.assertTrue(disputando.wait(15), 'o concorrente não chegou a disputar a trava')
+                reader.join(0.5)  # time enough for it to win, if nothing stops it
             return real_unlink(path, *args, **kwargs)
 
         with mock.patch.object(os, 'unlink', hooked):
@@ -1323,7 +1358,7 @@ class IssueLockTest(IssueLockCase):
 
         started = time.monotonic()
         with mock.patch.object(Path, 'read_text', being_deleted), \
-                mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 1), watchdog():
+                mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 0.3), watchdog():
             with self.assertRaises(serve.Refusal) as caught:
                 serve.acquire_lock(self.root, 11)
         self.assertLess(time.monotonic() - started, 6)
@@ -1383,6 +1418,7 @@ class LockLoopDeadlineTest(IssueLockCase):
 
     def test_the_whole_call_including_the_guard_wait_ends_within_one_deadline(self):
         self.lock.write_text('', encoding='utf-8')  # recent and empty: waited for until the deadline
+        self.addCleanup(self.lock.unlink)  # fica após a recusa: nada da limpeza espera por ela
         stamp = time.time() - 1
         os.utime(self.lock, (stamp, stamp))
         held = serve.take_os_lock(self.lock.parent / '.locks.guard', 'ocupada')
@@ -1475,9 +1511,10 @@ class EmptyLockTest(IssueLockCase):
 
     def test_a_recent_empty_lock_is_waited_for_and_then_refused_without_touching_it(self):
         self.lock.write_text('', encoding='utf-8')
+        self.addCleanup(self.lock.unlink)  # fica após a recusa: nada da limpeza espera por ela
         self.age(1)
         started = time.monotonic()
-        with mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 1), watchdog():
+        with mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 0.3), watchdog():
             with self.assertRaises(serve.Refusal) as caught:
                 serve.acquire_lock(self.root, 11)
         self.assertLess(time.monotonic() - started, 6)
@@ -1512,7 +1549,7 @@ class EmptyLockTest(IssueLockCase):
         future = time.time() + 7200
         os.utime(self.lock, (future, future))
         self.addCleanup(self.lock.unlink)  # or the cleanup `stop` would wait for this lock too
-        with mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 1), watchdog():
+        with mock.patch.object(serve, 'RESERVE_LOCK_SECONDS', 0.3), watchdog():
             with self.assertRaises(serve.Refusal) as caught:
                 serve.acquire_lock(self.root, 11)
         message = str(caught.exception)
@@ -1532,11 +1569,13 @@ class EmptyLockTest(IssueLockCase):
     def test_two_callers_competing_for_an_old_empty_lock_end_with_a_single_owner(self):
         self.lock.write_text('', encoding='utf-8')
         self.age(3600)
-        runs = [subprocess.Popen([sys.executable, '-c', COMPETITOR, str(SCRIPT.parent), str(self.root), '4'],
+        solta = self.base / 'solta'
+        runs = [subprocess.Popen([sys.executable, '-c', COMPETITOR, str(SCRIPT.parent), str(self.root), str(solta)],
                                  stdout=subprocess.PIPE, text=True, encoding='utf-8') for _ in range(2)]
         for run in runs:
             self.addCleanup(run.kill)
-        lines = [run.stdout.readline().strip() for run in runs]
+        lines = [desfecho(run) for run in runs]
+        solta.write_text('x', encoding='utf-8')  # os dois responderam: o vencedor pode soltar a trava
         for run in runs:
             run.communicate(timeout=60)
         self.assertEqual(sorted(line.split()[0] for line in lines), ['refused', 'won'], lines)
@@ -1805,7 +1844,7 @@ class ConfigPortRangeTest(PortsTestCase):
         result = self.payload(done)
         self.assertEqual(result['category'], 'uso', text)
         self.assertEqual(result['failedProcess'], 'web', text)
-        time.sleep(0.5)
+        time.sleep(0.1)
         self.assertFalse((self.base / 'marker').exists(), f'{text}: um processo foi criado')
         self.assertFalse((self.root / '.frontlights' / 'serve' / '11.json').exists(), text)
         self.assertEqual(list(self.root.glob('.frontlights/serve/ports/*.json')), [], f'{text}: porta reservada')
