@@ -12,7 +12,7 @@ ticket count. Each names observable outcomes and relevant test layers. No extra
 question asking permission to repair an obviously horizontal decomposition.
 
 Reject: separate database/backend/frontend issues without a working seam;
-acceptance copied verbatim from the whole PRD; hidden shared-file contention;
+acceptance copied verbatim from the whole issue body; hidden shared-file contention;
 claiming `validate-plan` semantically proved verticality; creation before approval.
 
 Prerequisite case: if no storage abstraction exists, a tiny tested persistence
@@ -43,9 +43,9 @@ and its database column, found by search. Two fields with no consumer in the bac
 back capabilities with no action on the screen become acceptance criteria or sub-issues of
 the slice, never "not touched". A consumer that cannot be proven by reading (dynamic access,
 a column name built in a string) becomes the task "prove the consumption by a test or by
-reading the execution" and the plan is not offered for approval until it is closed. The PRD
-and the plan show the complete trace table, and the `Fluxo:` of the browser test also checks
-the effect in the back or the database after saving, not only what the screen shows.
+reading the execution" and the plan is not offered for approval until it is closed. The issue
+body (stage 4) and the plan show the complete trace table, and the `Fluxo:` of the browser test
+also checks the effect in the back or the database after saving, not only what the screen shows.
 
 Reject: a layer "not touched" with a reason but no evidence; a declared gap or a note in
 place of the task; approving a plan with a row lacking evidence; a slice defined without

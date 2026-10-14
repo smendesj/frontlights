@@ -1,6 +1,6 @@
 # Vertical issue planning
 
-Read the approved PRD revision and current GitHub issues/board. Reuse an existing
+Read the approved issue body (stage 4) and current GitHub issues/board. Reuse an existing
 matching issue when its acceptance scope fits; never create a duplicate local task.
 Use `templates/issue.md` and `examples/plan.json`. Before publication, temporary
 integer IDs are proposal IDs only; remap every dependency to real GitHub numbers
@@ -75,7 +75,7 @@ record the trace in the layers section (`templates/issue.md`). Then:
   with evidence. It is never only a note, and a declared gap is not a state in which a
   plan can be approved. When it cannot be proven by reading, ask with `AskUserQuestion`
   how to prove it.
-- The PRD (stage 4) and the plan (stage 5) show the complete trace table before the
+- The issue body (stage 4) and the plan (stage 5) show the complete trace table before the
   approval. The slice counts as defined only when no row lacks evidence; a plan with
   such a row goes back for correction before it is shown for approval.
 

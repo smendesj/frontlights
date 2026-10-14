@@ -2,9 +2,9 @@
 
 Uma skill do Claude Code que conduz **qualquer pedido seu** — uma funcionalidade,
 um bug, uma refatoração, uma pesquisa, um script pontual, um documento — por
-descoberta do problema, documentos de requisitos (PRDs) aprovados, issues
+descoberta do problema, o corpo da issue aprovado (a spec é a issue), issues
 verticais no GitHub e implementação com testes e autorização delimitada. O
-caminho é dimensionado ao pedido: trabalho pequeno é feito direto, sem PRD nem
+caminho é dimensionado ao pedido: trabalho pequeno é feito direto, sem
 issue. Observações do RoadS são uma entrada **opcional**, usada quando
 configurada; nada exige RoadS para começar. Uma única skill, com um arquivo de
 referência por etapa e os scripts, modelos e exemplos dentro dela. Não depende do GuardianS nem
@@ -639,8 +639,8 @@ nada a impõe mecanicamente, e o gatilho do ambiente nunca vale como prova do me
 
 Verificação de atualização da skill (sem pergunta; mostra o comando de atualização
 quando há versão nova no GitHub) →
-pedido e dimensionamento → inspeção → entrevista de decisões → PRD mostrado na
-íntegra e aprovado →
+pedido e dimensionamento → inspeção → entrevista de decisões → corpo da issue escrito sem nova
+entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 plano de issues verticais aprovado e publicado → autorização permanente de
 implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
@@ -654,9 +654,9 @@ marcar critérios nas issues. Merge de PR, fechar issue, mexer no quadro, public
 migration já registrada, escrever na branch base ou protegida, ligar configuração, chave ou flag em
 produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
 "Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
-assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do PRD, do plano de
-issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do próprio Claude
-Code não são do Frontlights e continuam valendo.
+assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
+do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do
+próprio Claude Code não são do Frontlights e continuam valendo.
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
@@ -687,7 +687,7 @@ em texto o conceito em linguagem simples, por que o projeto faz assim, um trecho
 comentado do próprio código e o que cada opção muda, e fecha cada rodada com um
 "Ficou claro?". Desligado, a última opção de cada pergunta técnica é "Explicar
 antes de decidir". Depois de duas reexplicações da mesma rodada, aparece "Seguir
-a recomendação": a decisão fica marcada como "a revisar" e entra no PRD como
+a recomendação": a decisão fica marcada como "a revisar" e entra no corpo da issue como
 suposição, não como decisão aprovada. O modo pode ser ligado ou desligado a
 qualquer momento, e os conceitos explicados ficam registrados no `discovery.md`.
 Toda pergunta ao usuário usa `AskUserQuestion`, sempre com opções. A conversa

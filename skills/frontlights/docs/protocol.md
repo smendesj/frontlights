@@ -7,7 +7,7 @@
 | Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código e registrar decisões | Resultado, limites e escolhas aprovados |
-| PRD | Redigir e revisar uma versão local | Texto integral mostrado e aprovação humana da versão exata |
+| Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
 | Plano de issues | Propor entregas e dependências | Plano e corpos das issues mostrados; aprovação das gravações específicas |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração e revisão independente |
@@ -31,8 +31,8 @@ configuração, chave ou flag em produção e apagar o que não for dado de test
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando
 exato; só roda depois do "Sim", que vale só para ela, e a resposta literal vai para o handoff. As
 perguntas do próprio trabalho (teste assistido, falhas, lote de achados, decisão nova de produto)
-continuam, e as etapas com aprovação própria (PRD, plano e publicação de issues, fechamento,
-limpeza, roadmap e resumo) também.
+continuam, e as etapas com aprovação própria (texto da issue, plano e publicação de issues,
+fechamento, limpeza, roadmap e resumo) também.
 
 O bloco `monitoring` da autorização registra `mode` (`local`, `phone` ou
 `alternative`), `confirmed_by`, a identidade da sessão e o horário; sem outra
@@ -121,7 +121,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 .frontlights/
   config.json
   discovery.md
-  prd.md
+  issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
   plan.json
   authorization.json
   issues/<numero-no-github>/

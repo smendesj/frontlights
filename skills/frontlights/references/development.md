@@ -167,8 +167,9 @@ When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and
 interface vocabulary match the project's domain language, and respect ADRs in the
 area you're touching.
 
-Follow the conventions recorded in the issue's `## Abordagem e convenções` (`## Approach and
-conventions` in issues published before 0.28.1) and
+Follow the conventions recorded in the issue's `## Decisões de implementação` (`## Abordagem e
+convenções` in issues published before this section existed, `## Approach and conventions`
+before 0.28.1) and
 in the discovery log: structure, naming, error handling, libraries and test
 style of the surrounding code. Break a convention only where that section names
 the approved break. Finding mid-work that the pattern is concretely worse, or
@@ -191,7 +192,8 @@ A **seam** is the public boundary you test at: the interface where you observe
 behavior without reaching inside. Tests live at seams, never against internals.
 
 **Test only at pre-agreed seams.** The seams under test are part of each issue
-(`## Seams sob teste` in `templates/issue.md`, `## Seams under test` in older issues) and
+(`## Decisões de teste` in `templates/issue.md`, `## Seams sob teste` or `## Seams under test` in
+older issues) and
 were approved when the issues
 were published. You can't test everything; agreeing the seams up front is how
 testing effort lands on the critical paths and complex logic instead of every

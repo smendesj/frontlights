@@ -157,7 +157,7 @@ parent's problem and solution rounds. Never leave one out to "decide later".
 
 Never decide alone that the interview is over. The open branches of sub-issues
 count as open branches. End with one question whose
-options are "Seguir para o plano/PRD", "Aprofundar <the most uncertain open
+options are "Seguir para a issue", "Aprofundar <the most uncertain open
 branch>" and "Aprofundar <the next one>". Keep going while the user chooses to
 deepen, and do not re-ask settled decisions unless new evidence invalidates them
 or the user asked for another explanation in the same call (see
@@ -177,6 +177,6 @@ same tables, naming the issue number in the first column. Do not start product
 implementation here.
 
 Carry approved decisions, the chosen approach, the recorded conventions and
-unresolved items into stage 4 (PRD) as the input. Decisions marked "a revisar"
+unresolved items into stage 4 (the issue) as the input. Decisions marked "a revisar"
 go in as assumptions to be shown, never as approved decisions. A decision log is
 planning evidence, never an issue status database.

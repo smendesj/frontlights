@@ -85,7 +85,7 @@ class StandingAuthorizationTests(unittest.TestCase):
         self.assertIn('A "Sim" covers that one operation, never another one, another PR or a later moment', development)
 
     def test_the_approvals_with_their_own_stage_keep_them(self):
-        self.assertIn('The approvals that have their own stage (PRD, issue plan and publication, closeout, cleanup, roadmap and summary) keep them',
+        self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them",
                       stage(6))
         self.assertIn('fechamento, limpeza, roadmap e resumo', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('da limpeza, do roadmap e do resumo', flat('README.md'))

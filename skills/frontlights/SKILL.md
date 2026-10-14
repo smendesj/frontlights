@@ -1,6 +1,6 @@
 ---
 name: frontlights
-description: Starts the Frontlights session for whatever the user asks: stages 0 and 1 first (update check, roadmap, progress summary, closeout), then discovery, an approved PRD, vertical GitHub issues and bounded implementation, right-sized to the request. Use it whenever the user mentions frontlights to start, activate, act on, attack or resume an issue, with or without the slash ("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); in such a sentence "frontlights" is this skill, not a session or project of the same name. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
+description: Starts the Frontlights session for whatever the user asks: stages 0 and 1 first (update check, roadmap, progress summary, closeout), then discovery, an approved issue body (the spec is the issue), vertical GitHub issues and bounded implementation, right-sized to the request. Use it whenever the user mentions frontlights to start, activate, act on, attack or resume an issue, with or without the slash ("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); in such a sentence "frontlights" is this skill, not a session or project of the same name. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -19,7 +19,7 @@ not upfront. Keep one coherent conversation. Never require
 named workers, GuardianS, initialization prompts or a second coordinator. Read
 `${CLAUDE_SKILL_DIR}/docs/protocol.md` and `${CLAUDE_SKILL_DIR}/docs/security.md`
 before execution. The references are `references/grilling.md` (stage 3),
-`references/prd.md` (stage 4), `references/issues.md` (stage 5),
+`references/issue.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
 `browser-testing.md`),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
@@ -179,8 +179,8 @@ why in one sentence:
   sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5 entirely. Confirm the intent, do the work, report
   what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
-  Do not manufacture a PRD or an issue for it, not even for the watched run: that question offers to name the existing
-  issue, never to open one.
+  Do not manufacture an issue body or an issue for it, not even for the watched run: that question
+  offers to name the existing issue, never to open one.
 - **Short.** A bounded piece of work whose shape is clear but whose details are
   not, including work that starts from an existing issue. Grill (stage 3, with
   its mandatory solution round), show the plan in full and get it approved, implement
@@ -189,7 +189,7 @@ why in one sentence:
   more than one person involved. Run stages 3 to 6 as written.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
-do. Do not silently downgrade a path the user asked for: if they asked for a PRD
+do. Do not silently downgrade a path the user asked for: if they asked for the issue body
 or for issues, produce them. The path controls the ceremony, never the quality
 of the work or the honesty of the evidence.
 
@@ -266,13 +266,17 @@ in one question (`references/grilling.md`). Keep facts, inferences and assumptio
 research/prototypes are driven by uncertainty and do not authorize product
 mutations.
 
-## 4. PRD approval
+## 4. Issue
 
-Read `references/prd.md`. Draft a proportionate PRD, show it in full under the
-show-before-approval rule, and obtain explicit approval of its exact revision.
-When the work touches a screen, the PRD shows the field-by-field trace to the back
-and the database (`references/issues.md`) before it is approved.
-This approval does not authorize live issue writes.
+Read `references/issue.md`. Write the body of the issue from the discovery log, without a new
+interview: the decisions were made in stage 3, and a decision that is missing from the log
+goes back there instead of being invented or asked here. The only question of this stage is the
+seams: propose the seams under test, preferring the ones that already exist, at the highest
+point possible, ideally one, and confirm them with `AskUserQuestion`. Then show the full body
+under the show-before-approval rule and obtain explicit approval of its exact revision. When
+the work touches a screen, the body shows the field-by-field trace to the back and the
+database (`references/issues.md`) before it is approved. This approval does not authorize live
+issue writes: the GitHub write is the approval of stage 5.
 
 ## 5. Issue-plan approval and publication
 
@@ -343,8 +347,8 @@ are never covered by the standing authorization. When one of them is the next st
 `AskUserQuestion` naming the exact operation and the exact command, with "Sim" first and "Não"
 second; run it only after "Sim", record the answer verbatim in the handoff, and never extend a
 "Sim" to another operation, another PR or a later moment. "Não", silence or any other answer
-leaves it undone. The approvals that have their own stage (PRD, issue plan and publication,
-closeout, cleanup, roadmap and summary) keep them.
+leaves it undone. The approvals that have their own stage (the issue's text, issue plan and
+publication, closeout, cleanup, roadmap and summary) keep them.
 
 A family is integrated locally
 and its full suite is green before any of its PRs opens, and a review that the code has

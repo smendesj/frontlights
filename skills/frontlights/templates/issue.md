@@ -1,10 +1,37 @@
 # <Um resultado observável>
 
-PRD: <revisão aprovada ou link>
+As seções até "Fora de escopo" são a spec: registram, em português, o que a entrevista da
+etapa 3 decidiu, sem nova pergunta além da dos seams. Seção que não se aplica fica marcada
+com o motivo, nunca preenchida por obrigação. Nada aqui que o usuário não tenha decidido.
 
-## Resultado
+## Problema
 
-## Limites e fora de escopo
+O problema do ponto de vista de quem usa: o que acontece hoje, a dor observada e a fonte
+(observação, issue, pedido), com data.
+
+## Solução
+
+A solução do ponto de vista de quem usa: o que passa a acontecer e a medida de sucesso.
+
+## Decisões de implementação
+
+A abordagem escolhida; as alternativas rejeitadas, cada uma com o motivo; as convenções do
+projeto que a abordagem segue, com caminhos de exemplo, e toda quebra de padrão aprovada, com
+o motivo e o custo; interfaces, contratos, esquema e decisões de arquitetura. A prosa das
+decisões não cita arquivo nem trecho de código, porque envelhece; a exceção é um trecho de
+protótipo que registra uma decisão melhor do que a prosa, cortado ao essencial e dito como tal.
+
+## Decisões de teste
+
+O que é um bom teste aqui: só comportamento observável pela interface pública, nunca detalhe
+interno. Os seams sob teste, confirmados na etapa 4, cada um com o comportamento de aceitação
+observado nele: só eles recebem testes, e seam ausente ou errado volta ao usuário. A arte
+prévia (testes parecidos que já existem no código) e os comandos reais de regressão,
+integração e checagem de tipos.
+
+## Fora de escopo
+
+O que foi recusado, com o motivo. São as linhas mais úteis da página.
 
 ## Critérios de aceitação
 
@@ -15,22 +42,6 @@ aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado 
 Evidência que fecha: <teste, medição ou diff revisado>`), nunca numa seção à parte: só
 esta seção conta para fechar a issue, e a issue só fecha com a pendência tratada,
 concluída e marcada com evidência.
-
-## Abordagem e convenções
-
-Abordagem escolhida (as alternativas rejeitadas ficam no PRD ou no registro de descoberta)
-e as convenções do projeto a seguir, com caminhos de exemplo. Toda quebra de padrão
-aprovada é nomeada aqui com o motivo.
-
-## Seams sob teste
-
-- <interface pública> — <comportamento de aceitação observado ali>
-
-Só estes seams recebem testes. Seam ausente ou errado volta ao usuário.
-
-## Expectativas de teste
-
-Regressão focada, integração mais ampla e os comandos reais de checagem de tipos.
 
 ## Camadas da fatia
 
@@ -104,7 +115,9 @@ Arquivos e componentes, arquivos gerados, migrations, portas, serviços de teste
 O que funciona de ponta a ponta e como um revisor observa isso. Um pré-requisito
 nomeia o seam que funciona, o teste e o consumidor que depende dele.
 
-## Riscos e tamanho da sessão
+## Riscos e dependências
+
+Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sessão.
 
 ## Pontos de evidência
 

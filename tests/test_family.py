@@ -162,9 +162,9 @@ class FamilyRulesTextTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, issues)
         skill = read('skills', 'frontlights', 'SKILL.md')
-        self.assertIn('field-by-field trace', flat(section(skill, '4. PRD approval') or ''))
+        self.assertIn('field-by-field trace', flat(section(skill, '4. Issue') or ''))
         self.assertIn('only after reading every layer', flat(section(skill, '5. Issue-plan approval and publication') or ''))
-        self.assertIn('trace table', flat(read('skills', 'frontlights', 'references', 'prd.md')))
+        self.assertIn('trace table', flat(read('skills', 'frontlights', 'references', 'issue.md')))
         self.assertIn('effect in the back and the database', flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
 
     def test_issue_template_asks_for_evidence_and_the_field_trace(self):

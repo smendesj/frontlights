@@ -14,8 +14,11 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    alone is not proof of interactive skill invocation.
 2. Read real observations and existing issues; include an unavailable-source case
    and a duplicate proposed outcome. Verify no mutation occurred during discovery.
-3. Interview, approve a PRD revision and inspect the proposed issues. Decline one
-   publication approval; confirm no issues were written. Approve the final plan.
+3. Interview, then let stage 4 write the issue body: confirm it asks nothing but the seams, that
+   the body carries Problema, Solução, Decisões de implementação, Decisões de teste and Fora de
+   escopo, and that nothing in it was not decided in the interview; approve its exact revision and
+   inspect the proposed issues. Decline one publication approval; confirm no issues were written.
+   Approve the final plan.
 4. Run the horizontal-ticket input from `vertical-slices.md`; inspect the revised
    vertical outcomes before publication. Record the actual transcript and judgment.
 5. Authorize two independent slices plus a third dependent/overlapping slice with
