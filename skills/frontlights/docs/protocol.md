@@ -306,12 +306,16 @@ de um subagente é afirmação, não evidência: a sessão lê o diff e repete o
 e o revisor nunca é o autor.
 
 **Rodadas de teste.** Por slice, rodam os módulos que a slice toca e a verificação de tipos; a suíte
-rápida é a forma de conferir o todo entre slices, quando o projeto tem uma (no repositório do Frontlights,
-`FRONTLIGHTS_SUITE=rapida` faz o `python -m unittest discover -s tests` pular os módulos de portas do
-`serve` e de integração do `checks`, cada um relatado como pulado com o motivo que cita a variável;
-qualquer outro valor, ou a ausência dela, roda tudo); antes da revisão independente e do PR, a suíte
-inteira sem a variável, uma vez, obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede,
-e a CI do GitHub deste repositório não define a variável.
+rápida é a forma de conferir o todo entre slices, quando o projeto tem uma. No repositório do Frontlights
+ela roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (só Windows): a variável faz pular os
+módulos de portas do `serve` e de integração do `checks`, cada um relatado como pulado com o motivo que
+cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
+módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os cinco
+sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
+Fica para o fim, antes da revisão independente e do PR, a suíte inteira sem a variável, uma vez, pelo
+`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
+obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede; a CI do GitHub deste
+repositório roda o mesmo `discover` e não define a variável.
 
 ## Ponto de retomada e continuação
 
