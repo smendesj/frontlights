@@ -287,6 +287,12 @@ class SerialQueueTests(FakeFolderTests):
             self.assertLessEqual(len(overlapping), 2, (name, marks))
         self.assertIn('Trabalhadores: 2', completed.stdout)
 
+    def test_without_the_workers_option_the_pool_has_four_workers_whatever_the_cores(self):
+        path = self.folder({'test_passa': PASSES})
+        completed = suite(['--tests-dir', str(path), '--serial', ''])
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertIn('Trabalhadores: 4\n', completed.stdout)
+
 
 class EnvironmentTests(FakeFolderTests):
     """Seam: o cabeçalho e a variável repassada aos filhos."""

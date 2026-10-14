@@ -68,8 +68,11 @@ def existing_dir(text):
     return path
 
 
+DEFAULT_WORKERS = 4  # o mais rápido medido na issue 27 (revisão r2): mais trabalhadores atrasam a fila serial
+
+
 def default_workers():
-    return max(1, (os.cpu_count() or 1) - 2)
+    return DEFAULT_WORKERS
 
 
 def parse(argv):
@@ -81,7 +84,7 @@ def parse(argv):
                         help='lista de módulos seriais separados por vírgula, no lugar da lista SERIAL '
                              '(vazia = nenhum serial)')
     parser.add_argument('--workers', type=positive_int, default=default_workers(),
-                        help='trabalhadores do pool (padrão: max(1, cpu_count - 2))')
+                        help=f'trabalhadores do pool (padrão: {DEFAULT_WORKERS})')
     parser.add_argument('--module-timeout', type=positive_float, default=900,
                         help='prazo por módulo, em segundos; estourado, a árvore do filho é morta e a suíte sai '
                              'com 2 (padrão: 900)')
