@@ -14,7 +14,7 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
 
 ## Verificação automatizada
 
-- `python -m unittest discover -s tests -v`: **1439 testes em 29 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem da 0.25.0).
+- `python -m unittest discover -s tests -v`: **1518 testes em 38 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 14/10/2026, issue 25, pelo que `unittest.TestLoader().discover('tests')` carrega).
   Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários minutos; rode por módulo, ou defina
   `FRONTLIGHTS_SUITE=rapida` para a suíte pulá-los com o motivo (issue 25, S1); a rodada inteira sem a variável
   continua obrigatória antes da revisão independente e do PR.

@@ -57,8 +57,8 @@ def loaded(value):
 def marked(test, module):
     """Pré-condição barata: sem a marcação, o runner rodaria o módulo lento inteiro (minutos) só para falhar."""
     count = loaded('rapida')[module]['count']
-    test.assertEqual(count, 1, f'{module} carrega {count} testes com {VARIABLE}=rapida: a marcação de pulo está ausente, '
-                               'e a rodada do módulo inteiro não é disparada')
+    test.assertEqual(count, 1, f'{module} carrega {count} testes com {VARIABLE}=rapida: a marcação de pulo está '
+                               'ausente, e a rodada do módulo inteiro não é disparada')
 
 
 def read(*parts):

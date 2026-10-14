@@ -28,8 +28,8 @@ import checks  # noqa: E402
 import serve  # noqa: E402
 
 SERVE = SCRIPTS / 'serve.py'
-MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_checks_integration: o módulo sobe processos e portas de '
-                       'verdade. Rode a suíte sem a variável antes da revisão independente e do PR.')
+MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_checks_integration: o módulo sobe processos e portas '
+                       'de verdade. Rode a suíte sem a variável antes da revisão independente e do PR.')
 
 
 def load_tests(loader, tests, pattern):

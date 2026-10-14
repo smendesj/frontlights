@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontli
 import serve  # noqa: E402
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts' / 'serve.py'
-MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_serve_ports: o módulo sobe processos e portas de verdade. '
-                       'Rode a suíte sem a variável antes da revisão independente e do PR.')
+MOTIVO_SUITE_RAPIDA = ('FRONTLIGHTS_SUITE=rapida pula tests.test_serve_ports: o módulo sobe processos e portas de '
+                       'verdade. Rode a suíte sem a variável antes da revisão independente e do PR.')
 
 
 def load_tests(loader, tests, pattern):
@@ -220,7 +220,7 @@ class IgnoredPortTest(PortsTestCase):
         ignoring = self.base / 'ignoring_server.py'
         ignoring.write_text(IGNORING_SERVER, encoding='utf-8')
         fixed = free_port()
-        bad = self.auto('api', argv_port=False, timeoutSeconds=0.5)
+        bad = self.auto('api', argv_port=False, timeoutSeconds=1)  # o servidor errado chega a escutar antes de morrer
         bad['argv'] = [sys.executable, str(ignoring), str(fixed)]
         self.write_config([self.auto('web'), bad])
         done = self.serve('start')
@@ -441,11 +441,14 @@ import serve
 directory, marker, log = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
 go, loops = Path(sys.argv[5]), int(sys.argv[6])
 print('ready', flush=True)
+limite = time.monotonic() + 60  # sem largada em 60 s (o teste falhou antes de gravá-la), o worker sai sozinho
 while True:  # o teste grava o instante de largada em `go` quando todos os workers disseram `ready`
     try:
         start_at = float(go.read_text(encoding='utf-8'))
         break
     except (OSError, ValueError):
+        if time.monotonic() > limite:
+            sys.exit(2)
         time.sleep(0.0005)
 while time.time() < start_at:
     time.sleep(0.0005)
@@ -602,6 +605,8 @@ class ReserveLockTest(PortsTestCase):
             runs = [subprocess.Popen([sys.executable, '-c', WORKER, str(SCRIPT.parent), str(self.ports), str(marker),
                                       str(log), str(go), str(loops)], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                      text=True) for _ in range(workers)]
+            for run in runs:  # uma asserção que dispare antes da largada não deixa worker vivo
+                self.addCleanup(run.kill)
             for run in runs:  # todos prontos e girando antes de marcar a largada, 0,2 s à frente
                 self.assertEqual(run.stdout.readline().strip(), 'ready', f'rodada {number}')
             go.write_text(str(time.time() + 0.2), encoding='utf-8')
@@ -1844,7 +1849,7 @@ class ConfigPortRangeTest(PortsTestCase):
         result = self.payload(done)
         self.assertEqual(result['category'], 'uso', text)
         self.assertEqual(result['failedProcess'], 'web', text)
-        time.sleep(0.1)
+        time.sleep(0.5)  # janela para um `python -c` indevido subir e escrever o marcador, mesmo em máquina lenta
         self.assertFalse((self.base / 'marker').exists(), f'{text}: um processo foi criado')
         self.assertFalse((self.root / '.frontlights' / 'serve' / '11.json').exists(), text)
         self.assertEqual(list(self.root.glob('.frontlights/serve/ports/*.json')), [], f'{text}: porta reservada')

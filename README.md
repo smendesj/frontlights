@@ -738,7 +738,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q skills/frontlights/scripts tests
 ```
 
-A suíte inteira leva de 25 a 40 minutos, quase tudo em dois módulos que sobem processos e portas de
+A suíte inteira leva dezenas de minutos, quase tudo em dois módulos que sobem processos e portas de
 verdade. Para conferir o todo entre slices, defina `FRONTLIGHTS_SUITE=rapida` (no PowerShell,
 `$env:FRONTLIGHTS_SUITE = 'rapida'` antes do `unittest`): os módulos `tests.test_serve_ports` e
 `tests.test_checks_integration` são pulados, cada um relatado como um teste pulado com o motivo, que cita
