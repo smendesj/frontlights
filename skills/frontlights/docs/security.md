@@ -143,7 +143,9 @@ Uma pendência que não é corrigida no PR vira um critério de aceitação novo
 issue de topo, nunca uma sub-issue nova. Isso é uma
 escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permissões vigentes, só depois de o
 texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
-migração de uma seção legada, pedida por você, também remove os itens movidos), a releitura confere a diferença e nenhum utilitário do Frontlights faz essa escrita. O Frontlights não impede a sessão de
+migração de uma seção legada, pedida por você, também remove os itens movidos, e a linha `Bloqueada:` de uma
+slice que destravou é apagada antes da marcação), a releitura confere a diferença e nenhum utilitário do
+Frontlights faz essa escrita. O Frontlights não impede a sessão de
 encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
 que impede que a issue seja proposta para fechar com o critério aberto.
 

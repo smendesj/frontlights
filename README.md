@@ -216,7 +216,8 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   topo, os valores do quadro, os labels finais, o tipo nativo e as linhas do corpo. A publicação
   usa exatamente isso. Sem os blocos, a saída e as regras são as de antes. Sub-issue não leva
   `labels` nem `body_fields`: herda do pai. Uma issue que já existe (o plano traz o `url` dela) não
-  precisa de `body_fields`, porque o texto de uma issue nunca é editado.
+  precisa de `body_fields`, porque o texto que já estava no corpo nunca é editado (a spec e as
+  slices entram só por acréscimo).
 - Um label (do plano ou do `config.json`) usa só letras, números e `: . / + -` ou espaço no meio,
   até 50 caracteres, sem terminar em `: . / -` nem em espaço e sem hífen depois de espaço: nada que
   um terminal interprete (aspas, `$`, crase, `;`, `&`, `|`, vírgula). Letras acentuadas precisam
@@ -652,8 +653,9 @@ oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no p
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
 Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo
-só entre issues, anuncia num bloco curto as issues, a ordem das slices, a concorrência, o
-empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Cada slice
+só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
+concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
+e começa. Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,

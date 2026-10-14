@@ -309,7 +309,8 @@ def board_body_fields(project, issue):
             f'{issue["id"]}: body_fields must map line names to non-empty values')
     unknown = sorted(set(chosen) - set(rules))
     require(not unknown, f'{issue["id"]}: body_fields not on the board: {", ".join(unknown)}')
-    # An issue that already exists (it carries its `url`) cannot get a body line: the flow never edits a body.
+    # An issue that already exists (it carries its `url`) cannot get a body line: the text already in a body is
+    # never edited (stage 5 only appends the spec and the slices to it).
     missing = [] if issue.get('url') else sorted(set(rules) - set(chosen))
     require(not missing, f'{issue["id"]}: choose body field(s) {", ".join(missing)} in the plan')
     for name, value in chosen.items():
@@ -384,7 +385,7 @@ def slices_of(issue):
                 f'{label}: slice {sid}: falta delivers (o que dá para demonstrar quando ela termina)')
         for field in ('seams', 'layers'):
             require(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)')
-        deps = item.get('depends_on')
+        deps = item.get('depends_on', [])   # absent means none ("Depende de: nenhuma")
         require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
                 f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')
         for dep in deps:
@@ -433,10 +434,11 @@ def validate_plan(plan, project=None):
                     f'{issue["id"]}: parent_external e parent são exclusivos: use parent para uma issue do plano')
         if issue.get('parent') is not None or issue.get('parent_external') is not None:
             # Only a family that already exists has children: the plan never proposes a sub-issue.
-            require(issue.get('status') != 'proposed',
+            published = issue.get('status') != 'proposed' and (plan['repository'] is None or nonempty(issue.get('url')))
+            require(published,
                     f'{issue["id"]}: sub-issue nova não é proposta: o plano só carrega filhas já publicadas '
-                    '(status ready, running, verified ou blocked); um achado vira critério da issue de origem '
-                    'ou issue de topo')
+                    '(status ready, running, verified ou blocked, com o url da issue); um achado vira critério '
+                    'da issue de origem ou issue de topo')
         if project is not None:
             resolve_board(project, issue)
         if issue.get('url'):
@@ -689,20 +691,20 @@ def pending_names(pending):
     return sorted(set(names))
 
 
-def checkpoint(root, issue, handoff, next_step, pending=(), slice=None):
+def checkpoint(root, issue, handoff, next_step, pending=(), slice_id=None):
     root, handoff = Path(root).resolve(strict=True), Path(handoff).resolve()
     require(handoff.is_file(), 'durable handoff file required')
     require(number(issue.get('number')) and nonempty(issue.get('body')) and
             (nonempty(issue.get('html_url')) or issue.get('source') == 'local'),
             'current canonical GitHub issue snapshot, or a local issue with source "local", required')
     require(nonempty(next_step), 'next concrete step required')
-    if slice is not None:   # the acceptance-criteria box in progress, so the next window resumes there
-        require(isinstance(slice, str) and SLICE_ID_RULE.fullmatch(slice),
+    if slice_id is not None:   # the acceptance-criteria box in progress, so the next window resumes there
+        require(isinstance(slice_id, str) and SLICE_ID_RULE.fullmatch(slice_id),
                 'slice is a short label without spaces, such as S2')
     return {'version': 1, 'created_at': dt.datetime.now(dt.timezone.utc).isoformat(),
             'root': str(root), 'issue': issue, 'git': git_evidence(root),
             'handoff_sha256': hashlib.sha256(handoff.read_bytes()).hexdigest(),
-            'next_step': next_step, 'pending': pending_names(pending), 'slice': slice}
+            'next_step': next_step, 'pending': pending_names(pending), 'slice': slice_id}
 
 
 def resume(root, saved, current_issue, handoff):
@@ -964,7 +966,7 @@ def main():
     p.add_argument('--toca', choices=['sim', 'nao', 'não', 'ausente'], help="the plan's `Toca o frontend:`")
     p.add_argument('--record', help='the batch result.json, which may not exist yet')
     p.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
-                   help='a stacked slice and the branch its PR targets (its base in the stacking authorization); repeatable')
+                   help='the branch of a stacked issue and the branch its PR targets (its base in the stacking authorization); repeatable')
     sub.add_parser('update-check')
     p = sub.add_parser('publish-order')
     p.add_argument('--plan', required=True, help='the plan; prints its issue ids blockers first, for --blocked-by')

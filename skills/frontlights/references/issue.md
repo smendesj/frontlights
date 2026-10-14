@@ -24,7 +24,8 @@ Use `templates/issue.md`, in the user's language. The sections before the accept
 are the spec: Problema (the problem from the user's point of view, with the observed pain and
 its source), Solução (the solution from the user's point of view, with the measure of success),
 Decisões de implementação (the chosen approach, the rejected alternatives with their reasons, the
-conventions followed with example paths and every approved break with its cost; interfaces,
+conventions followed, named by their pattern (paths belong to the ownership and the trace table),
+and every approved break with its cost; interfaces,
 contracts, schema and architecture decisions, without file paths or code snippets in the prose,
 because they go stale; the only exception is a snippet a prototype produced that records a
 decision better than prose, trimmed to the decision and said to be from the prototype), Decisões

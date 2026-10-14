@@ -65,8 +65,11 @@ this is done?" is horizontal: fix it before the quiz, with no extra question. On
 the complete body under the show-before-approval rule.
 
 **One write per issue.** The approval of the plan names the writes, one write per issue: a
-creation (or one append to an existing body) with its boxes and board values, then a reread
-of GitHub that confirms the body, the number of boxes and the board values.
+creation or, for an issue that already exists, one append of the spec sections and the boxes
+to its body by the write rule of the leftover (body captured, append only, difference checked,
+reread; the text that was there is not edited), with its board values, then a reread of GitHub
+that confirms the body, the number of boxes and the board values. Stages 4 and 5 run in the
+same window.
 
 ## The issue and its layers (a family that already exists)
 
@@ -124,8 +127,9 @@ record the trace in the layers section (`templates/issue.md`). Then:
   consumer, test). A reason without evidence is not accepted, "the API already
   validates" included.
 - A field nothing in the back consumes, or a back capability with no action on the
-  screen, is a finding: it becomes an acceptance criterion of the slice or a
-  sub-issue, never "not touched".
+  screen, is a finding: it becomes an acceptance criterion of the issue (in a family that
+  already exists, of the child that covers that layer), never a new sub-issue and never
+  "not touched".
 - An inconclusive trace (dynamic consumption, reflection, a column name built in a
   string) is an explicit task of the slice, "prove the consumption by a test or by
   reading the execution", and it blocks the approval of the plan until it is closed
@@ -157,7 +161,7 @@ shared ownership for resources that cannot safely run together. Split oversized
 issues into independently acceptable outcomes. See `evals/vertical-slices.md`.
 
 Before asking for approval, show the complete plan in the user's language: the
-table of slices with dependencies and ownership, and the full body of every
+table of issues with their dependencies and ownership, and the full body of every
 issue, in the conversation, as a file sent with the host's file-sending tool
 when one exists, and in the `preview` of the approve option (as much as fits).
 Then ask approval through `AskUserQuestion`, with options, for the exact issue
@@ -212,7 +216,8 @@ and takes none of the board writes below (see Follow-ups). Plan it with the issu
   `gh issue edit <n> --repo <repo> --add-label "<name>"` once per label, `--add-assignee "<login>"`
   and `--type "<type>"`; `gh project item-add` when it is not on the board; the fields as above, with
   `--number` or `--date` for those types. Only on top of an empty value, and these writes never edit its body
-  (the only body edits are a leftover criterion and the move of a legacy section, under Follow-ups).
+  (the only body edits are the append of the spec and the slices of stage 5, a leftover criterion,
+  the tick of a box, the `Bloqueada:` line and the move of a legacy section, each under its own rule).
 - Every value typed into these commands goes in as one double-quoted argument, and none may hold a
   dollar sign, backtick, double quote (straight or curly: PowerShell closes a string on both),
   backslash or control character; `validate-plan` refuses a plan value that does, so reword it. A
@@ -298,7 +303,9 @@ contradicts a closed issue): use a top-level issue that cites it and say why.
   (a test at a seam, a measured result, a reviewed diff), in the user's language and
   prefixed with where it came from: `- [ ] Pendência (achado da revisão): <what must be
   true>. Evidência que fecha: <evidence>` (`do teste ao vivo`, `dos testes` or `da
-  conferência` for the other origins). Several leftovers are several items.
+  conferência` for the other origins). Several leftovers are several items. A leftover box
+  has no `S<n>` id, so give it a label for `checkpoint --slice` (`P1`, `P2`, in order) and keep
+  that mapping in the handoff.
 - **Approval.** It changes the issue's scope, so, like any update of a published issue, it
   keeps what is there and is shown before it is written (the update rule at the end of
   the Project board section): the exact text, the issue and its place in the section go

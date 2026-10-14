@@ -173,7 +173,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 22. Trace of every screen field to the back and the database (`evals/vertical-slices.md`, trace case). On a disposable issue
     that changes a form, confirm the slice is defined only after reading front end, back end, migrations and schema, tests and
     documentation; every field has its consumer (`file:line`) and column in the layers section; a field with no consumer or a
-    back capability with no action becomes a criterion or sub-issue; an inconclusive trace becomes the explicit task and the
+    back capability with no action becomes a criterion, never a sub-issue; an inconclusive trace becomes the explicit task and the
     plan is not offered for approval until it is closed; and the `Fluxo:` checks the effect in the back or the database.
 23. Standing authorization and slices in order. On a disposable issue with three slices (and, for the stacking rules,
     a family that already exists), confirm stage 6 opens with no concurrency, stacking or authorization question and

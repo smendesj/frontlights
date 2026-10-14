@@ -163,7 +163,7 @@ class BodyFieldTests(RefusalMixin, unittest.TestCase):
 
 class SubIssueTests(RefusalMixin, unittest.TestCase):
     def child(self, **extra):
-        child = issue(2, parent=1, **extra)
+        child = issue(2, parent=1, url='https://github.com/example/project/issues/2', **extra)
         for key in ('project_fields', 'labels', 'body_fields'):
             if key not in extra:
                 child.pop(key)
@@ -178,7 +178,8 @@ class SubIssueTests(RefusalMixin, unittest.TestCase):
         self.assertRefused(plan(issue(1), self.child(body_fields={'Effort': 'Low'})), 'sub-issue')
 
     def test_a_sub_issue_still_cannot_carry_board_fields(self):
-        self.assertRefused(plan(issue(1), issue(2, parent=1)), 'project_fields')
+        self.assertRefused(plan(issue(1), issue(2, parent=1, url='https://github.com/example/project/issues/2')),
+                           'project_fields')
 
     def test_a_board_without_rules_does_not_look_at_labels_or_body_lines_of_a_sub_issue(self):
         board = project(labels=None, issue_type_by_label=None, body_fields=None)
@@ -394,7 +395,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue(printed['valid'])
 
     def test_a_sub_issue_has_no_resolved_entry(self):
-        child = issue(2, parent=1)
+        child = issue(2, parent=1, url='https://github.com/example/project/issues/2')
         for key in ('project_fields', 'labels', 'body_fields'):
             child.pop(key)
         printed = json.loads(self.run_cli(plan(issue(1), child), project()).stdout)

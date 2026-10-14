@@ -16,8 +16,8 @@ A solução do ponto de vista de quem usa: o que passa a acontecer e a medida de
 ## Decisões de implementação
 
 A abordagem escolhida; as alternativas rejeitadas, cada uma com o motivo; as convenções do
-projeto que a abordagem segue, com caminhos de exemplo, e toda quebra de padrão aprovada, com
-o motivo e o custo; interfaces, contratos, esquema e decisões de arquitetura. A prosa das
+projeto que a abordagem segue, nomeadas pelo padrão (os caminhos ficam na propriedade e no
+rastreio), e toda quebra de padrão aprovada, com o motivo e o custo; interfaces, contratos, esquema e decisões de arquitetura. A prosa das
 decisões não cita arquivo nem trecho de código, porque envelhece; a exceção é um trecho de
 protótipo que registra uma decisão melhor do que a prosa, cortado ao essencial e dito como tal.
 
@@ -40,14 +40,16 @@ resultado observável de ponta a ponta, e logo abaixo os sub-itens sem caixa. Pr
 quando houver, é a primeira slice e nomeia o seam que funciona, o teste e o consumidor que
 depende dele; refatoração larga é a exceção declarada: expandir, migrar por lotes e contrair,
 cada passo uma slice. Todo critério falha no commit de partida; o que já é verdadeiro antes
-do trabalho não é critério. Cada caixa fecha só com evidência.
+do trabalho não é critério. Cada caixa fecha só com evidência. Uma slice estacionada ganha, como
+último sub-item da caixa, `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, antes da
+marcação; não copie esse sub-item para uma slice que não está estacionada, porque o RoadS lê
+qualquer caixa aberta com ele como bloqueada.
 
 - [ ] S1. <resultado observável de ponta a ponta desta slice>
   - Entrega: <o que dá para demonstrar quando ela termina>
   - Seams: <interfaces públicas em que o comportamento é observado>
   - Camadas: <as camadas que ela toca>
   - Depende de: <slices anteriores, ou nenhuma>
-  - Bloqueada: <só numa slice estacionada: o que falta e de quem; a linha é apagada ao destravar, antes da marcação>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.
@@ -85,7 +87,8 @@ Rastreio dos campos, botões e ações que a fatia toca na tela, feito por busca
 | <campo> | | | |
 
 Campo sem consumidor no back, ou capacidade do back sem ação na tela, é achado: vira
-critério de aceitação desta issue ou sub-issue, nunca "não tocada". Rastreio inconclusivo
+critério de aceitação desta issue (numa família que já existe, da filha que cobre a camada),
+nunca sub-issue nova nem "não tocada". Rastreio inconclusivo
 (consumo dinâmico, reflexão, nome de coluna montado em texto) vira a tarefa "provar o
 consumo por teste ou por leitura da execução" e bloqueia a aprovação do plano até ser
 resolvida com evidência; nunca fica só como nota.

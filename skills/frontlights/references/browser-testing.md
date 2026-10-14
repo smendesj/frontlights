@@ -242,11 +242,11 @@ When the user will watch:
   every edge of the page are inside it; when something is cut off, resize and check
   again, and never go on with a cut-off window.
 - **Two passes, same scenario and same account.** ANTES runs the `Fluxo:` on the
-  approved base of the batch (`main`, or the default branch); a slice stacked on a
+  approved base of the batch (`main`, or the default branch); an issue stacked on a
   parent that is not part of the batch uses that parent's branch, the base of its PR.
   Serve it from a checkout of that
   base, a detached-HEAD worktree made with `git worktree add` because the base
-  branch is already checked out elsewhere; for that stacked slice the
+  branch is already checked out elsewhere; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
   --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
   delivered state (the batch's single branch, or the local integration of the slices that

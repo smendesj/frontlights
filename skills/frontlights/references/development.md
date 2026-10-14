@@ -54,7 +54,8 @@ sub-item of its box and more indented than it, the line `- Bloqueada: <what is m
 whom>`, by the write rule of the leftover (body captured, append only, difference checked,
 reread); the RoadS reads that sub-item as the reason of a blocked part of the delivery. When
 the slice is released, remove exactly that line before the box is ticked: the only removal
-allowed in a body, checked by the difference (nothing else added or removed). The closeout
+allowed in a body besides the move of a legacy section, checked by the difference (nothing
+else added or removed). The closeout
 keeps counting the box as open while the line is there, because a sub-item without a box is
 never a criterion.
 

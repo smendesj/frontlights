@@ -62,10 +62,11 @@ class BlockedSliceTextTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
 
-    def test_the_issue_template_shows_the_optional_sub_item(self):
+    def test_the_issue_template_explains_the_sub_item_without_a_live_blocked_line(self):
         criteria = section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Critérios de aceitação') or ''
-        self.assertRegex(criteria, r'(?m)^  - Bloqueada:')
-        self.assertIn('apagada ao destravar', flat(criteria))
+        self.assertIn('`- Bloqueada: <o que falta e de quem>`', criteria)
+        self.assertIn('apagado ao destravar', flat(criteria))
+        self.assertNotRegex(criteria, r'(?m)^  - Bloqueada:')   # a copied template must never read as blocked
 
     def test_the_protocol_names_the_line_as_the_only_removal(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))

@@ -64,6 +64,10 @@ class NoNewSubIssueTests(unittest.TestCase):
             frontlights.validate_plan(plan(issue(1), issue(2, parent=1, status='proposed')))
         with self.assertRaisesRegex(ValueError, r'sub-issue nova'):
             frontlights.validate_plan(plan(issue(2, parent_external=9, status='proposed')))
+        unpublished = issue(2, parent=1)   # ready, but without the url that proves the publication
+        unpublished.pop('url')
+        with self.assertRaisesRegex(ValueError, r'sub-issue nova .*url'):
+            frontlights.validate_plan(plan(issue(1), unpublished))
 
     def test_the_example_plan_proposes_no_sub_issue(self):
         example = json.loads(read('skills', 'frontlights', 'examples', 'plan.json'))

@@ -45,8 +45,8 @@ Trace case (manual): the request is to fix the save of a settings form with four
 fields; the proposal marks the API layer "not touched, already validates (400)". Expected:
 before any plan is shown, every field is traced to its consumer in the back (`file:line`)
 and its database column, found by search. Two fields with no consumer in the back and two
-back capabilities with no action on the screen become acceptance criteria or sub-issues of
-the slice, never "not touched". A consumer that cannot be proven by reading (dynamic access,
+back capabilities with no action on the screen become acceptance criteria of the issue, never
+sub-issues and never "not touched". A consumer that cannot be proven by reading (dynamic access,
 a column name built in a string) becomes the task "prove the consumption by a test or by
 reading the execution" and the plan is not offered for approval until it is closed. The issue
 body (stage 4) and the plan show the complete trace table, and the `Fluxo:` of the browser test

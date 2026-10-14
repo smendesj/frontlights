@@ -55,7 +55,7 @@ class SliceCheckpointTests(unittest.TestCase):
                       'assignees': [], 'updated_at': 'x'}
 
     def test_a_checkpoint_carries_the_slice_in_progress_and_resume_echoes_it(self):
-        saved = frontlights.checkpoint(self.root, self.issue, self.handoff, 'next', slice='S2')
+        saved = frontlights.checkpoint(self.root, self.issue, self.handoff, 'next', slice_id='S2')
         self.assertEqual(saved['slice'], 'S2')
         resumed = frontlights.resume(self.root, saved, self.issue, self.handoff)
         self.assertEqual((resumed['state'], resumed['slice']), ('unchanged', 'S2'))
@@ -69,7 +69,7 @@ class SliceCheckpointTests(unittest.TestCase):
     def test_a_slice_id_is_a_short_label_without_spaces(self):
         for bad in ('S 2', '', 'x' * 20, 'S2\n'):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
-                frontlights.checkpoint(self.root, self.issue, self.handoff, 'next', slice=bad)
+                frontlights.checkpoint(self.root, self.issue, self.handoff, 'next', slice_id=bad)
 
     def test_the_cli_takes_and_echoes_the_slice(self):
         issue_file = Path(self.tmp.name) / 'issue.json'

@@ -8,7 +8,7 @@
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código e registrar decisões | Resultado, limites e escolhas aprovados |
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
-| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro), mostrar a lista numerada com o quiz e depois o corpo completo | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue |
+| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro), mostrar a lista numerada com o quiz e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração e revisão independente |
 | Espera do merge | Ler o estado das PRs abertas (`closeout.py merge-status`) e oferecer o merge da PR pronta; só com o "Sim" o merge é feito | Resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
@@ -19,10 +19,10 @@ A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para t
 pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
 slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo só entre issues;
 empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
-publicadas antes desta regra); anuncia num bloco curto as issues, a ordem das slices, o
-repositório, a concorrência, o empilhamento quando há família, a base das worktrees, os testes e
-as condições de parada, e grava `authorization.json` com o usuário em `approved_by` e
-`confirmed_by`,
+publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
+de cada uma, o repositório, a concorrência, o empilhamento quando há família, a base das
+worktrees, os testes e as condições de parada, e grava `authorization.json` com o usuário em
+`approved_by` e `confirmed_by`,
 `"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
 horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, enviar as
 branches de trabalho, abrir e redirecionar PRs rascunho (empilhadas inclusive), os merges que a
@@ -30,8 +30,8 @@ autorização de empilhamento nomeia, rodar migrations no banco de desenvolvimen
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
 evidência. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
-apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue,
-conferida pela diferença. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
+apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
+da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
 em produção, editar uma migration já registrada, escrever na branch base ou protegida, ligar
 configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando

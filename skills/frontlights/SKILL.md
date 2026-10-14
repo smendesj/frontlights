@@ -187,7 +187,7 @@ why in one sentence:
   not, including work that starts from an existing issue. Grill (stage 3, with
   its mandatory solution round), show the plan in full and get it approved, implement
   under stage 6. Publish issues only if the user wants them.
-- **Full.** A feature or body of work with real uncertainty, several slices or
+- **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
@@ -299,7 +299,10 @@ on, what it delivers) and ask the quiz with `AskUserQuestion`: is the granularit
 the dependencies real, should any slice merge or split; a slice with no answer to "what can
 be demoed" is horizontal and goes back to the cut without an extra question. Then show the
 complete body of every issue under the show-before-approval rule and ask approval for the
-plan and the named GitHub writes: one write per issue. Publish only after approval and
+plan and the named GitHub writes: one write per issue; when the work starts from an issue that
+already exists, the spec and the slices are appended to its body by the write rule of the
+leftover (body captured, append only, difference checked, reread) and the text that was there
+is not edited. Stages 4 and 5 run in the same window. Publish only after approval and
 verify by rereading GitHub: the body, the boxes (the x/y the issue list shows) and the board
 values. If permissions block writes, preserve the approved draft and identify the exact
 blocked operation.
@@ -338,9 +341,9 @@ family integration apply only to a family that already exists (an issue with sub
 before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap
 (`references/development.md`). Then announce in one short block, in the user's language, what
-this run does: the issue IDs, repository, concurrency, the order of the slices of each issue,
-stacking when a family exists, worktree base and branch prefix, the verification argv and the
-stop conditions; the user may change any of it at any time, and a
+this run does: the issue IDs, repository, concurrency, the branch and the order of the slices of
+each issue, stacking when a family exists, worktree base and branch prefix, the verification argv
+and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
 only: editing, testing, committing, pushing the work branches, opening draft PRs (stacked ones
 included) and retargeting them, the merges the stacking authorization names, running migrations
