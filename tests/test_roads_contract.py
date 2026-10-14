@@ -1,4 +1,4 @@
-"""`docs/roads-contract.md` descreve o que o plugin realmente faz: os conjuntos fechados e a regra de versão
+"""`docs/roads-contract.md` descreve o que o Frontlights realmente faz: os conjuntos fechados e a regra de versão
 do texto batem com o código, e o documento só traz marcadores genéricos (repositório público).
 
 Seam: o texto do contrato contra as constantes e as funções públicas de `roadmap_sync` e `progress_report`.
@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
 import roadmap_sync as rs
 
@@ -62,9 +62,9 @@ class ClosedSetsTests(unittest.TestCase):
 
 
 class DocumentShapeTests(unittest.TestCase):
-    def test_the_user_agent_is_the_one_the_plugin_sends(self):
-        self.assertRegex(rs.user_agent(), r'^frontlights-roadmap-sync/\d+\.\d+\.\d+$')
-        self.assertIn('frontlights-roadmap-sync/<versão do plugin>', DOC)
+    def test_the_user_agent_is_the_one_the_skill_sends(self):
+        self.assertRegex(rs.user_agent(), r'^frontlights-roadmap-sync/[0-9a-f]{12}$')
+        self.assertIn('frontlights-roadmap-sync/<commit da skill>', DOC)
         self.assertIn('não prova', DOC)
 
     def test_the_week_folder_rule_is_the_one_the_code_applies(self):
@@ -77,7 +77,7 @@ class DocumentShapeTests(unittest.TestCase):
                 self.assertIn(phrase, DOC)
 
     def test_the_break_rule_names_the_order_and_forbids_two_versions(self):
-        for phrase in ('abra uma issue neste repositório', 'depois** que o plugin que a entende estiver publicado',
+        for phrase in ('abra uma issue neste repositório', 'depois** que o Frontlights que a entende estiver publicado',
                        'não serve\nduas versões ao mesmo tempo'.replace('\n', ' ')):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, ' '.join(DOC.split()))
@@ -87,7 +87,7 @@ class DocumentShapeTests(unittest.TestCase):
         for phrase in ('`from_lane_id` (a de origem)', '`lane_id` (a lane de destino)', 'Compare instantes, nunca textos',
                        '`concluido`, `em_validacao`, `em_andamento`, `bloqueado`, `proximo`', 'conjunto fechado',
                        'o dia do **último instante** da janela', 'unsupported_schema_version',
-                       'O plugin envia `"schemaVersion": 1` no corpo de `POST ack`'):
+                       'O Frontlights envia `"schemaVersion": 1` no corpo de `POST ack`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
@@ -97,15 +97,15 @@ class DocumentShapeTests(unittest.TestCase):
                        'Só a **rotação** das sprints o remove', 'sprint ended, issue done', 'Grupos são diferentes',
                        'nunca do GitHub ao vivo', 'até 30 s depois de outra',
                        'Fechar uma issue sem mover o cartão para Done não muda nada no RoadS',
-                       'o plugin a registra como "concluída", com a data da sincronização', '`roadmapSync.markCompleted`'):
+                       'o Frontlights a registra como "concluída", com a data da sincronização', '`roadmapSync.markCompleted`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
     def test_the_completed_marks_are_described_where_users_and_maintainers_look(self):
-        for name in ('README.md', 'docs/protocol.md', 'docs/security.md'):
+        for name in ('README.md', 'skills/frontlights/docs/protocol.md', 'skills/frontlights/docs/security.md'):
             with self.subTest(name=name):
                 self.assertIn('markCompleted', ' '.join((ROOT / name).read_text(encoding='utf-8').split()))
-        for name in ('README.md', 'docs/protocol.md'):
+        for name in ('README.md', 'skills/frontlights/docs/protocol.md'):
             with self.subTest(name=name):
                 self.assertIn('not_needed', ' '.join((ROOT / name).read_text(encoding='utf-8').split()))
         reference = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
@@ -124,7 +124,7 @@ class DocumentShapeTests(unittest.TestCase):
         self.assertNotRegex(DOC, r'(?i)bearer [a-z0-9]{12,}')
 
     def test_the_contract_is_linked_from_the_readme_and_the_protocol(self):
-        for name in ('README.md', 'docs/protocol.md'):
+        for name in ('README.md', 'skills/frontlights/docs/protocol.md'):
             with self.subTest(name=name):
                 self.assertIn('roads-contract.md', (ROOT / name).read_text(encoding='utf-8'))
 

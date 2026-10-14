@@ -40,7 +40,7 @@ class PeriodTests(unittest.TestCase):
     def test_the_docs_tell_the_same_rule(self):
         self.assertIn('**Período de cada resumo.**', flat('README.md'))
         self.assertIn('o de quarta começa onde o de sexta terminou, e o de sexta onde o de quarta terminou', flat('README.md'))
-        self.assertIn('`collect --start <start> --end <end>`', flat('docs', 'protocol.md'))
+        self.assertIn('`collect --start <start> --end <end>`', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         contract = flat('docs', 'roads-contract.md')
         for phrase in ('**Corte por instante.**', 'nunca arredondado para a meia-noite', '`other_draft_pending`',
                        '`draftOtherPeriod`'):
@@ -48,7 +48,7 @@ class PeriodTests(unittest.TestCase):
                 self.assertIn(phrase, contract)
 
     def test_the_example_collector_takes_the_instants(self):
-        config = json.loads((ROOT / 'examples' / 'config.json').read_text(encoding='utf-8'))
+        config = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
         command = config['roadmapSync']['progress']['collectors'][0]['command']
         self.assertEqual(command[-4:], ['--start', '{start}', '--end', '{end}'])
 

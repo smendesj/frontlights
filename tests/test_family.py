@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 
 
@@ -143,7 +143,7 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertIn('Do not split by UI/API/database layers.', issues)
 
     def test_issue_template_has_the_layers_table(self):
-        template = section(read('templates', 'issue.md'), 'Camadas da fatia') or ''
+        template = section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Camadas da fatia') or ''
         self.assertNotEqual(template, '')
         for layer in ('Tela', 'API', 'Banco e migração', 'Testes', 'Integração', 'Documentação'):
             with self.subTest(layer=layer):
@@ -168,7 +168,7 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertIn('effect in the back and the database', flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
 
     def test_issue_template_asks_for_evidence_and_the_field_trace(self):
-        template = section(read('templates', 'issue.md'), 'Camadas da fatia') or ''
+        template = section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Camadas da fatia') or ''
         self.assertRegex(template, r'(?m)^\| Camada \| Situação \| Onde ou motivo \| Evidência \|')
         self.assertRegex(template, r'(?m)^\| Campo ou ação \| Consumidor no back \(arquivo:linha\) \| Coluna no banco \| Teste \|')
         flat_template = flat(template)
@@ -176,7 +176,7 @@ class FamilyRulesTextTests(unittest.TestCase):
                        'provar o consumo por teste ou por leitura da execução'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_template)
-        self.assertIn('o efeito no back e no banco depois de salvar', read('templates', 'issue.md'))
+        self.assertIn('o efeito no back e no banco depois de salvar', read('skills', 'frontlights', 'templates', 'issue.md'))
         evals = flat(read('evals', 'vertical-slices.md'))
         self.assertIn('Trace case (manual)', evals)
         self.assertIn('a layer "not touched" with a reason but no evidence', evals)
@@ -228,7 +228,7 @@ class FamilyRulesTextTests(unittest.TestCase):
 
     def test_example_authorization_shows_a_stacked_worktree_base(self):
         import json
-        charter = json.loads(read('examples', 'authorization.json'))
+        charter = json.loads(read('skills', 'frontlights', 'examples', 'authorization.json'))
         stacked = [w for w in charter['worktrees'] if 'base' in w]
         self.assertEqual(len(stacked), 1)
         self.assertEqual(stacked[0]['base'], 'claude/issue-1')
@@ -298,20 +298,20 @@ class WatchedRunTextTests(unittest.TestCase):
         self.assertIn('ends with the question of what to do next', flat(self.text))
 
     def test_the_docs_and_the_runbook_carry_the_closing_question(self):
-        for name in (('README.md',), ('docs', 'protocol.md'), ('docs', 'security.md'), ('evals', 'runbook.md')):
+        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('evals', 'runbook.md')):
             text = flat(read(*name))
             with self.subTest(doc=name[-1]):
                 self.assertIn('Assistir de novo', text)
                 self.assertIn('Aprovado', text)
                 self.assertIn('Precisa de alteração', text)
                 self.assertIn('Pode prosseguir', text)
-        for name in (('README.md',), ('docs', 'protocol.md'), ('evals', 'runbook.md')):
+        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'protocol.md'), ('evals', 'runbook.md')):
             with self.subTest(doc=name[-1], field='record'):
                 text = flat(read(*name))
                 self.assertIn('`rodadas`', text)
                 self.assertIn('`aprovacao`', text)
         self.assertIn('never write `aprovacao: "aprovado"` on your own', flat(self.text))
-        self.assertIn('nunca grava `aprovacao: "aprovado"` por conta própria', flat(read('docs', 'security.md')))
+        self.assertIn('nunca grava `aprovacao: "aprovado"` por conta própria', flat(read('skills', 'frontlights', 'docs', 'security.md')))
 
     def test_the_run_is_part_of_the_order_the_evidence_and_the_docs(self):
         evidence = flat(section(self.text, 'Evidence') or '')
@@ -322,7 +322,7 @@ class WatchedRunTextTests(unittest.TestCase):
         self.assertIn('only the profile field before and after the undo', evidence)
         self.assertIn('the watched-run question below', flat(self.text))
         self.assertIn('"pronto para assistir?"', flat(read('skills', 'frontlights', 'references', 'development.md')))
-        for doc in (('docs', 'protocol.md'), ('docs', 'security.md'), ('README.md',)):
+        for doc in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             with self.subTest(doc=doc[-1]):
                 self.assertIn('assistir', flat(read(*doc)))
 
@@ -330,9 +330,9 @@ class WatchedRunTextTests(unittest.TestCase):
 class PublicRepositoryTests(unittest.TestCase):
     def test_the_new_rules_carry_no_machine_path(self):
         names = [SKILL / 'SKILL.md', *(SKILL / 'references').glob('*.md'), ROOT / 'README.md',
-                 ROOT / 'templates' / 'issue.md', *(ROOT / 'docs').glob('*.md'),
+                 ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md', *(ROOT / 'docs').glob('*.md'),
                  ROOT / 'evals' / 'runbook.md', ROOT / 'evals' / 'vertical-slices.md',
-                 ROOT / 'examples' / 'authorization.json']
+                 ROOT / 'skills' / 'frontlights' / 'examples' / 'authorization.json']
         for path in names:
             text = path.read_text(encoding='utf-8')
             with self.subTest(path=path.name):

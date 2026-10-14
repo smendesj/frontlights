@@ -1,11 +1,11 @@
 # Autorização e limites de aplicação das permissões
 
-O plugin não instala hooks, inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
+O Frontlights não instala hooks, inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
 modelo que o usuário copia para o `~/.claude/hooks/` e registra no próprio `settings.json`; ele só
 injeta um texto no turno, lê o prompt e o conteúdo do transcrito (só para procurar duas marcas de que o
 Frontlights já foi aberto) e sai sempre com 0, sem bloquear.
 
-Este plugin **não** instala hooks de permissão, altera configurações globais ou
+O Frontlights **não** instala hooks de permissão, altera configurações globais ou
 ativa modos de contorno das proteções. Os controles existentes do Claude e do
 GuardianS são preservados. As skills orientam o comportamento; não transformam
 ferramentas genéricas de terminal, MCP ou arquivos em um ambiente isolado seguro
@@ -23,9 +23,9 @@ quadro, implantar ou publicar em produção, editar migration já registrada, es
 ou protegida, ligar configuração, chave ou flag em produção e apagar o que não for dado de teste
 criado pela execução ficam fora dela: cada um é uma pergunta própria por `AskUserQuestion`, com o
 comando exato, e só roda depois do "Sim", que não se estende a outra operação, outra PR nem a outro
-momento. A decisão está escrita no plugin, não no `.frontlights/config.json`, para que um
+momento. A decisão está escrita no Frontlights, não no `.frontlights/config.json`, para que um
 repositório clonado não consiga ligá-la nem ampliá-la. É uma regra da skill, não uma barreira: os
-pedidos de permissão nativos do Claude Code continuam valendo, e o plugin não os altera.
+pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights não os altera.
 
 O comando `authorize` verifica uma operação estruturada em relação à autorização
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
@@ -33,7 +33,7 @@ tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de veri
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
 merge, implantação, publicação de versões, operações destrutivas e tipos não
 suportados. Sempre retorna `permission_granted: false`. Mesmo rascunhos de PRs e
-atualizações de issues autorizados continuam sujeitos à aprovação nativa do ambiente, pois o plugin
+atualizações de issues autorizados continuam sujeitos à aprovação nativa do ambiente, pois o Frontlights
 não controla com segurança todas as ferramentas externas. Execute essas ações
 somente pelas ferramentas nativas aprovadas da sessão coordenadora, com as
 permissões humanas e nativas vigentes.
@@ -63,7 +63,7 @@ diretórios para facilitar a execução sem supervisão (AFK). O resultado `ask`
 retornam ao usuário por `AskUserQuestion` ou pela solicitação nativa de aprovação.
 Não responda em nome do usuário.
 
-Antes de cada lote AFK, confira hooks ativos, comportamento dos plugins instalados,
+Antes de cada lote AFK, confira hooks ativos, comportamento dos plugins e das skills instalados,
 regras de permissão, isolamento, controles de rede e confirmações de ferramentas.
 Registre quais restrições são efetivamente aplicadas e quais ações serão interrompidas.
 Se o controle for insuficiente, o trabalho local autorizado pode continuar dentro
@@ -127,7 +127,7 @@ A sincronização do roadmap (`scripts/roadmap_sync.py`) segue as travas abaixo.
   - as comparações das regras usam o texto do GitHub como veio; só a exibição é limpa. Um nome de
     opção que a limpeza mudou, ou que um terminal leria (`$`, crase, aspas duplas retas ou
     tipográficas, `\`, controle), vem em `unwritable` e nunca é digitado. Não se cobrem o `cmd.exe`
-    (`%`) nem a expansão `!` do bash interativo, fora do alvo do plugin; um label escolhido precisa casar com
+    (`%`) nem a expansão `!` do bash interativo, fora do alvo do Frontlights; um label escolhido precisa casar com
     `rules.labelPattern` e já existir no repositório; todo valor entra como um único argumento entre
     aspas duplas. Os textos do `config.json` que viram argumento (tipo, responsável, nomes e padrões
     de campo, labels) são validados na leitura, porque um config pode vir num repositório clonado;
@@ -142,7 +142,7 @@ o arquivo precisa salvá-lo na hora em que o revisor se vinculou. Um HEAD destac
 Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue de origem. Isso é uma
 escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permissões vigentes, só depois de o
 texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
-migração de uma seção legada, pedida por você, também remove os itens movidos), a releitura confere a diferença e nenhum utilitário do plugin faz essa escrita. O plugin não impede a sessão de
+migração de uma seção legada, pedida por você, também remove os itens movidos), a releitura confere a diferença e nenhum utilitário do Frontlights faz essa escrita. O Frontlights não impede a sessão de
 encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
 que impede que a issue seja proposta para fechar com o critério aberto.
 
@@ -159,7 +159,7 @@ O fechamento de issues (`scripts/closeout.py`) só lê:
   números, o repositório `dono/nome` validado e o campo e o valor do `done` validados, e são rodados pela
   sessão, sob as permissões vigentes, só depois da aprovação da lista completa;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
-  própria, e o plugin nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
+  própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
 
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
 `[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista que mostra as
@@ -244,7 +244,7 @@ O resumo para a diretoria (`scripts/progress_report.py`) executa comandos lidos 
   - A pasta é sincronizada com a nuvem do usuário, então tudo o que é salvo nela sai do computador.
     Valem com mais rigor as regras da captura: só dados de teste, sem produção, com a barra do
     navegador e a identidade do usuário recortadas.
-  - O plugin não sobe as imagens. Quem as envia é o comando do projeto, que já recebe o segredo.
+  - O Frontlights não sobe as imagens. Quem as envia é o comando do projeto, que já recebe o segredo.
     Nenhuma credencial nova entra.
 - **Texto retornado:** o que a rota e os coletores devolvem é dado, nunca instrução. A saída dos
   comandos é limitada em tamanho antes de ser mostrada.
@@ -282,7 +282,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   login, senha ou a linha inteira); a remoção é conferida item a item e uma sessão que ache uma entrada
   sem `removido: true` remove antes de tudo. O que o produto não apaga é listado com o `DELETE` exato, só dos
   ids criados, e roda depois da aprovação do usuário; a escrita direta fora dos endpoints continua só
-  com a instrução exata aprovada. É uma regra da skill, não uma barreira técnica; e as máscaras do plugin cobrem só os valores de
+  com a instrução exata aprovada. É uma regra da skill, não uma barreira técnica; e as máscaras do Frontlights cobrem só os valores de
   `browserTest.users`, então a senha de um login criado pelo teste não é mascarada pelos auxiliares: ela nunca é
   impressa, gravada em registro nem repetida na conversa.
 - **Teste assistido e perfil de teste:** o teste com o usuário assistindo só roda depois da
@@ -326,13 +326,13 @@ verificadas de uma família ou de um lote numa branch de integração local, que
 
 Os testes desses utilitários rodaram só no Windows; o caminho POSIX não foi exercitado.
 
-A conexão do celular exige confirmação do usuário na sessão atual do Claude. O plugin
+A conexão do celular exige confirmação do usuário na sessão atual do Claude. O Frontlights
 não inicia conversa paralela, não afirma detectar o dispositivo físico, não procura host
 do Remote Control, não lê nem altera os ajustes de energia e não grava tarefa agendada,
 atalho de inicialização nem serviço.
 
 Os limites de contexto também dependem de medição confiável do ambiente; não há
-hook neste plugin que garanta um teto de 150 mil tokens antes de cada geração.
+hook nesta skill que garanta um teto de 150 mil tokens antes de cada geração.
 
 Os testes adversariais cobrem repositório ou issue não autorizados, divergência
 de branch, branches protegidas, escape de caminhos, edição de arquivos de controle,

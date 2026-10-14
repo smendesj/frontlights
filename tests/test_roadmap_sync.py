@@ -3,6 +3,7 @@ import http.client
 import http.server
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -10,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import roadmap_sync as rs
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'roadmap-sync'
@@ -919,12 +920,12 @@ class ContractVersionTests(RoadmapSyncTestCase):
         status, _ = rs.http_default('GET', f'http://127.0.0.1:{server.server_address[1]}/x', {}, None)
         self.assertEqual(status, 200)
         self.assertEqual(seen, [rs.user_agent()])
-        self.assertRegex(seen[0], r'^frontlights-roadmap-sync/\d+\.\d+\.\d+$')
+        self.assertRegex(seen[0], r'^frontlights-roadmap-sync/[0-9a-f]{12}$')
 
-    def test_the_user_agent_names_the_plugin_and_its_version(self):
-        plugin = json.loads((Path(__file__).resolve().parents[1] / '.claude-plugin' / 'plugin.json')
-                            .read_text(encoding='utf-8'))
-        self.assertEqual(rs.user_agent(), f'frontlights-roadmap-sync/{plugin["version"]}')
+    def test_the_user_agent_names_the_skill_and_its_commit(self):
+        head = subprocess.run(['git', '-C', str(Path(__file__).resolve().parents[1]), 'rev-parse', '--short=12', 'HEAD'],
+                              capture_output=True, text=True).stdout.strip()
+        self.assertEqual(rs.user_agent(), f'frontlights-roadmap-sync/{head}')
 
 
 if __name__ == '__main__':

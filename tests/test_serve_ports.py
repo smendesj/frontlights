@@ -16,10 +16,10 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import serve  # noqa: E402
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'serve.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts' / 'serve.py'
 PASSWORD = 'senha-fake'
 LOGIN = 'usuario1@exemplo.test'
 

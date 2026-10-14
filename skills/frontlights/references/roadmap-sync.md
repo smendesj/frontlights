@@ -21,7 +21,7 @@ same credential, and then GitHub, to complete the issues RoadS shows. It writes 
 what the user approves in that step goes to GitHub only, never to RoadS.
 
 Every network call, path check, marker check, backup and acknowledgement is done by the
-deterministic helper `python "${CLAUDE_PLUGIN_ROOT}/scripts/roadmap_sync.py" <operation> --root
+deterministic helper `python "${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" <operation> --root
 <project>`. You write only the prose, into the staged copies it prepares. Every operation prints one
 JSON object. Exit code 0 is success; 1 means nothing was acknowledged; 2 means the files were
 written and verified but the acknowledgement did not happen. Everything you say to the user is in
@@ -189,7 +189,7 @@ their language; quote the helper's English messages only when useful.
 7. **Complete the issues.** RoadS creates its own issues with the labels, the board fields and
    the effort it can fill; it leaves out the assignee and the native issue type, and the issues
    that were born elsewhere reach its board with whatever they had. Run `python
-   "${CLAUDE_PLUGIN_ROOT}/scripts/roadmap_sync.py" gaps --root <project>`. It is read only: it
+   "${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" gaps --root <project>`. It is read only: it
    asks RoadS for `roadmap-state` again (nothing is consumed), reads on GitHub only the issues of
    the configured repository, and writes nothing. `--only-sprints` leaves the backlog groups out.
    When the project has no `repository` or no `project` board, it says so and reads nothing: skip

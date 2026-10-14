@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
 import roadmap_sync as rs
 
@@ -639,7 +639,7 @@ class PushTests(ProgressTestCase):
 class CommandLineTests(ProgressTestCase):
     def test_the_script_prints_one_json_object_and_exits_with_the_code(self):
         import subprocess
-        script = ROOT / 'scripts' / 'progress_report.py'
+        script = ROOT / 'skills' / 'frontlights' / 'scripts' / 'progress_report.py'
         done = subprocess.run([sys.executable, str(script), 'status', '--root', str(self.project)],
                               capture_output=True, text=True, env={**os.environ, 'FRONTLIGHTS_HOME': self.tmp.name})
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -684,7 +684,7 @@ class PluginContractTests(unittest.TestCase):
         self.assertLess(text.index('**Prints.**'), text.index('**Show the complete draft.**'))
 
     def test_example_config_has_only_the_generic_disabled_block(self):
-        config = json.loads(self.read('examples', 'config.json'))
+        config = json.loads(self.read('skills', 'frontlights', 'examples', 'config.json'))
         progress = config['roadmapSync']['progress']
         self.assertFalse(progress['enabled'])
         self.assertEqual(progress['path'], 'progress-report')
@@ -693,18 +693,10 @@ class PluginContractTests(unittest.TestCase):
         self.assertEqual(progress['draftGuide'], 'docs/progress-draft.md')
         self.assertEqual(progress['shotsDir'], '.frontlights/progress/shots')
 
-    def test_manifests_are_bumped_together(self):
-        plugin = json.loads(self.read('.claude-plugin', 'plugin.json'))
-        market = json.loads(self.read('.claude-plugin', 'marketplace.json'))
-        entry = next(p for p in market['plugins'] if p['name'] == plugin['name'])
-        # Sem o número literal: ele mudava a cada versão e quebrava este teste sem provar nada a mais.
-        self.assertRegex(plugin['version'], r'^\d+\.\d+\.\d+$')
-        self.assertEqual(entry['version'], plugin['version'])
-
     def test_docs_describe_the_approval(self):
         self.assertIn('progress_report.py', self.read('README.md'))
-        self.assertIn('progress_report.py', self.read('docs', 'security.md'))
-        self.assertIn('progress', self.read('docs', 'protocol.md'))
+        self.assertIn('progress_report.py', self.read('skills', 'frontlights', 'docs', 'security.md'))
+        self.assertIn('progress', self.read('skills', 'frontlights', 'docs', 'protocol.md'))
 
 
 if __name__ == '__main__':

@@ -63,7 +63,7 @@ those same two passes. A slice that closes its loop after the run and changes wh
 exercises (the same screen or route) makes the session ask again by hand, with the options of `stale`, because the gate cannot see
 that; until it is answered the report says "implementada, aguardando teste assistido", never "completa".
 
-**The gate.** `python "${CLAUDE_PLUGIN_ROOT}/scripts/frontlights.py" browser-gate --config <config>
+**The gate.** `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" browser-gate --config <config>
 --base <base> --root <worktree> [--root <worktree> ...] [--stacked <branch>=<target> ...] --toca
 <sim|nao|ausente> --record <result.json>`. `--base` is the approved base of the batch, the same for
 every `--root`; each `--root` is a slice's worktree; each slice stacked on another branch (the base
@@ -132,9 +132,9 @@ Direct change keeps its record in `.frontlights/direct/<branch, slashes as dashe
 ## Environment: `serve`
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/serve.py" start --config <config> --root <worktree> --issue <n>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/serve.py" status --config <config> --root <worktree> --issue <n>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/serve.py" stop --config <config> --root <worktree> --issue <n>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" start --config <config> --root <worktree> --issue <n>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" status --config <config> --root <worktree> --issue <n>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <worktree> --issue <n>
 ```
 
 `serve start` brings up every process of `browserTest.processes` in the issue's
@@ -167,11 +167,11 @@ which processes are still up when the user chose to keep them.
 ## Checks: `checks`
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/checks.py" regression --config <config> --root <worktree> `
+python "${CLAUDE_SKILL_DIR}/scripts/checks.py" regression --config <config> --root <worktree> `
   --base <base-checkout> --issue <n>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/checks.py" integration --config <config> --root <worktree> `
+python "${CLAUDE_SKILL_DIR}/scripts/checks.py" integration --config <config> --root <worktree> `
   --issue <n> --base <base-checkout>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/checks.py" smoke --config <config> --root <worktree> `
+python "${CLAUDE_SKILL_DIR}/scripts/checks.py" smoke --config <config> --root <worktree> `
   --issue <n> --base <base-checkout>
 ```
 
@@ -443,7 +443,7 @@ the answer is recorded verbatim.
 
 ## Evidence
 
-Before each browser run, take `python "${CLAUDE_PLUGIN_ROOT}/scripts/frontlights.py" evidence --root <worktree>`.
+Before each browser run, take `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" evidence --root <worktree>`.
 Write `.frontlights/issues/<n>/browser/result.json` (for a batch, `<n>` is its lead issue and
 the file is the batch's) with timestamp, branch,
 `head`, `diff_sha256`, the account used (`conta 1` or `conta 2`, never the login),

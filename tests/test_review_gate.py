@@ -11,10 +11,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 
-SCRIPT = ROOT / 'scripts' / 'frontlights.py'
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
 
 
 class ReviewGateTestCase(unittest.TestCase):
@@ -143,7 +143,7 @@ class GateDocumentationTests(unittest.TestCase):
                        'Any commit, edit or new file after the review'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
-        handoff = (ROOT / 'templates' / 'handoff.md').read_text(encoding='utf-8')
+        handoff = (ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md').read_text(encoding='utf-8')
         self.assertIn('review-gate', handoff)
 
 

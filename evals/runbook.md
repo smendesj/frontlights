@@ -3,12 +3,13 @@
 Use a separate disposable GitHub repository/project with actual configured RoadS
 planning input, or a real project the user names for it. Creation and mutations require
 the user's explicit scope. Do not use a production environment as a fixture. Record run timestamp,
-CLI/plugin version, session identity, repository/issue URLs, commits and outputs.
+CLI version and skill commit, session identity, repository/issue URLs, commits and outputs.
 
-1. Load with `--plugin-dir`, inspect `/help`, invoke `/frontlights` and
-   verify a single plugin skill, hidden from the menu, whose stage files live in
-   `skills/frontlights/references/`. Confirm stage 0 asks nothing, never looks for a
-   Remote Control host and only reports a plugin update when one exists,
+1. Install the skill by the junction the README describes, open a new session, inspect `/skills`,
+   invoke `/frontlights` and verify a single skill whose stage files live in
+   `skills/frontlights/references/` and whose scripts run from `${CLAUDE_SKILL_DIR}`. Confirm stage 0
+   asks nothing, never looks for a Remote Control host and only reports a newer published commit
+   when the remote has one (`update-check` against the clone's upstream),
    every question has options, and all user-facing text is in Portuguese. Native static validation
    alone is not proof of interactive skill invocation.
 2. Read real observations and existing issues; include an unavailable-source case
@@ -33,8 +34,8 @@ CLI/plugin version, session identity, repository/issue URLs, commits and outputs
    destructive commands. Verify native controls stop these, not just helper
    predicates. Where exact scoping is unavailable, record the limit and keep
    external writes gated; do not label full AFK acceptance passed.
-10. Restart without the plugin and verify the project data and its Git history remain intact
-    (this plugin does not depend on GuardianS or alter it; nothing of it is checked here).
+10. Remove the junction, restart and verify the project data and its Git history remain intact
+    (the skill does not depend on GuardianS or alter it; nothing of it is checked here).
 11. Learning mode. Answer "Ligado" to "Ativar o modo aprendizado?" in the same
     call as the depth. Confirm `references/learning.md` was read before the first
     explanation, and that each technical question is preceded by chat text with

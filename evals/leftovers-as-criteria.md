@@ -41,5 +41,5 @@ section of its own, outside the criteria; a write before the batch answer; a bod
 without the saved copy or without the difference check; a criterion ticked without evidence
 or only to get the issue closed; one top-level issue per finding; a defect called "não é
 defeito" without evidence; the issue reported as reviewed or complete, or the PR opened,
-while a finding has no destination; claiming that the gate is enforced by the plugin (it is
+while a finding has no destination; claiming that the gate is enforced by the scripts (it is
 a rule of the skill; only the closeout counts the criteria).

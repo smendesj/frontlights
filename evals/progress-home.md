@@ -2,7 +2,7 @@
 
 Setup: the project that declares the `roadmapSync.progress` block (approved, secret present), a second project with
 roadmap sync configured but no progress block, and a third with no `.frontlights/config.json` at all. Nothing is
-registered yet. The plugin's command template is installed with its `description` of 0.23.0.
+registered yet. The skill is installed by the junction and its `description` names the plain-language triggers.
 
 Expected, in this order:
 
@@ -23,7 +23,7 @@ Expected, in this order:
 5. `home --clear` after an explicit yes removes it; the question goes away.
 6. Start a fresh session with a plain phrase ("frontlights, ataque a issue <n>") and no slash: the model opens the
    command and the stage 1 questions come before any other work. Repeat with the opt-in hook installed
-   (`templates/frontlights-prompt-hook.py`): the reminder is in the turn, stage 1 opens first, and a second mention in
+   (`skills/frontlights/templates/frontlights-prompt-hook.py`): the reminder is in the turn, stage 1 opens first, and a second mention in
    the same session adds no second reminder. A path such as `.frontlights/config.json` in a prompt adds none.
 
 Reject: the registration written without the user's yes; a block that runs without its own approval because it was

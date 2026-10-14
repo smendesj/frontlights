@@ -824,14 +824,15 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def user_agent():
-    """`frontlights-roadmap-sync/<plugin version>`, so the service can tell the plugin's calls from any other."""
+    """`frontlights-roadmap-sync/<commit>`, the skill checkout's `HEAD` (12 hex digits), so the service can tell this
+    client's calls from any other; bare when Git or the checkout is unavailable."""
     try:
-        manifest = json.loads((Path(__file__).resolve().parents[1] / '.claude-plugin' / 'plugin.json').read_text(encoding='utf-8'))
-        version = manifest.get('version')
-    except (OSError, ValueError):
-        version = None
-    return 'frontlights-roadmap-sync' + (f'/{version}' if isinstance(version, str) and re.fullmatch(r'\d+\.\d+\.\d+', version) else '')
-
+        done = subprocess.run(['git', '-C', str(Path(__file__).resolve().parents[1]), 'rev-parse', '--short=12', 'HEAD'],
+                              capture_output=True, text=True, timeout=10)
+        commit = done.stdout.strip() if done.returncode == 0 else ''
+    except (OSError, subprocess.TimeoutExpired):
+        commit = ''
+    return 'frontlights-roadmap-sync' + (f'/{commit}' if re.fullmatch(r'[0-9a-f]{12}', commit) else '')
 
 def http_default(method, url, headers, body):
     """Redirects are never followed, so the Authorization header cannot reach another host; a 3xx

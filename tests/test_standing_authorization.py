@@ -47,7 +47,7 @@ class StandingAuthorizationTests(unittest.TestCase):
             for name, text in (('SKILL.md', skill), ('development.md', development)):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
-        for name in (('docs', 'protocol.md'), ('docs', 'security.md'), ('README.md',)):
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name)
             for phrase in ('rodar a migration' if name == ('README.md',) else 'migrations no banco de desenvolvimento local',
                            'endpoints do produto', 'PRs rascunho'):
@@ -66,7 +66,7 @@ class StandingAuthorizationTests(unittest.TestCase):
             for name, text in (('SKILL.md', skill), ('development.md', development)):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase.casefold(), text.casefold())
-        for name in (('docs', 'protocol.md'), ('docs', 'security.md'), ('README.md',)):
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name).casefold()
             for phrase in portuguese:
                 with self.subTest(file=name[-1], phrase=phrase):
@@ -87,7 +87,7 @@ class StandingAuthorizationTests(unittest.TestCase):
     def test_the_approvals_with_their_own_stage_keep_them(self):
         self.assertIn('The approvals that have their own stage (PRD, issue plan and publication, closeout, cleanup, roadmap and summary) keep them',
                       stage(6))
-        self.assertIn('fechamento, limpeza, roadmap e resumo', flat('docs', 'protocol.md'))
+        self.assertIn('fechamento, limpeza, roadmap e resumo', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('da limpeza, do roadmap e do resumo', flat('README.md'))
 
     def test_the_merge_is_offered_when_the_pr_is_ready(self):
@@ -106,14 +106,14 @@ class StandingAuthorizationTests(unittest.TestCase):
                 self.assertLessEqual(len(label.split()), 5)
 
     def test_the_grant_lives_in_the_plugin_and_native_prompts_remain(self):
-        security = flat('docs', 'security.md')
+        security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('**Autorização permanente.**', 'não no `.frontlights/config.json`',
                        'um repositório clonado não consiga ligá-la nem ampliá-la',
                        'os pedidos de permissão nativos do Claude Code continuam valendo'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, security)
         self.assertIn("the host's own permission prompts still apply", stage(6))
-        self.assertNotIn('standing', read('examples', 'config.json').casefold())
+        self.assertNotIn('standing', read('skills', 'frontlights', 'examples', 'config.json').casefold())
 
     def test_acceptance_and_runbook_track_it_as_pending(self):
         self.assertIn('| 23. Autorização permanente da etapa 6 e negados com "Sim" | Pendente |', flat('docs', 'acceptance.md'))

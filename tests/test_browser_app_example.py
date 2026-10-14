@@ -16,12 +16,12 @@ from pathlib import Path
 from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / 'scripts'))
+sys.path.insert(0, str(REPO / 'skills' / 'frontlights' / 'scripts'))
 import serve  # noqa: E402
 
-EXAMPLE = REPO / 'examples' / 'browser-app'
+EXAMPLE = REPO / 'skills' / 'frontlights' / 'examples' / 'browser-app'
 CONFIG = EXAMPLE / 'config.json'
-SERVE = REPO / 'scripts' / 'serve.py'
+SERVE = REPO / 'skills' / 'frontlights' / 'scripts' / 'serve.py'
 RUNNER = EXAMPLE / 'run_spec.py'
 ISSUE = 13
 LOCAL_HOSTS = {'127.0.0.1', 'localhost', '::1'}

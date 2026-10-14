@@ -11,7 +11,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import checks
 
 SUITE_ARGV = [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v']

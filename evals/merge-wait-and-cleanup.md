@@ -37,7 +37,7 @@ Reject: a close, a tick or a removal without its own approval; closing on the no
 ticking an item that cites other issues, or in a parent that is closed or in another repository; any change to the
 parent's body besides the ticks; `--force`; removing the main worktree, the folder the session stands in, a worktree with
 uncommitted changes or a branch with an open pull request on it; deleting a remote branch that has moved; asking about
-the cleanup before the closing was written and verified; claiming that the plugin enforces the wait (it is a rule of the
+the cleanup before the closing was written and verified; claiming that the scripts enforce the wait (it is a rule of the
 skill; only the helpers read, and only the session writes).
 
 Cleanup details (same case): the question names the files a worktree ignores (a `.env`, a dependency folder), because

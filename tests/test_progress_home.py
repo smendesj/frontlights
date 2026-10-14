@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
 import test_progress_report as base
 
@@ -256,7 +256,7 @@ class OperationsFollowTheHomeTests(HomeTestCase):
 
 class CommandLineTests(HomeTestCase):
     def test_a_relative_folder_is_registered_as_the_real_absolute_path(self):
-        script = ROOT / 'scripts' / 'progress_report.py'
+        script = ROOT / 'skills' / 'frontlights' / 'scripts' / 'progress_report.py'
         env = {**os.environ, 'FRONTLIGHTS_HOME': str(Path(self.tmp.name) / 'rel-home'), 'FRONTLIGHTS_API_SECRET': base.SECRET}
         done = subprocess.run([sys.executable, str(script), 'home', '--set', '../project'], cwd=self.other,
                               capture_output=True, text=True, encoding='utf-8', env=env)
@@ -266,7 +266,7 @@ class CommandLineTests(HomeTestCase):
         self.assertTrue(Path(result['root']).is_absolute())
 
     def test_the_script_registers_shows_and_clears_the_home(self):
-        script = ROOT / 'scripts' / 'progress_report.py'
+        script = ROOT / 'skills' / 'frontlights' / 'scripts' / 'progress_report.py'
         env = {**os.environ, 'FRONTLIGHTS_HOME': str(Path(self.tmp.name) / 'cli-home'), 'FRONTLIGHTS_API_SECRET': base.SECRET}
 
         def call(*args):

@@ -1,6 +1,6 @@
 # Contrato Frontlights ↔ RoadS (versão 1)
 
-Este é o contrato do ponto de vista de quem consome: o que o plugin Frontlights envia, o que espera
+Este é o contrato do ponto de vista de quem consome: o que o Frontlights envia, o que espera
 receber e como reage ao que não entende. O dono do lado servidor é o RoadS, que documenta a parte dele
 no próprio repositório. Se os dois textos divergirem, abra uma issue neste repositório **antes** de
 publicar qualquer mudança. Todo endereço, segredo e valor deste documento é um marcador genérico;
@@ -10,16 +10,16 @@ o endereço real fica no `.frontlights/config.json` do projeto, fora do Git.
 
 - **Base e autenticação.** Todas as rotas ficam sob `roadmapSync.endpoint` (termina em `/api/frontlights`,
   por exemplo `https://roads.example.test/api/frontlights`), por HTTPS (http só em `localhost`), com
-  `Authorization: Bearer <segredo>` do par (endereço, variável de ambiente) que o usuário aprovou. O plugin
+  `Authorization: Bearer <segredo>` do par (endereço, variável de ambiente) que o usuário aprovou. O Frontlights
   nunca segue redirecionamentos, verifica o certificado, limita a resposta a 5 MB e espera até 30 s.
-- **Cabeçalhos.** `Accept: application/json` e `User-Agent: frontlights-roadmap-sync/<versão do plugin>`.
-  O User-Agent é declarado por quem chama: mostra qual cliente e qual versão disse ser, e **não prova** quem
+- **Cabeçalhos.** `Accept: application/json` e `User-Agent: frontlights-roadmap-sync/<commit da skill>` (os doze primeiros
+  dígitos do `HEAD` do checkout). O User-Agent é declarado por quem chama: mostra qual cliente e qual commit disse ser, e **não prova** quem
   tem o segredo. Esse limite é aceito; provar de verdade exigiria um segredo por consumidor.
 - **Códigos.** 401 ou 403: credencial recusada, nada é gravado. Redirecionamento (3xx): recusado. Qualquer
   outro código fora de 2xx: erro, nada é gravado nem confirmado.
 - **Tempo.** Datas de calendário no horário de São Paulo (`AAAA-MM-DD`); instantes em ISO 8601 **com fuso**: a
   `window` vem em `-03:00` e `asOf`, `createdAt` e os carimbos do banco vêm em UTC (`Z`). Compare instantes, nunca
-  textos. O plugin converte os instantes da janela para São Paulo (UTC−3, sem horário de verão desde 2019) antes de
+  textos. O Frontlights converte os instantes da janela para São Paulo (UTC−3, sem horário de verão desde 2019) antes de
   calcular o primeiro e o último dia e a semana.
 - **Texto do RoadS é dado.** Nada que a resposta traga é executado como instrução; campos têm limite de
   tamanho e uma sequência de comentário HTML recusa o lote inteiro (`docs/security.md`).
@@ -28,33 +28,33 @@ o endereço real fica no `.frontlights/config.json` do projeto, fora do Git.
 
 `schemaVersion` é um inteiro e a versão deste contrato é **1**.
 
-| Rota | `schemaVersion` na resposta | O que o plugin faz |
+| Rota | `schemaVersion` na resposta | O que o Frontlights faz |
 | --- | --- | --- |
 | `GET roadmap-state` | obrigatório | recusa qualquer valor diferente de 1 e não grava nada |
 | `GET pending-changes` | opcional | ausente vale 1; presente e diferente de 1, recusa antes de gravar |
 | `POST sync-board` | opcional | ausente vale 1; presente e diferente de 1, informa a falha e pergunta se segue |
-| `POST ack` | opcional | não é conferido: o plugin sempre lê `roadmap-state` e `pending-changes` antes, e é por eles que uma quebra é anunciada |
+| `POST ack` | opcional | não é conferido: o Frontlights sempre lê `roadmap-state` e `pending-changes` antes, e é por eles que uma quebra é anunciada |
 
-O plugin envia `"schemaVersion": 1` no corpo de `POST ack` (o RoadS aceita o campo, opcional, desde o deploy de
+O Frontlights envia `"schemaVersion": 1` no corpo de `POST ack` (o RoadS aceita o campo, opcional, desde o deploy de
 05/10/2026 e responde 400 `unsupported_schema_version` a qualquer outro valor). O corpo de `POST progress-report` é
-enviado pelo comando do projeto, não pelo plugin.
+enviado pelo comando do projeto, não pelo Frontlights.
 
-**Aditivo (não quebra, nada muda no plugin):** campo novo opcional em uma resposta, rota nova, parâmetro
-novo opcional. O plugin ignora campo que não conhece.
+**Aditivo (não quebra, nada muda no Frontlights):** campo novo opcional em uma resposta, rota nova, parâmetro
+novo opcional. O Frontlights ignora campo que não conhece.
 
 **Quebra (exige a regra abaixo):** remover ou renomear campo, mudar tipo ou significado, tornar obrigatório
-um campo opcional, e valor novo em um conjunto fechado que o plugin recusa:
+um campo opcional, e valor novo em um conjunto fechado que o Frontlights recusa:
 
-| Conjunto | Valores que o plugin conhece | Valor desconhecido |
+| Conjunto | Valores que o Frontlights conhece | Valor desconhecido |
 | --- | --- | --- |
 | `status` de item do `roadmap-state` | `open`, `development`, `blocker`, `done`, `none` | **recusado** (quebra) |
-| `action` de uma mudança de `pending-changes` | `add`, `modify`, `remove`, `move_lane` | aceito e marcado como ação desconhecida; o plugin pede a decisão do usuário (tolerado) |
+| `action` de uma mudança de `pending-changes` | `add`, `modify`, `remove`, `move_lane` | aceito e marcado como ação desconhecida; o Frontlights pede a decisão do usuário (tolerado) |
 | `reason` de `sync-board` com `ok: false` | `not_configured`, `no_access`, `unauthenticated`, `error` | repetido ao usuário como texto curto (tolerado) |
 | `status` de entrega, na **resposta** do resumo (`lastSent.entries[].status`) | `proximo` e os demais | só `proximo` dispensa print; qualquer outro valor exige print (tolerado) |
 | `status` de entrega, no **pedido** do resumo (o comando do projeto envia) | `concluido`, `em_validacao`, `em_andamento`, `bloqueado`, `proximo` | o RoadS recusa qualquer outro com 400: conjunto fechado |
 
 **Regra de quebra (decisão do mantenedor):** o RoadS sobe o `schemaVersion`, abre uma issue neste
-repositório e só publica a quebra **depois** que o plugin que a entende estiver publicado. O RoadS não serve
+repositório e só publica a quebra **depois** que o Frontlights que a entende estiver publicado. O RoadS não serve
 duas versões ao mesmo tempo: um consumidor, um dono.
 
 ## Rotas
@@ -71,11 +71,11 @@ o botão e com a rotina diária: uma segunda chamada dentro dele responde `ran: 
 
 Campos opcionais que o RoadS acrescentou em 06/10/2026 (aditivos, `schemaVersion` continua 1) no resumo `roadmap`:
 `retitled` (inteiro: itens cujo título acompanhou uma issue renomeada no GitHub, cada um como um `modify` na fila) e
-`sprint` (contagens: `pulled`, `released`, `written`, `wouldWrite`, `failed`, `stuck` e, opcionalmente, `error`). O plugin
+`sprint` (contagens: `pulled`, `released`, `written`, `wouldWrite`, `failed`, `stuck` e, opcionalmente, `error`). O Frontlights
 relata `retitled` e ignora `sprint`.
 
 Falha de negócio, com HTTP 200: `{ "schemaVersion": 1, "ok": false, "reason": "no_access", "message": "texto curto" }`. A falha do
-`sync-board` nunca interrompe a busca: o plugin a relata e pergunta se segue com o último estado.
+`sync-board` nunca interrompe a busca: o Frontlights a relata e pergunta se segue com o último estado.
 
 ### `GET roadmap-state`
 
@@ -111,11 +111,11 @@ Uma mudança sem `id` utilizável, com `id` repetido ou sem título (exceto um `
 `add` traz `lane_id` e `title`; `modify` traz os campos alterados; `remove` traz `item_id`, `lane_id` e `title` (essa
 parte é contrato); `move_lane` traz `lane_id` (a lane de destino) e `from_lane_id` (a de origem), as duas contrato desde
 05/10/2026, mais `title` e `reason` informativos (e pode vir `github_issue_url`). Um `move_lane` feito por uma
-pessoa e enfileirado antes dessa data pode não ter `from_lane_id`. Um `remove` chega com `item` e `itemId` nulos. O prefixo `done-` nos ids de mudança da fila é reservado ao plugin (as
-conclusões que ele registra); uma mudança da fila com esse prefixo faz o plugin recusar a busca, então o RoadS não
-deve usá-lo. O plugin lê de um `move_lane` o
+pessoa e enfileirado antes dessa data pode não ter `from_lane_id`. Um `remove` chega com `item` e `itemId` nulos. O prefixo `done-` nos ids de mudança da fila é reservado ao Frontlights (as
+conclusões que ele registra); uma mudança da fila com esse prefixo faz o Frontlights recusar a busca, então o RoadS não
+deve usá-lo. O Frontlights lê de um `move_lane` o
 `from_lane_id` e o `lane_id` para saber que sprints ele atinge (`from` e `to` são a grafia antiga, só usada quando a
-chave nova falta); sem eles (uma fila antiga, ou um desvio futuro), o plugin vê só o destino, pelo que `pendingChangeIds` de
+chave nova falta); sem eles (uma fila antiga, ou um desvio futuro), o Frontlights vê só o destino, pelo que `pendingChangeIds` de
 `roadmap-state` já diz. O `asOf` vem do servidor,
 nunca do relógio local.
 
@@ -141,12 +141,12 @@ Devolve a janela a resumir, o rascunho atual e o último envio:
   uma janela que termina na quinta 00:00 tem a quarta como último dia.
 - **Corte por instante.** `window.start` é o `period_end` exato do último resumo marcado como enviado, e o
   `period_end` de um resumo é o instante em que os números dele foram coletados (o `window.end` que o
-  plugin passou aos coletores com `--start`/`--end`), nunca arredondado para a meia-noite. Assim o resumo
+  Frontlights passou aos coletores com `--start`/`--end`), nunca arredondado para a meia-noite. Assim o resumo
   de quarta cobre desde o fim do de sexta, o de sexta desde o fim do de quarta, e nada fica entre dois
   e-mails nem conta duas vezes. A apresentação da semana soma os resumos enviados cujo período termina
   nela, e a lista do RoadS mostra os dois resumos e a apresentação.
 - `draft`, quando existe, traz `period_start` e `period_end`. Um rascunho cujo `period_start` difere de
-  `window.start` é outro resumo, quase sempre o anterior ainda não marcado como enviado: o plugin o
+  `window.start` é outro resumo, quase sempre o anterior ainda não marcado como enviado: o Frontlights o
   informa em `draftOtherPeriod` e a skill para e pergunta. O RoadS guarda um rascunho por produto, e o
   `POST progress-report` de outro período responde `409` com `other_draft_pending` e não grava nada
   (mudança aditiva: um código de erro novo, sem campo removido); o mesmo `period_start` atualiza o
@@ -154,16 +154,16 @@ Devolve a janela a resumir, o rascunho atual e o último envio:
   "period_start", "period_end" } }`, e `period_already_sent` continua sendo conferido antes.
 - Os coletores do projeto recebem `--start <instante> --end <instante>` (com fuso; o início entra, o fim
   não) e gravam essa mesma janela nos arquivos de fatos e de uso; `--from`/`--to` por dias continuam
-  aceitos. O plugin passa os mesmos valores a todos os coletores de uma coleta.
-- `weekMeeting` (opcional para o plugin; ausente ou `null` valem como ausente): sempre uma segunda-feira, no calendário de São Paulo, e descreve
+  aceitos. O Frontlights passa os mesmos valores a todos os coletores de uma coleta.
+- `weekMeeting` (opcional para o Frontlights; ausente ou `null` valem como ausente): sempre uma segunda-feira, no calendário de São Paulo, e descreve
   **apenas a janela devolvida na mesma resposta**. É a segunda-feira seguinte à semana (segunda a domingo)
-  do último instante da janela. Se o plugin enviar um período diferente do da janela, ele calcula o dia
+  do último instante da janela. Se o Frontlights enviar um período diferente do da janela, ele calcula o dia
   localmente pela mesma regra e não usa o valor do RoadS. Quando o valor vem e difere do cálculo local, o
-  plugin avisa e usa o do RoadS para essa janela. O valor precisa ser posterior ao último dia do período e
-  vir no máximo oito semanas depois da segunda-feira usual; fora disso o plugin o recusa, porque um valor velho
+  Frontlights avisa e usa o do RoadS para essa janela. O valor precisa ser posterior ao último dia do período e
+  vir no máximo oito semanas depois da segunda-feira usual; fora disso o Frontlights o recusa, porque um valor velho
   escolheria uma pasta longe da semana.
 
-O plugin não envia o rascunho: quem chama a rota de envio e a de prints (`POST progress-report`,
+O Frontlights não envia o rascunho: quem chama a rota de envio e a de prints (`POST progress-report`,
 `POST progress-report/shots` e `POST progress-report/<id>/shots`) é o comando do projeto, que recebe o
 segredo pela variável de ambiente. O formato do rascunho e dos prints é o do documento do RoadS.
 
@@ -193,50 +193,50 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
 - **A sprint segue o Status do Project.** Em 06/10/2026 o RoadS passou a seguir o Project nos dois sentidos: "está na
   sprint atual" é "Status Development" (a próxima e a terceira sprint existem só no RoadS), o RoadS só age quando os
   dois lados discordam (vale quem mexeu por último; empate vale o RoadS) e a escrita dele no Project nasce desligada.
-  A fila de mudanças (`fetch`, `apply` e `ack`) não escreve no Project, e o plugin só escreve nele em passos próprios
+  A fila de mudanças (`fetch`, `apply` e `ack`) não escreve no Project, e o Frontlights só escreve nele em passos próprios
   que o usuário aprova, como o `gaps` e o fechamento: um `move_lane` com `payload.origin` `project` (o conjunto de valores,
   `app`, `rotation`, `label` e `project`, é aberto e informativo) vai para os arquivos como qualquer outro e nunca volta
   ao Project. Um `add` pode trazer `lane_id` `atual`, e um `modify` pode só trocar o título: os arquivos ainda têm o
   título antigo, então a entrada se acha pelo número da issue e não pelo título.
 - **Quando aparece.** Ao apertar Sincronizar, na hora. Uma sincronização feita até 30 s depois de outra (de qualquer
-  origem: botão, rotina diária, `sync-board` do plugin) não consulta o GitHub e devolve o snapshot anterior. Sem
+  origem: botão, rotina diária, `sync-board` do Frontlights) não consulta o GitHub e devolve o snapshot anterior. Sem
   sincronizar, recarregar a página só relê o que está guardado.
-- **Consequência para o plugin.** Fechar uma issue sem mover o cartão para Done não muda nada no RoadS. Os arquivos
+- **Consequência para o Frontlights.** Fechar uma issue sem mover o cartão para Done não muda nada no RoadS. Os arquivos
   `.md` recebem a fila de mudanças (`add`, `modify`, `remove`, `move_lane`) e, a partir da 0.18.0, a conclusão de um
-  item de sprint lida só do `done` do `roadmap-state` (`roadmapSync.markCompleted`, padrão true): o plugin a registra
+  item de sprint lida só do `done` do `roadmap-state` (`roadmapSync.markCompleted`, padrão true): o Frontlights a registra
   como "concluída", com a data da sincronização, mesmo sem mudança na fila, e nunca a confirma ao RoadS. Um item
   concluído que fica na sprint tem, então, o registro de conclusão e, depois da rotação, o `remove`.
 
 ## Fatos do resumo: a família inteira de cada entrega
 
-O `facts.json` é gerado pelo coletor do projeto (no RoadS, `scripts/progress/github.ts`); o plugin só o lê. Uma entrega
+O `facts.json` é gerado pelo coletor do projeto (no RoadS, `scripts/progress/github.ts`); o Frontlights só o lê. Uma entrega
 é uma issue de topo e **representa a família inteira**: ela e todas as sub-issues abaixo dela, em qualquer profundidade.
-Os campos abaixo são **aditivos** (o plugin ignora o que falta e não quebra com o que sobra); a regra de quebra desta
-página não se aplica a eles, mas o que o plugin faz com cada um está na referência `progress-report.md`.
+Os campos abaixo são **aditivos** (o Frontlights ignora o que falta e não quebra com o que sobra); a regra de quebra desta
+página não se aplica a eles, mas o que o Frontlights faz com cada um está na referência `progress-report.md`.
 
 - `scope` (texto): o produto do resumo. Entregas, dificuldades e próximos passos saem só dele; o uso do Claude é a única
   exceção e cobre os projetos conectados.
 - `entries[].subIssues` (`{ "total", "done" }`): as **partes** da família, contadas pelas folhas da árvore inteira (uma
   sub-issue que tem filhas conta pelas filhas; folha fechada como não planejada fica fora dos dois números), e
   quantas estão prontas. O e-mail e a visão semanal do RoadS escrevem "X de Y partes prontas" sozinhos, então o
-  texto do plugin não repete a contagem; número de issue nunca vai ao texto.
+  texto do Frontlights não repete a contagem; número de issue nunca vai ao texto.
 - `entries[].slices` (só em entrega com sub-issues): `{ "closed": [{ "title", "closedAt" }], "blocked": [{ "title" }] }`,
   as partes de qualquer nível fechadas como concluídas no período e as bloqueadas (aberta com o rótulo
   `status:blocker`, ou com cartão em Blocker no fim do período), só como evidência para quem escreve: não vão ao
   e-mail nem ao conteúdo montado. Se o RoadS cortar a leitura da árvore, `ignored.cut` conta quantas issues ficaram
-  sem leitura completa e a entrada traz a linha de evidência dizendo isso: o plugin repassa o aviso ao usuário.
+  sem leitura completa e a entrada traz a linha de evidência dizendo isso: o Frontlights repassa o aviso ao usuário.
 - `sprint` (bloco) e `delivered`: as capas da sprint são os itens do Project em Development (épicos incluídos) e **não
   são entregas**. `sprint.epics[]` traz, por capa, `issue`, `title`, `issues` (`total`, `done`), `parts` (`total`, `done`,
   `remaining`, contadas pelas folhas da árvore) e `open` (as issues que faltam); `delivered` traz `issues` (as
   entregas concluídas no período, esteja ou não na sprint) e `parts` (a soma das partes prontas, em que uma entrega sem
   filhas conta 1). Os dois vão ao conteúdo montado: o e-mail e a visão semanal mostram **"Concluído: N sub-issues em M
   issues"** (tudo o que foi entregue na janela) e **"Em andamento: N sub-issues em K issues"** (o que resta das capas
-  da sprint), sem o chip "Em validação". Decisão de 07/10/2026; vale para todo resumo. O texto do plugin não repete esses
+  da sprint), sem o chip "Em validação". Decisão de 07/10/2026; vale para todo resumo. O texto do Frontlights não repete esses
   números, e os próximos passos saem do que resta em cada capa.
 - **Atividade da família.** PR mesclado ou aberto, commit e fechamento de qualquer descendente dentro do período contam
   como atividade da entrega. Uma entrega com partes entregues no período nunca fica em `proximo` (que dispensa o print).
   O `status` continua vindo do coletor e só dele.
-- **Prints.** O print é exigido por entrega (a issue de topo). O plugin guarda o print de uma parte com o número da
+- **Prints.** O print é exigido por entrega (a issue de topo). O Frontlights guarda o print de uma parte com o número da
   entrega em `captions.json`, então o RoadS não precisa aceitar número de sub-issue ali.
 
 ## Pasta dos prints do resumo (`weekShots`)
@@ -254,5 +254,5 @@ resumos da mesma semana (quarta e sexta) nunca dividem arquivo. Prints salvos an
 - O RoadS registra, das chamadas feitas com segredo válido, o método, a rota, o status, o User-Agent declarado
   (cortado em 200 caracteres) e a duração, e guarda por 90 dias. Isso prova qual cliente e qual versão disseram
   chamar, não quem tem o segredo.
-- O `sync-board` ainda não declara um tempo máximo no RoadS e a duração dele não foi medida: o plugin espera 30 s,
-  e um tempo esgotado é erro tolerado (o plugin relata e pergunta se segue com o último estado).
+- O `sync-board` ainda não declara um tempo máximo no RoadS e a duração dele não foi medida: o Frontlights espera 30 s,
+  e um tempo esgotado é erro tolerado (o Frontlights relata e pergunta se segue com o último estado).

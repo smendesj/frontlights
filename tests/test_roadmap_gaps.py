@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import roadmap_sync as rs
 from test_roadmap_sync import RoadmapSyncTestCase, Transport, SECRET, state_fixture
 
@@ -646,8 +646,8 @@ class DocumentedContractTests(unittest.TestCase):
         self.assertIn('--only-sprints', readme)
         self.assertIn('issue_type_by_label', readme)
         self.assertIn('body_fields', readme)
-        self.assertIn('`gaps`', self.text('docs', 'protocol.md'))
-        self.assertIn('Completar issues (`gaps`)', self.text('docs', 'security.md'))
+        self.assertIn('`gaps`', self.text('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('Completar issues (`gaps`)', self.text('skills', 'frontlights', 'docs', 'security.md'))
 
     def test_the_public_documents_carry_no_project_vocabulary(self):
         # Nomes reais de projeto, produto, organização ou pessoa vivem só fora do repositório: a lista vem de
@@ -659,9 +659,9 @@ class DocumentedContractTests(unittest.TestCase):
             words += [w.strip() for w in listed.read_text(encoding='utf-8').splitlines() if w.strip()]
         if not words:
             self.skipTest('no forbidden-word list outside the repository')
-        for path in (ROOT / 'README.md', ROOT / 'docs' / 'protocol.md', ROOT / 'docs' / 'security.md',
-                     REFERENCES / 'issues.md', REFERENCES / 'roadmap-sync.md', ROOT / 'scripts' / 'roadmap_sync.py',
-                     ROOT / 'scripts' / 'frontlights.py', ROOT / 'tests' / 'test_board_rules.py', Path(__file__)):
+        for path in (ROOT / 'README.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'security.md',
+                     REFERENCES / 'issues.md', REFERENCES / 'roadmap-sync.md', ROOT / 'skills' / 'frontlights' / 'scripts' / 'roadmap_sync.py',
+                     ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py', ROOT / 'tests' / 'test_board_rules.py', Path(__file__)):
             body = path.read_text(encoding='utf-8').casefold()
             for word in words:
                 with self.subTest(path=path.name):

@@ -12,14 +12,14 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import quote
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import checks
 import frontlights
 import serve
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'scripts' / 'frontlights.py'
-EXAMPLE = json.loads((ROOT / 'examples' / 'config.json').read_text(encoding='utf-8'))
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
+EXAMPLE = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
 PASSWORD = 'senha-ficticia-longa'
 
 

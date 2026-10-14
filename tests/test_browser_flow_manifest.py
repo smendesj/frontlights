@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import checks  # noqa: E402
 import serve  # noqa: E402
 
@@ -72,7 +72,7 @@ def read(path):
 
 
 def help_text(*args):
-    done = subprocess.run([sys.executable, *args, '--help'], cwd=ROOT, capture_output=True, encoding='utf-8',
+    done = subprocess.run([sys.executable, *args, '--help'], cwd=SKILL, capture_output=True, encoding='utf-8',
                           errors='replace', check=True)
     return done.stdout
 
@@ -87,7 +87,7 @@ class BrowserFlowManifestTests(unittest.TestCase):
         self.assertTrue(REFERENCE.is_file(), 'falta skills/frontlights/references/browser-testing.md')
 
     def test_issue_template_declares_front_account_flow_and_enabled_tests(self):
-        template = read(ROOT / 'templates' / 'issue.md')
+        template = read(ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md')
         self.assertIn('## Navegador e testes ligados', template)
         section = template.split('## Navegador e testes ligados')[1].split('\n## ')[0]
         for field in ('Toca o frontend:', 'Conta:', 'Fluxo:', 'Testes ligados:'):
@@ -156,7 +156,7 @@ class BrowserFlowManifestTests(unittest.TestCase):
         self.assertIn('never counts as passed', self.reference)
 
     def test_reference_and_template_hold_no_login_password_or_real_url(self):
-        for name, text in (('reference', self.reference), ('issue.md', read(ROOT / 'templates' / 'issue.md'))):
+        for name, text in (('reference', self.reference), ('issue.md', read(ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md'))):
             self.assertTrue(url_hosts_are_local(text), f'URL externa em {name}')
             self.assertIsNone(re.search(r'[\w.+-]+@[\w-]+\.[\w.]+', text), f'e-mail ou login em {name}')
             self.assertIsNone(re.search(r'\bwww\.|\.com\b|\.com\.br\b', text), f'domínio real em {name}')
@@ -236,15 +236,15 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 {'name': 'web', 'argv': ['web'], 'health': 'not-a-url'}]}}), encoding='utf-8')
             for config, category in ((invalid, serve.USAGE), (Path(folder) / 'missing.json', serve.INFRASTRUCTURE)):
                 done = subprocess.run([sys.executable, 'scripts/serve.py', 'start', '--config', str(config),
-                                       '--root', folder, '--issue', '1'], cwd=ROOT, capture_output=True,
+                                       '--root', folder, '--issue', '1'], cwd=SKILL, capture_output=True,
                                       encoding='utf-8', errors='replace')
                 with self.subTest(config=config.name):
                     self.assertEqual(done.returncode, 1)
                     self.assertEqual(json.loads(done.stdout)['category'], category)
 
     def test_cited_output_fields_exist_in_the_scripts(self):
-        sources = read(ROOT / 'scripts' / 'serve.py') + read(ROOT / 'scripts' / 'checks.py') \
-            + read(ROOT / 'scripts' / 'frontlights.py') + read(ROOT / 'scripts' / 'browser_gate.py')
+        sources = read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'serve.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'checks.py') \
+            + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'browser_gate.py')
         fields = set(re.findall(r'`([a-z]+(?:_[a-z0-9]+)+)`', self.reference))
         self.assertIn('reservas_compartilhadas', fields)
         for field in fields:

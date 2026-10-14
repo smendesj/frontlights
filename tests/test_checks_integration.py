@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 from unittest import mock
 
-SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
+SCRIPTS = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
 import checks  # noqa: E402
 import serve  # noqa: E402

@@ -1,18 +1,23 @@
 ---
 name: frontlights
-description: Starts a single planning and delivery session for whatever the user asks, from discovery through approved vertical GitHub issues and bounded implementation, right-sized to the request. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
-disable-model-invocation: true
-user-invocable: false
+description: Starts the Frontlights session for whatever the user asks: stages 0 and 1 first (update check, roadmap, progress summary, closeout), then discovery, an approved PRD, vertical GitHub issues and bounded implementation, right-sized to the request. Use it whenever the user mentions frontlights to start, activate, act on, attack or resume an issue, with or without the slash ("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); in such a sentence "frontlights" is this skill, not a session or project of the same name. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
+disable-model-invocation: false
+user-invocable: true
 ---
 
 # Frontlights
 
-This is the only skill of the plugin; the user starts it with `/frontlights`.
-It holds the order of the stages, and each stage's detailed instructions live in
-`references/` next to this file. Read a reference only when entering its stage,
+Frontlights is a single skill, installed as `~/.claude/skills/frontlights` (usually a
+junction into its Git checkout); the user starts it with `/frontlights` or by naming it in a
+plain sentence. When the session starts from a plain sentence, the request is that sentence,
+and "frontlights" in it is this skill, not a session or a project of the same name (the
+skill's own repository), unless the user clearly asks to talk to that session. This file
+holds the order of the stages, and each stage's detailed instructions live in `references/`
+next to it. `${CLAUDE_SKILL_DIR}` is the folder of this file: the `scripts/`, `templates/`,
+`examples/` and `docs/` named below live inside it. Read a reference only when entering its stage,
 not upfront. Keep one coherent conversation. Never require
 named workers, GuardianS, initialization prompts or a second coordinator. Read
-`${CLAUDE_PLUGIN_ROOT}/docs/protocol.md` and `${CLAUDE_PLUGIN_ROOT}/docs/security.md`
+`${CLAUDE_SKILL_DIR}/docs/protocol.md` and `${CLAUDE_SKILL_DIR}/docs/security.md`
 before execution. The references are `references/grilling.md` (stage 3),
 `references/prd.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
@@ -90,17 +95,17 @@ fits, in the `preview` of the approve option. A summary or a file path alone is
 not showing it. If none of these is possible, record the approval as pending
 and stop.
 
-## 0. Plugin update check (no questions)
+## 0. Update check (no questions)
 
 Before inspecting the project, run the read-only `python
-"${CLAUDE_PLUGIN_ROOT}/scripts/frontlights.py" update-check`. Ask nothing: this
-stage never calls `AskUserQuestion`.
+"${CLAUDE_SKILL_DIR}/scripts/frontlights.py" update-check`. It asks the skill's Git remote
+for the tip of the tracked branch and compares it with the installed commit; it never
+pulls. Ask nothing: this stage never calls `AskUserQuestion`.
 
-- **`update_available`:** say in one line, in Portuguese, that version
-  `<published>` is out and this session runs `<installed>`; show each entry of
-  `commands` in its own code block; add that the Desktop must be restarted and
-  `/frontlights` run again for the new version to apply; then go on in this
-  session.
+- **`update_available`:** say in one line, in Portuguese, that commit `<published>` is
+  published and this session runs `<installed>`; show each entry of `commands` in its own
+  code block; add that a new session must be started for the new version to apply (skills
+  are read when a session opens); then go on in this session.
 - **`current`:** say nothing about it.
 - **`unavailable`:** say in one line that the update could not be checked, and
   go on.
@@ -111,7 +116,7 @@ Never run the update commands yourself unless the user asks.
 
 **Roadmap question, first, every session.** Before anything else in this stage,
 even when the user arrived with another request, run the read-only `python
-"${CLAUDE_PLUGIN_ROOT}/scripts/roadmap_sync.py" status --root <project>` (no
+"${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" status --root <project>` (no
 network) and ask with `AskUserQuestion`:
 "Atualizar a sprint e o roadmap de acordo com o RoadS?"
 Put what `status` reports in the question text: configured
@@ -124,7 +129,7 @@ no, make no call to RoadS and go on.
 **Progress question, right after the roadmap question.** Once the roadmap question and
 everything it triggered are done, and also when the roadmap had nothing pending or the
 user answered no to it, run the read-only `python
-"${CLAUDE_PLUGIN_ROOT}/scripts/progress_report.py" status --root <project>` (no
+"${CLAUDE_SKILL_DIR}/scripts/progress_report.py" status --root <project>` (no
 network), in whatever project the session opened. The block of the summary lives in one
 project (the one the user registered once as its home), and `status` finds it from any
 other, so the question is asked in any project once that home is registered (until then only a project
@@ -147,7 +152,7 @@ not trusted or the registered project lost its block). Options: "Sim, escolher a
 about it in this session. Ask nothing else and go on exactly as before.
 
 **Closeout question, right after the progress question.** When `.frontlights/config.json`
-exists with a `repository`, run the read-only `python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py"
+exists with a `repository`, run the read-only `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py"
 candidates --config <config> --root <project>` (a GitHub read through `gh` that takes a while when many issues are in scope, so give it a generous timeout; if it
 cannot run, say so in one line and go on). Only when it reports `ask` true, ask with `AskUserQuestion`: "Fechar as
 issues que já têm todos os critérios marcados e mover os cartões para Done?" Put in the question text
@@ -192,21 +197,21 @@ of the work or the honesty of the evidence.
 
 Identify the actual project path, Git remotes, current branch/worktrees, dirty
 changes and project instructions. Inspect configured integrations rather than
-guessing URLs or borrowing another plugin's credentials/runtime. Read
+guessing URLs or borrowing another tool's credentials/runtime. Read
 `.frontlights/config.json` if present; its shape is in `examples/config.json`.
 The file is usually untracked, so a linked worktree does not carry it: when the
 session runs in one, look in the main worktree too (the parent of `git rev-parse
 --path-format=absolute --git-common-dir`) and use that config. Never treat it as
 absent, or create a second one, before checking there.
 
-The plugin used to be called Workflows and kept its records in `.workflows/`.
+Frontlights used to be called Workflows and kept its records in `.workflows/`.
 When a project (main worktree included) has `.workflows/` and no
 `.frontlights/`, rename the folder to `.frontlights/` without asking, keeping
 every file, say so in one line, and add `/.frontlights/` to `.git/info/exclude`
 when `.workflows/` was excluded there. Never merge the two folders when both
 exist: report it and use `.frontlights/`.
 
-Use `python "${CLAUDE_PLUGIN_ROOT}/scripts/frontlights.py" inspect --config
+Use `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" inspect --config
 <config-path> --root <project>`. `repository: null` is a supported local project
 without a remote: GitHub reads as `unconfigured`, plans use `repository: null`
 and `url: null`, and issue snapshots carry `source: "local"`. The helper reports
@@ -347,7 +352,7 @@ outgrown (`review-gate`, exit code 2) is redone before anything is reported as r
 authorization's `monitoring` block is `mode: "local"`;
 `phone_connected: true` only when the user states, unprompted in this session,
 that the phone received and answered. Local files record consent but
-cannot enforce it, and the host's own permission prompts still apply: the plugin never
+cannot enforce it, and the host's own permission prompts still apply: Frontlights never
 changes them.
 
 Start all ready, non-conflicting approved issues up to that limit. Refill slots

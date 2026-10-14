@@ -29,7 +29,7 @@ a setting, key or flag in production, and deleting anything but the test data th
 created. Run it only after "Sim" and record the answer verbatim in the handoff. A
 "Sim" covers that one operation, never another one, another PR or a later moment; "Não",
 silence or another answer leaves it undone and the work goes on without it. The host's
-own permission prompts are not this plugin's to remove and still apply.
+own permission prompts are not Frontlights' to remove and still apply.
 
 ## Dispatch and ownership
 
@@ -338,7 +338,7 @@ By default, as soon as a PR of the family is open, the session waits for the use
 - **Say it and record it.** One line to the user, in their language: which PRs the session waits for and what
   happens at the merge. In the handoff (`Aguardando o merge`): each PR number with its issue, head and base
   branch, the approved base, and when the wait began.
-- **No closing keyword.** A PR opened by this plugin never carries `Closes`, `Fixes`, `Resolves` or a variant of
+- **No closing keyword.** A PR opened by Frontlights never carries `Closes`, `Fixes`, `Resolves` or a variant of
   them, in its body or in its commits: closing an issue has its own approval, and a merge that closed it would skip
   that approval and ignore the criteria still unticked. Cite the issue by number instead.
 - **Offer the merge when the PR is ready.** A PR is ready when its review is current (`review-gate` exit code 0),
@@ -350,11 +350,11 @@ By default, as soon as a PR of the family is open, the session waits for the use
   approval). On "Sim", run them, then `merge-status` as below; a child PR is offered only once it has been
   retargeted to the base its parent merged into. On "Não", the wait goes on unchanged.
 - **What wakes the session.** Whatever the host offers: a subscription to the PR's activity, or a background
-  monitor that runs `python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" merge-status --config <config> --prs 12,13
+  monitor that runs `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" merge-status --config <config> --prs 12,13
   --base <approved base>` every few minutes. Either is only a trigger. On every wake run `merge-status` and act only
   on its answer, never on the notification. A subscription to the PR's activity may not report a merge at all, so the
   monitor is the dependable trigger: it prints one short line only when the set of `ready` or `settled` PRs changes
-  (never the whole JSON every cycle) and uses the plugin's resolved path, because `${CLAUDE_PLUGIN_ROOT}` may be unset
+  (never the whole JSON every cycle) and uses the skill's resolved path, because `${CLAUDE_SKILL_DIR}` may be unset
   in a background shell. The user can also say "mesclei", and the session runs `merge-status` at once. A monitor must run with the same GitHub account as the session's `gh`
   for that repository. When the host offers neither, say so in the handoff and stop waiting: nothing is lost, the
   closeout question of the next session finds the merged work.

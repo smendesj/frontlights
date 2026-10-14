@@ -1,22 +1,22 @@
-# Frontlights — plugin para Claude Code
+# Frontlights — skill para Claude Code
 
-Um plugin independente que conduz **qualquer pedido seu** — uma funcionalidade,
+Uma skill do Claude Code que conduz **qualquer pedido seu** — uma funcionalidade,
 um bug, uma refatoração, uma pesquisa, um script pontual, um documento — por
 descoberta do problema, documentos de requisitos (PRDs) aprovados, issues
 verticais no GitHub e implementação com testes e autorização delimitada. O
 caminho é dimensionado ao pedido: trabalho pequeno é feito direto, sem PRD nem
 issue. Observações do RoadS são uma entrada **opcional**, usada quando
 configurada; nada exige RoadS para começar. Uma única skill, com um arquivo de
-referência por etapa. Não depende do GuardianS nem altera sua instalação.
-O plugin se chamava Workflows e foi renomeado para não colidir com os workflows
-do próprio Claude Code.
+referência por etapa e os scripts, modelos e exemplos dentro dela. Não depende do GuardianS nem
+altera sua instalação. O Frontlights se chamava Workflows, renomeado para não colidir com os
+workflows do próprio Claude Code, e foi um plugin até a 0.28.1; desde então é uma skill avulsa.
 
 **Situação:** versão candidata à 1.0, para **uso supervisionado no Windows**. O núcleo do fluxo, o
 teste de navegador assistido (aplicado à mão na versão anterior) e a integração com o RoadS foram
 exercitados em sessões reais de um projeto de produto; as [evidências de aceitação](docs/acceptance.md) dizem o que está provado, o que
 falta e os limites. A 1.0 sai depois de uma sessão real que cumpra os itens 12 e 13 do
-[roteiro](evals/runbook.md) com esta versão. **Não** são garantidos: a execução sem supervisão (o
-plugin não instala hooks, então o teto de contexto e o escopo exato das permissões não são impostos
+[roteiro](evals/runbook.md) com esta versão. **Não** são garantidos: a execução sem supervisão (a
+skill não instala hooks, então o teto de contexto e o escopo exato das permissões não são impostos
 por ele), o `authorize` (apenas consultivo) e qualquer sistema fora do Windows.
 
 ## Idioma
@@ -26,64 +26,62 @@ são em português. As skills, destinadas ao modelo, são escritas em inglês, m
 orientam a produção de respostas e documentos em português. Comandos, caminhos,
 chaves de configuração e identificadores técnicos mantêm sua grafia original.
 
-## Carregar localmente
+## Instalar
 
-Requer Claude Code com suporte a plugins, skills e `AskUserQuestion`, Python 3.11+,
-Git e, para consultar o GitHub, GitHub CLI autenticado. Não exige pacotes Python adicionais.
+Requer Claude Code com suporte a skills e `AskUserQuestion`, Python 3.11+, Git e, para
+consultar o GitHub, GitHub CLI autenticado. Não exige pacotes Python adicionais.
 
-Instale pelo marketplace deste repositório:
+A skill é a pasta `skills/frontlights` deste repositório, com tudo o que uma sessão usa:
+`SKILL.md`, `references/`, `scripts/`, `templates/`, `examples/` e `docs/` (protocolo e
+segurança). Instale-a apontando a pasta de skills do usuário para o clone, por uma junção:
 
 ```powershell
-claude plugin marketplace add smendesj/frontlights
-claude plugin install frontlights@frontlights
+git clone https://github.com/smendesj/frontlights.git <pasta-do-clone>
+cmd /c mklink /J "$HOME\.claude\skills\frontlights" "<pasta-do-clone>\skills\frontlights"
 ```
 
-Para testar um clone sem instalar, rode no projeto de destino
-`claude --plugin-dir <pasta-do-clone>`.
+A junção não copia nada: `~/.claude/skills/frontlights` passa a ser a própria pasta do clone,
+então `git pull` no clone já atualiza a skill instalada, e uma sessão nova a lê. Para desinstalar,
+`rmdir "$HOME\.claude\skills\frontlights"` apaga só o atalho. Quem prefere uma cópia pode copiar
+a pasta `skills/frontlights` para `~/.claude/skills/frontlights`, lembrando de recopiar a cada
+atualização. `tests/`, `evals/` e a documentação da raiz servem a quem desenvolve o Frontlights
+e ficam fora da skill.
+
+Até a 0.28.1 o Frontlights era um plugin instalado por marketplace; esse caminho não existe
+mais. Quem o tem instalado assim remove com `claude plugin uninstall frontlights@frontlights`
+antes de criar a junção, para não carregar os dois.
 
 ### Invocar com `/frontlights`
 
-O plugin tem uma única skill, oculta do menu (`user-invocable: false`), para não
-aparecer como `/frontlights:frontlights`. A entrada é um comando de usuário: copie
-`templates/frontlights-command.md` para `~/.claude/commands/frontlights.md`.
-
-```powershell
-Copy-Item templates/frontlights-command.md "$HOME/.claude/commands/frontlights.md"
-```
-
-Depois, em qualquer sessão:
+Em qualquer sessão:
 
 ```text
 /frontlights
 ```
 
-O comando localiza a skill instalada e a segue. A skill define a ordem das etapas
-e lê o arquivo de cada etapa em `skills/frontlights/references/` só quando chega
-nela. O `CLAUDE.md` da raiz orienta quem trabalha neste repositório; o Claude não
-o carrega nos projetos que usam o plugin.
+A skill define a ordem das etapas e lê o arquivo de cada etapa em `skills/frontlights/references/`
+só quando chega nela. O `CLAUDE.md` da raiz orienta quem trabalha neste repositório; o Claude não
+o carrega nos projetos que usam a skill.
 
-Esse carregamento de desenvolvimento não instala o plugin permanentemente. Para
-parar de usá-lo, encerre a sessão e inicie outra sem `--plugin-dir`. Preserve os
-pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). Nenhuma
+Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). Nenhuma
 configuração ou rotina automática de interceptação (hook) é instalada.
 
 #### Início por linguagem natural
 
 Uma frase comum ("frontlights, ataque a issue <n>", "ativar frontlights") pode abrir o mesmo estágio 1,
-se o modelo decidir invocar o comando. A `description` do modelo de comando lista esses gatilhos,
-então recopie `templates/frontlights-command.md` depois de atualizar o plugin. Isso reduz a falha,
-mas não a elimina: já houve a frase lida como pedido à sessão vizinha do próprio plugin, com o
-estágio 1 só abrindo quando a pessoa escreveu de novo.
+se o modelo decidir invocar a skill: a `description` dela lista esses gatilhos e a skill aceita a
+invocação pelo modelo. Isso reduz a falha, mas não a elimina: já houve a frase lida como pedido à
+sessão vizinha do próprio Frontlights, com o estágio 1 só abrindo quando a pessoa escreveu de novo.
 
-Para um lembrete a cada prompt há um hook **opcional**, que o plugin não instala: o modelo
-`templates/frontlights-prompt-hook.py` (evento `UserPromptSubmit`). Ele só injeta um lembrete de abrir o
-`/frontlights` quando o prompt cita o plugin; não decide nada pelo modelo, nunca bloqueia (sai sempre com
+Para um lembrete a cada prompt há um hook **opcional**, que a skill não instala: o modelo
+`skills/frontlights/templates/frontlights-prompt-hook.py` (evento `UserPromptSubmit`). Ele só injeta um lembrete de abrir o
+`/frontlights` quando o prompt cita a skill; não decide nada pelo modelo, nunca bloqueia (sai sempre com
 0) e fica calado se o prompt já é o comando, se a palavra está num caminho ou nome de arquivo, se a
-sessão está aberta na pasta do próprio plugin ou se o transcrito já mostra o Frontlights aberto. Para ligar:
+sessão está aberta no repositório do próprio Frontlights ou se o transcrito já mostra o Frontlights aberto. Para ligar:
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME/.claude/hooks" | Out-Null
-Copy-Item templates/frontlights-prompt-hook.py "$HOME/.claude/hooks/frontlights-prompt-hook.py"
+Copy-Item skills/frontlights/templates/frontlights-prompt-hook.py "$HOME/.claude/hooks/frontlights-prompt-hook.py"
 ```
 
 e acrescente ao `~/.claude/settings.json`:
@@ -124,7 +122,7 @@ Fechar a janela tira o dispositivo do ar. Depois de reiniciar o PC ou o Claude,
 repita os passos 1 e 2 em cada pasta: as sessões voltam sincronizadas (observado
 em um teste em uma máquina, sem garantia).
 
-O plugin não lê nem altera os ajustes de energia do PC. Com a tampa fechada ou o
+O Frontlights não lê nem altera os ajustes de energia do PC. Com a tampa fechada ou o
 PC em suspensão, o dispositivo pode sair do ar.
 
 ## Configurar um projeto
@@ -231,7 +229,7 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   parecem aspas), `\` nem caractere de controle. `assignee` é `@me`, `@copilot` ou um login do GitHub
   (letras, números, `-`, `_` e o sufixo `[bot]`). O mesmo vale, no plano, para os valores de
   `project_fields` (sem limite de tamanho, mas numa linha só: reescreva o texto se ele trouxer
-  aspas ou `$`) e para `issue_type`. Não se cobrem o `cmd.exe` (`%`), que o plugin não usa, nem a
+  aspas ou `$`) e para `issue_type`. Não se cobrem o `cmd.exe` (`%`), que o Frontlights não usa, nem a
   expansão `!` do bash interativo. O título da issue segue o que já valia: o plano aprovado o define
   e a sessão o digita como um único argumento entre aspas duplas; um título com esses caracteres
   deve ser criado por `gh api` com o corpo num arquivo JSON.
@@ -278,7 +276,7 @@ todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é 
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
 pode ficar como texto, dito como "não é defeito" com a evidência. O `handoff` registra
 "Achados sem correção e destino de cada um". Isso é regra da skill, não barreira do
-plugin: o que o plugin garante é que o fechamento conta a pendência como critério.
+Frontlights: o que o Frontlights garante é que o fechamento conta a pendência como critério.
 
 Sem `project`, ou com `"project": null`, as issues não entram em quadro nenhum; num
 repositório de organização, o Frontlights pergunta qual quadro usar antes de publicar.
@@ -452,8 +450,8 @@ O bloco fica dentro de `roadmapSync` (veja `examples/config.json`) e reaproveita
     o resumo de 28/09 a 02/10 vai para `05_10/summary/02_10`, e o de sáb 03/10 a qua 07/10 para
     `12_10/summary/07_10`. Dois resumos da mesma semana (quarta e sexta) nunca dividem o `captions.json`.
     O `window` informa `weekMeeting` e `summaryFolder`, lendo a janela no calendário de São Paulo; se o RoadS
-    mandar o campo `weekMeeting` e ele divergir do cálculo do plugin, o do RoadS vale para essa janela e o
-    plugin avisa. Um `weekMeeting` ou `--meeting` fora do intervalo plausível (depois do último dia e até oito
+    mandar o campo `weekMeeting` e ele divergir do cálculo do Frontlights, o do RoadS vale para essa janela e o
+    Frontlights avisa. Um `weekMeeting` ou `--meeting` fora do intervalo plausível (depois do último dia e até oito
     semanas depois da segunda-feira usual) é recusado. Prints salvos antes
     da subpasta, direto em `weekShots`, ainda são lidos pelo `push` (com aviso) quando a subpasta do dia não existe e só a pasta plana tem
     `captions.json`; com a subpasta do dia criada, só ela vale.
@@ -471,7 +469,7 @@ O bloco fica dentro de `roadmapSync` (veja `examples/config.json`) e reaproveita
   - **Mesmas travas da sincronização do roadmap:** nada fora do `scrumRoot`, sem junção nem link no
     caminho.
 
-Como esse bloco faz o plugin executar comandos lidos de um arquivo de configuração, nada roda e
+Como esse bloco faz o Frontlights executar comandos lidos de um arquivo de configuração, nada roda e
 nenhuma chamada é feita antes de você aprovar o bloco exato (endereço, variável, rota e cada
 comando). Qualquer mudança nele pede nova aprovação. Os coletores não recebem o segredo; só o
 comando de envio o recebe, pela variável de ambiente. Este repositório não traz coletor nenhum. O
@@ -634,12 +632,12 @@ Com o merge confirmado, em aprovações separadas, nesta ordem:
    também: o aviso lista os nomes antes da pergunta. A worktree de integração local da família (nunca enviada, sem PR)
    entra quando não guarda commit próprio (nem merge com conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
 
-Responder "Não agora" ao fechamento não gera a pergunta da limpeza. A espera é regra da skill, não barreira do plugin:
+Responder "Não agora" ao fechamento não gera a pergunta da limpeza. A espera é regra da skill, não barreira do Frontlights:
 nada a impõe mecanicamente, e o gatilho do ambiente nunca vale como prova do merge.
 
 ## Fluxo de trabalho e utilitários
 
-Verificação de atualização do plugin (sem pergunta; mostra os dois comandos de atualização
+Verificação de atualização da skill (sem pergunta; mostra o comando de atualização
 quando há versão nova no GitHub) →
 pedido e dimensionamento → inspeção → entrevista de decisões → PRD mostrado na
 íntegra e aprovado →
@@ -658,7 +656,7 @@ produção e apagar o que não for dado de teste viram, cada um, uma pergunta pr
 "Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
 assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do PRD, do plano de
 issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do próprio Claude
-Code não são do plugin e continuam valendo.
+Code não são do Frontlights e continuam valendo.
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
@@ -698,17 +696,16 @@ sido mostrado antes. O GitHub é a fonte oficial;
 os arquivos Markdown e JSON locais são registros e pontos de retomada, não um
 segundo sistema de tickets.
 
-Execute estes comandos no diretório do plugin:
+Execute estes comandos na raiz do repositório (os quatro primeiros também valem de dentro de
+`skills/frontlights`, sem o prefixo):
 
 ```powershell
-python scripts/frontlights.py validate-plan --plan examples/plan.json
-python scripts/frontlights.py schedule --plan examples/plan.json --limit 2
-python scripts/frontlights.py context --used 85000 --reserve 15000
-python scripts/frontlights.py update-check
+python skills/frontlights/scripts/frontlights.py validate-plan --plan skills/frontlights/examples/plan.json
+python skills/frontlights/scripts/frontlights.py schedule --plan skills/frontlights/examples/plan.json --limit 2
+python skills/frontlights/scripts/frontlights.py context --used 85000 --reserve 15000
+python skills/frontlights/scripts/frontlights.py update-check
 python -m unittest discover -s tests -v
-python -m compileall -q scripts tests
-claude plugin validate . --json
-claude --plugin-dir . plugin details frontlights
+python -m compileall -q skills/frontlights/scripts tests
 ```
 
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
@@ -725,14 +722,13 @@ ou sessões disponíveis do Claude, respeitando a autorização e a capacidade r
 A validação estrutural não determina se o texto descreve uma entrega realmente
 vertical. Isso exige a revisão de conteúdo da skill e a avaliação fornecida.
 
-Leia o [protocolo](docs/protocol.md), o [contrato com o RoadS](docs/roads-contract.md), os [limites de segurança](docs/security.md),
+Leia o [protocolo](skills/frontlights/docs/protocol.md), o [contrato com o RoadS](docs/roads-contract.md), os [limites de segurança](skills/frontlights/docs/security.md),
 o [roteiro de homologação](evals/runbook.md) e a [recuperação](docs/recovery.md).
 
 ## Fontes da documentação
 
-O formato e os comandos seguem as referências oficiais de
-[plugins do Claude Code](https://code.claude.com/docs/en/plugins) e
-[skills](https://code.claude.com/docs/en/skills). Os passos para acompanhar pelo celular seguem a documentação
+O formato e os comandos seguem a referência oficial de
+[skills do Claude Code](https://code.claude.com/docs/en/skills). Os passos para acompanhar pelo celular seguem a documentação
 de [Remote Control](https://code.claude.com/docs/en/remote-control). O desenho de
 permissões foi conferido na [referência de hooks](https://code.claude.com/docs/en/hooks).
 Essas fontes externas estão em inglês. Consulta realizada em 24/09/2026; versão da

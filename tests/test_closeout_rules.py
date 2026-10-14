@@ -89,7 +89,7 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(all(len(label.split()) <= 5 for label in options), options)
 
     def test_every_reason_and_board_status_the_script_produces_is_documented(self):
-        source = (ROOT / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
+        source = (ROOT / 'skills' / 'frontlights' / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
         for code in ('unchecked_criteria', 'no_criteria', 'open_children', 'truncated', 'not_found', 'unreadable',
                      'unconfigured', 'not_read', 'unavailable', 'done_option_missing', 'open_pr', 'no_pr', 'not_on_board',
                      'already_done_card', 'pending_outside_criteria', 'close_and_move', 'move_only'):
@@ -127,9 +127,9 @@ class RulesInOtherDocsTests(unittest.TestCase):
                       text)
 
     def test_the_documents_describe_the_step(self):
-        self.assertIn('| Fechamento |', (ROOT / 'docs' / 'protocol.md').read_text(encoding='utf-8'))
-        self.assertIn('scripts/closeout.py', flat('docs', 'protocol.md'))
-        self.assertIn('só lê', flat('docs', 'security.md'))
+        self.assertIn('| Fechamento |', (ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8'))
+        self.assertIn('scripts/closeout.py', flat('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('só lê', flat('skills', 'frontlights', 'docs', 'security.md'))
         readme = flat('README.md')
         for phrase in ('### Fechar o que terminou', 'todos os critérios de aceitação marcados', 'sub-issues antes dos pais',
                        '`done` é opcional', '"Status", "value": "Done"', 'scripts/closeout.py candidates|verify'):

@@ -288,7 +288,7 @@ contradicts a closed issue): use a sub-issue and say why.
   The first copy is `.frontlights/issues/<n>/body-before-<YYYYMMDDTHHMMSSZ>.md` (UTC, no
   colon: a colon is not valid in a Windows file name; create the folder first when it
   does not exist) and each later one, with its own stamp, `body-now-<stamp>.md`. Run
-  `python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" candidates --config <config> --root
+  `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" candidates --config <config> --root
   <project> --issues <n>` (read only) once now: its `criteria.total`, under `candidates`
   or `excluded`, is the baseline.
 - **Write.** Build the new body as a copy of the saved one with only the new items

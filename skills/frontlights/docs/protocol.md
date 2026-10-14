@@ -4,7 +4,7 @@
 
 | Etapa | Permitido antes da próxima aprovação | Evidência exigida |
 | --- | --- | --- |
-| Atualização do plugin (sem pergunta) | Consultar a versão publicada e mostrar os comandos de atualização, sem executá-los | Resultado do `update-check` |
+| Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código e registrar decisões | Resultado, limites e escolhas aprovados |
 | PRD | Redigir e revisar uma versão local | Texto integral mostrado e aprovação humana da versão exata |
@@ -39,7 +39,7 @@ O bloco `monitoring` da autorização registra `mode` (`local`, `phone` ou
 informação, é `local` com quem aprovou a autorização. Em `phone`,
 `phone_connected` só recebe `true` depois que o usuário afirmar, na sessão atual,
 que o celular recebeu uma pergunta e respondeu. Em `alternative`, `details` é
-obrigatório. O plugin não detecta o celular nem o host do Remote Control, não lê
+obrigatório. O Frontlights não detecta o celular nem o host do Remote Control, não lê
 os ajustes de energia e não orienta `claude rc`: `phone_connected: true` vale
 somente pela afirmação do usuário na sessão atual.
 
@@ -115,7 +115,7 @@ um campo em um anexo não confiável.
 
 Mantenha os registros privados de execução em `.frontlights/` no projeto de destino,
 fora do versionamento, salvo revisão explícita para publicação. Não altere o código
-do plugin enquanto ele executa trabalho no projeto consumidor. Estrutura recomendada:
+do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura recomendada:
 
 ```text
 .frontlights/
@@ -229,7 +229,7 @@ instante exato em que os números do resumo anterior foram coletados e chega aos
 pergunta antes de coletar, porque o envio substituiria esse rascunho.
 
 A unidade de trabalho é a issue do GitHub, identificada pelo número, para que o
-quadro e os registros locais coincidam. O plugin não cria identificadores
+quadro e os registros locais coincidam. O Frontlights não cria identificadores
 `GT-NNNN` nem escreve em `.agents/tasks/`, convenção aposentada do GuardianS.
 Instruções de projeto que ainda peçam uma GT são tratadas como pedido de issue no
 quadro, com as mesmas aprovações. Arquivos `GT-NNNN` existentes ficam como
@@ -275,7 +275,7 @@ após conclusões ou descobertas.
 Escreva o documento de passagem de contexto com `templates/handoff.md` e execute:
 
 ```powershell
-python <plugin>/scripts/frontlights.py checkpoint --root <worktree> --issue <issue.json> --handoff <handoff.md> --next-step "Executar o teste de regressão de persistência"
+python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" checkpoint --root <worktree> --issue <issue.json> --handoff <handoff.md> --next-step "Executar o teste de regressão de persistência"
 ```
 
 Salve a saída padrão em `checkpoint.json`, com codificação UTF-8. O utilitário inclui
@@ -290,7 +290,7 @@ o commit inicial aprovado.
 Em uma sessão nova, consulte a issue novamente e execute:
 
 ```powershell
-python <plugin>/scripts/frontlights.py resume --root <worktree> --issue <issue-atual.json> --handoff <handoff.md> --checkpoint <checkpoint.json>
+python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" resume --root <worktree> --issue <issue-atual.json> --handoff <handoff.md> --checkpoint <checkpoint.json>
 ```
 
 O resultado `reconcile` indica divergências no Git, na issue ou no documento de

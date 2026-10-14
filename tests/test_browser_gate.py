@@ -13,12 +13,12 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import browser_gate
 import frontlights
 
-SCRIPT = ROOT / 'scripts' / 'frontlights.py'
-EXAMPLE = json.loads((ROOT / 'examples' / 'config.json').read_text(encoding='utf-8'))
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
+EXAMPLE = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
 
 SCREEN = 'web/src/app/pages/items/items.component.ts'
 SCREEN_SPEC = 'web/src/app/pages/items/items.component.spec.ts'
@@ -754,11 +754,11 @@ class GateDocumentationTests(unittest.TestCase):
         for phrase in ('browser-gate', 'teste_assistido'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, skill)
-        self.assertIn('browser-gate', self.flat('templates', 'handoff.md'))
+        self.assertIn('browser-gate', self.flat('skills', 'frontlights', 'templates', 'handoff.md'))
 
     def test_the_eval_the_runbook_and_the_record_cover_the_case(self):
         self.assertIn('browser-gate', self.flat('evals', 'batch-watched-run.md'))
-        for name in (('skills', 'frontlights', 'references', 'browser-testing.md'), ('docs', 'security.md'), ('README.md',),
+        for name in (('skills', 'frontlights', 'references', 'browser-testing.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',),
                      ('evals', 'batch-watched-run.md'), ('evals', 'runbook.md')):
             with self.subTest(doc=name[-1]):
                 self.assertIn('dispensado', self.flat(*name))

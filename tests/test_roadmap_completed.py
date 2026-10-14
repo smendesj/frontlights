@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import roadmap_sync as rs
 from test_roadmap_sync import (CURRENT, NEXT, REMOVE_ID, ADD_ID, MOVE_ID, MONDAY, RoadmapSyncTestCase, Transport,
@@ -261,7 +261,7 @@ class ConfigurationTests(CompletedTestCase):
                 self.assertEqual(transport.calls, [])
 
     def test_the_example_configuration_documents_the_key(self):
-        example = json.loads((Path(__file__).resolve().parents[1] / 'examples' / 'config.json').read_text(encoding='utf-8'))
+        example = json.loads((Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
         self.assertIs(example['roadmapSync']['markCompleted'], True)
 
 

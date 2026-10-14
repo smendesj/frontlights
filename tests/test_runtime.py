@@ -8,26 +8,26 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseManifestTests(unittest.TestCase):
-    """The desktop Update button needs a version it can compare; both manifests must agree."""
+    """The skill is installed by a junction into its checkout; the session invokes it, so can the model."""
 
-    def test_marketplace_entry_declares_the_plugin_json_version(self):
-        plugin = json.loads((ROOT / '.claude-plugin' / 'plugin.json').read_text(encoding='utf-8'))
-        market = json.loads((ROOT / '.claude-plugin' / 'marketplace.json').read_text(encoding='utf-8'))
-        entry = next(p for p in market['plugins'] if p['name'] == plugin['name'])
-        self.assertEqual(entry.get('version'), plugin['version'])
-
-    def test_single_hidden_skill_whose_stage_references_exist(self):
+    def test_single_invocable_skill_whose_stage_references_exist(self):
         skills = sorted(p.name for p in (ROOT / 'skills').iterdir() if p.is_dir())
         self.assertEqual(skills, ['frontlights'])
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
-        self.assertIn('user-invocable: false', text.split('---')[1])
+        head = text.split('---')[1]
+        self.assertIn('user-invocable: true', head)
+        self.assertIn('disable-model-invocation: false', head)
+        self.assertNotIn('CLAUDE_PLUGIN_ROOT', text)
+        for folder in ('scripts', 'templates', 'examples', 'docs', 'references'):
+            self.assertTrue((ROOT / 'skills' / 'frontlights' / folder).is_dir(), folder)
+        self.assertFalse((ROOT / '.claude-plugin').exists())
         for name in ('grilling', 'prd', 'issues', 'development', 'roadmap-sync', 'learning'):
             self.assertIn(f'references/{name}.md', text)
             self.assertTrue((ROOT / 'skills' / 'frontlights' / 'references' / f'{name}.md').is_file())
@@ -63,7 +63,7 @@ class ReleaseManifestTests(unittest.TestCase):
         for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Abordagem e convenções'),
                                   ('prd.md', 'onventions')):
             with self.subTest(template=template):
-                self.assertIn(heading, (ROOT / 'templates' / template).read_text(encoding='utf-8'))
+                self.assertIn(heading, (ROOT / 'skills' / 'frontlights' / 'templates' / template).read_text(encoding='utf-8'))
 
     def test_learning_reference_defines_when_to_explain_how_to_check_and_what_to_record(self):
         text = (ROOT / 'skills' / 'frontlights' / 'references' / 'learning.md').read_text(encoding='utf-8')
@@ -171,7 +171,7 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('together with the learning mode (off by default', stage3)
 
     def test_discovery_template_records_learning_mode_and_concepts_explained(self):
-        text = (ROOT / 'templates' / 'discovery.md').read_text(encoding='utf-8')
+        text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'discovery.md').read_text(encoding='utf-8')
         self.assertIn('- Learning mode (ligado / desligado):', text)
         self.assertLess(text.index('- Grilling depth'), text.index('- Learning mode'))
         self.assertIn('- Learning mode changes (nenhuma, ou cada troca e a pergunta em que ocorreu):', text)
@@ -183,7 +183,7 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertLess(text.index('## Concepts explained'), text.index('## Pre-mortem'))
 
     def test_example_config_carries_only_generic_placeholders(self):
-        example = json.loads((ROOT / 'examples' / 'config.json').read_text(encoding='utf-8'))
+        example = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
         sync = example['roadmapSync']
         self.assertRegex(sync['secretEnvVar'], r'^FRONTLIGHTS_[A-Z0-9_]+$')
         self.assertIn('example', sync['endpoint'])
@@ -193,7 +193,7 @@ class ReleaseManifestTests(unittest.TestCase):
     def test_example_config_browser_and_checks_blocks_load_without_refusal(self):
         import checks
         import serve
-        path = ROOT / 'examples' / 'config.json'
+        path = ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json'
         example = json.loads(path.read_text(encoding='utf-8'))
         processes = serve.load_block(path)
         self.assertTrue(processes and all(p['port'] == 'auto' for p in processes))
@@ -825,66 +825,62 @@ class MonitoringBlockTests(unittest.TestCase):
 
 
 class UpdateCheckTests(unittest.TestCase):
-    """Warn about a newer published version without relying on the stale local clone."""
+    """Warn when the tracked branch moved on, by asking the remote and never pulling."""
 
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.plugin_root = Path(self.tmp.name, 'plugin')
-        self.config_dir = Path(self.tmp.name, 'config')
-        Path(self.plugin_root, '.claude-plugin').mkdir(parents=True)
-        Path(self.config_dir, 'plugins').mkdir(parents=True)
-        self.write(self.plugin_root / '.claude-plugin' / 'plugin.json', {'name': 'sample', 'version': '0.7.2'})
-        self.write(self.plugin_root / '.claude-plugin' / 'marketplace.json', {'name': 'market', 'plugins': []})
-        self.known({'source': 'github', 'repo': 'OWNER/REPOSITORY'})
+    HEAD = 'a' * 40
+    REMOTE = 'b' * 40
 
-    def write(self, path, data):
-        Path(path).write_text(json.dumps(data), encoding='utf-8')
+    def check(self, listed, ancestor=False, fail=None):
+        answers = {'rev-parse --show-toplevel': '/skill', 'rev-parse HEAD': self.HEAD,
+                   'rev-parse --abbrev-ref --symbolic-full-name @{upstream}': 'origin/main',
+                   'ls-remote --heads origin main': listed}
+        calls = []
 
-    def known(self, source):
-        self.write(self.config_dir / 'plugins' / 'known_marketplaces.json', {'market': {'source': source}})
+        def git_text(root, *args, timeout=30):
+            key = ' '.join(args)
+            calls.append(key)
+            if fail and key.startswith(fail):
+                raise OSError('offline')
+            return answers[key]
 
-    def check(self, published=None, error=None):
-        body = json.dumps({'name': 'market', 'plugins': [{'name': 'sample', 'version': published}]})
-        fake = patch.object(frontlights, 'fetch_text', side_effect=error, return_value=body)
-        with fake as fetch:
-            result = frontlights.update_check(self.plugin_root, self.config_dir)
-        return result, fetch
+        with patch.object(frontlights, 'git_text', side_effect=git_text), \
+             patch.object(frontlights, 'git_ok', return_value=ancestor) as ok:
+            result = frontlights.update_check('/skill')
+        return result, calls, ok
 
-    def test_newer_published_version_lists_both_commands(self):
-        result, fetch = self.check('0.10.0')
+    def test_a_newer_published_commit_lists_the_pull_command(self):
+        result, calls, ok = self.check(f'{self.REMOTE}\trefs/heads/main')
         self.assertEqual(result['status'], 'update_available')
-        self.assertEqual(result['commands'], ['claude plugin marketplace update market',
-                                              'claude plugin update sample@market'])
-        self.assertEqual(fetch.call_args[0][0], 'https://api.github.com/repos/OWNER/REPOSITORY'
-                                                '/contents/.claude-plugin/marketplace.json')
+        self.assertEqual(result['commands'], ['git -C "/skill" pull --ff-only'])
+        self.assertEqual((result['installed'], result['published'], result['source']),
+                         (self.HEAD[:12], self.REMOTE[:12], 'origin/main'))
+        self.assertIn('ls-remote --heads origin main', calls)
+        self.assertFalse(any(c.startswith(('pull', 'fetch', 'merge ', 'reset')) for c in calls))
+        ok.assert_called_once_with('/skill', 'merge-base', '--is-ancestor', self.REMOTE, self.HEAD)
 
-    def test_same_or_older_published_version_is_current(self):
-        for published in ('0.7.2', '0.7.1'):
-            with self.subTest(published=published):
-                result, _ = self.check(published)
-                self.assertEqual(result['status'], 'current')
+    def test_the_same_commit_or_a_checkout_ahead_of_it_is_current(self):
+        result, _, ok = self.check(f'{self.HEAD}\trefs/heads/main')
+        self.assertEqual(result['status'], 'current')
+        self.assertNotIn('commands', result)
+        ok.assert_not_called()
+        result, _, _ = self.check(f'{self.REMOTE}\trefs/heads/main', ancestor=True)
+        self.assertEqual(result['status'], 'current')
+
+    def test_no_remote_branch_no_upstream_or_no_network_is_unavailable_not_current(self):
+        remote = f'{self.REMOTE}\trefs/heads/main'
+        for listed, fail in (('', None), (remote, 'ls-remote'), (remote, 'rev-parse --abbrev-ref'), (remote, 'rev-parse --show')):
+            with self.subTest(listed=listed, fail=fail):
+                result, _, _ = self.check(listed, fail=fail)
+                self.assertEqual(result['status'], 'unavailable')
+                self.assertNotIn('offline', json.dumps(result))
                 self.assertNotIn('commands', result)
 
-    def test_git_url_source_resolves_to_the_same_repository(self):
-        self.known({'source': 'git', 'url': 'https://github.com/OWNER/REPOSITORY.git'})
-        result, fetch = self.check('0.8.0')
-        self.assertEqual(result['status'], 'update_available')
-        self.assertIn('/repos/OWNER/REPOSITORY/', fetch.call_args[0][0])
-
-    def test_network_failure_or_unknown_source_is_unavailable_not_current(self):
-        result, _ = self.check(error=OSError('offline'))
-        self.assertEqual(result['status'], 'unavailable')
-        self.assertNotIn('offline', json.dumps(result))
-        self.known({'source': 'directory', 'path': 'somewhere'})
-        result, fetch = self.check('9.9.9')
-        self.assertEqual(result['status'], 'unavailable')
-        fetch.assert_not_called()
-
-    def test_non_numeric_version_is_never_compared(self):
-        result, _ = self.check('latest')
-        self.assertEqual(result['status'], 'unavailable')
-
+    def test_the_real_checkout_reports_its_own_head_as_installed(self):
+        head = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
+        with patch.object(frontlights, 'git_ok', return_value=True):
+            result = frontlights.update_check(ROOT / 'skills' / 'frontlights')
+        self.assertEqual(result['installed'], head[:12])
+        self.assertIn(result['status'], ('current', 'update_available', 'unavailable'))
 
 if __name__ == '__main__':
     unittest.main()

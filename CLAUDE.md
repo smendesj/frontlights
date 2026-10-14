@@ -1,9 +1,12 @@
 # Frontlights
 
-Plugin independente para Claude Code, antes chamado Workflows. Entrada:
-`/frontlights`. O plugin tem uma única skill, `skills/frontlights/SKILL.md`, que
-define a ordem das etapas; as instruções detalhadas de cada etapa ficam em
-`skills/frontlights/references/`. Leia a skill antes de alterar o fluxo.
+Skill avulsa para Claude Code, antes chamada Workflows e, até a 0.28.1, distribuída como plugin.
+Entrada: `/frontlights`, ou uma frase que cite o Frontlights. A skill inteira é a pasta
+`skills/frontlights`: `SKILL.md` define a ordem das etapas, as instruções detalhadas de cada
+etapa ficam em `references/`, e `scripts/`, `templates/`, `examples/` e `docs/` (protocolo e
+segurança) vivem dentro dela, referidos por `${CLAUDE_SKILL_DIR}`. Leia a skill antes de
+alterar o fluxo. `tests/`, `evals/` e a documentação da raiz são ferramental de quem desenvolve
+o Frontlights e ficam fora da skill.
 
 Idioma: mantenha README, documentação, modelos, exemplos e textos apresentados ao
 usuário em português. Somente as skills são redigidas em inglês; elas devem orientar
@@ -16,31 +19,25 @@ não invente aprovação. Descoberta, PRD e publicação de issues têm aprovaç
 separadas. A implementação (etapa 6) roda sob a autorização permanente, decisão do
 mantenedor para todo projeto: abre sem pergunta, e cada operação negada (merge,
 fechar issue, quadro, produção, migration registrada, branch base ou protegida) só
-roda depois do "Sim" de uma pergunta própria (`docs/security.md`).
+roda depois do "Sim" de uma pergunta própria (`skills/frontlights/docs/security.md`).
 
 Este repositório é público. Nunca versione endpoint real, segredo, token, nome de
 organização, produto, cliente ou pessoa, caminho local de máquina, nem saída
 capturada de sessão real. Exemplos, modelos, testes e documentação usam apenas
 marcadores genéricos (`OWNER/REPOSITORY`, `roads: null`). Configuração real vive
 fora deste repositório, no `.frontlights/config.json` do projeto de destino.
-Exceções, por decisão do mantenedor: `author.name` em `.claude-plugin/plugin.json`
-é "Sergio Mendes" e `owner.name` em `.claude-plugin/marketplace.json` é "SworkS".
 
-Suba a versão em `.claude-plugin/plugin.json` **e** na entrada do plugin em
-`.claude-plugin/marketplace.json` em toda alteração que precise chegar a quem já
-instalou. As duas precisam ser iguais, e um teste confere isso. O
-`claude plugin update` e o botão Atualizar do Desktop comparam a versão, não o
-conteúdo: sem o incremento, ambos respondem "already at the latest version" e a
-cópia instalada continua antiga. O botão do Desktop não liberou com a versão só
-no `plugin.json`. Mesmo com a versão certa, o Desktop compara com a cópia local do
-marketplace, que um marketplace de terceiros só renova com
-`claude plugin marketplace update frontlights` (ou com a atualização automática
-ligada nele); só depois disso o botão Atualizar aparece.
+Instalação e atualização são o Git: `~/.claude/skills/frontlights` é uma junção para
+`skills/frontlights` do clone, então um commit na `main` já é a versão instalada em quem
+fez `git pull`, e uma sessão nova a lê. Não há número de versão a subir; o `update-check`
+da etapa 0 compara o `HEAD` do clone com o remoto, e o User-Agent enviado ao RoadS leva o
+commit.
 
 Use worktrees isoladas. A autorização comum de implementação não permite escrever
 em branches protegidas, fazer merge, implantar ou publicar versões sem o "Sim" da
 pergunta própria de cada operação. Preserve o
-GuardianS e os dados do usuário. Leia `docs/protocol.md` para execução e retomada,
-e `docs/security.md` para os limites de aplicação das permissões. Execute
-`python -m unittest discover -s tests -v` e `python -m compileall -q scripts tests`.
+GuardianS e os dados do usuário. Leia `skills/frontlights/docs/protocol.md` para execução e
+retomada, e `skills/frontlights/docs/security.md` para os limites de aplicação das permissões.
+Execute `python -m unittest discover -s tests -v` e
+`python -m compileall -q skills/frontlights/scripts tests`.
 Não apresente testes com dados simulados como homologação de integrações reais.

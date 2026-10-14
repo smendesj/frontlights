@@ -10,8 +10,8 @@ writes, with its own `gh`, and only what the user approved.
 ## 1. Find the candidates (read only)
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" candidates --config <config> --root <project>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" candidates --config <config> --root <project> --issues 12,13
+python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" candidates --config <config> --root <project>
+python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" candidates --config <config> --root <project> --issues 12,13
 ```
 
 By default the scope is the issues this project worked on with Frontlights (the folders of
@@ -100,7 +100,7 @@ with all its lines, and before that parent is closed when it is in the same list
 the Capture command of the recipe in `issues.md` and check that each listed line of that copy is still an unticked
 item that cites the sub-issue and no other issue, and is the line the user was shown (otherwise stop and show the
 difference). Build the new body as a copy of it in which only the `[ ]` of those lines became `[x]`, by an
-exact-replace edit, and run `python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" tick-check --before <saved> --after
+exact-replace edit, and run `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" tick-check --before <saved> --after
 <new> --lines <lines>`: it must answer `ok` before anything is written. Capture the body once more right before the
 write and compare it with the saved copy (the compare step of the same recipe), then write it with `gh issue edit
 <parent> --repo <repo> --body-file <file>`. Capture it again and run `tick-check` against the saved copy with the
@@ -111,7 +111,7 @@ and children are now complete goes through the same question.
 ## 4. Verify
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" verify --config <config> --root <project> --issues 12,13
+python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" verify --config <config> --root <project> --issues 12,13
 ```
 
 Report per issue whether it is closed and its card is in Done; list every `ok: false` (the command then exits
@@ -128,8 +128,8 @@ authorization for these issues, plus an integration worktree the handoff names) 
 requests were merged into the approved base, and removing them is a write of its own, with **its own approval**.
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base>
-python "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base> --integration <integration worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base>
+python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base> --integration <integration worktree>
 ```
 
 Run it from the folder the session stands in, with `--root` pointing at the project's main worktree: the helper
@@ -172,7 +172,7 @@ and reported, and never retried with force; the rest of that item's commands are
 could not be removed keeps both), and the next item goes on. Then verify:
 
 ```powershell
-python "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup.py" verify --config <config> --root <project> --worktree <path> --branch <name>
+python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" verify --config <config> --root <project> --worktree <path> --branch <name>
 ```
 
 Report per item whether it is gone and list every `gone: false` (the command then exits with code 1). Put the

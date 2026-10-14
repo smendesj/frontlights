@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import roadmap_sync as rs
 
 ISSUE = 'https://github.com/OWNER/REPOSITORY/issues/12'
@@ -137,16 +137,16 @@ class RuleTextTests(unittest.TestCase):
             with self.subTest(doc='README', phrase=phrase):
                 self.assertIn(phrase, readme)
         contract = flat('docs', 'roads-contract.md')
-        for phrase in ('`retitled` (inteiro: itens cujo título acompanhou uma issue renomeada no GitHub', 'O plugin relata `retitled` e ignora `sprint`',
+        for phrase in ('`retitled` (inteiro: itens cujo título acompanhou uma issue renomeada no GitHub', 'O Frontlights relata `retitled` e ignora `sprint`',
                        'e, opcionalmente, `error`', 'a entrada se acha pelo número da issue e não pelo título',
                        'um `move_lane` com `payload.origin` `project`', 'nunca volta ao Project',
-                       'A fila de mudanças (`fetch`, `apply` e `ack`) não escreve no Project, e o plugin só escreve nele em passos próprios que o usuário aprova, como o `gaps` e o fechamento',
+                       'A fila de mudanças (`fetch`, `apply` e `ack`) não escreve no Project, e o Frontlights só escreve nele em passos próprios que o usuário aprova, como o `gaps` e o fechamento',
                        'o RoadS tirou do Dashboard os blocos "Em paralelo" e "Próxima semana" e o card "Resumo"'):
             with self.subTest(doc='contract', phrase=phrase):
                 self.assertIn(phrase, contract)
 
     def test_the_contract_no_longer_says_the_plugin_never_writes_to_the_project(self):
-        self.assertNotIn('O plugin continua sem escrever no Project', flat('docs', 'roads-contract.md'))
+        self.assertNotIn('O Frontlights continua sem escrever no Project', flat('docs', 'roads-contract.md'))
 
     def test_the_stale_dashboard_counters_are_gone_from_the_contract(self):
         contract = flat('docs', 'roads-contract.md')

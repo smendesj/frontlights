@@ -820,75 +820,54 @@ def inspect(config, root, config_path=None):
     return result
 
 
-PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = Path(__file__).resolve().parents[1]
 
 
-def version_key(value):
-    """`1.2.3` as a comparable tuple; None for anything else, never a guess."""
-    if not isinstance(value, str) or not re.fullmatch(r'\d+(\.\d+)*', value.strip()):
-        return None
-    return tuple(int(part) for part in value.strip().split('.'))
+def git_text(root, *args, timeout=30):
+    """Stripped stdout of a Git command run in `root`; raises on any failure."""
+    result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=timeout)
+    require(result.returncode == 0, f'git {args[0]} failed (exit {result.returncode})')
+    return result.stdout.strip()
 
 
-def marketplace_repo(source):
-    """owner/name of a GitHub-hosted marketplace source, or None."""
-    if not isinstance(source, dict):
-        return None
-    if source.get('source') == 'github' and repository(source.get('repo')):
-        return source['repo']
-    match = re.fullmatch(r'(?:https://|git@)github\.com[/:]([^/\s]+/[^/\s]+?)(?:\.git)?/?',
-                         str(source.get('url') or ''))
-    return match.group(1) if source.get('source') == 'git' and match else None
+def git_ok(root, *args, timeout=30):
+    """Whether a Git command exits 0, for predicates such as `merge-base --is-ancestor`."""
+    return subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=timeout).returncode == 0
 
 
-def fetch_text(url):
-    request = urllib.request.Request(url, headers={'Accept': 'application/vnd.github.raw+json',
-                                                   'User-Agent': 'frontlights-update-check'})
-    with urllib.request.urlopen(request, timeout=10) as response:
-        raw = response.read(1_000_001)
-    require(len(raw) <= 1_000_000, 'published manifest exceeds limit')
-    return raw.decode('utf-8-sig')
+def update_check(skill_root=SKILL_ROOT):
+    """Compare the installed skill's commit with the tip of the branch it tracks.
 
-
-def update_check(plugin_root=PLUGIN_ROOT, config_dir=None):
-    """Compare the running plugin's version with the one published on GitHub.
-
-    The desktop Update button compares against the local marketplace clone,
-    which a third-party marketplace refreshes only on demand, so the published
-    manifest is read from the source itself. Read only; it never updates.
+    The skill is a Git checkout (or a junction into one), so "installed" is `HEAD` and
+    "published" is what the remote reports for the upstream branch. `git ls-remote` asks the
+    remote and writes nothing locally; a published tip that is not an ancestor of `HEAD`
+    means the remote moved on. Read only; it never pulls.
     """
-    plugin = load(Path(plugin_root) / '.claude-plugin' / 'plugin.json')
-    market_name = load(Path(plugin_root) / '.claude-plugin' / 'marketplace.json')['name']
-    result = {'checked_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-              'plugin': plugin['name'], 'marketplace': market_name,
-              'installed': plugin.get('version'), 'published': None}
-    config_dir = Path(config_dir or os.environ.get('CLAUDE_CONFIG_DIR') or Path.home() / '.claude')
+    result = {'checked_at': dt.datetime.now(dt.timezone.utc).isoformat(), 'skill': 'frontlights',
+              'installed': None, 'published': None}
     try:
-        known = load(config_dir / 'plugins' / 'known_marketplaces.json')
-        repo = marketplace_repo((known.get(market_name) or {}).get('source'))
-        require(repo, 'marketplace is not hosted on GitHub')
-        # The contents API, not raw.githubusercontent.com: raw caches for minutes
-        # and would hide a version pushed just before the session.
-        url = f'https://api.github.com/repos/{repo}/contents/.claude-plugin/marketplace.json'
-        result['source'] = url
-        entry = next(p for p in json.loads(fetch_text(url))['plugins'] if p.get('name') == plugin['name'])
-        result['published'] = entry.get('version')
-    except (ValueError, OSError, KeyError, TypeError, StopIteration, AttributeError):
+        root = git_text(skill_root, 'rev-parse', '--show-toplevel')
+        result['root'] = root
+        head = git_text(root, 'rev-parse', 'HEAD')
+        result['installed'] = head[:12]
+        upstream = git_text(root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}')
+        remote, _, branch = upstream.partition('/')
+        require(remote and branch, 'no upstream branch')
+        listed = git_text(root, 'ls-remote', '--heads', remote, branch)
+        published = listed.split()[0] if listed else ''
+        require(re.fullmatch(r'[0-9a-f]{40}', published), 'remote branch not found')
+        result['published'] = published[:12]
+        result['source'] = f'{remote}/{branch}'
+    except (ValueError, OSError, subprocess.TimeoutExpired):
         result['status'] = 'unavailable'
-        result['reason'] = 'published version could not be read; check the network and the marketplace source'
+        result['reason'] = 'published commit could not be read; check the network, the Git remote and the upstream branch'
         return result
-    installed, published = version_key(result['installed']), version_key(result['published'])
-    if installed is None or published is None:
-        result['status'] = 'unavailable'
-        result['reason'] = 'version is not numeric'
-    elif published > installed:
-        result['status'] = 'update_available'
-        result['commands'] = [f'claude plugin marketplace update {market_name}',
-                              f'claude plugin update {plugin["name"]}@{market_name}']
+    if published == head or git_ok(root, 'merge-base', '--is-ancestor', published, head):
+        result['status'] = 'current'   # equal, or a checkout ahead of what is published (development)
     else:
-        result['status'] = 'current'
+        result['status'] = 'update_available'
+        result['commands'] = [f'git -C "{root}" pull --ff-only']
     return result
-
 
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))

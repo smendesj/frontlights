@@ -3,7 +3,7 @@ modelos, dos docs e do eval diz o mesmo que os scripts `closeout.py` e `cleanup.
 
 Seams: o texto de `SKILL.md`, `references/development.md`, `references/closeout.md`, `templates/handoff.md`,
 `docs/`, `README.md` e `evals/`; os scripts têm os próprios testes (`test_closeout.py`, `test_cleanup.py`). A espera
-é uma regra da skill (o plugin não a impõe), então ela só se prova pelo texto e pela revisão manual de
+é uma regra da skill (o Frontlights não a impõe), então ela só se prova pelo texto e pela revisão manual de
 `evals/merge-wait-and-cleanup.md`.
 """
 import re
@@ -54,7 +54,7 @@ class WaitTests(unittest.TestCase):
         for phrase in ('Either is only a trigger', 'run `merge-status` and act only on its answer, never on the notification',
                        'may not report a merge at all, so the monitor is the dependable trigger',
                        'prints one short line only when the set of `ready` or `settled` PRs changes',
-                       '`${CLAUDE_PLUGIN_ROOT}` may be unset in a background shell', 'The user can also say "mesclei"',
+                       '`${CLAUDE_SKILL_DIR}` may be unset in a background shell', 'The user can also say "mesclei"',
                        'closeout.py" merge-status --config <config> --prs 12,13 --base <approved base>',
                        'the same GitHub account as the session\'s `gh`',
                        'When the host offers neither, say so in the handoff and stop waiting'):
@@ -171,7 +171,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                 self.assertIn(phrase, never)
 
     def test_every_reason_the_cleanup_script_produces_is_documented(self):
-        source = read('scripts', 'cleanup.py')
+        source = read('skills', 'frontlights', 'scripts', 'cleanup.py')
         for code in ('main_worktree', 'current_directory', 'detached_head', 'not_a_worktree', 'path_missing', 'unsafe_path',
                      'unsafe_branch', 'protected_branch', 'uncommitted_changes', 'unreadable_status', 'open_pr',
                      'no_merged_pr', 'newer_than_merged_pr', 'merged_into_other_branch', 'ancestry_unverifiable',
@@ -184,7 +184,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                 self.assertIn(code, self.flat, 'the reference does not explain it')
 
     def test_every_status_merge_status_produces_is_documented_where_the_wait_reads_it(self):
-        source = read('scripts', 'closeout.py')
+        source = read('skills', 'frontlights', 'scripts', 'closeout.py')
         wait = flat('skills', 'frontlights', 'references', 'development.md')
         for code in ('merged_into_base', 'merged_elsewhere', 'closed_unmerged', 'not_found', 'unknown', 'open'):
             self.assertIn(f"'{code}'", source)
@@ -203,7 +203,7 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
                 self.assertIn(phrase, stage7)
 
     def test_the_handoff_template_has_the_wait_and_the_closing_and_cleanup_lines(self):
-        text = flat('templates', 'handoff.md')
+        text = flat('skills', 'frontlights', 'templates', 'handoff.md')
         for phrase in ('Aguardando o merge (cada PR com a issue', 'ou "não aguardar" com a resposta literal do usuário',
                        'Fechamento e limpeza (a lista aprovada de cada um, a resposta literal, os comandos rodados',
                        '`closeout.py verify`, `tick-check` e `cleanup.py verify`'):
@@ -218,15 +218,15 @@ class DocsAndEvalsTests(unittest.TestCase):
                              'nunca leva palavra de fechamento', 'só vale o merge **na branch base aprovada**',
                              '`closeout.py tick-check` antes e depois', 'Sem item citando a filha, ela só fecha',
                              '`cleanup.py plan`', 'Nunca usa `--force`', 'Responder "Não agora" ao fechamento não gera a pergunta da limpeza',
-                             'A espera é regra da skill, não barreira do plugin',
+                             'A espera é regra da skill, não barreira do Frontlights',
                              '`python scripts/closeout.py candidates|verify|merge-status|tick-check ...`',
                              '`python scripts/cleanup.py plan|verify ...`', 'os arquivos que o Git ignora (um `.env`, `node_modules`) também',
                              'A worktree de integração local da família (nunca enviada, sem PR)',
                              'só é apagada se `origin` é o repositório configurado'),
-            ('docs', 'protocol.md'): ('| Espera do merge |', '| Limpeza |', 'Aguardando o merge', 'só `merged_into_base` vale',
+            ('skills', 'frontlights', 'docs', 'protocol.md'): ('| Espera do merge |', '| Limpeza |', 'Aguardando o merge', 'só `merged_into_base` vale',
                                       '(`parentTicks`: números de linha', '`closeout.py tick-check` confere antes e depois',
                                       '`scripts/cleanup.py plan|verify`', 'nunca com `--force`'),
-            ('docs', 'security.md'): ('A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:',
+            ('skills', 'frontlights', 'docs', 'security.md'): ('A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:',
                                       'o gatilho do ambiente (inscrição na PR ou monitor) não é prova',
                                       'um item que cita outras issues junto nunca é marcado', 'nunca com `--force`',
                                       'cujo tip é a cabeça de uma PR mesclada que chegou à base aprovada',
@@ -256,8 +256,8 @@ class DocsAndEvalsTests(unittest.TestCase):
         self.assertIn('| 17. Espera do merge, marcação no pai e limpeza | Pendente |', flat('docs', 'acceptance.md'))
 
     def test_the_new_files_carry_no_machine_path_and_no_real_name(self):
-        names = [ROOT / 'evals' / 'merge-wait-and-cleanup.md', ROOT / 'scripts' / 'cleanup.py', ROOT / 'tests' / 'test_cleanup.py',
-                 SKILL / 'references' / 'closeout.md', SKILL / 'references' / 'development.md', ROOT / 'templates' / 'handoff.md']
+        names = [ROOT / 'evals' / 'merge-wait-and-cleanup.md', ROOT / 'skills' / 'frontlights' / 'scripts' / 'cleanup.py', ROOT / 'tests' / 'test_cleanup.py',
+                 SKILL / 'references' / 'closeout.md', SKILL / 'references' / 'development.md', ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md']
         for path in names:
             text = path.read_text(encoding='utf-8')
             with self.subTest(path=path.name):

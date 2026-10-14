@@ -6,7 +6,7 @@
 2. Preserve alterações não salvas em commits, evidências, branches e `.frontlights/`.
    Confira o estado real do Git e a responsabilidade pela worktree antes de retomar.
    Não execute limpeza ou restauração automática.
-3. Inicie uma nova sessão do Claude com o mesmo projeto e plugin. Leia a issue,
+3. Inicie uma nova sessão do Claude com o mesmo projeto e a skill instalada. Leia a issue,
    a autorização e o documento de passagem de contexto. Consulte novamente o GitHub
    e compare a saída de `resume`.
 4. Trate as divergências na sessão coordenadora. Autorização vencida, critérios de
@@ -18,11 +18,11 @@
 6. Restabeleça o Remote Control na própria sessão atual e obtenha confirmação pelo
    celular ou pela alternativa escolhida. Não presuma que a conexão anterior continua ativa.
 
-Para deixar de usar o plugin carregado localmente, encerre a sessão e omita
-`--plugin-dir` na próxima inicialização. Se ele for instalado posteriormente por
-um catálogo de plugins, use `claude plugin uninstall` com o identificador exato,
-após conferir a lista de instalações. Preserve worktrees, registros e issues do
+Para deixar de usar a skill, encerre a sessão e remova a junção `~/.claude/skills/frontlights`
+(`rmdir`, que apaga só o atalho, nunca o repositório). Se o Frontlights ainda estiver instalado
+como plugin de uma versão antiga, use `claude plugin uninstall frontlights@frontlights` depois
+de conferir a lista de instalações. Preserve worktrees, registros e issues do
 usuário. Este repositório não possui instalador ou desinstalador que altere o GuardianS.
 
 A troca do fluxo padrão e a desativação do GuardianS são decisões humanas separadas,
-tomadas após a revisão das evidências de aceitação. O plugin não as executa.
+tomadas após a revisão das evidências de aceitação. O Frontlights não as executa.

@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / 'scripts' / 'frontlights.py'
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
 SKILL = ROOT / 'skills' / 'frontlights'
 
 
@@ -130,16 +130,16 @@ class SubIssuePlanTests(unittest.TestCase):
 class WithoutParentNothingChangesTests(unittest.TestCase):
     def test_example_plan_still_validates_and_schedules(self):
         result = subprocess.run([sys.executable, str(SCRIPT), 'validate-plan', '--plan',
-                                 str(ROOT / 'examples' / 'plan.json')], capture_output=True, text=True)
+                                 str(ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json')], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {'valid': True, 'semantic_review_required': True})
         result = subprocess.run([sys.executable, str(SCRIPT), 'schedule', '--plan',
-                                 str(ROOT / 'examples' / 'plan.json'), '--limit', '2'],
+                                 str(ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json'), '--limit', '2'],
                                 capture_output=True, text=True)
         self.assertEqual(json.loads(result.stdout), {'start': [1, 2]})
 
     def test_example_plan_shows_one_sub_issue(self):
-        example = json.loads((ROOT / 'examples' / 'plan.json').read_text(encoding='utf-8'))
+        example = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json').read_text(encoding='utf-8'))
         children = [i for i in example['issues'] if 'parent' in i]
         self.assertEqual(len(children), 1)
         self.assertNotIn('project_fields', children[0])
@@ -208,11 +208,11 @@ class FollowUpsManifestTests(unittest.TestCase):
         self.assertNotIn('including follow-ups proposed after delivery', text)
 
     def test_issue_template_has_parent_next_to_depends_on(self):
-        text = (ROOT / 'templates' / 'issue.md').read_text(encoding='utf-8')
+        text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md').read_text(encoding='utf-8')
         self.assertRegex(text, r'Depends on: none\nParent: none\n')
 
     def test_docs_say_top_level_issues_join_the_board(self):
-        for path in (ROOT / 'README.md', ROOT / 'docs' / 'protocol.md'):
+        for path in (ROOT / 'README.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md'):
             with self.subTest(path=path.name):
                 self.assertIn('toda issue de topo entra no quadro; sub-issue entra só pelo pai',
                               path.read_text(encoding='utf-8'))

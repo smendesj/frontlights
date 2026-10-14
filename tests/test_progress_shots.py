@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import progress_report as pr
 import roadmap_sync as rs
@@ -584,9 +584,9 @@ class ShotsDocumentationTests(unittest.TestCase):
             self.assertIn(needle, text)
 
     def test_security_and_readme_describe_the_write_outside_the_project(self):
-        self.assertIn('weekShots', self.read('docs', 'security.md'))
+        self.assertIn('weekShots', self.read('skills', 'frontlights', 'docs', 'security.md'))
         self.assertIn('weekShots', self.read('README.md'))
-        config = json.loads(self.read('examples', 'config.json'))
+        config = json.loads(self.read('skills', 'frontlights', 'examples', 'config.json'))
         self.assertNotIn('weekShots', config['roadmapSync']['progress'])
 
 

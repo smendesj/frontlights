@@ -11,7 +11,7 @@ project's own or the registered home's (next section).
 
 The collectors and the push command are the project's own commands, written in that config file.
 This step runs them, so the exact block must be approved by the user first (step 2). The helper is
-`python "${CLAUDE_PLUGIN_ROOT}/scripts/progress_report.py" <operation> --root <operationsRoot>`
+`python "${CLAUDE_SKILL_DIR}/scripts/progress_report.py" <operation> --root <operationsRoot>`
 (`status` takes the project the session opened; the other operations take the `operationsRoot` it reports). Every
 operation prints one JSON object. Exit code 0 is success; 1 means the step failed and nothing is to
 be described as updated; 2 (push only) means the push command started and did not finish, so part
@@ -119,7 +119,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
 5. **Draft.** The project's push command assembles the final draft itself: it merges the texts file you
    write here (the file passed as `{draft}`) with the collected facts, the usage numbers, the local
    sign-in details and the screenshots, validates it and sends it. Write the texts file as one JSON
-   file in a temporary place outside the repository (never inside the plugin).
+   file in a temporary place outside the repository (never inside the skill folder).
    - **Contract.** When `status` reported `draftGuide`, read that file (relative to the `operationsRoot`, where the block
      lives) first and follow its field names and rules exactly: it describes the texts file, and this
      reference does not define them. When `draftGuide` is absent, ask with `AskUserQuestion` where the
@@ -128,7 +128,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
      `operationsRoot`), the local issue records under `.frontlights/issues/` of the project the session
      opened and, when it is another one, of the `operationsRoot`, and, when roadmap sync is configured, the
      roadmap file and the sprint file of the current week. Find them with the read-only `python
-     "${CLAUDE_PLUGIN_ROOT}/scripts/roadmap_sync.py" status --root <operationsRoot>` (no network; it reports
+     "${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" status --root <operationsRoot>` (no network; it reports
      the files). Read those two files, never write them here. They are the source of "Próximos passos"
      and of what is in development versus still in the backlog, so the next steps reflect the sprint of
      the week. When no sprint file for the current week exists, say so plainly to the user and write the
@@ -179,7 +179,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
      you chose yourself. It creates the folder when missing and prints it as `shotsDir`: one folder per summary,
      named by the day the period ends (`<dd_MM>`), inside the folder of the Monday after the week of that last
      day, when the summary is presented. Use only that path. `--from` no longer names the folder and is refused.
-     Tell the user about any `warnings` that `window` printed (a `weekMeeting` that differs from the plugin's own
+     Tell the user about any `warnings` that `window` printed (a `weekMeeting` that differs from the skill's own
      calculation) before saving the prints.
    - `shotsDir` reported: the prints live in that folder inside the project.
    - Neither: offer prints only through `--shot`/`--caption` in step 8 and say that the project did
@@ -194,7 +194,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
    deliveries need one, then ask with `AskUserQuestion` how to get each (below). Without
    `weekShots`, ask whether the summary should carry screenshots and, if so, for which deliveries.
    - **Prints the watched tests kept.** Before asking, run `python
-     "${CLAUDE_PLUGIN_ROOT}/scripts/progress_report.py" candidates --root <the main worktree of the project
+     "${CLAUDE_SKILL_DIR}/scripts/progress_report.py" candidates --root <the main worktree of the project
      the session opened> --repository <the facts file's `repository`> --to <to>` (read-only, no network, no
      approval, nothing is copied; add `--ref <branch>` for work that is not on `HEAD` yet). A project other
      than the summary's product has none of its prints offered: the `--repository` check says so. It lists the prints that watched browser tests kept for the summary

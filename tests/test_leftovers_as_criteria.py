@@ -4,7 +4,7 @@ Seams: o texto de `SKILL.md`, `references/issues.md` (escada de destinos, receit
 `references/development.md`, `references/closeout.md`, `templates/issue.md`, `templates/handoff.md`,
 `docs/`, `README.md` e `evals/`; e o `closeout.scan`/`op_candidates` (ver `test_closeout.py`) para provar que o
 modelo de issue e o critério escrito pela receita são contados pelo fechamento. O portão é uma regra da skill
-(o plugin não a impõe), então ela só se prova pelo texto e pela revisão manual de `evals/leftovers-as-criteria.md`.
+(o Frontlights não a impõe), então ela só se prova pelo texto e pela revisão manual de `evals/leftovers-as-criteria.md`.
 """
 import json
 import re
@@ -17,7 +17,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import closeout
 
 
@@ -139,7 +139,7 @@ class RecipeTests(unittest.TestCase):
                 self.assertIn(phrase, self.recipe)
 
     def test_the_write_is_verified_by_the_closeout_count_and_by_the_difference(self):
-        for phrase in ('python "${CLAUDE_PLUGIN_ROOT}/scripts/closeout.py" candidates --config <config> --root <project> --issues <n>',
+        for phrase in ('python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" candidates --config <config> --root <project> --issues <n>',
                        'Run the same closeout command again', 'criteria.total`, under `candidates` or `excluded`',
                        'grown by the number of items added', 'unchecked_criteria', 'open_children',
                        'with the same flag (`--ignore-cr-at-eol`)',
@@ -214,7 +214,7 @@ class GateTests(unittest.TestCase):
 
     def test_the_handoff_keeps_the_list(self):
         self.assertIn('Achados sem correção e destino de cada um', self.gate)
-        handoff = read('templates', 'handoff.md')
+        handoff = read('skills', 'frontlights', 'templates', 'handoff.md')
         self.assertIn('Achados sem correção e destino de cada um', handoff)
         self.assertIn('"descartado pelo usuário"', handoff)
 
@@ -249,7 +249,7 @@ class SkillAndDevelopmentTests(unittest.TestCase):
 
 class TemplateAndCloseoutTests(unittest.TestCase):
     def test_the_issue_template_tells_where_the_leftovers_go_without_adding_a_criterion(self):
-        template = read('templates', 'issue.md')
+        template = read('skills', 'frontlights', 'templates', 'issue.md')
         note = ' '.join(section(template, 'Critérios de aceitação').split())
         for phrase in ('Pendência (achado da revisão)', 'Evidência que fecha', 'nunca numa seção à parte',
                        'só esta seção conta para fechar a issue', 'tratada, concluída e marcada com evidência'):
@@ -258,12 +258,12 @@ class TemplateAndCloseoutTests(unittest.TestCase):
         self.assertEqual(closeout.scan(template), ((0, 1), 0))   # the explanation is not a criterion
 
     def test_a_leftover_written_as_the_recipe_says_is_counted_and_blocks_the_closeout_until_ticked(self):
-        template = read('templates', 'issue.md')
+        template = read('skills', 'frontlights', 'templates', 'issue.md')
         body = template.replace('- [ ] <resultado observável>\n', '- [x] Behavior\n' + LEFTOVER)
         self.assertEqual(closeout.scan(body), ((1, 2), 0))
         self.assertEqual(closeout.scan(body.replace('- [ ] Pendência', '- [x] Pendência')), ((2, 2), 0))
         # the prefix the recipe tells the session to write is the one the template shows
-        self.assertIn('Pendência (achado da revisão)', read('templates', 'issue.md'))
+        self.assertIn('Pendência (achado da revisão)', read('skills', 'frontlights', 'templates', 'issue.md'))
         self.assertIn('Pendência (achado da revisão)', read(*ISSUES))
 
     def test_the_leftover_kept_in_a_section_of_its_own_is_the_one_the_closeout_warns_about(self):
@@ -288,9 +288,9 @@ class DocsAndEvalsTests(unittest.TestCase):
             ('README.md',): ('critério `- [ ] Pendência (achado da revisão): ...`', 'seção de critérios de aceitação da issue de origem',
                              '"citado no corpo do PR" nunca é destino', 'Achados sem correção e destino de cada um',
                              'fecha com N pendências fora dos critérios'),
-            ('docs', 'protocol.md'): ('critério de aceitação novo na issue de origem', 'nunca numa seção à parte',
+            ('skills', 'frontlights', 'docs', 'protocol.md'): ('critério de aceitação novo na issue de origem', 'nunca numa seção à parte',
                                       '"citado no corpo do PR" nunca é destino', 'Achados sem correção e destino de cada um'),
-            ('docs', 'security.md'): ('O plugin não impede a sessão de encerrar com o achado só no texto do PR',
+            ('skills', 'frontlights', 'docs', 'security.md'): ('O Frontlights não impede a sessão de encerrar com o achado só no texto do PR',
                                       '`pending_outside_criteria`', '`pendingOutside`'),
         }
         for name, phrases in cases.items():
@@ -300,7 +300,7 @@ class DocsAndEvalsTests(unittest.TestCase):
                     self.assertIn(phrase, text)
 
     def test_the_old_checklist_wording_is_gone_from_the_documents(self):
-        for name in (('README.md',), ('docs', 'protocol.md')):
+        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'protocol.md')):
             with self.subTest(doc=name[-1]):
                 self.assertNotIn('item de checklist no corpo da issue de origem', flat(*name))
                 self.assertNotIn('checklist na issue de origem', flat(*name))
@@ -318,8 +318,8 @@ class DocsAndEvalsTests(unittest.TestCase):
         self.assertIn('| 16. Pendências como critério de aceitação | Pendente |', flat('docs', 'acceptance.md'))
 
     def test_the_new_files_carry_no_machine_path_and_no_real_name(self):
-        for path in (ROOT / 'evals' / 'leftovers-as-criteria.md', ROOT / 'templates' / 'issue.md',
-                     ROOT / 'templates' / 'handoff.md', SKILL / 'references' / 'issues.md'):
+        for path in (ROOT / 'evals' / 'leftovers-as-criteria.md', ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md',
+                     ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md', SKILL / 'references' / 'issues.md'):
             text = path.read_text(encoding='utf-8')
             with self.subTest(path=path.name):
                 self.assertNotRegex(text, r'\b[A-Za-z]:[\\/]|/(home|Users)/[A-Za-z]')
