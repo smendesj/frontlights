@@ -395,9 +395,10 @@ roadmap, o Frontlights pergunta uma vez por sessão se você quer registrar o pr
    próprio projeto monta o rascunho final com fatos, uso, dados de acesso locais e prints. O resumo é
    do produto que o `facts.json` nomeia em `scope` (entregas, dificuldades e próximos passos só dele; o uso
    do Claude cobre todos os projetos conectados). Cada entrega é uma issue de topo e representa a família
-   inteira, em qualquer profundidade: o e-mail e a visão semanal mostram sozinhos "X de Y partes prontas", e
-   o texto diz o que ficou pronto no período e o que bloqueia, sem repetir a contagem (campos `subIssues` e
-   `slices` do coletor, contrato em `docs/roads-contract.md`);
+   inteira, em qualquer profundidade, ou, sem sub-issues, as caixas de critério de aceitação como partes: o
+   e-mail e a visão semanal mostram sozinhos "X de Y partes prontas", e o texto diz o que ficou pronto no
+   período e o que bloqueia (uma caixa com o sub-item "Bloqueada:" é uma dificuldade), sem repetir a
+   contagem (campos `subIssues` e `slices` do coletor, contrato em `docs/roads-contract.md`);
 5. cuida dos prints e, para cada um, oferece capturar a tela do produto rodando neste computador (só
    dados de teste, nunca dados reais nem produção, sem a barra do navegador nem a identidade de quem
    está logado; JPEG ou PNG, até 1 MB e cerca de 1920 px de largura, no máximo 40). Antes de perguntar,

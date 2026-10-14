@@ -144,20 +144,26 @@ operation runs in, because the collectors, the draft guide and the approval all 
    - **Sprint block and chips.** The facts file carries `sprint` (the covers of the sprint: the items of the Project
      in Development, epics included; `epics[]` with `issue`, `title`, `issues` {total, done}, `parts` {total, done,
      remaining} and `open`) and `delivered` ({issues, parts}). RoadS draws from them, by itself, the two chips of
-     the e-mail and of the weekly view: "Concluído: N sub-issues em M issues" (everything delivered in the period,
-     in the sprint or not) and "Em andamento: N sub-issues em K issues" (what is left of the sprint's covers). There
+     the e-mail and of the weekly view: "Concluído: N partes em M issues" (everything delivered in the period,
+     in the sprint or not) and "Em andamento: N partes em K issues" (what is left of the sprint's covers; the
+     parts of a cover without sub-issues are its acceptance-criteria boxes). There
      is no "Em validação" chip. The text never repeats those numbers. The covers are not deliveries: they need no
      entry and no print. "Próximos passos" come from what is left in each cover (`open`), in the order of the
      sprint, in plain words; the sprint file of the week is only the fallback when the facts have no `sprint`, and a
      sprint file that disagrees with `sprint` (an older reading, other items) is said to the user in one line. When
      the draft guide allows it, a cover may get one sentence in the `sprint` field of the texts file.
-   - **Families.** An entry stands for a whole family: the issue and every sub-issue under it, however deep.
-     When the entry carries `subIssues` (`total` parts, `done` ready), the e-mail and the weekly view show
-     "X de Y partes prontas" under the sentence by themselves: do not repeat the count in the text. Use the
-     sentence for what became ready in the period, in plain words, from `slices.closed` (the parts closed in
-     the period, with their titles, which are rewritten like any other text) when the facts carry it, else
-     from the local records. Each part in `slices.blocked` is a difficulty: what blocks it and what is needed,
-     from whom. When the facts report `ignored.cut` above zero, or an entry's evidence says the reading of
+   - **Families and boxes.** An entry stands for a whole family: the issue and every sub-issue under it,
+     however deep. A delivery without sub-issues has its parts in the boxes of its acceptance-criteria section
+     (the slices of stage 5): `subIssues` counts the boxes (`total`) and the ticked ones (`done`), `slices.closed`
+     lists the boxes ticked in the period, dated by the edit history of the body, and `slices.blocked` the open
+     boxes that carry a "Bloqueada:" sub-item, each with its `reason`. When the entry carries `subIssues`
+     (`total` parts, `done` ready), the e-mail and the weekly view show "X de Y partes prontas" under the
+     sentence by themselves: do not repeat the count in the text. Use the sentence for what became ready in
+     the period, in plain words, from `slices.closed` (the parts closed in the period, with their titles, which
+     are rewritten like any other text) when the facts carry it, else from the local records. Each part in
+     `slices.blocked` is a difficulty: what blocks it and what is needed, from whom; when it carries `reason`
+     (the text after "Bloqueada:" under the box), that reason is one line of the difficulties, rewritten in
+     plain words. When the facts report `ignored.cut` above zero, or an entry's evidence says the reading of
      its sub-issues was cut, tell the user before drafting: that count is partial. Parts that are ready never
      make the entry "Concluído"; its status is the facts'.
    - Never invent a fact that is not in the collected facts, the local issue records or those files;

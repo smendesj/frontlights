@@ -218,24 +218,44 @@ página não se aplica a eles, mas o que o Frontlights faz com cada um está na 
   exceção e cobre os projetos conectados.
 - `entries[].subIssues` (`{ "total", "done" }`): as **partes** da família, contadas pelas folhas da árvore inteira (uma
   sub-issue que tem filhas conta pelas filhas; folha fechada como não planejada fica fora dos dois números), e
-  quantas estão prontas. O e-mail e a visão semanal do RoadS escrevem "X de Y partes prontas" sozinhos, então o
-  texto do Frontlights não repete a contagem; número de issue nunca vai ao texto.
-- `entries[].slices` (só em entrega com sub-issues): `{ "closed": [{ "title", "closedAt" }], "blocked": [{ "title" }] }`,
-  as partes de qualquer nível fechadas como concluídas no período e as bloqueadas (aberta com o rótulo
-  `status:blocker`, ou com cartão em Blocker no fim do período), só como evidência para quem escreve: não vão ao
-  e-mail nem ao conteúdo montado. Se o RoadS cortar a leitura da árvore, `ignored.cut` conta quantas issues ficaram
-  sem leitura completa e a entrada traz a linha de evidência dizendo isso: o Frontlights repassa o aviso ao usuário.
+  quantas estão prontas. Numa entrega **sem sub-issues**, as partes são as caixas da seção de critérios de aceitação
+  do corpo (as slices da etapa 5): `total` = caixas, `done` = marcadas, lidas com as regras do `closeout.py` do
+  Frontlights (título da seção, itens com ou sem recuo, código cercado e comentários ignorados); uma família com
+  sub-issues segue pelas folhas e as duas contagens nunca se misturam; sem filhas e sem caixas, `null` (conta 1 em
+  `delivered`). Decisão de 14/10/2026, em produção no RoadS. O e-mail e a visão semanal do RoadS escrevem "X de Y
+  partes prontas" sozinhos, então o texto do Frontlights não repete a contagem; número de issue nunca vai ao texto.
+- `entries[].slices` (em entrega com sub-issues ou com caixas): `{ "closed": [{ "title", "closedAt" }], "blocked":
+  [{ "title", "reason" }] }`, as partes de qualquer nível fechadas como concluídas no período e as bloqueadas (aberta
+  com o rótulo `status:blocker`, ou com cartão em Blocker no fim do período), só como evidência para quem escreve: não
+  vão ao e-mail nem ao conteúdo montado. Numa entrega por caixas, `closed` traz as caixas marcadas no período, com
+  `title` = o texto da caixa até a primeira frase (um rótulo curto como "S1." não conta como frase; até 120
+  caracteres) e `closedAt` = a edição do corpo que a marcou, lida do histórico de edições do GitHub
+  (`userContentEdits`, até 100 edições), em instante com fuso; uma caixa cuja marcação o histórico não alcança, ou um
+  histórico que não pôde ser lido, conta sem data e nunca como "marcada no período" (o coletor avisa). `blocked` traz
+  as caixas abertas com o sub-item "Bloqueada:" logo abaixo, e `blocked[].reason` (campo opcional, aditivo,
+  14/10/2026) é o resto dessa linha. A convenção "Bloqueada:" é do Frontlights: um sub-item sem caixa, mais recuado
+  que uma caixa aberta e logo abaixo dela (uma linha de lista no mesmo nível ou acima desfaz o vínculo), cujo texto
+  começa com "Bloqueada:" sem importar acento, maiúsculas, negrito ou itálico. Se o RoadS cortar a leitura da árvore,
+  `ignored.cut` conta quantas issues ficaram sem leitura completa e a entrada traz a linha de evidência dizendo isso:
+  o Frontlights repassa o aviso ao usuário.
 - `sprint` (bloco) e `delivered`: as capas da sprint são os itens do Project em Development (épicos incluídos) e **não
   são entregas**. `sprint.epics[]` traz, por capa, `issue`, `title`, `issues` (`total`, `done`), `parts` (`total`, `done`,
-  `remaining`, contadas pelas folhas da árvore) e `open` (as issues que faltam); `delivered` traz `issues` (as
-  entregas concluídas no período, esteja ou não na sprint) e `parts` (a soma das partes prontas, em que uma entrega sem
-  filhas conta 1). Os dois vão ao conteúdo montado: o e-mail e a visão semanal mostram **"Concluído: N sub-issues em M
-  issues"** (tudo o que foi entregue na janela) e **"Em andamento: N sub-issues em K issues"** (o que resta das capas
-  da sprint), sem o chip "Em validação". Decisão de 07/10/2026; vale para todo resumo. O texto do Frontlights não repete esses
-  números, e os próximos passos saem do que resta em cada capa.
+  `remaining`, contadas pelas folhas da árvore ou, numa capa sem sub-issues, pelas caixas de critério) e `open` (as
+  issues que faltam; vazio numa capa sem filhas, que traz `issues` `{ total: 1, done: 0 }`); `delivered` traz `issues`
+  (as entregas concluídas no período, esteja ou não na sprint) e `parts` (a soma das partes prontas, em que uma
+  entrega sem filhas e sem caixas conta 1). Os dois vão ao conteúdo montado: o e-mail e a visão semanal mostram
+  **"Concluído: N partes em M issues"** (tudo o que foi entregue na janela) e **"Em andamento: N partes em K issues"**
+  (o que resta das capas da sprint), sem o chip "Em validação". Decisão de 07/10/2026; vale para todo resumo; desde
+  14/10/2026 os textos do RoadS dizem "partes" no lugar de "sub-issues" (o e-mail já enviado não muda). O texto do
+  Frontlights não repete esses números, e os próximos passos saem do que resta em cada capa.
 - **Atividade da família.** PR mesclado ou aberto, commit e fechamento de qualquer descendente dentro do período contam
   como atividade da entrega. Uma entrega com partes entregues no período nunca fica em `proximo` (que dispensa o print).
   O `status` continua vindo do coletor e só dele.
+- **Entrega por caixas.** A situação segue o PR e o fechamento, como numa issue avulsa: caixa aberta não é "filha
+  pendente", e caixa marcada no período conta como atividade e trabalho feito (nunca `proximo`). Uma issue fechada com
+  caixas abertas mostra o que está marcado e ganha na evidência "Concluída com N caixas dos critérios de aceitação
+  ainda abertas". No Dashboard, o bloco Slices mostra uma linha por caixa (CONCLUÍDO, A FAZER ou BLOQUEADO) para a
+  issue da sprint sem sub-issues; nada disso é rota do contrato.
 - **Prints.** O print é exigido por entrega (a issue de topo). O Frontlights guarda o print de uma parte com o número da
   entrega em `captions.json`, então o RoadS não precisa aceitar número de sub-issue ali.
 
@@ -251,6 +271,8 @@ resumos da mesma semana (quarta e sexta) nunca dividem arquivo. Prints salvos an
 - Os caminhos de erro (tempo esgotado do `sync-board`, 401 com segredo trocado, `schemaVersion` desconhecido,
   `overLimit`, marcas recusadas) só têm cobertura simulada nos testes; a produção real exercitou o caminho
   feliz.
+- A contagem de partes por caixas (14/10/2026) ainda não apareceu num resumo real: no período de 09/10 a 13/10
+  nenhuma entrega usava caixas, e a coleta real não mudou.
 - O RoadS registra, das chamadas feitas com segredo válido, o método, a rota, o status, o User-Agent declarado
   (cortado em 200 caracteres) e a duração, e guarda por 90 dias. Isso prova qual cliente e qual versão disseram
   chamar, não quem tem o segredo.

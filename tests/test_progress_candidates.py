@@ -264,8 +264,8 @@ class TextTests(unittest.TestCase):
 
     def test_the_sprint_block_and_the_chips_are_documented_for_every_summary(self):
         text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
-        for phrase in ('Sprint block and chips', '`delivered`', '"Concluído: N sub-issues em M issues"',
-                       '"Em andamento: N sub-issues em K issues"', 'There is no "Em validação" chip',
+        for phrase in ('Sprint block and chips', '`delivered`', '"Concluído: N partes em M issues"',
+                       '"Em andamento: N partes em K issues"', 'There is no "Em validação" chip',
                        'The covers are not deliveries', 'only the fallback when the facts have no `sprint`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -273,6 +273,22 @@ class TextTests(unittest.TestCase):
         for phrase in ('`sprint.epics[]`', 'sem o chip "Em validação"', 'Decisão de 07/10/2026'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, contract)
+
+    def test_a_delivery_without_sub_issues_counts_its_parts_by_the_boxes(self):
+        text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
+        for phrase in ('A delivery without sub-issues has its parts in the boxes of its acceptance-criteria section',
+                       '`subIssues` counts the boxes', 'dated by the edit history of the body',
+                       'the open boxes that carry a "Bloqueada:" sub-item', '`reason`',
+                       'that reason is one line of the difficulties'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        contract = self.flat('docs', 'roads-contract.md')
+        for phrase in ('as caixas da seção de critérios de aceitação', '`closedAt`', 'histórico de edições',
+                       '`blocked[].reason`', '"Bloqueada:"', '"Concluído: N partes em M issues"',
+                       'Decisão de 14/10/2026'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, contract)
+        self.assertIn('whose parts are the boxes of its acceptance criteria', self.flat('evals', 'runbook.md'))
 
     def test_the_watched_test_keeps_clean_prints_for_the_summary(self):
         text = self.flat('skills', 'frontlights', 'references', 'browser-testing.md')
