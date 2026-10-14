@@ -15,7 +15,7 @@ respostas e documentos em português. Preserve comandos e identificadores técni
 O GitHub é a fonte oficial de escopo, critérios de aceitação, dependências e situação
 das issues. Registros locais são evidências e cópias de referência, nunca tickets
 duplicados. Informe divergências. Faça todas as perguntas por `AskUserQuestion`;
-não invente aprovação. Descoberta, PRD e publicação de issues têm aprovações
+não invente aprovação. Descoberta, texto da issue e publicação de issues têm aprovações
 separadas. A implementação (etapa 6) roda sob a autorização permanente, decisão do
 mantenedor para todo projeto: abre sem pergunta, e cada operação negada (merge,
 fechar issue, quadro, produção, migration registrada, branch base ou protegida) só

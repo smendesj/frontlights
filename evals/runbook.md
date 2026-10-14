@@ -14,10 +14,18 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    alone is not proof of interactive skill invocation.
 2. Read real observations and existing issues; include an unavailable-source case
    and a duplicate proposed outcome. Verify no mutation occurred during discovery.
-3. Interview, approve a PRD revision and inspect the proposed issues. Decline one
-   publication approval; confirm no issues were written. Approve the final plan.
-4. Run the horizontal-ticket input from `vertical-slices.md`; inspect the revised
-   vertical outcomes before publication. Record the actual transcript and judgment.
+3. Interview, then let stage 4 write the issue body: confirm it asks nothing but the seams, that
+   the body carries Problema, Solução, Decisões de implementação, Decisões de teste and Fora de
+   escopo, and that nothing in it was not decided in the interview; approve its exact revision and
+   inspect the proposed issues. Decline one publication approval; confirm no issues were written.
+   Approve the final plan.
+4. Run the horizontal-ticket input from `vertical-slices.md`; confirm the numbered list of the
+   slices and the quiz come before the body, inspect the revised vertical outcomes (one box per
+   slice with Entrega, Seams, Camadas and Depende de) before publication, and confirm the
+   published issue shows the x/y of its boxes. With two dependent issues in the plan, confirm the
+   blocker is created first (`publish-order`), the dependent is created with `--blocked-by` and
+   `gh issue view <n> --json blockedBy` shows the edge, and that no sub-issue is proposed. Record
+   the actual transcript and judgment.
 5. Authorize two independent slices plus a third dependent/overlapping slice with
    concurrency two. Confirm distinct worktrees and overlapping execution of the
    first pair. Confirm the third waits for verified integration and no slot overrun.
@@ -56,7 +64,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     log records the mode and one row per concept, and the explanations are
     readable on the phone. The textual tests only prove these rules are written
     down; this step proves they are followed.
-12. Issue family and stacked branches. Start from a disposable issue with three open
+12. Issue family and stacked branches (a family that already exists). Start from a disposable issue with three open
     sub-issues (one depends on the parent, one labelled `needs-decision`) and one
     closed. Confirm the stage 2 line names the open ones, the grilling gives the
     pending one its own solution round, every body has `## Camadas da fatia`, and stage 6
@@ -157,17 +165,22 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     from `slices.closed`, turns each `slices.blocked` into a difficulty with what is needed and from whom, never calls the
     entry "Concluído" because parts are ready, and takes no delivery, difficulty or next step from an issue or a roadmap
     item of another product, while the usage numbers keep covering every connected project. With a facts file that carries `sprint` and `delivered`, the e-mail
-    shows "Concluído: N sub-issues em M issues" for everything delivered in the period (in the sprint or not) and "Em andamento: N
-    sub-issues em K issues" for what is left of the sprint's covers, with no "Em validação" chip, and the draft's next steps
-    come from what is left in each cover.
+    shows "Concluído: N partes em M issues" for everything delivered in the period (in the sprint or not) and "Em andamento: N
+    partes em K issues" for what is left of the sprint's covers, with no "Em validação" chip, and the draft's next steps
+    come from what is left in each cover. With an entry whose parts are the boxes of its acceptance criteria (no
+    sub-issues), confirm the draft takes a box ticked in the period as work done (from `slices.closed`), turns each
+    `slices.blocked[].reason` into one line of the difficulties, and never repeats the box count.
 22. Trace of every screen field to the back and the database (`evals/vertical-slices.md`, trace case). On a disposable issue
     that changes a form, confirm the slice is defined only after reading front end, back end, migrations and schema, tests and
     documentation; every field has its consumer (`file:line`) and column in the layers section; a field with no consumer or a
-    back capability with no action becomes a criterion or sub-issue; an inconclusive trace becomes the explicit task and the
+    back capability with no action becomes a criterion, never a sub-issue; an inconclusive trace becomes the explicit task and the
     plan is not offered for approval until it is closed; and the `Fluxo:` checks the effect in the back or the database.
-23. Standing authorization. On a disposable family with a parent and a child that depends on it, confirm stage 6 opens
-    with no concurrency, stacking or authorization question and with the announcement (issues, concurrency, stacking,
-    worktree base, verification argv, stop conditions); `authorization.json` carries `"autorização permanente
+23. Standing authorization and slices in order. On a disposable issue with three slices (and, for the stacking rules,
+    a family that already exists), confirm stage 6 opens with no concurrency, stacking or authorization question and
+    with the announcement (issues, the order of the slices, concurrency, stacking only for an existing family, worktree
+    base, verification argv, stop conditions); the first slice is ticked with evidence before the second starts,
+    `checkpoint --slice` carries the slice in progress and a fresh session resumes at the first open box;
+    `authorization.json` carries `"autorização permanente
     (docs/security.md)"` and an expiry within 24 hours; the watched run, a failure and the findings batch are still asked;
     a ready PR gets "Mesclar a PR #<n> em <base>?" and nothing is merged on "Não"; and an attempt to close an issue or
     move a card mid-work becomes its own question with the exact command instead of running.

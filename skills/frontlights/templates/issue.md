@@ -1,36 +1,62 @@
 # <Um resultado observável>
 
-PRD: <revisão aprovada ou link>
+As seções até "Fora de escopo" são a spec: registram, em português, o que a entrevista da
+etapa 3 decidiu, sem nova pergunta além da dos seams. Seção que não se aplica fica marcada
+com o motivo, nunca preenchida por obrigação. Nada aqui que o usuário não tenha decidido.
 
-## Resultado
+## Problema
 
-## Limites e fora de escopo
+O problema do ponto de vista de quem usa: o que acontece hoje, a dor observada e a fonte
+(observação, issue, pedido), com data.
+
+## Solução
+
+A solução do ponto de vista de quem usa: o que passa a acontecer e a medida de sucesso.
+
+## Decisões de implementação
+
+A abordagem escolhida; as alternativas rejeitadas, cada uma com o motivo; as convenções do
+projeto que a abordagem segue, nomeadas pelo padrão (os caminhos ficam na propriedade e no
+rastreio), e toda quebra de padrão aprovada, com o motivo e o custo; interfaces, contratos,
+esquema e decisões de arquitetura. A prosa das
+decisões não cita arquivo nem trecho de código, porque envelhece; a exceção é um trecho de
+protótipo que registra uma decisão melhor do que a prosa, cortado ao essencial e dito como tal.
+
+## Decisões de teste
+
+O que é um bom teste aqui: só comportamento observável pela interface pública, nunca detalhe
+interno. Os seams sob teste, confirmados na etapa 4, cada um com o comportamento de aceitação
+observado nele: só eles recebem testes, e seam ausente ou errado volta ao usuário. A arte
+prévia (testes parecidos que já existem no código) e os comandos reais de regressão,
+integração e checagem de tipos.
+
+## Fora de escopo
+
+O que foi recusado, com o motivo. São as linhas mais úteis da página.
 
 ## Critérios de aceitação
 
-- [ ] <resultado observável>
+As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice, com o
+resultado observável de ponta a ponta, e logo abaixo os sub-itens sem caixa. Prefactoring,
+quando houver, é a primeira slice e nomeia o seam que funciona, o teste e o consumidor que
+depende dele; refatoração larga é a exceção declarada: expandir, migrar por lotes e contrair,
+cada passo uma slice. Todo critério falha no commit de partida; o que já é verdadeiro antes
+do trabalho não é critério. Cada caixa fecha só com evidência. Uma slice estacionada ganha, como
+último sub-item da caixa, `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, antes da
+marcação; não copie esse sub-item para uma slice que não está estacionada, porque o RoadS lê
+qualquer caixa aberta com ele como bloqueada.
+
+- [ ] S1. <resultado observável de ponta a ponta desta slice>
+  - Entrega: <o que dá para demonstrar quando ela termina>
+  - Seams: <interfaces públicas em que o comportamento é observado>
+  - Camadas: <as camadas que ela toca>
+  - Depende de: <slices anteriores, ou nenhuma>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.
 Evidência que fecha: <teste, medição ou diff revisado>`), nunca numa seção à parte: só
 esta seção conta para fechar a issue, e a issue só fecha com a pendência tratada,
 concluída e marcada com evidência.
-
-## Abordagem e convenções
-
-Abordagem escolhida (as alternativas rejeitadas ficam no PRD ou no registro de descoberta)
-e as convenções do projeto a seguir, com caminhos de exemplo. Toda quebra de padrão
-aprovada é nomeada aqui com o motivo.
-
-## Seams sob teste
-
-- <interface pública> — <comportamento de aceitação observado ali>
-
-Só estes seams recebem testes. Seam ausente ou errado volta ao usuário.
-
-## Expectativas de teste
-
-Regressão focada, integração mais ampla e os comandos reais de checagem de tipos.
 
 ## Camadas da fatia
 
@@ -62,7 +88,8 @@ Rastreio dos campos, botões e ações que a fatia toca na tela, feito por busca
 | <campo> | | | |
 
 Campo sem consumidor no back, ou capacidade do back sem ação na tela, é achado: vira
-critério de aceitação desta issue ou sub-issue, nunca "não tocada". Rastreio inconclusivo
+critério de aceitação desta issue (numa família que já existe, da filha que cobre a camada),
+nunca sub-issue nova nem "não tocada". Rastreio inconclusivo
 (consumo dinâmico, reflexão, nome de coluna montado em texto) vira a tarefa "provar o
 consumo por teste ou por leitura da execução" e bloqueia a aprovação do plano até ser
 resolvida com evidência; nunca fica só como nota.
@@ -84,27 +111,23 @@ issue nem por branch.
 ## Dependências
 
 Depends on: none
-Parent: none
 
-Troque `none` pelos links canônicos #issue depois da publicação aprovada. `Depends on:` e
-`Parent:` são marcadores lidos pelos scripts e ficam como estão.
-
-`Parent` é a issue de origem de uma sub-issue (parte da mesma fatia, achado de revisão
-ou de conferência); `none` numa issue de topo. Toda issue de topo entra no quadro;
-sub-issue entra só pelo pai, que mostra o progresso das filhas. `Parent` é
-pertencimento, não dependência: uma filha que precisa do código do pai também o lista
-em `Depends on`, e na etapa 6 ela pode ser empilhada na branch dele, sem esperar o merge.
+Troque `none` pelos links canônicos #issue depois da publicação aprovada. `Depends on:` é
+texto de apoio: a dependência entre issues do plano nasce no GitHub como relação nativa
+(`gh issue create --blocked-by`, relida em `blockedBy`), com as bloqueadoras publicadas
+primeiro. Nenhuma sub-issue nova é criada: um achado vira critério desta issue ou issue de
+topo. Toda issue de topo entra no quadro; uma filha já publicada de uma família que já
+existe entra só pelo pai e mantém a linha `Parent: #<pai>` que tem: `Parent` é
+pertencimento, não dependência, e na etapa 6 ela pode ser empilhada na branch do pai, sem
+esperar o merge.
 
 ## Propriedade e contenção
 
 Arquivos e componentes, arquivos gerados, migrations, portas, serviços de teste compartilhados.
 
-## Verificação da fatia vertical
+## Riscos e dependências
 
-O que funciona de ponta a ponta e como um revisor observa isso. Um pré-requisito
-nomeia o seam que funciona, o teste e o consumidor que depende dele.
-
-## Riscos e tamanho da sessão
+Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sessão.
 
 ## Pontos de evidência
 

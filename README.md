@@ -2,9 +2,9 @@
 
 Uma skill do Claude Code que conduz **qualquer pedido seu** — uma funcionalidade,
 um bug, uma refatoração, uma pesquisa, um script pontual, um documento — por
-descoberta do problema, documentos de requisitos (PRDs) aprovados, issues
+descoberta do problema, o corpo da issue aprovado (a spec é a issue), issues
 verticais no GitHub e implementação com testes e autorização delimitada. O
-caminho é dimensionado ao pedido: trabalho pequeno é feito direto, sem PRD nem
+caminho é dimensionado ao pedido: trabalho pequeno é feito direto, sem
 issue. Observações do RoadS são uma entrada **opcional**, usada quando
 configurada; nada exige RoadS para começar. Uma única skill, com um arquivo de
 referência por etapa e os scripts, modelos e exemplos dentro dela. Não depende do GuardianS nem
@@ -216,7 +216,8 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   topo, os valores do quadro, os labels finais, o tipo nativo e as linhas do corpo. A publicação
   usa exatamente isso. Sem os blocos, a saída e as regras são as de antes. Sub-issue não leva
   `labels` nem `body_fields`: herda do pai. Uma issue que já existe (o plano traz o `url` dela) não
-  precisa de `body_fields`, porque o texto de uma issue nunca é editado.
+  precisa de `body_fields`, porque o texto que já estava no corpo nunca é editado (a spec e as
+  slices entram só por acréscimo).
 - Um label (do plano ou do `config.json`) usa só letras, números e `: . / + -` ou espaço no meio,
   até 50 caracteres, sem terminar em `: . / -` nem em espaço e sem hífen depois de espaço: nada que
   um terminal interprete (aspas, `$`, crase, `;`, `&`, `|`, vírgula). Letras acentuadas precisam
@@ -248,20 +249,24 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   `labels`) não desligue a regra em silêncio. O `inspect` mostra as regras lidas.
 
 Achados de revisão, de testes ou de conferência ligados a uma issue não viram uma issue
-de topo cada. O Frontlights propõe o destino de cada achado, nesta ordem: corrigir no
-mesmo PR, critério de aceitação novo na issue de origem, sub-issue da issue de origem e,
-só para escopo novo ou problema que atravessa várias issues, issue de topo (sub-issue do
-épico que as reúne). O lote inteiro é decidido numa única pergunta.
+de topo cada. O Frontlights propõe o destino de cada achado, nesta ordem, com três
+destinos: corrigir no mesmo PR, critério de aceitação novo na issue de origem e, só para
+escopo novo ou problema que atravessa várias issues, issue de topo, nunca uma sub-issue
+nova. O lote inteiro é decidido numa única pergunta.
 
-A sub-issue nasce ligada ao pai (`gh issue create --parent <n>`), herda responsável, tipo
-e rótulos dele e não ganha cartão no quadro: o cartão do pai mostra o progresso das
-filhas. No `plan.json`, a sub-issue leva `parent` com o id da issue de origem, que
-precisa estar no mesmo plano, e dispensa `project_fields`. O `validate-plan` recusa
-`parent` igual ao próprio id, pai fora do plano, mais de 100 filhas por pai no plano e
-mais de 8 níveis de aninhamento; as filhas que o pai já tem no GitHub
-(`subIssuesSummary.total`) são conferidas antes de publicar, sem passar de 100. O pai só
-é dado como concluído com as filhas fechadas; um achado depois do fechamento do pai vira
-sub-issue dele, e o Frontlights avisa que o pai precisa ser reaberto, sem reabri-lo.
+O Frontlights não cria sub-issues: uma família que já existe (filhas publicadas antes
+desta regra) continua lida, trabalhada e fechada como antes, filhas antes dos pais, e o
+`validate-plan` recusa uma issue proposta com `parent` ou `parent_external`, ou sem o `url`
+dela. No
+`plan.json`, uma filha já publicada leva `parent` com o id do pai, que precisa estar no
+mesmo plano, e dispensa `project_fields`; o `validate-plan` recusa `parent` igual ao
+próprio id, pai fora do plano, mais de 100 filhas por pai no plano e mais de 8 níveis de
+aninhamento. As dependências entre as issues de um plano nascem como relação nativa do
+GitHub (`gh issue create --blocked-by`), com as bloqueadoras publicadas primeiro, na ordem
+que `frontlights.py publish-order --plan <plano>` imprime, e são relidas em `blockedBy`;
+a linha `Depends on:` do corpo é texto de apoio. O pai só é dado como concluído com as
+filhas fechadas; um achado depois do fechamento de uma issue vira issue de topo que a
+cita, e o Frontlights nunca reabre uma issue.
 
 Uma pendência que não é corrigida no PR não fica só no texto do PR, que ninguém
 acompanha e que some depois do merge: ela vira um critério `- [ ] Pendência (achado da
@@ -395,9 +400,10 @@ roadmap, o Frontlights pergunta uma vez por sessão se você quer registrar o pr
    próprio projeto monta o rascunho final com fatos, uso, dados de acesso locais e prints. O resumo é
    do produto que o `facts.json` nomeia em `scope` (entregas, dificuldades e próximos passos só dele; o uso
    do Claude cobre todos os projetos conectados). Cada entrega é uma issue de topo e representa a família
-   inteira, em qualquer profundidade: o e-mail e a visão semanal mostram sozinhos "X de Y partes prontas", e
-   o texto diz o que ficou pronto no período e o que bloqueia, sem repetir a contagem (campos `subIssues` e
-   `slices` do coletor, contrato em `docs/roads-contract.md`);
+   inteira, em qualquer profundidade, ou, sem sub-issues, as caixas de critério de aceitação como partes: o
+   e-mail e a visão semanal mostram sozinhos "X de Y partes prontas", e o texto diz o que ficou pronto no
+   período e o que bloqueia (uma caixa com o sub-item "Bloqueada:" é uma dificuldade), sem repetir a
+   contagem (campos `subIssues` e `slices` do coletor, contrato em `docs/roads-contract.md`);
 5. cuida dos prints e, para cada um, oferece capturar a tela do produto rodando neste computador (só
    dados de teste, nunca dados reais nem produção, sem a barra do navegador nem a identidade de quem
    está logado; JPEG ou PNG, até 1 MB e cerca de 1920 px de largura, no máximo 40). Antes de perguntar,
@@ -639,34 +645,47 @@ nada a impõe mecanicamente, e o gatilho do ambiente nunca vale como prova do me
 
 Verificação de atualização da skill (sem pergunta; mostra o comando de atualização
 quando há versão nova no GitHub) →
-pedido e dimensionamento → inspeção → entrevista de decisões → PRD mostrado na
-íntegra e aprovado →
-plano de issues verticais aprovado e publicado → autorização permanente de
+pedido e dimensionamento → inspeção → entrevista de decisões → corpo da issue escrito sem nova
+entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
+slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
+antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights anuncia num bloco curto as issues, a concorrência, o empilhamento, a base das worktrees e
-os testes, e começa. Ficam autorizados, só para as issues da família ou do lote: editar, testar,
+Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo
+só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
+concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
+e começa. Cada slice
+é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
+sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
+do lote: editar, testar,
 commitar, enviar as branches, abrir PRs rascunho empilhadas, rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
 marcar critérios nas issues. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
 migration já registrada, escrever na branch base ou protegida, ligar configuração, chave ou flag em
 produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
 "Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
-assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do PRD, do plano de
-issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do próprio Claude
-Code não são do Frontlights e continuam valendo.
+assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
+do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do
+próprio Claude Code não são do Frontlights e continuam valendo.
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
+As slices da issue são os critérios de aceitação: uma caixa por slice, em ordem de dependência,
+com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
+e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
+só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
+contrair, e todo critério falha no commit de partida.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
 lê as filhas no GitHub e leva todas na mesma execução (entrevista, plano e implementação),
-nunca só o pai. A fatia vertical é a issue mais as filhas, e juntas elas cobrem todas as
+nunca só o pai; nenhuma sub-issue nova é criada. A fatia vertical é a issue mais as filhas, e
+juntas elas cobrem todas as
 camadas que o requisito pede (tela, API, banco e migração, testes, integração, documentação e
 as do projeto); a seção `## Camadas da fatia` de cada issue registra as camadas analisadas e,
 para as que não serão tocadas, o motivo com a evidência do rastreio de cada campo de tela até o
 consumidor no back e a coluna no banco (um rastreio inconclusivo bloqueia a aprovação do plano até ser provado). Uma filha com `needs-decision`, ou sem abordagem
-definida, entra na entrevista da mesma sessão. Na etapa 6, quando uma filha depende do pai, a
+definida, entra na entrevista da mesma sessão. Numa família que já existe (issue com sub-issues
+publicadas antes da regra das slices), quando uma filha depende do pai, a
 autorização permanente usa **branches empilhadas** (você pode pedir para esperar o merge do pai): a filha sai da branch do
 pai assim que ele está verificado nela, o PR dela tem como base a branch do pai e, depois que
 uma pessoa faz o merge do pai, o PR é redirecionado para a base em que o pai entrou, trazendo-a
@@ -687,7 +706,7 @@ em texto o conceito em linguagem simples, por que o projeto faz assim, um trecho
 comentado do próprio código e o que cada opção muda, e fecha cada rodada com um
 "Ficou claro?". Desligado, a última opção de cada pergunta técnica é "Explicar
 antes de decidir". Depois de duas reexplicações da mesma rodada, aparece "Seguir
-a recomendação": a decisão fica marcada como "a revisar" e entra no PRD como
+a recomendação": a decisão fica marcada como "a revisar" e entra no corpo da issue como
 suposição, não como decisão aprovada. O modo pode ser ligado ou desligado a
 qualquer momento, e os conceitos explicados ficam registrados no `discovery.md`.
 Toda pergunta ao usuário usa `AskUserQuestion`, sempre com opções. A conversa
@@ -714,7 +733,10 @@ compara a evidência salva na hora da revisão independente com a atual e sai co
 commit, edição ou arquivo novo depois dela.
 
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
-(`parent: 3`), ainda é só proposta. O planejador escolhe o
+(`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
+`slices` (a segunda slice depende da
+primeira); o `validate-plan` confere `delivers`, seams, camadas e a ordem das dependências. O
+planejador escolhe o
 maior conjunto seguro de issues prontas, respeita o trabalho em andamento e verifica
 sobreposição de caminhos sem distinguir maiúsculas de minúsculas, para compatibilidade
 com Windows. Ele recomenda um lote; a skill distribui o trabalho entre os agentes

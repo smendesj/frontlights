@@ -28,7 +28,7 @@ class ReleaseManifestTests(unittest.TestCase):
         for folder in ('scripts', 'templates', 'examples', 'docs', 'references'):
             self.assertTrue((ROOT / 'skills' / 'frontlights' / folder).is_dir(), folder)
         self.assertFalse((ROOT / '.claude-plugin').exists())
-        for name in ('grilling', 'prd', 'issues', 'development', 'roadmap-sync', 'learning'):
+        for name in ('grilling', 'issue', 'issues', 'development', 'roadmap-sync', 'learning'):
             self.assertIn(f'references/{name}.md', text)
             self.assertTrue((ROOT / 'skills' / 'frontlights' / 'references' / f'{name}.md').is_file())
 
@@ -60,8 +60,7 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertLess(grilling.index('## 2. Project conventions'), grilling.index('## 3. Solution round'))
         stage3 = (skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0]
         self.assertIn('never skips the solution round', stage3)
-        for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Abordagem e convenções'),
-                                  ('prd.md', 'onventions')):
+        for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Decisões de implementação')):
             with self.subTest(template=template):
                 self.assertIn(heading, (ROOT / 'skills' / 'frontlights' / 'templates' / template).read_text(encoding='utf-8'))
 

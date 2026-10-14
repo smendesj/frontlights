@@ -47,7 +47,7 @@ class LadderTests(unittest.TestCase):
     def test_destination_two_is_a_new_criterion_inside_the_criteria_section(self):
         two = self.ladder.split('2. ', 1)[1].split(' 3. ')[0]
         for phrase in ('A new acceptance criterion in the source issue', 'checklist item (`- [ ] ...`)',
-                       'inside its acceptance-criteria section', 'does not need its own branch or review',
+                       'inside its acceptance-criteria section', 'for a leftover that belongs to that outcome',
                        'treated, completed and ticked with evidence'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, two)
@@ -62,7 +62,7 @@ class LadderTests(unittest.TestCase):
 
     def test_the_batch_shows_and_approves_the_exact_criterion_text(self):
         batch = ' '.join(self.followups.split())
-        for phrase in ('the full text of every new criterion and sub-issue body', 'single `AskUserQuestion`',
+        for phrase in ('the full text of every new criterion and top-level issue body', 'single `AskUserQuestion`',
                        'with the criterion text exactly as shown'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, batch)
@@ -83,8 +83,9 @@ class RecipeTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
-    def test_a_source_issue_without_the_section_or_already_closed_takes_a_sub_issue_instead(self):
-        for phrase in ('has no such section, or is closed, cannot take destination 2', 'use a sub-issue and say why'):
+    def test_a_source_issue_without_the_section_or_already_closed_takes_a_top_level_issue_instead(self):
+        for phrase in ('has no such section, or is closed, cannot take destination 2',
+                       'use a top-level issue that cites it and say why'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
@@ -188,7 +189,7 @@ class GateTests(unittest.TestCase):
         for phrase in ('Before an issue is reported as reviewed or complete, and before a PR is opened or updated',
                        'every open finding of the review, the tests, the live check and any other verification pass',
                        'the ones of earlier rounds included', 'fixed (the commit)', 'new criterion',
-                       'sub-issue or top-level issue', 'not a defect, or dropped by the user'):
+                       'top-level issue (its number)', 'not a defect, or dropped by the user'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.gate)
 
@@ -259,7 +260,9 @@ class TemplateAndCloseoutTests(unittest.TestCase):
 
     def test_a_leftover_written_as_the_recipe_says_is_counted_and_blocks_the_closeout_until_ticked(self):
         template = read('skills', 'frontlights', 'templates', 'issue.md')
-        body = template.replace('- [ ] <resultado observável>\n', '- [x] Behavior\n' + LEFTOVER)
+        box = '- [ ] S1. <resultado observável de ponta a ponta desta slice>\n'
+        self.assertIn(box, template)   # the slice box of the template is the one a session ticks
+        body = template.replace(box, '- [x] S1. Behavior\n' + LEFTOVER)
         self.assertEqual(closeout.scan(body), ((1, 2), 0))
         self.assertEqual(closeout.scan(body.replace('- [ ] Pendência', '- [x] Pendência')), ((2, 2), 0))
         # the prefix the recipe tells the session to write is the one the template shows

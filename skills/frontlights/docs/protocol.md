@@ -7,8 +7,8 @@
 | Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código e registrar decisões | Resultado, limites e escolhas aprovados |
-| PRD | Redigir e revisar uma versão local | Texto integral mostrado e aprovação humana da versão exata |
-| Plano de issues | Propor entregas e dependências | Plano e corpos das issues mostrados; aprovação das gravações específicas |
+| Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
+| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro), mostrar a lista numerada com o quiz e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração e revisão independente |
 | Espera do merge | Ler o estado das PRs abertas (`closeout.py merge-status`) e oferecer o merge da PR pronta; só com o "Sim" o merge é feito | Resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
@@ -16,23 +16,30 @@
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
 A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
-pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão escolhe a maior
-concorrência segura, empilha as filhas na branch da dependência, anuncia num bloco curto as issues,
-o repositório, a concorrência, o empilhamento, a base das worktrees, os testes e as condições de
-parada, e grava `authorization.json` com o usuário em `approved_by` e `confirmed_by`,
+pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
+slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo só entre issues;
+empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
+publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
+de cada uma, o repositório, a concorrência, o empilhamento quando há família, a base das
+worktrees, os testes e as condições de parada, e grava `authorization.json` com o usuário em
+`approved_by` e `confirmed_by`,
 `"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
 horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, enviar as
 branches de trabalho, abrir e redirecionar PRs rascunho (empilhadas inclusive), os merges que a
 autorização de empilhamento nomeia, rodar migrations no banco de desenvolvimento local, criar e
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
-evidência. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
+evidência. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
+linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
+apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
+da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR,
+fechar issue, mexer no quadro, implantar ou publicar
 em produção, editar uma migration já registrada, escrever na branch base ou protegida, ligar
 configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando
 exato; só roda depois do "Sim", que vale só para ela, e a resposta literal vai para o handoff. As
 perguntas do próprio trabalho (teste assistido, falhas, lote de achados, decisão nova de produto)
-continuam, e as etapas com aprovação própria (PRD, plano e publicação de issues, fechamento,
-limpeza, roadmap e resumo) também.
+continuam, e as etapas com aprovação própria (texto da issue, plano e publicação de issues,
+fechamento, limpeza, roadmap e resumo) também.
 
 O bloco `monitoring` da autorização registra `mode` (`local`, `phone` ou
 `alternative`), `confirmed_by`, a identidade da sessão e o horário; sem outra
@@ -85,10 +92,16 @@ pelo GitHub, que a issue está no quadro com os valores aprovados. Projeto local
 (`repository: null`) não tem quadro.
 
 Regra do quadro: toda issue de topo entra no quadro; sub-issue entra só pelo pai.
-Achados de revisão, testes ou conferência seguem a seção Follow-ups de
-`skills/frontlights/references/issues.md`: corrigir no PR, critério de aceitação novo
-na issue de origem, sub-issue, e issue de topo só para escopo novo ou problema que
-atravessa várias issues. O lote é decidido numa única pergunta. Toda pendência que não
+Nenhuma sub-issue nova é criada: uma família que já existe (filhas publicadas antes desta
+regra) é lida, trabalhada e fechada como antes, e o `validate-plan` recusa uma issue
+proposta com `parent`. As dependências entre as issues de um plano nascem como relação
+nativa do GitHub (`gh issue create --blocked-by`, bloqueadoras publicadas primeiro, na
+ordem de `frontlights.py publish-order`) e são relidas em `blockedBy`; a linha `Depends
+on:` do corpo é texto de apoio. Achados de revisão, testes ou conferência seguem a seção
+Follow-ups de `skills/frontlights/references/issues.md`, com três destinos: corrigir no
+PR, critério de aceitação novo na issue de origem, e issue de topo só para escopo novo ou
+problema que atravessa várias issues; nunca uma sub-issue nova. O lote é decidido numa
+única pergunta. Toda pendência que não
 for corrigida no PR vira, na issue de origem, um critério `- [ ]` dentro da seção de
 critérios de aceitação (nunca numa seção à parte, que o fechamento não conta), com
 a evidência que o fechará; como altera o escopo, o texto exato é mostrado e aprovado no
@@ -97,15 +110,11 @@ guardado, só acréscimo, exceto na migração de uma seção legada, releitura 
 conferidas) e a escrita é registrada no
 documento de passagem de contexto. Antes de relatar uma issue como revisada ou concluída,
 e antes de abrir ou atualizar um PR, todo achado em aberto precisa de destino rastreável
-(corrigido, critério novo, sub-issue ou issue de topo); "citado no corpo do PR" nunca é
+(corrigido, critério novo ou issue de topo); "citado no corpo do PR" nunca é
 destino, e só ruído que não é defeito pode ficar como texto, dito como tal e com a
-evidência. A sub-issue é criada com
-`gh issue create --parent` (ou ligada com `gh issue edit --parent`), herda
-responsável, tipo e rótulos do pai e não recebe `gh project item-add` nem
-`item-edit`. A conferência relê `parent` e `projectItems` do filho e
-`subIssuesSummary` do pai. O pai só é dado como concluído com as filhas fechadas;
-achado tardio vira sub-issue com aviso de que o pai precisa ser reaberto, decisão
-do usuário.
+evidência. O pai de uma família que já existe só é dado como concluído com as filhas
+fechadas; um achado tardio, depois de a issue fechar, vira issue de topo que a cita,
+nunca sub-issue, e o Frontlights nunca reabre uma issue.
 
 Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
 solicitações remotas não significa consentimento. Nunca deduza consentimento de
@@ -121,7 +130,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 .frontlights/
   config.json
   discovery.md
-  prd.md
+  issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
   plan.json
   authorization.json
   issues/<numero-no-github>/
@@ -241,9 +250,16 @@ registrar o estado da issue. Não copie tokens, credenciais ou dados privados al
 ao trabalho. Atualizações de situação no GitHub exigem autorização própria; salvar
 um ponto de retomada local não concede essa permissão.
 
-O formato de `plan.json` segue `examples/plan.json`. O campo opcional `parent` de uma
+O formato de `plan.json` segue `examples/plan.json`. O campo opcional `slices` de uma issue
+lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `id`, `title`,
+`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers` e `depends_on`; o
+`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, ou com dependência
+inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
+`vertical_check`, porque as slices trazem os dois. O campo opcional `parent` de uma
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
-plano com o próprio número), o que permite conferir o vínculo sem rede. O limite de
+plano com o próprio número), o que permite conferir o vínculo sem rede; ele só cabe numa
+filha já publicada de uma família que já existe, porque uma issue proposta com `parent`
+ou `parent_external`, ou sem o `url` dela, é recusada: nunca se cria sub-issue nova. O limite de
 100 filhas conta só as do plano; antes de publicar, confira `subIssuesSummary.total` do
 pai no GitHub para não passar de 100. Sem `parent`, nada muda. Uma sub-issue de uma issue já
 publicada que não está no plano leva `parent_external` (o número do pai) no lugar de `parent`: não

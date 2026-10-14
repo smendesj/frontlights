@@ -1,6 +1,6 @@
 ---
 name: frontlights
-description: Starts the Frontlights session for whatever the user asks: stages 0 and 1 first (update check, roadmap, progress summary, closeout), then discovery, an approved PRD, vertical GitHub issues and bounded implementation, right-sized to the request. Use it whenever the user mentions frontlights to start, activate, act on, attack or resume an issue, with or without the slash ("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); in such a sentence "frontlights" is this skill, not a session or project of the same name. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
+description: Starts the Frontlights session for whatever the user asks: stages 0 and 1 first (update check, roadmap, progress summary, closeout), then discovery, an approved issue body (the spec is the issue), vertical GitHub issues and bounded implementation, right-sized to the request. Use it whenever the user mentions frontlights to start, activate, act on, attack or resume an issue, with or without the slash ("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); in such a sentence "frontlights" is this skill, not a session or project of the same name. Always asks first whether to update the sprint and roadmap files from RoadS, and, when a progress block is available (the project's own or the registered home's), whether to also prepare the progress summary in RoadS, and, when issues it worked on have every acceptance criterion ticked, whether to close them and move their cards to Done. RoadS observations are an optional input when configured.
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -19,7 +19,7 @@ not upfront. Keep one coherent conversation. Never require
 named workers, GuardianS, initialization prompts or a second coordinator. Read
 `${CLAUDE_SKILL_DIR}/docs/protocol.md` and `${CLAUDE_SKILL_DIR}/docs/security.md`
 before execution. The references are `references/grilling.md` (stage 3),
-`references/prd.md` (stage 4), `references/issues.md` (stage 5),
+`references/issue.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
 `browser-testing.md`),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
@@ -76,9 +76,11 @@ default; only an explicit choice of the user narrows it, and a family too large 
 one plan (more than 24 open issues) is cut by asking the user how, with
 `AskUserQuestion`. A parent/child dependency
 does not serialize the work behind a merge: children may be stacked on the
-parent's branch (stage 6). Sub-issues born during stage 6, from review or tests,
-follow the Follow-ups ladder of `references/issues.md` and are implemented only
-under an authorization that names them.
+parent's branch (stage 6). No new sub-issue is ever created, on any path and at any
+stage: a family that already exists (children published before this rule) is read,
+worked and closed as before, and a finding during stage 6, from review or tests, becomes
+a new acceptance criterion of its source issue or a top-level issue (the Follow-ups ladder
+of `references/issues.md`), implemented only under an authorization that names it.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,
@@ -179,17 +181,17 @@ why in one sentence:
   sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5 entirely. Confirm the intent, do the work, report
   what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
-  Do not manufacture a PRD or an issue for it, not even for the watched run: that question offers to name the existing
-  issue, never to open one.
+  Do not manufacture an issue body or an issue for it, not even for the watched run: that question
+  offers to name the existing issue, never to open one.
 - **Short.** A bounded piece of work whose shape is clear but whose details are
   not, including work that starts from an existing issue. Grill (stage 3, with
   its mandatory solution round), show the plan in full and get it approved, implement
   under stage 6. Publish issues only if the user wants them.
-- **Full.** A feature or body of work with real uncertainty, several slices or
+- **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
-do. Do not silently downgrade a path the user asked for: if they asked for a PRD
+do. Do not silently downgrade a path the user asked for: if they asked for the issue body
 or for issues, produce them. The path controls the ceremony, never the quality
 of the work or the honesty of the evidence.
 
@@ -266,38 +268,54 @@ in one question (`references/grilling.md`). Keep facts, inferences and assumptio
 research/prototypes are driven by uncertainty and do not authorize product
 mutations.
 
-## 4. PRD approval
+## 4. Issue
 
-Read `references/prd.md`. Draft a proportionate PRD, show it in full under the
-show-before-approval rule, and obtain explicit approval of its exact revision.
-When the work touches a screen, the PRD shows the field-by-field trace to the back
-and the database (`references/issues.md`) before it is approved.
-This approval does not authorize live issue writes.
+Read `references/issue.md`. Write the body of the issue from the discovery log, without a new
+interview: the decisions were made in stage 3, and a decision that is missing from the log
+goes back there instead of being invented or asked here. The only question of this stage is the
+seams: propose the seams under test, preferring the ones that already exist, at the highest
+point possible, ideally one, and confirm them with `AskUserQuestion`. Then show the full body
+under the show-before-approval rule and obtain explicit approval of its exact revision. When
+the work touches a screen, the body shows the field-by-field trace to the back and the
+database (`references/issues.md`) before it is approved. This approval does not authorize live
+issue writes: the GitHub write is the approval of stage 5.
 
-## 5. Issue-plan approval and publication
+## 5. Slices and publication
 
-Read `references/issues.md`. Propose vertical slices and the dependency graph.
-Each slice (an issue with its sub-issues) covers every layer the requirement
-needs, and records the layers analysed and, for each one not touched, why. The
-slice is defined only after reading every layer (front end, back end, migrations and
-schema, tests, documentation) and tracing each screen field, button or action to its
-consumer in the back and its column in the database; a layer is "not touched" only
-with that evidence, and an inconclusive trace blocks the approval of the plan until
-it is proven (`references/issues.md`). Show
-the complete plan and every issue body under the show-before-approval rule,
-then ask approval for the plan and the named GitHub writes. Publish only after
-approval and verify returned issue links, bodies and dependencies by rereading
-GitHub. If permissions block writes, preserve the approved draft and identify
-the exact blocked operation.
+Read `references/issues.md`. Cut the approved body into slices: each one a tracer bullet, a
+narrow but complete path through every layer the behavior needs, demonstrable on its own and
+sized for one TDD loop and one checkpoint. Prefactoring, when there is any, is the first slice
+and blocks the others; a wide refactor is the declared exception, cut as expand, migrate in
+batches and contract. Each slice becomes one acceptance-criteria box of the issue, in
+dependency order, blockers first, with the sub-items Entrega, Seams, Camadas and Depende de,
+and every criterion fails at the base commit. The issue (with the sub-issues it already has)
+covers every layer the requirement needs and records the layers analysed and, for each one
+not touched, why; the layers are known only after reading every layer (front end, back end,
+migrations and schema, tests, documentation) and tracing each screen field, button or action
+to its consumer in the back and its column in the database; a layer is "not touched" only
+with that evidence, and an inconclusive trace blocks the approval of the plan until it is
+proven (`references/issues.md`). Show first the numbered list of the slices (title, depends
+on, what it delivers) and ask the quiz with `AskUserQuestion`: is the granularity right, are
+the dependencies real, should any slice merge or split; a slice with no answer to "what can
+be demoed" is horizontal and goes back to the cut without an extra question. Then show the
+complete body of every issue under the show-before-approval rule and ask approval for the
+plan and the named GitHub writes: one write per issue; when the work starts from an issue that
+already exists, the spec and the slices are appended to its body by the write rule of the
+leftover (body captured, append only, difference checked, reread) and the text that was there
+is not edited. Stages 4 and 5 run in the same window. Publish only after approval and
+verify by rereading GitHub: the body, the boxes (the x/y the issue list shows) and the board
+values. If permissions block writes, preserve the approved draft and identify the exact
+blocked operation.
 
 These publication rules cover every issue the session creates, on any path and
 at any stage: every top-level issue joins the board; a sub-issue joins only through its parent.
 With a configured `project`, each top-level issue joins that board with its
 assignee, type, labels and fields (and any body lines the board configures) in the same approved write, and is verified there. Never
-create a top-level issue outside the configured board. Findings from review, tests
-or checks follow the destination ladder and the sub-issue recipe of the Follow-ups
-section of `references/issues.md`, decided as one batch. A finding that is not fixed
-in the PR leaves as a new acceptance criterion of its source issue, a sub-issue or a
+create a top-level issue outside the configured board. Dependencies between the issues of
+a plan are published as native `blocked by` edges (`--blocked-by`), blockers first, and
+reread in `blockedBy`. Findings from review, tests or checks follow the destination ladder
+of the Follow-ups section of `references/issues.md`, decided as one batch. A finding that
+is not fixed in the PR leaves as a new acceptance criterion of its source issue or a
 top-level issue, never as a note in the PR body (the gate of that section).
 
 ## 6. Bounded development
@@ -316,12 +334,16 @@ exposing secrets. Do not disable hooks or request bypass mode.
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Choose the highest safe parallelism; when a sub-issue
-depends on its parent (or on another issue of the family), stack it on the dependency's branch,
+implementation authorization question. Each issue gets one branch, one worktree and one PR, and
+its slices are worked in order, in dependency order, one at a time; parallelism only between
+issues, the highest safe number of independent issues whose files do not overlap. Stacking and the
+family integration apply only to a family that already exists (an issue with sub-issues published
+before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap
 (`references/development.md`). Then announce in one short block, in the user's language, what
-this run does: the issue IDs, repository, concurrency, stacking, worktree base and branch prefix,
-the verification argv and the stop conditions; the user may change any of it at any time, and a
+this run does: the issue IDs, repository, concurrency, the branch and the order of the slices of
+each issue, stacking when a family exists, worktree base and branch prefix, the verification argv
+and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
 only: editing, testing, committing, pushing the work branches, opening draft PRs (stacked ones
 included) and retargeting them, the merges the stacking authorization names, running migrations
@@ -343,8 +365,8 @@ are never covered by the standing authorization. When one of them is the next st
 `AskUserQuestion` naming the exact operation and the exact command, with "Sim" first and "Não"
 second; run it only after "Sim", record the answer verbatim in the handoff, and never extend a
 "Sim" to another operation, another PR or a later moment. "Não", silence or any other answer
-leaves it undone. The approvals that have their own stage (PRD, issue plan and publication,
-closeout, cleanup, roadmap and summary) keep them.
+leaves it undone. The approvals that have their own stage (the issue's text, issue plan and
+publication, closeout, cleanup, roadmap and summary) keep them.
 
 A family is integrated locally
 and its full suite is green before any of its PRs opens, and a review that the code has
@@ -390,7 +412,7 @@ checkpoint (`checkpoint --pending teste_assistido`; `resume` lists it first) and
 spent. Before an issue is reported as reviewed or complete, and before a PR is opened or
 updated, every open finding has its destination (the gate of the Follow-ups section
 of `references/issues.md`): fixed, a new acceptance criterion of the source issue, a
-sub-issue, a top-level issue, shown as not a defect with its evidence, or dropped by
+top-level issue, shown as not a defect with its evidence, or dropped by
 the user's explicit answer. "Cited in the PR" is never a destination, and an issue is not reported as reviewed or complete
 while one has none.
 Finish with per-issue state, branch/PR, changes, measured commands/results,

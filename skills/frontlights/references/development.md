@@ -2,8 +2,9 @@
 
 Read the recorded authorization, current GitHub issues and `docs/security.md`.
 Stage 6 runs under the standing authorization (`SKILL.md`, stage 6): the session
-fills the issue IDs, concurrency, stacking, worktree base, verification commands,
-monitoring arrangement and stop conditions itself, announces them in one block and
+fills the issue IDs, the branch and the order of the slices of each issue, concurrency,
+stacking (a family that already exists), worktree base, verification commands, monitoring
+arrangement and stop conditions itself, announces them in one block and
 records the charter without asking. A decision the standing authorization does not
 cover (a new product decision, an operation on its denied list, a scope change)
 goes back to the coordinator's `AskUserQuestion`. Never infer permission for any
@@ -31,11 +32,39 @@ created. Run it only after "Sim" and record the answer verbatim in the handoff. 
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
+## Slices in order: one branch and one PR per issue
+
+An issue is worked on one branch, in one worktree, and delivered in one PR; its slices (the
+boxes of its acceptance criteria, stage 5) are worked in dependency order, one at a time. Each
+slice is one TDD loop at its own seams (the `Seams:` under its box), one checkpoint
+(`checkpoint --slice <id>` of `frontlights.py`, which `resume` echoes so the next window starts
+at that slice) and, when its loop closes with evidence (the affected test modules green, the
+measured commands), the tick of its box: capture the body, tick that line only, run
+`closeout.py tick-check` before and after the write, and leave a short comment on the issue with
+the commit and the commands. The session may end in the middle of an issue: the handoff names
+the slice in progress and the slices already ticked, and a fresh session resumes at the first
+open box, in order. Parallelism is between issues only. The watched run stays one per batch,
+when the last slice that changes the screen closes its loop; the independent review stays one
+per issue, of the whole diff, before the PR, and the full suite runs once there. Stacking, the
+stacked wave and the family integration below apply only to a family that already exists (an
+issue with sub-issues published before this rule), never to the slices of one issue.
+
+**A parked slice.** When a slice is parked (it waits for something the session cannot do: a
+decision, a credential, another team's endpoint), write right below its open box, as the last
+sub-item of its box and more indented than it, the line `- Bloqueada: <what is missing and from
+whom>`, by the write rule of the leftover (body captured, append only, difference checked,
+reread); the RoadS reads that sub-item as the reason of a blocked part of the delivery. When
+the slice is released, remove exactly that line before the box is ticked: the only removal
+allowed in a body besides the move of a legacy section, checked by the difference (nothing
+else added or removed). The closeout
+keeps counting the box as open while the line is there, because a sub-item without a box is
+never a criterion.
+
 ## Dispatch and ownership
 
-Inspect Git status/remotes/worktrees and current issue acceptance criteria. The
-scope of a dispatch is the family: the issue and all its open sub-issues
-(`SKILL.md`, "An issue and its sub-issues move together"), each with its own branch
+Inspect Git status/remotes/worktrees and current issue acceptance criteria. For a family
+that already exists, the scope of a dispatch is the family: the issue and all its open
+sub-issues (`SKILL.md`, "An issue and its sub-issues move together"), each with its own branch
 and worktree; the parent never goes alone unless the user chose that. Create one
 isolated branch/worktree per issue from its approved base (the approved base
 branch, or its dependency's branch when stacked, see below) using native
@@ -73,7 +102,7 @@ issues), so give the command a longer timeout.
 ## Stacked branches: parent and children without waiting for the merge
 
 Making children wait for the parent's merge serializes the family behind a human
-step. So, whenever an issue of the family depends on another one (a child that
+step. So, in a family that already exists, whenever an issue of the family depends on another one (a child that
 lists its parent in `Depends on`, or a sibling chain), stage 6 **stacks** the
 dependent on its dependency's branch. Under the standing authorization this is not
 asked: the announcement says it. The choice "Como as filhas se apoiam no pai?" comes
@@ -167,8 +196,9 @@ When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and
 interface vocabulary match the project's domain language, and respect ADRs in the
 area you're touching.
 
-Follow the conventions recorded in the issue's `## Abordagem e convenções` (`## Approach and
-conventions` in issues published before 0.28.1) and
+Follow the conventions recorded in the issue's `## Decisões de implementação` (`## Abordagem e
+convenções` in issues published before this section existed, `## Approach and conventions`
+before 0.28.1) and
 in the discovery log: structure, naming, error handling, libraries and test
 style of the surrounding code. Break a convention only where that section names
 the approved break. Finding mid-work that the pattern is concretely worse, or
@@ -191,7 +221,8 @@ A **seam** is the public boundary you test at: the interface where you observe
 behavior without reaching inside. Tests live at seams, never against internals.
 
 **Test only at pre-agreed seams.** The seams under test are part of each issue
-(`## Seams sob teste` in `templates/issue.md`, `## Seams under test` in older issues) and
+(`## Decisões de teste` in `templates/issue.md`, `## Seams sob teste` or `## Seams under test` in
+older issues) and
 were approved when the issues
 were published. You can't test everything; agreeing the seams up front is how
 testing effort lands on the critical paths and complex logic instead of every
@@ -276,8 +307,8 @@ independent reviewer is available, report "implemented, awaiting independent
 review", not completed. Do not manufacture reviewer identities or approvals.
 Classify the review's findings, and those of tests and live checks, by the
 destination ladder of the Follow-ups section in `issues.md` (same PR, a new
-acceptance criterion in the source issue, sub-issue, top-level issue only for new
-scope), decided as one batch.
+acceptance criterion in the source issue, top-level issue only for new scope; never a
+new sub-issue), decided as one batch.
 
 **Gate on the findings.** Before an issue is reported as reviewed or complete, and before
 a PR is opened or updated, every open finding (review, tests, live check, any other
@@ -287,7 +318,7 @@ Follow-ups section. A line in the PR body, a comment or the chat is never a
 destination, so "cited in the PR" does not pass the gate. A finding
 left unfixed leaves by the ladder: most often as an acceptance criterion of the source
 issue, which keeps the issue open until the leftover is treated, completed and ticked
-with evidence; or as a sub-issue or a top-level issue. The PR cites the issue without a
+with evidence; or as a top-level issue. The PR cites the issue without a
 closing keyword, in its body and in the commit messages, while such a criterion is open.
 
 Refactoring happens here. The reviewer may recommend refactors of the green code;
@@ -300,9 +331,11 @@ Save compact `templates/handoff.md` and a machine-readable checkpoint before eac
 session renewal. Include the issue URL and acceptance snapshot, repository map,
 decisions, changed files, commands/results, review evidence, blockers and next
 concrete step. `frontlights.py checkpoint` records the issue snapshot, handoff and
-current Git evidence, and carries open obligations with `--pending teste_assistido` (a watched run that is due and unanswered);
-`frontlights.py resume` detects drift without overwriting it and lists those obligations
-first, so the next window starts by asking the watched run.
+current Git evidence, carries open obligations with `--pending teste_assistido` (a watched run that is due and unanswered)
+and the slice in progress with `--slice <id>`;
+`frontlights.py resume` detects drift without overwriting it, lists those obligations
+first, so the next window starts by asking the watched run, and echoes the slice, so the
+next window continues at that box.
 Read both the human handoff and current issue/diff in the fresh session.
 
 Check context using measured accumulated session usage plus a conservative next
