@@ -1,4 +1,4 @@
-"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1 e S2).
+"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1, S2 e S3).
 
 Roda cada módulo `test_*.py` da pasta como um processo filho (`python -m unittest discover -s <pasta> -p <arquivo>`,
 o mesmo modo da suíte inteira, que respeita o `load_tests` da suíte rápida): os módulos sensíveis da lista SERIAL
@@ -10,9 +10,15 @@ registrada. Prazo estourado, módulo que não importa e filho que termina sem a 
 infraestrutura: a suíte sai com 2, que prevalece sobre o 1 das falhas de produto sem escondê-las. `Ran 0 tests`
 é aceito e conta zero. Ctrl+C ou Ctrl+Break mata todos os filhos vivos antes de sair com 130.
 
-Uso: python tests/suite.py [--tests-dir PASTA] [--serial a,b,c] [--workers N] [--module-timeout S] [--list]
+`--report <arquivo>` grava a rodada em JSON (UTF-8), como evidência: início e fim com fuso, HEAD do repositório,
+variável, trabalhadores e, por módulo, fila, tempo, contagens, resultado e o comando para rodá-lo sozinho. Numa
+interrupção, o relatório sai com `result: "interrupted"` e só os módulos que terminaram antes dela.
+
+Uso: python tests/suite.py [--tests-dir PASTA] [--serial a,b,c] [--workers N] [--module-timeout S]
+                           [--report ARQUIVO] [--list]
 """
 import argparse
+import json
 import locale
 import os
 import re
@@ -22,6 +28,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, wait
+from datetime import datetime
 from pathlib import Path
 
 VARIABLE = 'FRONTLIGHTS_SUITE'
@@ -68,6 +75,13 @@ def existing_dir(text):
     return path
 
 
+def report_path(text):
+    path = Path(text)
+    if not path.parent.is_dir():
+        raise argparse.ArgumentTypeError(f'{text!r}: a pasta do relatório não existe')
+    return path
+
+
 DEFAULT_WORKERS = 4  # o mais rápido medido na issue 27 (revisão r2): mais trabalhadores atrasam a fila serial
 
 
@@ -88,6 +102,8 @@ def parse(argv):
     parser.add_argument('--module-timeout', type=positive_float, default=900,
                         help='prazo por módulo, em segundos; estourado, a árvore do filho é morta e a suíte sai '
                              'com 2 (padrão: 900)')
+    parser.add_argument('--report', type=report_path, default=None,
+                        help='grava a rodada em JSON neste arquivo, como evidência (a pasta precisa existir)')
     parser.add_argument('--list', action='store_true', help='só lista os módulos e a ordem, sem rodar nada')
     return parser.parse_args(argv)
 
@@ -453,8 +469,12 @@ def print_failures(current, outcomes):
             print(f'{outcome.name} ({outcome.kind}): saída completa, código de saída {outcome.returncode}')
         print('-' * 70)
         print(outcome.output.rstrip('\n'))
-        print(f'Rode sozinho: python -m unittest discover -s {current.shown_dir} -p {outcome.name}.py')
+        print(f'Rode sozinho: {rerun_command(current, outcome.name)}')
         print()
+
+
+def rerun_command(current, name):
+    return f'python -m unittest discover -s {current.shown_dir} -p {name}.py'
 
 
 def print_total(outcomes, wall):
@@ -473,6 +493,81 @@ def exit_code(outcomes):
     if any(outcome.problem is not None for outcome in outcomes):
         return 2
     return 0 if all(outcome.passed for outcome in outcomes) else 1
+
+
+# --- relatório JSON (--report) ------------------------------------------------------------------------------
+
+RESULTS = {0: 'ok', 1: 'failed', 2: 'infrastructure', INTERRUPTED: 'interrupted'}
+
+
+def git_head(root):
+    """O commit do repositório onde este script está, ou None fora de um repositório ou em erro do git."""
+    try:
+        completed = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'], capture_output=True, text=True,
+                                   timeout=45)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip() or None
+
+
+def module_record(current, outcome):
+    if outcome.problem is not None:
+        result = 'infrastructure'
+    else:
+        result = 'ok' if outcome.passed else 'failed'
+    return {
+        'name': outcome.name,
+        'queue': outcome.kind,
+        'seconds': round(outcome.wall, 3),
+        'tests_run': outcome.ran,
+        'skipped': outcome.counts.get('skipped', 0),
+        'failures': outcome.counts.get('failures', 0),
+        'errors': outcome.counts.get('errors', 0),
+        'result': result,
+        'exit_code': None if outcome.timed_out is not None else outcome.returncode,
+        'problem': outcome.problem,
+        'command': rerun_command(current, outcome.name),
+    }
+
+
+def report_data(current, options, head, started_at, wall, outcomes, code):
+    """O JSON da rodada. Os totais somam só os módulos sem erro de infraestrutura, como a linha de total."""
+    good = counted(outcomes)
+    return {
+        'version': 1,
+        'started_at': started_at.isoformat(timespec='milliseconds'),
+        'finished_at': datetime.now().astimezone().isoformat(timespec='milliseconds'),
+        'seconds': round(wall, 3),
+        'head': head,
+        'variable': os.environ.get(VARIABLE),
+        'workers': current.workers,
+        'module_timeout': options.module_timeout,
+        'tests_dir': str(current.tests_dir),
+        'modules': [module_record(current, outcome) for outcome in outcomes],
+        'totals': {
+            'modules': len(outcomes),
+            'tests_run': sum(outcome.ran or 0 for outcome in good),
+            'skipped': sum(outcome.counts.get('skipped', 0) for outcome in good),
+            'failures': sum(outcome.counts.get('failures', 0) for outcome in good),
+            'errors': sum(outcome.counts.get('errors', 0) for outcome in good),
+            'infrastructure': len(outcomes) - len(good),
+        },
+        'result': RESULTS[code],
+        'exit_code': code,
+    }
+
+
+def write_report(path, data):
+    """Grava o relatório; devolve False (com o motivo no stderr) quando não consegue."""
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    except OSError as error:
+        print(f'Relatório não gravado em {path}: {error}', file=sys.stderr)
+        return False
+    print(f'Relatório: {path}', flush=True)
+    return True
 
 
 # --- principal ----------------------------------------------------------------------------------------------
@@ -495,22 +590,33 @@ def main(argv=None):
         print_list(current)
         return 0
     root = Path(__file__).resolve().parents[1]
+    head = git_head(root) if options.report is not None else None
     install_break_handler()
     print_header(current)
+    started_at = datetime.now().astimezone()
     started = time.monotonic()
     run = Run(current, root, options.module_timeout)
     try:
         outcomes = run.execute()
     except KeyboardInterrupt:
+        with run.lock:  # os que terminaram antes da interrupção; os mortos por ela ficam de fora
+            finished = [run.outcomes[name] for name, _ in current.entries() if name in run.outcomes]
         killed = run.abort()
         print(f'\nInterrompido: {killed} módulo{"" if killed == 1 else "s"} morto{"" if killed == 1 else "s"} '
               f'(com as árvores de processos); nada foi somado.', flush=True)
+        if options.report is not None:
+            write_report(options.report, report_data(current, options, head, started_at,
+                                                     time.monotonic() - started, finished, INTERRUPTED))
         return INTERRUPTED
     wall = time.monotonic() - started
     print()
     print_failures(current, outcomes)
     print_total(outcomes, wall)
-    return exit_code(outcomes)
+    code = exit_code(outcomes)
+    if options.report is not None:
+        if not write_report(options.report, report_data(current, options, head, started_at, wall, outcomes, code)):
+            return max(code, 2)  # sem a evidência pedida, a rodada é um erro de infraestrutura
+    return code
 
 
 def install_break_handler():

@@ -6,7 +6,9 @@ stdout (cabeçalho, uma linha por módulo, saída completa dos que falharam, tot
 de saída, os instantes gravados pelos módulos marcadores (fila serial e limite de trabalhadores) e a variável
 `FRONTLIGHTS_SUITE` repassada aos filhos. S2: o prazo por módulo (`--module-timeout`) com a árvore morta e a saída
 parcial, os erros de infraestrutura (módulo que não importa, filho sem a linha `Ran`, crash) com saída 2, e o
-Ctrl+Break que mata os filhos (PIDs gravados pelos módulos falsos, conferidos depois). Nada aqui roda a suíte
+Ctrl+Break que mata os filhos (PIDs gravados pelos módulos falsos, conferidos depois). S3: o relatório JSON de
+`--report <arquivo>` (topo, módulos, totais, prazo estourado, pasta inexistente, interrupção) e os manifestos de
+texto (README, protocolo, referência da etapa 6, `docs/acceptance.md` e o workflow da CI). Nada aqui roda a suíte
 real: sobre a pasta `tests/` só se usa `--list`.
 """
 import json
@@ -19,9 +21,10 @@ import tempfile
 import textwrap
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT =Path(__file__).resolve().parents[1]
 SUITE = ROOT / 'tests' / 'suite.py'
 VARIABLE = 'FRONTLIGHTS_SUITE'
 SERIAL_REAL = ('test_serve_ports', 'test_checks_integration', 'test_serve', 'test_browser_app_example', 'test_checks')
@@ -485,6 +488,210 @@ class InterruptTests(SleepersTests):
         self.assertNotEqual(runner.returncode, 3221225786, 'o runner morreu pelo CTRL_BREAK sem tratar\n' + output)
         self.assertEqual(runner.returncode, 130, output)
         self.assertIn('Interrompido', output)
+
+
+def git_head():
+    completed = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True, text=True,
+                               timeout=45)
+    return completed.stdout.strip() if completed.returncode == 0 else None
+
+
+TOP_KEYS = ('version', 'started_at', 'finished_at', 'seconds', 'head', 'variable', 'workers', 'module_timeout',
+            'tests_dir', 'modules', 'totals', 'result', 'exit_code')
+MODULE_KEYS = ('name', 'queue', 'seconds', 'tests_run', 'skipped', 'failures', 'errors', 'result', 'exit_code',
+               'problem', 'command')
+TOTAL_KEYS = ('modules', 'tests_run', 'skipped', 'failures', 'errors', 'infrastructure')
+
+
+class ParallelSuiteReportTests(SleepersTests):
+    """Seam: o JSON que `--report <arquivo>` grava, lido depois da rodada sobre os módulos falsos."""
+
+    def report_file(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        return Path(temp.name) / 'rodada.json'
+
+    def load(self, report):
+        self.assertTrue(report.exists(), 'o runner não gravou o relatório')
+        return json.loads(report.read_text(encoding='utf-8'))
+
+    def by_name(self, data):
+        return {module['name']: module for module in data['modules']}
+
+    def test_the_report_has_the_run_the_modules_and_the_totals(self):
+        path = self.folder({'test_passa': PASSES, 'test_falha': FAILS, 'test_pula': SKIPS})
+        report = self.report_file()
+        completed = self.run_suite(path, ['test_passa'], workers=2, extra=['--report', str(report)], value='rapida')
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        data = self.load(report)
+        self.assertEqual(list(data), list(TOP_KEYS))
+        self.assertEqual(data['version'], 1)
+        started = datetime.fromisoformat(data['started_at'])
+        finished = datetime.fromisoformat(data['finished_at'])
+        self.assertIsNotNone(started.tzinfo, data['started_at'])
+        self.assertIsNotNone(finished.tzinfo, data['finished_at'])
+        self.assertLessEqual(started, finished)
+        self.assertGreaterEqual(data['seconds'], 0)
+        self.assertEqual(data['head'], git_head())
+        self.assertEqual(data['variable'], 'rapida')
+        self.assertEqual(data['workers'], 2)
+        self.assertEqual(data['module_timeout'], 900)
+        self.assertEqual(Path(data['tests_dir']).resolve(), path.resolve())
+        self.assertEqual([module['name'] for module in data['modules']], ['test_passa', 'test_falha', 'test_pula'])
+        for module in data['modules']:
+            with self.subTest(module=module['name']):
+                self.assertEqual(list(module), list(MODULE_KEYS))
+                self.assertGreaterEqual(module['seconds'], 0)
+                self.assertIsNone(module['problem'])
+                self.assertIn(f'-p {module["name"]}.py', module['command'])
+        modules = self.by_name(data)
+        self.assertEqual(modules['test_passa']['queue'], 'serial')
+        self.assertEqual(modules['test_falha']['queue'], 'pool')
+        self.assertEqual(modules['test_pula']['queue'], 'pool')
+        self.assertEqual((modules['test_passa']['result'], modules['test_passa']['exit_code'],
+                          modules['test_passa']['tests_run']), ('ok', 0, 2))
+        self.assertEqual((modules['test_falha']['result'], modules['test_falha']['exit_code'],
+                          modules['test_falha']['tests_run'], modules['test_falha']['failures']), ('failed', 1, 1, 1))
+        self.assertEqual((modules['test_pula']['result'], modules['test_pula']['tests_run'],
+                          modules['test_pula']['skipped']), ('ok', 1, 1))
+        self.assertEqual(list(data['totals']), list(TOTAL_KEYS))
+        for key in ('tests_run', 'skipped', 'failures', 'errors'):
+            with self.subTest(total=key):
+                self.assertEqual(data['totals'][key], sum(module[key] for module in data['modules']))
+        self.assertEqual(data['totals']['modules'], 3)
+        self.assertEqual(data['totals']['infrastructure'], 0)
+        self.assertEqual((data['result'], data['exit_code']), ('failed', 1))
+
+    def test_without_the_variable_the_report_says_null_and_a_green_run_is_ok(self):
+        path = self.folder({'test_passa': PASSES})
+        report = self.report_file()
+        completed = self.run_suite(path, [], extra=['--report', str(report)])
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        data = self.load(report)
+        self.assertIsNone(data['variable'])
+        self.assertEqual((data['result'], data['exit_code']), ('ok', 0))
+
+    def test_a_timed_out_module_is_infrastructure_with_no_exit_code_and_the_run_exits_two(self):
+        path = self.folder_with_cleanup({'test_sleeps': SLEEPS, 'test_passa': PASSES})
+        report = self.report_file()
+        completed = self.run_suite(path, [], extra=['--module-timeout', '1', '--report', str(report)])
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        data = self.load(report)
+        sleeps = self.by_name(data)['test_sleeps']
+        self.assertEqual((sleeps['result'], sleeps['exit_code']), ('infrastructure', None))
+        self.assertIn('prazo de 1.0 s estourado', sleeps['problem'])
+        self.assertEqual(data['module_timeout'], 1)
+        self.assertEqual(data['totals']['infrastructure'], 1)
+        self.assertEqual(data['totals']['tests_run'], 2, 'o módulo de infraestrutura não entra nos totais')
+        self.assertEqual((data['result'], data['exit_code']), ('infrastructure', 2))
+
+    def test_a_report_in_a_missing_folder_is_refused_with_exit_two_before_anything_runs(self):
+        path = self.folder({'test_marca_v': MARKER})
+        report = path / 'nao_existe' / 'rodada.json'
+        completed = self.run_suite(path, [], extra=['--report', str(report)])
+        self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+        self.assertIn('usage', completed.stderr)
+        self.assertIn('a pasta do relatório não existe', completed.stderr)
+        self.assertFalse((path / 'test_marca_v.json').exists(), 'nenhum módulo pode rodar antes da validação')
+        self.assertFalse(report.exists())
+
+    @unittest.skipUnless(os.name == 'nt', 'CTRL_BREAK_EVENT e grupos de processos só existem no Windows')
+    def test_an_interrupted_run_writes_the_report_with_the_modules_that_finished(self):
+        path = self.folder_with_cleanup({'test_passa': PASSES, 'test_neto': SPAWNS_GRANDCHILD})
+        report = self.report_file()
+        runner = subprocess.Popen([sys.executable, str(SUITE), '--tests-dir', str(path), '--serial', 'test_passa',
+                                   '--workers', '2', '--module-timeout', '60', '--report', str(report)],
+                                  cwd=str(ROOT), env=environment(None), stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        self.addCleanup(lambda: kill_pids([runner.pid]))
+        deadline = time.monotonic() + 15
+        while len(self.recorded_pids(path, ['test_neto'])) < 2 and time.monotonic() < deadline:
+            time.sleep(0.1)
+        self.assertEqual(len(self.recorded_pids(path, ['test_neto'])), 2, 'o módulo falso não gravou os PIDs')
+        try:
+            os.kill(runner.pid, signal.CTRL_BREAK_EVENT)
+        except OSError as error:
+            kill_pids([runner.pid])
+            self.skipTest(f'sem console para o CTRL_BREAK_EVENT ({error})')
+        try:
+            raw, _ = runner.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            kill_pids([runner.pid])
+            self.fail('o runner não terminou em 15 s depois do Ctrl+Break')
+        output = raw.decode('utf-8', errors='replace')
+        self.assertEqual(runner.returncode, 130, output)
+        data = self.load(report)
+        self.assertEqual((data['result'], data['exit_code']), ('interrupted', 130))
+        self.assertEqual([module['name'] for module in data['modules']], ['test_passa'], output)
+        self.assertEqual(data['totals']['tests_run'], 2)
+
+
+def read(*parts):
+    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
+
+
+def flat(*parts):
+    return ' '.join(read(*parts).split())
+
+
+def section(text, heading, next_heading):
+    return ' '.join(text.split(heading)[1].split(next_heading)[0].split())
+
+
+class ParallelSuiteTextTests(unittest.TestCase):
+    """Seam: os manifestos de texto. As frases da issue 25 continuam guardadas por test_suite_rapida.py."""
+
+    def test_the_readme_runs_the_fast_suite_by_the_runner_and_the_whole_one_by_discover(self):
+        text = flat('README.md')
+        for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'numa fila serial',
+                       '`--report <arquivo>` grava um JSON',
+                       'vale igual para o `discover` e para o runner',
+                       'pelo `python -m unittest discover -s tests -v`',
+                       'o runner não encurta a suíte inteira',
+                       'roda o mesmo `discover`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertIn('python -m unittest discover -s tests -v\npython tests/suite.py\n', read('README.md'))
+
+    def test_the_protocol_says_the_same(self):
+        text = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        for phrase in ('roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida`', 'numa fila serial',
+                       '`--report <arquivo>` grava o JSON da rodada',
+                       'pelo `python -m unittest discover -s tests -v`',
+                       'roda o mesmo `discover` e não define a variável'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_the_stage_six_reference_says_the_same_inside_its_section(self):
+        text = section(read('skills', 'frontlights', 'references', 'development.md'),
+                       '## Slices in order', '## Dispatch and ownership')
+        for phrase in ('the fast suite runs through `python tests/suite.py`', 'in a serial queue',
+                       '`--report <file>` writes the JSON of the run',
+                       'through `python -m unittest discover -s tests -v`',
+                       'the runner does not make the whole suite shorter',
+                       'runs the same `discover` and never sets the variable'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_the_acceptance_record_names_the_runner_and_the_discover(self):
+        text = flat('docs', 'acceptance.md')
+        for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'É a suíte inteira e o comando da CI',
+                       'pelo `discover`, continua obrigatória antes da revisão independente e do PR',
+                       '`python -m compileall -q skills/frontlights/scripts tests`', 'issue 27'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn('`python -m compileall -q scripts tests`', text)
+
+    def test_the_acceptance_record_counts_every_test_module(self):
+        match = re.search(r'\*\*(\d+) testes em (\d+) módulos', flat('docs', 'acceptance.md'))
+        self.assertIsNotNone(match)
+        self.assertEqual(int(match.group(2)), len(list((ROOT / 'tests').glob('test_*.py'))))
+
+    def test_the_ci_keeps_the_discover_and_never_calls_the_runner(self):
+        workflow = read('.github', 'workflows', 'tests.yml')
+        self.assertIn('python -m unittest discover -s tests -v', workflow)
+        self.assertNotIn('tests/suite.py', workflow)
 
 
 if __name__ == '__main__':

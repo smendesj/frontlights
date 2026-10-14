@@ -14,11 +14,13 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
 
 ## Verificação automatizada
 
-- `python -m unittest discover -s tests -v`: **1518 testes em 38 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 14/10/2026, issue 25, pelo que `unittest.TestLoader().discover('tests')` carrega).
-  Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários minutos; rode por módulo, ou defina
-  `FRONTLIGHTS_SUITE=rapida` para a suíte pulá-los com o motivo (issue 25, S1); a rodada inteira sem a variável
-  continua obrigatória antes da revisão independente e do PR.
-- `python -m compileall -q scripts tests`: passou (não há verificador de tipos externo).
+- `python -m unittest discover -s tests -v`: **1549 testes em 39 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 14/10/2026, issue 27, pelo que `unittest.TestLoader().discover('tests')` carrega, sem a variável).
+  É a suíte inteira e o comando da CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
+  minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
+  runner da issue 27, só Windows): pula esses dois módulos com o motivo, roda os seguros em paralelo e os cinco
+  sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada; a rodada inteira sem a variável,
+  pelo `discover`, continua obrigatória antes da revisão independente e do PR.
+- `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
   sem agentes, hooks nem servidores MCP.
 - Integração contínua no GitHub Actions: configurada para Windows, Python 3.11 e 3.14; localmente só o 3.14 foi rodado,

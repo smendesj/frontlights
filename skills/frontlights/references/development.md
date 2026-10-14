@@ -53,13 +53,18 @@ issue with sub-issues published before this rule), never to the slices of one is
 
 **Which tests run when.** Per slice, run the test modules the slice touches and the type checks;
 the fast suite is how the whole is checked between slices, when the project has one. In the
-Frontlights repository it is `FRONTLIGHTS_SUITE=rapida`: it makes `python -m unittest discover -s
-tests` skip the modules that start real processes and ports (`tests.test_serve_ports` and
+Frontlights repository the fast suite runs through `python tests/suite.py` with
+`FRONTLIGHTS_SUITE=rapida` (Windows only). The variable lives in each module's `load_tests`, so
+it works the same for the runner and for `python -m unittest discover -s tests`: both skip the
+modules that start real processes and ports (`tests.test_serve_ports` and
 `tests.test_checks_integration`), each one reported as skipped with a reason that names the
-variable; any other value, or no variable, runs everything. Before the independent review and
-before the PR, run the whole suite without the variable, once, with or without CI in the project:
-a project without CI has no other net, and the CI of this repository never sets the variable
-either.
+variable; any other value, or no variable, runs everything. The runner runs the safe modules in
+parallel and the five sensitive ones in a serial queue, one at a time; `--report <file>` writes
+the JSON of the run as evidence. Before the independent review and before the PR, run the whole
+suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
+without CI in the project: the runner does not make the whole suite shorter, a project without CI
+has no other net, and the CI of this repository runs the same `discover` and never sets the
+variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
