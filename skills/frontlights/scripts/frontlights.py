@@ -431,6 +431,12 @@ def validate_plan(plan, project=None):
                     'de uma issue já publicada fora deste plano')
             require(issue.get('parent') is None,
                     f'{issue["id"]}: parent_external e parent são exclusivos: use parent para uma issue do plano')
+        if issue.get('parent') is not None or issue.get('parent_external') is not None:
+            # Only a family that already exists has children: the plan never proposes a sub-issue.
+            require(issue.get('status') != 'proposed',
+                    f'{issue["id"]}: sub-issue nova não é proposta: o plano só carrega filhas já publicadas '
+                    '(status ready, running, verified ou blocked); um achado vira critério da issue de origem '
+                    'ou issue de topo')
         if project is not None:
             resolve_board(project, issue)
         if issue.get('url'):
@@ -511,6 +517,20 @@ def schedule(plan, limit):
             if not any(conflicts(a, b) for a, b in itertools.combinations(group, 2)):
                 return [i['id'] for i in group]
     return []
+
+
+def publish_order(plan):
+    """The ids of a valid plan in the order to publish them: every blocker before the issues it blocks, ties by
+    id, so each `gh issue create --blocked-by` can name real numbers at creation."""
+    validate_plan(plan)
+    pending = {i['id']: set(i['dependencies']) for i in plan['issues']}
+    order = []
+    while pending:
+        ready = sorted(i for i, deps in pending.items() if not deps - set(order))
+        order.extend(ready)
+        for i in ready:
+            del pending[i]
+    return order
 
 
 def context_action(used, reserve):
@@ -946,6 +966,8 @@ def main():
     p.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
                    help='a stacked slice and the branch its PR targets (its base in the stacking authorization); repeatable')
     sub.add_parser('update-check')
+    p = sub.add_parser('publish-order')
+    p.add_argument('--plan', required=True, help='the plan; prints its issue ids blockers first, for --blocked-by')
     for name in ('checkpoint', 'resume'):
         p = sub.add_parser(name)
         p.add_argument('--root', required=True)
@@ -991,6 +1013,8 @@ def main():
         elif args.command == 'browser-gate':
             import browser_gate
             result, code = browser_gate.run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked)
+        elif args.command == 'publish-order':
+            result = {'order': publish_order(load(args.plan))}
         elif args.command == 'update-check':
             result = update_check()
         elif args.command == 'checkpoint':

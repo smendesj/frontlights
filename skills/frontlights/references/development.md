@@ -295,8 +295,8 @@ independent reviewer is available, report "implemented, awaiting independent
 review", not completed. Do not manufacture reviewer identities or approvals.
 Classify the review's findings, and those of tests and live checks, by the
 destination ladder of the Follow-ups section in `issues.md` (same PR, a new
-acceptance criterion in the source issue, sub-issue, top-level issue only for new
-scope), decided as one batch.
+acceptance criterion in the source issue, top-level issue only for new scope; never a
+new sub-issue), decided as one batch.
 
 **Gate on the findings.** Before an issue is reported as reviewed or complete, and before
 a PR is opened or updated, every open finding (review, tests, live check, any other
@@ -306,7 +306,7 @@ Follow-ups section. A line in the PR body, a comment or the chat is never a
 destination, so "cited in the PR" does not pass the gate. A finding
 left unfixed leaves by the ladder: most often as an acceptance criterion of the source
 issue, which keeps the issue open until the leftover is treated, completed and ticked
-with evidence; or as a sub-issue or a top-level issue. The PR cites the issue without a
+with evidence; or as a top-level issue. The PR cites the issue without a
 closing keyword, in its body and in the commit messages, while such a criterion is open.
 
 Refactoring happens here. The reviewer may recommend refactors of the green code;

@@ -88,10 +88,16 @@ pelo GitHub, que a issue está no quadro com os valores aprovados. Projeto local
 (`repository: null`) não tem quadro.
 
 Regra do quadro: toda issue de topo entra no quadro; sub-issue entra só pelo pai.
-Achados de revisão, testes ou conferência seguem a seção Follow-ups de
-`skills/frontlights/references/issues.md`: corrigir no PR, critério de aceitação novo
-na issue de origem, sub-issue, e issue de topo só para escopo novo ou problema que
-atravessa várias issues. O lote é decidido numa única pergunta. Toda pendência que não
+Nenhuma sub-issue nova é criada: uma família que já existe (filhas publicadas antes desta
+regra) é lida, trabalhada e fechada como antes, e o `validate-plan` recusa uma issue
+proposta com `parent`. As dependências entre as issues de um plano nascem como relação
+nativa do GitHub (`gh issue create --blocked-by`, bloqueadoras publicadas primeiro, na
+ordem de `frontlights.py publish-order`) e são relidas em `blockedBy`; a linha `Depends
+on:` do corpo é texto de apoio. Achados de revisão, testes ou conferência seguem a seção
+Follow-ups de `skills/frontlights/references/issues.md`, com três destinos: corrigir no
+PR, critério de aceitação novo na issue de origem, e issue de topo só para escopo novo ou
+problema que atravessa várias issues; nunca uma sub-issue nova. O lote é decidido numa
+única pergunta. Toda pendência que não
 for corrigida no PR vira, na issue de origem, um critério `- [ ]` dentro da seção de
 critérios de aceitação (nunca numa seção à parte, que o fechamento não conta), com
 a evidência que o fechará; como altera o escopo, o texto exato é mostrado e aprovado no
@@ -100,15 +106,11 @@ guardado, só acréscimo, exceto na migração de uma seção legada, releitura 
 conferidas) e a escrita é registrada no
 documento de passagem de contexto. Antes de relatar uma issue como revisada ou concluída,
 e antes de abrir ou atualizar um PR, todo achado em aberto precisa de destino rastreável
-(corrigido, critério novo, sub-issue ou issue de topo); "citado no corpo do PR" nunca é
+(corrigido, critério novo ou issue de topo); "citado no corpo do PR" nunca é
 destino, e só ruído que não é defeito pode ficar como texto, dito como tal e com a
-evidência. A sub-issue é criada com
-`gh issue create --parent` (ou ligada com `gh issue edit --parent`), herda
-responsável, tipo e rótulos do pai e não recebe `gh project item-add` nem
-`item-edit`. A conferência relê `parent` e `projectItems` do filho e
-`subIssuesSummary` do pai. O pai só é dado como concluído com as filhas fechadas;
-achado tardio vira sub-issue com aviso de que o pai precisa ser reaberto, decisão
-do usuário.
+evidência. O pai de uma família que já existe só é dado como concluído com as filhas
+fechadas; um achado tardio, depois de a issue fechar, vira issue de topo que a cita,
+nunca sub-issue, e o Frontlights nunca reabre uma issue.
 
 Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
 solicitações remotas não significa consentimento. Nunca deduza consentimento de
@@ -251,7 +253,9 @@ lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `i
 inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
 `vertical_check`, porque as slices trazem os dois. O campo opcional `parent` de uma
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
-plano com o próprio número), o que permite conferir o vínculo sem rede. O limite de
+plano com o próprio número), o que permite conferir o vínculo sem rede; ele só cabe numa
+filha já publicada de uma família que já existe, porque uma issue proposta com `parent`
+ou `parent_external` é recusada: nunca se cria sub-issue nova. O limite de
 100 filhas conta só as do plano; antes de publicar, confira `subIssuesSummary.total` do
 pai no GitHub para não passar de 100. Sem `parent`, nada muda. Uma sub-issue de uma issue já
 publicada que não está no plano leva `parent_external` (o número do pai) no lugar de `parent`: não

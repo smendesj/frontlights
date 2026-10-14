@@ -248,20 +248,23 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   `labels`) não desligue a regra em silêncio. O `inspect` mostra as regras lidas.
 
 Achados de revisão, de testes ou de conferência ligados a uma issue não viram uma issue
-de topo cada. O Frontlights propõe o destino de cada achado, nesta ordem: corrigir no
-mesmo PR, critério de aceitação novo na issue de origem, sub-issue da issue de origem e,
-só para escopo novo ou problema que atravessa várias issues, issue de topo (sub-issue do
-épico que as reúne). O lote inteiro é decidido numa única pergunta.
+de topo cada. O Frontlights propõe o destino de cada achado, nesta ordem, com três
+destinos: corrigir no mesmo PR, critério de aceitação novo na issue de origem e, só para
+escopo novo ou problema que atravessa várias issues, issue de topo, nunca uma sub-issue
+nova. O lote inteiro é decidido numa única pergunta.
 
-A sub-issue nasce ligada ao pai (`gh issue create --parent <n>`), herda responsável, tipo
-e rótulos dele e não ganha cartão no quadro: o cartão do pai mostra o progresso das
-filhas. No `plan.json`, a sub-issue leva `parent` com o id da issue de origem, que
-precisa estar no mesmo plano, e dispensa `project_fields`. O `validate-plan` recusa
-`parent` igual ao próprio id, pai fora do plano, mais de 100 filhas por pai no plano e
-mais de 8 níveis de aninhamento; as filhas que o pai já tem no GitHub
-(`subIssuesSummary.total`) são conferidas antes de publicar, sem passar de 100. O pai só
-é dado como concluído com as filhas fechadas; um achado depois do fechamento do pai vira
-sub-issue dele, e o Frontlights avisa que o pai precisa ser reaberto, sem reabri-lo.
+O Frontlights não cria sub-issues: uma família que já existe (filhas publicadas antes
+desta regra) continua lida, trabalhada e fechada como antes, filhas antes dos pais, e o
+`validate-plan` recusa uma issue proposta com `parent` ou `parent_external`. No
+`plan.json`, uma filha já publicada leva `parent` com o id do pai, que precisa estar no
+mesmo plano, e dispensa `project_fields`; o `validate-plan` recusa `parent` igual ao
+próprio id, pai fora do plano, mais de 100 filhas por pai no plano e mais de 8 níveis de
+aninhamento. As dependências entre as issues de um plano nascem como relação nativa do
+GitHub (`gh issue create --blocked-by`), com as bloqueadoras publicadas primeiro, na ordem
+que `frontlights.py publish-order --plan <plano>` imprime, e são relidas em `blockedBy`;
+a linha `Depends on:` do corpo é texto de apoio. O pai só é dado como concluído com as
+filhas fechadas; um achado depois do fechamento de uma issue vira issue de topo que a
+cita, e o Frontlights nunca reabre uma issue.
 
 Uma pendência que não é corrigida no PR não fica só no texto do PR, que ninguém
 acompanha e que some depois do merge: ela vira um critério `- [ ] Pendência (achado da
@@ -672,7 +675,8 @@ só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai 
 contrair, e todo critério falha no commit de partida.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
 lê as filhas no GitHub e leva todas na mesma execução (entrevista, plano e implementação),
-nunca só o pai. A fatia vertical é a issue mais as filhas, e juntas elas cobrem todas as
+nunca só o pai; nenhuma sub-issue nova é criada. A fatia vertical é a issue mais as filhas, e
+juntas elas cobrem todas as
 camadas que o requisito pede (tela, API, banco e migração, testes, integração, documentação e
 as do projeto); a seção `## Camadas da fatia` de cada issue registra as camadas analisadas e,
 para as que não serão tocadas, o motivo com a evidência do rastreio de cada campo de tela até o
@@ -726,7 +730,8 @@ compara a evidência salva na hora da revisão independente com a atual e sai co
 commit, edição ou arquivo novo depois dela.
 
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
-(`parent: 3`), ainda é só proposta. As issues 1 e 3 trazem `slices` (a segunda slice depende da
+(`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
+`slices` (a segunda slice depende da
 primeira); o `validate-plan` confere `delivers`, seams, camadas e a ordem das dependências. O
 planejador escolhe o
 maior conjunto seguro de issues prontas, respeita o trabalho em andamento e verifica

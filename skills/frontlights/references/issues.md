@@ -68,12 +68,15 @@ the complete body under the show-before-approval rule.
 creation (or one append to an existing body) with its boxes and board values, then a reread
 of GitHub that confirms the body, the number of boxes and the board values.
 
-## The slice: an issue with its sub-issues, across every layer
+## The issue and its layers (a family that already exists)
 
-A slice is an issue together with its sub-issues, planned as one unit. When the
-work starts from, or adopts, an existing issue, the family read in stage 2 (its
-open sub-issues, down the tree) enters the plan: each sub-issue with `parent` set
-to the id of its parent (a published issue keeps its GitHub number as id). A
+An issue, together with the sub-issues it already has, is planned as one unit, and no
+new sub-issue is created: a family that already exists (children published before this
+rule) is the only case with children, and it is read, worked and closed as before. When
+the work starts from, or adopts, an existing issue, the family read in stage 2 (its
+open sub-issues, down the tree) enters the plan: each published sub-issue with `parent`
+set to the id of its parent (a published issue keeps its GitHub number as id;
+`validate-plan` refuses a proposed issue with `parent`). A
 closed sub-issue stays out of the plan; an open one that depends on it only cites
 it. A family of more than 24 open issues passes the plan limit of `validate-plan`,
 so ask with `AskUserQuestion` how to cut it into batches, never drop sub-issues
@@ -82,8 +85,9 @@ inside the same plan: a child in another batch cannot cite a dependency there. S
 approach in the body) stay in the plan and go through the grilling of this same
 session before their bodies are final (stage 3).
 
-The slice as a whole, not each issue alone, must leave the requirement completely
-met, so it must cover **every layer the requirement needs**. Name the candidate
+The issue as a whole (with the sub-issues it already has), not each issue alone, must
+leave the requirement completely met, so it must cover **every layer the requirement
+needs**. Name the candidate
 layers from the code, not from a fixed list: at least screen, API, database and
 migration, tests, integration and documentation, plus the project's own (for
 example permissions, configuration, translation, observability, background
@@ -103,8 +107,8 @@ corrected by an update of stage 5, never by a silent rewrite. A finding from rev
 or tests (Follow-ups below) is narrow by nature and is exempt: it lists only the
 layers it touches.
 
-**Define the slice only after reading every layer.** The layers table is a
-conclusion from reading, never a guess. Before proposing the slice, read everything it
+**Define the issue's layers only after reading every layer.** The layers table is a
+conclusion from reading, never a guess. Before proposing the issue, read everything it
 can touch: in the front end the components, services, models, routes and specs; in
 the back end the controllers, services, contracts and DTOs, repositories, mappings and
 validators; the migrations and the database schema; the tests; the documentation; and
@@ -189,14 +193,19 @@ and takes none of the board writes below (see Follow-ups). Plan it with the issu
   named writes, not a later step.
 - Create the issue with its labels and body lines in the same call: `gh issue create
   --repo <repo> --title <title> --body-file <file> --label <name>` once per resolved
-  label, and one `**<name>:** <value>` line in the body per body field. Then, in this
+  label, `--blocked-by <n>,<m>` with the real numbers of the issues it depends on (which is
+  why the plan is published blockers first, in the order `frontlights.py publish-order --plan
+  <plan.json>` prints; an issue that already exists gets `gh issue edit <n> --repo <repo>
+  --add-blocked-by <m>` instead), and one `**<name>:** <value>` line in the body per body
+  field. Then, in this
   order: `gh project item-add <number> --owner <owner> --url <issue-url>`; `gh issue
   edit <n> --repo <repo> --add-assignee <assignee> --type <issue_type>`; one `gh project
   item-edit <number> --owner <owner> --url <issue-url> --field <name> --value <value>`
   per single-select field (`--text <value>` instead of `--value` for a text field).
   Use `assignee` exactly as configured (`@me` is whoever runs `gh`), never a guessed login.
 - Verify by rereading GitHub (the issue's `projectItems`, `issueType`, `assignees`,
-  `labels` and each field value) and report any value that did not land. A failed
+  `labels`, each field value and, for its dependencies, `--json blockedBy`) and report any
+  value that did not land. A failed
   board write is a partial publication: record it and retry only the missing
   writes, never by creating the issue again.
 - An issue that already exists (an adopted one, or one the roadmap sync completes) is edited with
@@ -229,9 +238,10 @@ it takes no board field and joins the board only through its parent, and the lim
 of 100 children and 8 levels are read from GitHub before publishing, since the plan
 does not hold its ancestors. The two keys are exclusive.
 
-Put `Depends on: #N, #M` and `Parent: #P` in each canonical issue body (or `none`), and
-the `## Camadas da fatia` table of the slice;
-verify dependency IDs, parent and content after publication. Link local snapshots to returned issue URLs.
+Put `Depends on: #N, #M` in each canonical issue body (or `none`), as support text for the
+native `blocked by` edges, `Parent: #P` only in a published child of a family that already
+exists, and the `## Camadas da fatia` table of the issue;
+verify dependency IDs (`blockedBy`), parent and content after publication. Link local snapshots to returned issue URLs.
 An issue update preserves user text outside the approved plan. Surface divergence
 between approved draft and GitHub rather than overwriting it silently. Return
 verified issue links/graph to the coordinator for batch authorization.
@@ -240,79 +250,38 @@ verified issue links/graph to the coordinator for batch authorization.
 
 Findings from an independent review, a test run, a live check or another verification
 pass that belong to an issue never become one new issue each. Classify every finding
-by the first destination that fits:
+by the first of the three destinations that fits:
 
 1. Fix it in the same PR, when it is inside the issue's approved scope and ownership.
 2. A new acceptance criterion in the source issue, written as a checklist item
-   (`- [ ] ...`) inside its acceptance-criteria section, for a small leftover that
-   does not need its own branch or review (recipe: "A leftover as an acceptance
-   criterion", below). The issue is done only when the leftover is treated, completed
-   and ticked with evidence, like any other criterion.
-3. A sub-issue of the source issue, for work of its own that still belongs to that
-   outcome.
-4. A top-level issue only for new scope or for a problem that crosses several
-   issues; then make it a sub-issue of the epic that gathers them, when one exists.
+   (`- [ ] ...`) inside its acceptance-criteria section, for a leftover that belongs to
+   that outcome (recipe: "A leftover as an acceptance criterion", below). The issue is
+   done only when the leftover is treated, completed and ticked with evidence, like any
+   other criterion; it is one more box, worked in order like a slice.
+3. A top-level issue only for new scope or for a problem that crosses several issues;
+   it cites the issues it crosses in its body and, when one of them must land first,
+   depends on it (`--blocked-by`).
 
-Every finding that is not fixed in the PR leaves with a destination GitHub tracks
-(destination 2, 3 or 4); text in the PR body is never a destination (the gate, below).
+Never a new sub-issue: the destination of a finding is a criterion of its source issue or
+a top-level issue, and a family that already exists is never grown. Every finding that is
+not fixed in the PR leaves with a destination GitHub tracks (destination 2 or 3); text in
+the PR body is never a destination (the gate, below).
 
 No finding becomes a top-level issue by default. Show the whole batch (each finding,
 its proposed destination with the reason, and the full text of every new criterion
-and sub-issue body) under the show-before-approval rule, then decide it in a
+and top-level issue body) under the show-before-approval rule, then decide it in a
 single `AskUserQuestion`: one option approves the proposed destinations and their named
 writes, others adjust them. Approving the batch approves exactly those writes, with the
 criterion text exactly as shown; it is not an implementation authorization for the new
-work. The new sub-issues join the
-slice of their parent (with the `## Camadas da fatia` rows they cover); to implement
-them in the same execution, ask the extended authorization in a new `AskUserQuestion`,
-stacked on the parent's branch when they depend on it.
+work: a new criterion joins the slices of its issue, in order, and a new top-level issue
+is implemented only under an authorization that names it.
 
-Record each sub-issue in `plan.json` with `parent` set to the id of the source issue,
-which must be in the same plan (a published issue keeps its GitHub number as id), so
-`validate-plan` checks the link without network. A sub-issue takes no
-`project_fields`. The check counts only the plan's children (GitHub allows 100 per
-parent), so before publishing read the parent's `subIssuesSummary.total` with `gh issue
-view <parent> --json subIssuesSummary` and keep that total plus the new children at
-100 or fewer. When the parent is itself a sub-issue, include its ancestors too, so
-the depth check (8 levels below a top-level issue) sees the whole chain.
-
-Publish a sub-issue in this order, pausing a few seconds between creations to stay
-under the secondary rate limit:
-
-- Read what the child inherits: `gh issue view <parent> --repo <repo> --json
-  assignees,labels,issueType,state`. Those names come from GitHub, where anyone with triage access
-  can create a label: type each one as one double-quoted argument under the rule of the Project
-  board section above (no dollar sign, backtick, double quote, backslash or control character; a
-  label must match `LABEL_RULE`), and skip, then report, any value that breaks it.
-- Create it already linked: `gh issue create --repo <repo> --title <title> --body-file <file> --parent <parent>`
-  plus one `--assignee <login>` per parent assignee, one `--label <name>` per parent
-  label and `--type <issueType.name>` when the parent has a type. Put `Parent: #<parent>`
-  in the body. For an issue that already exists, link it with `gh issue edit <child>
-  --repo <repo> --parent <parent>` (or `gh issue edit <parent> --repo <repo>
-  --add-sub-issue <child>`).
-- A `gh` without these flags falls back to the REST route: `gh api
-  repos/<owner>/<repo>/issues/<parent>/sub_issues --method POST -F sub_issue_id=<id>`,
-  where `<id>` is the child's numeric `id` from `gh api repos/<owner>/<repo>/issues/<child>`
-  (not its number).
-- Run no board command for the child: the parent's card shows the children's
-  progress (x/y).
-
-Verify by rereading GitHub: `gh issue view <child> --repo <repo> --json
-parent,projectItems,assignees,labels,issueType` must show `parent.number` equal to the
-parent, an empty `projectItems` and the inherited values; `gh issue view <parent>
---repo <repo> --json subIssuesSummary` must show the total grown by the new children
-(the REST listing `gh api repos/<owner>/<repo>/issues/<parent>/sub_issues` is the
-fallback). A child that landed on a board anyway (a project auto-add rule, say) is a
-divergence to report, not to undo. A failed link is a partial publication: retry only
-the link, never by creating the issue again.
-
-A parent is reported complete only when every child is closed
-(`subIssuesSummary.completed` equal to `total`); otherwise list the open children.
-A late finding, after the parent was closed, still becomes a sub-issue of
-it: say that the parent must be reopened for its progress to count, and leave that
-decision to the user; never reopen, delete or archive an issue yourself, and close or move one
-only through the closeout approval of `references/closeout.md`. A parent that was only
-merged and is still open follows the ladder above like any other.
+A parent of a family that already exists is reported complete only when every child is
+closed (`subIssuesSummary.completed` equal to `total`); otherwise list the open children.
+A late finding, after the issue was closed, becomes a top-level issue that cites it (a
+closed issue takes no new criterion): never reopen, delete or archive an issue yourself,
+and close or move one only through the closeout approval of `references/closeout.md`. An
+issue that was only merged and is still open follows the ladder above like any other.
 
 ### A leftover as an acceptance criterion
 
@@ -323,7 +292,7 @@ only one `scripts/closeout.py` counts: a leftover kept anywhere else would let t
 be proposed for closing with it still open. A source issue that has no such section, or is
 closed, cannot take destination 2 (a section holding only the leftover would make the
 closeout read the issue as finished once it is ticked, and an unticked criterion
-contradicts a closed issue): use a sub-issue and say why.
+contradicts a closed issue): use a top-level issue that cites it and say why.
 
 - **Text.** One objective, observable item that names the evidence that will close it
   (a test at a seam, a measured result, a reviewed diff), in the user's language and
@@ -385,8 +354,8 @@ lines and those removed ones. Until then the closeout only warns about it
 Before an issue is reported as reviewed or complete, and before a PR is opened or
 updated, list every open finding of the review, the tests, the live check and any other
 verification pass, the ones of earlier rounds included, each with its destination: fixed
-(the commit), new criterion (the issue and the exact text), sub-issue or top-level issue
-(its number), not a defect, or dropped by the user. The report shows that list.
+(the commit), new criterion (the issue and the exact text), top-level issue (its number),
+not a defect, or dropped by the user. The report shows that list.
 
 - A finding with none of these stops the report and the PR: say how many are open and
   run the ladder above for them, as one batch.

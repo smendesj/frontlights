@@ -106,16 +106,15 @@ issue nem por branch.
 ## Dependências
 
 Depends on: none
-Parent: none
 
-Troque `none` pelos links canônicos #issue depois da publicação aprovada. `Depends on:` e
-`Parent:` são marcadores lidos pelos scripts e ficam como estão.
-
-`Parent` é a issue de origem de uma sub-issue (parte da mesma fatia, achado de revisão
-ou de conferência); `none` numa issue de topo. Toda issue de topo entra no quadro;
-sub-issue entra só pelo pai, que mostra o progresso das filhas. `Parent` é
-pertencimento, não dependência: uma filha que precisa do código do pai também o lista
-em `Depends on`, e na etapa 6 ela pode ser empilhada na branch dele, sem esperar o merge.
+Troque `none` pelos links canônicos #issue depois da publicação aprovada. `Depends on:` é
+texto de apoio: a dependência entre issues do plano nasce no GitHub como relação nativa
+(`gh issue create --blocked-by`, relida em `blockedBy`), com as bloqueadoras publicadas
+primeiro. Nenhuma sub-issue nova é criada: um achado vira critério desta issue ou issue de
+topo. Toda issue de topo entra no quadro; uma filha já publicada de uma família que já
+existe entra só pelo pai e mantém a linha `Parent: #<pai>` que tem: `Parent` é
+pertencimento, não dependência, e na etapa 6 ela pode ser empilhada na branch do pai, sem
+esperar o merge.
 
 ## Propriedade e contenção
 

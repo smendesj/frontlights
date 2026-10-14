@@ -22,7 +22,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 4. Run the horizontal-ticket input from `vertical-slices.md`; confirm the numbered list of the
    slices and the quiz come before the body, inspect the revised vertical outcomes (one box per
    slice with Entrega, Seams, Camadas and Depende de) before publication, and confirm the
-   published issue shows the x/y of its boxes. Record the actual transcript and judgment.
+   published issue shows the x/y of its boxes. With two dependent issues in the plan, confirm the
+   blocker is created first (`publish-order`), the dependent is created with `--blocked-by` and
+   `gh issue view <n> --json blockedBy` shows the edge, and that no sub-issue is proposed. Record
+   the actual transcript and judgment.
 5. Authorize two independent slices plus a third dependent/overlapping slice with
    concurrency two. Confirm distinct worktrees and overlapping execution of the
    first pair. Confirm the third waits for verified integration and no slot overrun.

@@ -139,7 +139,8 @@ O `review-gate` confere o **frescor** da revisão (HEAD, branch, diff e arquivos
 quem a fez: um arquivo de revisão tirado depois de uma correção faz uma revisão velha parecer atual, e quem salva
 o arquivo precisa salvá-lo na hora em que o revisor se vinculou. Um HEAD destacado tem `branch` vazio e é aceito.
 
-Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue de origem. Isso é uma
+Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue de origem ou uma
+issue de topo, nunca uma sub-issue nova. Isso é uma
 escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permissões vigentes, só depois de o
 texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
 migração de uma seção legada, pedida por você, também remove os itens movidos), a releitura confere a diferença e nenhum utilitário do Frontlights faz essa escrita. O Frontlights não impede a sessão de

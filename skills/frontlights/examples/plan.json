@@ -70,6 +70,7 @@
       "id": 4,
       "url": "https://github.com/example/project/issues/4",
       "parent": 3,
+      "_note": "a published child of a family that already exists; the plan never proposes a new sub-issue",
       "title": "Show the conflict message in the user's language",
       "outcome": "A review finding on issue 3: the stale-edit conflict reads in the user's language",
       "acceptance": ["The conflict message of a stale edit is translated"],
@@ -80,7 +81,7 @@
       "non_goals": ["Translating other messages"],
       "risks": ["Missing translation key"],
       "session_sized": true,
-      "status": "proposed"
+      "status": "ready"
     }
   ]
 }

@@ -132,8 +132,8 @@ class FamilyRulesTextTests(unittest.TestCase):
 
     def test_issues_reference_defines_the_slice_and_its_layers(self):
         issues = read('skills', 'frontlights', 'references', 'issues.md')
-        body = flat(section(issues, 'The slice: an issue with its sub-issues, across every layer') or '')
-        for phrase in ('A slice is an issue together with its sub-issues',
+        body = flat(section(issues, 'The issue and its layers (a family that already exists)') or '')
+        for phrase in ('An issue, together with the sub-issues it already has',
                        'every layer the requirement needs', '## Camadas da fatia',
                        'not touched with the reason', 'a gap in the plan',
                        'does not contradict the rule against splitting by layer',
@@ -152,8 +152,8 @@ class FamilyRulesTextTests(unittest.TestCase):
 
     def test_the_slice_is_defined_only_after_tracing_every_screen_field_to_the_back_and_the_database(self):
         issues = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),
-                              'The slice: an issue with its sub-issues, across every layer') or '')
-        for phrase in ('Define the slice only after reading every layer',
+                              'The issue and its layers (a family that already exists)') or '')
+        for phrase in ("Define the issue's layers only after reading every layer",
                        'the consumer in the back (`file:line`) and the column in the database',
                        'only with the evidence of that trace', 'A reason without evidence is not accepted',
                        'never "not touched"', 'prove the consumption by a test or by reading the execution',

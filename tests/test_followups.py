@@ -1,6 +1,7 @@
-"""Achados de revisão viram sub-issues da issue de origem, sem cartão avulso no quadro (#17).
+"""Achados de revisão viram critério da issue de origem ou issue de topo; filhas já publicadas continuam no plano,
+sem cartão avulso no quadro (#17, revisto pela issue 23: nenhuma sub-issue nova).
 
-Seams: a CLI `validate-plan`, a receita de publicação em `references/issues.md`
+Seams: a CLI `validate-plan`, a escada de destinos em `references/issues.md`
 (o script não publica issues) e o manifesto (skill, referências e modelo de issue).
 """
 import json
@@ -168,28 +169,24 @@ class FollowUpsManifestTests(unittest.TestCase):
 
     def test_follow_ups_section_holds_the_ladder_decided_in_one_question(self):
         text = self.followups
-        positions = [text.find(step) for step in
-                     ('same PR', 'checklist', 'sub-issue', 'top-level issue')]
+        positions = [text.find(step) for step in ('same PR', 'checklist', 'top-level issue')]
         self.assertNotIn(-1, positions)
         self.assertEqual(positions, sorted(positions))
         self.assertIn('single `AskUserQuestion`', text)
-        self.assertIn('epic', text)
+        self.assertIn('three destinations', ' '.join(text.split()))
 
-    def test_sub_issue_recipe_uses_parent_and_no_board_command(self):
+    def test_no_sub_issue_recipe_remains_and_no_board_command_either(self):
         text = self.followups
-        self.assertRegex(text, r'gh issue create [^`]*--parent')
-        self.assertIn('gh issue edit', text)
-        for flag in ('--assignee', '--label', '--type'):
-            self.assertIn(flag, text)
+        self.assertNotRegex(text, r'gh issue create [^`]*--parent')
         self.assertNotIn('item-add', text)
         self.assertNotIn('item-edit', text)
         self.assertNotIn('--project', text)
 
-    def test_sub_issue_recipe_verifies_parent_children_and_no_board(self):
-        text = self.followups
-        for field in ('parent', 'subIssuesSummary', 'projectItems'):
-            self.assertIn(field, text)
-        self.assertIn('sub_issues', text)  # rota REST para gh sem --parent
+    def test_existing_families_are_still_read_and_closed_as_before(self):
+        skill = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
+        self.assertIn('subIssuesSummary', skill)
+        self.assertIn('a family that already exists', ' '.join(skill.split()))
+        self.assertIn('parentTicks', (SKILL / 'references' / 'closeout.md').read_text(encoding='utf-8'))
 
     def test_follow_ups_section_covers_late_findings_and_closing(self):
         text = self.followups
@@ -207,9 +204,10 @@ class FollowUpsManifestTests(unittest.TestCase):
         self.assertIn('every top-level issue joins the board; a sub-issue joins only through its parent', text)
         self.assertNotIn('including follow-ups proposed after delivery', text)
 
-    def test_issue_template_has_parent_next_to_depends_on(self):
+    def test_issue_template_has_depends_on_without_a_parent_line(self):
         text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'issue.md').read_text(encoding='utf-8')
-        self.assertRegex(text, r'Depends on: none\nParent: none\n')
+        self.assertRegex(text, r'(?m)^Depends on: none$')
+        self.assertNotIn('Parent: none', text)
 
     def test_docs_say_top_level_issues_join_the_board(self):
         for path in (ROOT / 'README.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md'):

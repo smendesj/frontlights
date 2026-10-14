@@ -76,9 +76,11 @@ default; only an explicit choice of the user narrows it, and a family too large 
 one plan (more than 24 open issues) is cut by asking the user how, with
 `AskUserQuestion`. A parent/child dependency
 does not serialize the work behind a merge: children may be stacked on the
-parent's branch (stage 6). Sub-issues born during stage 6, from review or tests,
-follow the Follow-ups ladder of `references/issues.md` and are implemented only
-under an authorization that names them.
+parent's branch (stage 6). No new sub-issue is ever created, on any path and at any
+stage: a family that already exists (children published before this rule) is read,
+worked and closed as before, and a finding during stage 6, from review or tests, becomes
+a new acceptance criterion of its source issue or a top-level issue (the Follow-ups ladder
+of `references/issues.md`), implemented only under an authorization that names it.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,
@@ -306,10 +308,11 @@ These publication rules cover every issue the session creates, on any path and
 at any stage: every top-level issue joins the board; a sub-issue joins only through its parent.
 With a configured `project`, each top-level issue joins that board with its
 assignee, type, labels and fields (and any body lines the board configures) in the same approved write, and is verified there. Never
-create a top-level issue outside the configured board. Findings from review, tests
-or checks follow the destination ladder and the sub-issue recipe of the Follow-ups
-section of `references/issues.md`, decided as one batch. A finding that is not fixed
-in the PR leaves as a new acceptance criterion of its source issue, a sub-issue or a
+create a top-level issue outside the configured board. Dependencies between the issues of
+a plan are published as native `blocked by` edges (`--blocked-by`), blockers first, and
+reread in `blockedBy`. Findings from review, tests or checks follow the destination ladder
+of the Follow-ups section of `references/issues.md`, decided as one batch. A finding that
+is not fixed in the PR leaves as a new acceptance criterion of its source issue or a
 top-level issue, never as a note in the PR body (the gate of that section).
 
 ## 6. Bounded development
@@ -406,7 +409,7 @@ checkpoint (`checkpoint --pending teste_assistido`; `resume` lists it first) and
 spent. Before an issue is reported as reviewed or complete, and before a PR is opened or
 updated, every open finding has its destination (the gate of the Follow-ups section
 of `references/issues.md`): fixed, a new acceptance criterion of the source issue, a
-sub-issue, a top-level issue, shown as not a defect with its evidence, or dropped by
+top-level issue, shown as not a defect with its evidence, or dropped by
 the user's explicit answer. "Cited in the PR" is never a destination, and an issue is not reported as reviewed or complete
 while one has none.
 Finish with per-issue state, branch/PR, changes, measured commands/results,
