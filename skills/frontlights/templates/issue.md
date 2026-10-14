@@ -47,6 +47,7 @@ do trabalho não é critério. Cada caixa fecha só com evidência.
   - Seams: <interfaces públicas em que o comportamento é observado>
   - Camadas: <as camadas que ela toca>
   - Depende de: <slices anteriores, ou nenhuma>
+  - Bloqueada: <só numa slice estacionada: o que falta e de quem; a linha é apagada ao destravar, antes da marcação>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.

@@ -28,7 +28,10 @@ horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar
 branches de trabalho, abrir e redirecionar PRs rascunho (empilhadas inclusive), os merges que a
 autorização de empilhamento nomeia, rodar migrations no banco de desenvolvimento local, criar e
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
-evidência. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
+evidência. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
+linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
+apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue,
+conferida pela diferença. Nunca ficam cobertos: merge de PR, fechar issue, mexer no quadro, implantar ou publicar
 em produção, editar uma migration já registrada, escrever na branch base ou protegida, ligar
 configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando

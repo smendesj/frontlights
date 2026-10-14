@@ -48,6 +48,16 @@ per issue, of the whole diff, before the PR, and the full suite runs once there.
 stacked wave and the family integration below apply only to a family that already exists (an
 issue with sub-issues published before this rule), never to the slices of one issue.
 
+**A parked slice.** When a slice is parked (it waits for something the session cannot do: a
+decision, a credential, another team's endpoint), write right below its open box, as the last
+sub-item of its box and more indented than it, the line `- Bloqueada: <what is missing and from
+whom>`, by the write rule of the leftover (body captured, append only, difference checked,
+reread); the RoadS reads that sub-item as the reason of a blocked part of the delivery. When
+the slice is released, remove exactly that line before the box is ticked: the only removal
+allowed in a body, checked by the difference (nothing else added or removed). The closeout
+keeps counting the box as open while the line is there, because a sub-item without a box is
+never a criterion.
+
 ## Dispatch and ownership
 
 Inspect Git status/remotes/worktrees and current issue acceptance criteria. For a family
