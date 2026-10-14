@@ -61,7 +61,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     log records the mode and one row per concept, and the explanations are
     readable on the phone. The textual tests only prove these rules are written
     down; this step proves they are followed.
-12. Issue family and stacked branches. Start from a disposable issue with three open
+12. Issue family and stacked branches (a family that already exists). Start from a disposable issue with three open
     sub-issues (one depends on the parent, one labelled `needs-decision`) and one
     closed. Confirm the stage 2 line names the open ones, the grilling gives the
     pending one its own solution round, every body has `## Camadas da fatia`, and stage 6
@@ -172,9 +172,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     documentation; every field has its consumer (`file:line`) and column in the layers section; a field with no consumer or a
     back capability with no action becomes a criterion or sub-issue; an inconclusive trace becomes the explicit task and the
     plan is not offered for approval until it is closed; and the `Fluxo:` checks the effect in the back or the database.
-23. Standing authorization. On a disposable family with a parent and a child that depends on it, confirm stage 6 opens
-    with no concurrency, stacking or authorization question and with the announcement (issues, concurrency, stacking,
-    worktree base, verification argv, stop conditions); `authorization.json` carries `"autorização permanente
+23. Standing authorization and slices in order. On a disposable issue with three slices (and, for the stacking rules,
+    a family that already exists), confirm stage 6 opens with no concurrency, stacking or authorization question and
+    with the announcement (issues, the order of the slices, concurrency, stacking only for an existing family, worktree
+    base, verification argv, stop conditions); the first slice is ticked with evidence before the second starts,
+    `checkpoint --slice` carries the slice in progress and a fresh session resumes at the first open box;
+    `authorization.json` carries `"autorização permanente
     (docs/security.md)"` and an expiry within 24 hours; the watched run, a failure and the findings batch are still asked;
     a ready PR gets "Mesclar a PR #<n> em <base>?" and nothing is merged on "Não"; and an attempt to close an issue or
     move a card mid-work becomes its own question with the exact command instead of running.

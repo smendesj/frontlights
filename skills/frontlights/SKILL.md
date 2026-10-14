@@ -328,12 +328,16 @@ exposing secrets. Do not disable hooks or request bypass mode.
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Choose the highest safe parallelism; when a sub-issue
-depends on its parent (or on another issue of the family), stack it on the dependency's branch,
+implementation authorization question. Each issue gets one branch, one worktree and one PR, and
+its slices are worked in order, in dependency order, one at a time; parallelism only between
+issues, the highest safe number of independent issues whose files do not overlap. Stacking and the
+family integration apply only to a family that already exists (an issue with sub-issues published
+before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap
 (`references/development.md`). Then announce in one short block, in the user's language, what
-this run does: the issue IDs, repository, concurrency, stacking, worktree base and branch prefix,
-the verification argv and the stop conditions; the user may change any of it at any time, and a
+this run does: the issue IDs, repository, concurrency, the order of the slices of each issue,
+stacking when a family exists, worktree base and branch prefix, the verification argv and the
+stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
 only: editing, testing, committing, pushing the work branches, opening draft PRs (stacked ones
 included) and retargeting them, the merges the stacking authorization names, running migrations

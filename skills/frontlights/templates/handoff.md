@@ -6,6 +6,7 @@
 - Repository path, branch, base and HEAD:
 - Repository map and approved decisions:
 - Files changed / diff hash / files hash:
+- Slice em andamento (id da caixa, também em `checkpoint --slice`) e slices já marcadas com evidência (id, commit e comandos de cada uma):
 
 | Command (actual argv and cwd) | Phase | Exit code / measured result | Evidence path |
 | --- | --- | --- | --- |

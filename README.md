@@ -648,8 +648,12 @@ implementação, anunciada sem pergunta → desenvolvimento orientado a testes (
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights anuncia num bloco curto as issues, a concorrência, o empilhamento, a base das worktrees e
-os testes, e começa. Ficam autorizados, só para as issues da família ou do lote: editar, testar,
+Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo
+só entre issues, anuncia num bloco curto as issues, a ordem das slices, a concorrência, o
+empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Cada slice
+é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
+sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
+do lote: editar, testar,
 commitar, enviar as branches, abrir PRs rascunho empilhadas, rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
 marcar critérios nas issues. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
@@ -673,7 +677,8 @@ camadas que o requisito pede (tela, API, banco e migração, testes, integraçã
 as do projeto); a seção `## Camadas da fatia` de cada issue registra as camadas analisadas e,
 para as que não serão tocadas, o motivo com a evidência do rastreio de cada campo de tela até o
 consumidor no back e a coluna no banco (um rastreio inconclusivo bloqueia a aprovação do plano até ser provado). Uma filha com `needs-decision`, ou sem abordagem
-definida, entra na entrevista da mesma sessão. Na etapa 6, quando uma filha depende do pai, a
+definida, entra na entrevista da mesma sessão. Numa família que já existe (issue com sub-issues
+publicadas antes da regra das slices), quando uma filha depende do pai, a
 autorização permanente usa **branches empilhadas** (você pode pedir para esperar o merge do pai): a filha sai da branch do
 pai assim que ele está verificado nela, o PR dela tem como base a branch do pai e, depois que
 uma pessoa faz o merge do pai, o PR é redirecionado para a base em que o pai entrou, trazendo-a

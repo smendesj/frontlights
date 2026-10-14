@@ -31,11 +31,28 @@ created. Run it only after "Sim" and record the answer verbatim in the handoff. 
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
+## Slices in order: one branch and one PR per issue
+
+An issue is worked on one branch, in one worktree, and delivered in one PR; its slices (the
+boxes of its acceptance criteria, stage 5) are worked in dependency order, one at a time. Each
+slice is one TDD loop at its own seams (the `Seams:` under its box), one checkpoint
+(`checkpoint --slice <id>` of `frontlights.py`, which `resume` echoes so the next window starts
+at that slice) and, when its loop closes with evidence (the affected test modules green, the
+measured commands), the tick of its box: capture the body, tick that line only, run
+`closeout.py tick-check` before and after the write, and leave a short comment on the issue with
+the commit and the commands. The session may end in the middle of an issue: the handoff names
+the slice in progress and the slices already ticked, and a fresh session resumes at the first
+open box, in order. Parallelism is between issues only. The watched run stays one per batch,
+when the last slice that changes the screen closes its loop; the independent review stays one
+per issue, of the whole diff, before the PR, and the full suite runs once there. Stacking, the
+stacked wave and the family integration below apply only to a family that already exists (an
+issue with sub-issues published before this rule), never to the slices of one issue.
+
 ## Dispatch and ownership
 
-Inspect Git status/remotes/worktrees and current issue acceptance criteria. The
-scope of a dispatch is the family: the issue and all its open sub-issues
-(`SKILL.md`, "An issue and its sub-issues move together"), each with its own branch
+Inspect Git status/remotes/worktrees and current issue acceptance criteria. For a family
+that already exists, the scope of a dispatch is the family: the issue and all its open
+sub-issues (`SKILL.md`, "An issue and its sub-issues move together"), each with its own branch
 and worktree; the parent never goes alone unless the user chose that. Create one
 isolated branch/worktree per issue from its approved base (the approved base
 branch, or its dependency's branch when stacked, see below) using native
@@ -73,7 +90,7 @@ issues), so give the command a longer timeout.
 ## Stacked branches: parent and children without waiting for the merge
 
 Making children wait for the parent's merge serializes the family behind a human
-step. So, whenever an issue of the family depends on another one (a child that
+step. So, in a family that already exists, whenever an issue of the family depends on another one (a child that
 lists its parent in `Depends on`, or a sibling chain), stage 6 **stacks** the
 dependent on its dependency's branch. Under the standing authorization this is not
 asked: the announcement says it. The choice "Como as filhas se apoiam no pai?" comes
@@ -302,9 +319,11 @@ Save compact `templates/handoff.md` and a machine-readable checkpoint before eac
 session renewal. Include the issue URL and acceptance snapshot, repository map,
 decisions, changed files, commands/results, review evidence, blockers and next
 concrete step. `frontlights.py checkpoint` records the issue snapshot, handoff and
-current Git evidence, and carries open obligations with `--pending teste_assistido` (a watched run that is due and unanswered);
-`frontlights.py resume` detects drift without overwriting it and lists those obligations
-first, so the next window starts by asking the watched run.
+current Git evidence, carries open obligations with `--pending teste_assistido` (a watched run that is due and unanswered)
+and the slice in progress with `--slice <id>`;
+`frontlights.py resume` detects drift without overwriting it, lists those obligations
+first, so the next window starts by asking the watched run, and echoes the slice, so the
+next window continues at that box.
 Read both the human handoff and current issue/diff in the fresh session.
 
 Check context using measured accumulated session usage plus a conservative next

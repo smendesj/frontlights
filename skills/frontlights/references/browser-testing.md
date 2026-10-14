@@ -38,9 +38,11 @@ what to do next), `checks smoke` (it reuses the running serve),
 ## One watched run per batch
 
 There is one watched run per batch of work, never one per branch or worktree. The batch is
-every slice the session delivers together: the issue and its sub-issues, and any other issue
-authorized in the same run. A slice that only changes tests or only the API does not hold the
-question back.
+every issue the session delivers together, one branch each (an issue with the sub-issues it
+already has, and any other issue authorized in the same run), and inside each issue its slices:
+in this reference a slice is a box of an issue's acceptance criteria (stage 5), and each
+`--root` is an issue's worktree. A slice that only changes tests or only the API does not hold
+the question back.
 
 **When the question comes out.** Only at these points, each one after `browser-gate`: (a) when the
 last slice that changes the screen has closed its TDD loop, the normal moment, which comes before
@@ -66,11 +68,13 @@ that; until it is answered the report says "implementada, aguardando teste assis
 **The gate.** `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" browser-gate --config <config>
 --base <base> --root <worktree> [--root <worktree> ...] [--stacked <branch>=<target> ...] --toca
 <sim|nao|ausente> --record <result.json>`. `--base` is the approved base of the batch, the same for
-every `--root`; each `--root` is a slice's worktree; each slice stacked on another branch (the base
-the stacking authorization records for it) is named with `--stacked <its branch>=<the branch its PR
-targets>`, so only its own changes count (an API-only child stacked on a parent that changes the
-screen is then no visible root); without `--stacked` every root is measured from `--base`; `--toca` is `sim` when any slice's plan says `Toca o frontend: sim`, else what the plans
-say (`by_root` lists the visible files of each root, so compare each slice with its own plan);
+every `--root`; each `--root` is an issue's worktree; each issue stacked on another branch (the base
+the stacking authorization records for it, in a family that already exists) is named with
+`--stacked <its branch>=<the branch its PR targets>`, so only its own changes count (an API-only
+child stacked on a parent that changes the screen is then no visible root); without `--stacked`
+every root is measured from `--base`; `--toca` is `sim` when any issue's plan says `Toca o
+frontend: sim`, else what the plans say (`by_root` lists the visible files of each root, so compare
+each issue with its own plan);
 `--record` is the batch record below and may not exist yet. It reads the Git diff, not the plan's
 text, and prints `status`, `reason` and `action`. Exit code 0 means `not_needed` or `answered`, 2
 anything else, 1 an error such as an unreadable file or a base that does not exist (a `--config`

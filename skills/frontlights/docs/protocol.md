@@ -16,10 +16,13 @@
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
 A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
-pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão escolhe a maior
-concorrência segura, empilha as filhas na branch da dependência, anuncia num bloco curto as issues,
-o repositório, a concorrência, o empilhamento, a base das worktrees, os testes e as condições de
-parada, e grava `authorization.json` com o usuário em `approved_by` e `confirmed_by`,
+pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
+slices de cada issue em ordem, numa branch e um PR por issue, com paralelismo só entre issues;
+empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
+publicadas antes desta regra); anuncia num bloco curto as issues, a ordem das slices, o
+repositório, a concorrência, o empilhamento quando há família, a base das worktrees, os testes e
+as condições de parada, e grava `authorization.json` com o usuário em `approved_by` e
+`confirmed_by`,
 `"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
 horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, enviar as
 branches de trabalho, abrir e redirecionar PRs rascunho (empilhadas inclusive), os merges que a

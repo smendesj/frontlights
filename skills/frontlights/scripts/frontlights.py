@@ -376,7 +376,7 @@ def slices_of(issue):
         require(isinstance(item, dict),
                 f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers e depends_on')
         sid = item.get('id')
-        require(isinstance(sid, str) and SLICE_ID_RULE.match(sid),
+        require(isinstance(sid, str) and SLICE_ID_RULE.fullmatch(sid),
                 f'{label}: slice com id inválido {sid!r}: use um rótulo curto sem espaço, como S1')
         require(sid not in seen, f'{label}: slice repetida {sid}')
         require(nonempty(item.get('title')), f'{label}: slice {sid}: falta title')
@@ -669,17 +669,20 @@ def pending_names(pending):
     return sorted(set(names))
 
 
-def checkpoint(root, issue, handoff, next_step, pending=()):
+def checkpoint(root, issue, handoff, next_step, pending=(), slice=None):
     root, handoff = Path(root).resolve(strict=True), Path(handoff).resolve()
     require(handoff.is_file(), 'durable handoff file required')
     require(number(issue.get('number')) and nonempty(issue.get('body')) and
             (nonempty(issue.get('html_url')) or issue.get('source') == 'local'),
             'current canonical GitHub issue snapshot, or a local issue with source "local", required')
     require(nonempty(next_step), 'next concrete step required')
+    if slice is not None:   # the acceptance-criteria box in progress, so the next window resumes there
+        require(isinstance(slice, str) and SLICE_ID_RULE.fullmatch(slice),
+                'slice is a short label without spaces, such as S2')
     return {'version': 1, 'created_at': dt.datetime.now(dt.timezone.utc).isoformat(),
             'root': str(root), 'issue': issue, 'git': git_evidence(root),
             'handoff_sha256': hashlib.sha256(handoff.read_bytes()).hexdigest(),
-            'next_step': next_step, 'pending': pending_names(pending)}
+            'next_step': next_step, 'pending': pending_names(pending), 'slice': slice}
 
 
 def resume(root, saved, current_issue, handoff):
@@ -697,6 +700,7 @@ def resume(root, saved, current_issue, handoff):
     return {'state': 'reconcile' if changed or git_changed or handoff_changed else 'unchanged',
             'issue_drift': changed, 'git_drift': git_changed, 'handoff_changed': handoff_changed,
             'pending': pending_names(saved.get('pending')), 'next_step': saved['next_step'],
+            'slice': saved.get('slice'),
             'required': 'Read current GitHub issue, handoff and diff before continuing.'}
 
 
@@ -950,6 +954,7 @@ def main():
         if name == 'checkpoint':
             p.add_argument('--next-step', required=True)
             p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
+            p.add_argument('--slice', help='the slice (acceptance-criteria box) in progress, e.g. S2')
         else:
             p.add_argument('--checkpoint', required=True)
     p = sub.add_parser('drift')
@@ -989,7 +994,7 @@ def main():
         elif args.command == 'update-check':
             result = update_check()
         elif args.command == 'checkpoint':
-            result = checkpoint(args.root, load(args.issue), args.handoff, args.next_step, args.pending)
+            result = checkpoint(args.root, load(args.issue), args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':
             result = resume(args.root, load(args.checkpoint), load(args.issue), args.handoff)
         else:

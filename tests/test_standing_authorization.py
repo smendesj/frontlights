@@ -117,7 +117,7 @@ class StandingAuthorizationTests(unittest.TestCase):
 
     def test_acceptance_and_runbook_track_it_as_pending(self):
         self.assertIn('| 23. Autorização permanente da etapa 6 e negados com "Sim" | Pendente |', flat('docs', 'acceptance.md'))
-        self.assertIn('23. Standing authorization.', flat('evals', 'runbook.md'))
+        self.assertIn('23. Standing authorization and slices in order.', flat('evals', 'runbook.md'))
 
 
 if __name__ == '__main__':
