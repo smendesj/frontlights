@@ -2,15 +2,20 @@
 """Homologation helper (issue 32): the local base branch (`main`) is the homologation bench of the project. It is
 never pushed; the release leaves by a branch of its own and one pull request. This module guards that rule in Git
 and keeps the bench current with the remote. Every Git call is a list argv run without a shell, with a timeout and
-GIT_TERMINAL_PROMPT=0. Later slices add their operations to `run`; an unknown one is a refusal.
+GIT_TERMINAL_PROMPT=0. `run` knows four operations, `hook`, `sync`, `bundle` and `release-plan`; an unknown one is
+a refusal.
 
 Operations (each prints one JSON object on stdout):
-  hook   --check (the default): is the `pre-push` hook that refuses pushing the local base installed, and is it
-         ours (its first lines carry MARKER)? --install writes it when missing or already ours (idempotent),
-         creates the hooks folder when needed and never overwrites a hook that is not ours: the user merges the
-         two by hand. The hook is POSIX sh with the base baked in; it refuses a push when any ref line has the
-         local or the remote ref equal to `refs/heads/<base>` (`git push origin main` and `git push origin x:main`
-         alike) and lets every other branch through.
+  hook   --check (the default): is the `pre-push` hook that refuses pushing the local base installed, is it ours
+         (its first lines carry MARKER) and is it current (byte for byte the script for `--base`, line endings
+         aside)? A hook that is ours but not current (another base baked in, or edited) is a question (exit 2):
+         `--install` rewrites it. --install writes the hook when missing or already ours (idempotent), creates
+         the hooks folder when needed and never overwrites a hook that is not ours: the user merges the two by
+         hand. The hook must live inside the common Git dir of the repository: when `core.hooksPath` points
+         elsewhere, `--check` reports `outsideRepository` (exit 2) and `--install` refuses (exit 1); nothing is
+         written outside the repository. The hook is POSIX sh with the base baked in; it refuses a push when any
+         ref line has the local or the remote ref equal to `refs/heads/<base>` (`git push origin main` and
+         `git push origin x:main` alike) and lets every other branch through.
   sync   bring `<remote>/<base>` into the local base: the worktree must have the base checked out, be clean
          (untracked files are fine) and have no merge in progress; then `git fetch <remote>` and `git merge
          --no-edit <remote>/<base>`, a fast-forward when possible. A conflict is aborted at once, the worktree is
@@ -27,8 +32,9 @@ Operations (each prints one JSON object on stdout):
          every `.frontlights/authorization*.json` under `--records`, default the root) is in the local base and
          not yet in `<remote>/<base>`, how many commits the local base is ahead of and behind the remote one, and
          the name of the release branch, `<prefix>release-<YYYY-MM-DD>` (the date in America/Sao_Paulo, the
-         machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch that already has
-         the name. `ready` is true (exit 0) when the local base is ahead, not behind, and at least one issue is in
+         machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
+         remote-tracking branch of `--remote`, that already has the name. `ready` is true (exit 0) when the local
+         base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
          no issue branch mapped). It only reads Git and the records: it never fetches, never creates the branch
          and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
@@ -141,48 +147,79 @@ def hook_script(base):
     return HOOK.format(marker=MARKER, base=base)
 
 
-def hook_path(root):
-    """Where Git looks for the pre-push hook: honours core.hooksPath and linked worktrees."""
-    code, out, _ = git(root, 'rev-parse', '--git-path', 'hooks/pre-push')
-    require(code == 0 and out.strip(), 'o git não disse onde fica o hook pre-push')
+def git_path(root, *args, what):
+    """A path Git reports (`rev-parse --git-path ...`, `--git-common-dir`), absolute against `root` and resolved."""
+    code, out, _ = git(root, 'rev-parse', *args)
+    require(code == 0 and out.strip(), f'o git não disse onde fica {what}')
     path = Path(out.strip())
     return (path if path.is_absolute() else Path(root) / path).resolve()
 
 
-def hook_state(path):
-    """(installed, ours, foreign): a file whose first lines carry MARKER is ours; any other file is foreign."""
+def hook_path(root):
+    """Where Git looks for the pre-push hook: honours core.hooksPath and linked worktrees."""
+    return git_path(root, '--git-path', 'hooks/pre-push', what='o hook pre-push')
+
+
+def common_dir(root):
+    """The common Git dir of the repository (`.git` of the main worktree), shared by every linked worktree."""
+    return git_path(root, '--git-common-dir', what='o diretório Git do repositório')
+
+
+def inside(path, folder):
+    """True when `path` is `folder` or below it; both already resolved, compared case-insensitively on Windows."""
+    path, folder = os.path.normcase(str(path)), os.path.normcase(str(folder))
+    return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+
+
+def hook_state(path, expected):
+    """(installed, ours, foreign, current): a file whose first lines carry MARKER is ours; any other file is
+    foreign; ours and equal to `expected` (CRLF read as LF) is current. A hook installed for another base, or
+    edited after the install, is ours but not current."""
     if not path.is_file():
-        return False, False, False
-    with open(path, encoding='utf-8', errors='replace') as handle:
-        head = [handle.readline() for _ in range(MARKER_LINES)]
-    ours = any(line.strip() == MARKER for line in head)
-    return True, ours, not ours
+        return False, False, False, False
+    with open(path, encoding='utf-8', errors='replace', newline='') as handle:
+        content = handle.read().replace('\r\n', '\n')
+    ours = any(line.strip() == MARKER for line in content.split('\n', MARKER_LINES)[:MARKER_LINES])
+    return True, ours, not ours, ours and content == expected
 
 
 def op_hook(root, base, install):
     worktree(root)
     base = plain_name(base, 'a branch base')
     path = hook_path(root)
-    installed, ours, foreign = hook_state(path)
-    result = {'installed': installed, 'ours': ours, 'foreign': foreign, 'path': str(path), 'base': base,
-              'script': hook_script(base)}
-    if foreign:
+    outside = not inside(path, common_dir(root))
+    script = hook_script(base)
+    installed, ours, foreign, current = hook_state(path, script)
+    result = {'installed': installed, 'ours': ours, 'foreign': foreign, 'current': current, 'path': str(path),
+              'base': base, 'script': script, 'outsideRepository': outside}
+    if outside:
+        # core.hooksPath (often a global one) sends the hooks to a folder outside the repository: the skill never
+        # writes there, in either mode.
+        result['exitCode'] = 1 if install else 2
+        result['message'] = (f'A pasta de hooks ({path.parent}) fica fora do diretório Git do repositório por '
+                             'core.hooksPath; a skill não escreve nada ali' + (', e nada foi escrito' if install else '')
+                             + '. Ajuste core.hooksPath ou instale o hook à mão.')
+    elif foreign:
         result['exitCode'] = 1 if install else 2
         result['message'] = (f'Há um hook pre-push em {path} que não é do Frontlights; ele nunca é sobrescrito'
                              + (', e nada foi escrito' if install else '') + ': junte os dois à mão.')
     elif install:
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, 'w', encoding='utf-8', newline='\n') as handle:
-            handle.write(result['script'])
+            handle.write(script)
         os.chmod(path, 0o755)
-        result.update(installed=True, ours=True, exitCode=0,
+        result.update(installed=True, ours=True, current=True, exitCode=0,
                       message=f'Hook pre-push do Frontlights instalado em {path}: a {base} local nunca é enviada.')
-    elif installed:
+    elif current:
         result.update(exitCode=0, message=f'O hook pre-push do Frontlights está instalado em {path}.')
+    elif installed:
+        result.update(exitCode=2, message=f'O hook pre-push em {path} é do Frontlights, mas difere do script esperado '
+                                          f'para a {base} (outra branch base, ou editado); `homolog hook --install` '
+                                          'o reescreve.')
     else:
         result.update(exitCode=2, message=f'Não há hook pre-push em {path}; `homolog hook --install` o instala.')
     if install:
-        result['written'] = not foreign
+        result['written'] = not (outside or foreign)
     return result
 
 
@@ -461,11 +498,12 @@ def release_date():
     return now.strftime('%Y-%m-%d')
 
 
-def release_name(root, prefix):
-    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch that already carries the name."""
+def release_name(root, prefix, remote):
+    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch, and every remote-tracking branch of
+    `remote`, that already carries the name."""
     stem = f'{prefix}release-{release_date()}'
     name, counter = stem, 2
-    while rev(root, f'refs/heads/{name}') is not None:
+    while rev(root, f'refs/heads/{name}') is not None or rev(root, f'refs/remotes/{remote}/{name}') is not None:
         name = f'{stem}-{counter}'
         counter += 1
     return name
@@ -489,7 +527,7 @@ def op_release_plan(root, base, remote, prefix, records):
                        'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)})
     release = [i['issue'] for i in issues if i['present'] and i['inLocalMain'] is True and i['inRemoteMain'] is False]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
-    name = release_name(root, prefix)
+    name = release_name(root, prefix, remote)
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
               'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'skipped': skipped,
               'ready': False}

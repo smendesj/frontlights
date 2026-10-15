@@ -891,6 +891,16 @@ class DeliveredWithoutPullRequestTests(CleanupCase):
         self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
         self.assertFalse(any('push' in c['argv'] for c in entry['commands']))
 
+    def test_a_branch_pushed_under_the_old_flow_and_delivered_without_a_pull_request_still_reports_its_remote(self):
+        path, branch, tip = self.delivered()
+        entry = self.only(self.plan({branch: {'heads': [], 'remote': 'a' * 40}})[0])
+        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']),
+                         (['contained_in_base_without_pull_request', 'remote_branch_moved'], False))
+        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
+        entry = self.only(self.plan({branch: {'heads': [], 'remote': tip}})[0])
+        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']), (['contained_in_base_without_pull_request'], True))
+        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch', 'delete_remote_branch'])
+
     def test_an_issue_branch_outside_the_base_still_needs_a_pull_request(self):
         path, branch, tip = self.worktree('issue-12')
         self.assertEqual(self.reasons(self.plan({branch: {'heads': []}})[0]), [['no_merged_pr']])

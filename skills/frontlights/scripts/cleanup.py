@@ -423,14 +423,19 @@ def assess(ctx, item, registered, github):
         cautions.append('local_only_integration')
     elif sliced:
         cautions.append('slice_merged_into_issue_branch')
-    elif not github['heads']:
-        cautions.append('contained_in_base_without_pull_request')   # issue 32: a merge into the local main, no pull request
-    elif remote is None:
-        cautions.append('remote_branch_gone')
-    elif not ctx['origin_ok']:
-        cautions.append('origin_is_not_the_repository')
-    elif not remove_remote:
-        cautions.append('remote_branch_moved')
+    else:
+        if not github['heads']:
+            cautions.append('contained_in_base_without_pull_request')   # issue 32: a merge into the local main, no pull request
+        # The remote cautions stand on their own, so a branch delivered without a pull request but pushed under
+        # the old flow still says what its remote branch is up to. Without a pull request, no remote branch means
+        # it was never pushed: nothing is gone.
+        if remote is None:
+            if github['heads']:
+                cautions.append('remote_branch_gone')
+        elif not ctx['origin_ok']:
+            cautions.append('origin_is_not_the_repository')
+        elif not remove_remote:
+            cautions.append('remote_branch_moved')
     main = ctx['main_path']
     commands = []
     if registered is not None:
