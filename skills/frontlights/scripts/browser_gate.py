@@ -6,10 +6,11 @@ that changes what they see on the screen?
 browser run (`skills/frontlights/references/browser-testing.md`) covers the visible change. It reads the
 Git diff, not the plan's text, so a screen change the plan forgot to declare is still caught.
 
-One batch is one decision: the roots are the worktrees of every issue the session finished and means to
-deliver together (the issue, its sub-issues, and any other issue authorized in the same run). The gate
+One issue is one decision: the roots are the worktrees of the issue and of its slices (each slice has its own
+worktree and branch, cut from the branch of the issue, so a slice root is named with `--stacked <its
+branch>=<the branch of its issue>`), and, for a family that already exists, of its sub-issues. The gate
 finds the visible changes of each root and compares them with the record of the watched run kept for the
-whole batch (`.frontlights/issues/<lead>/browser/result.json`), never one record per branch.
+issue (`.frontlights/issues/<n>/browser/result.json`), never one record per slice or branch.
 
 Inputs: `--root` (repeatable) the worktrees, `--base` the approved base of the batch (normally the default
 branch), the same for every root, `--config` the project's `.frontlights/config.json` (its
@@ -303,7 +304,7 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
     labels = [place['label'] for place in places]
     if len(set(labels)) != len(labels):
         raise ValueError('two --root entries are on the same branch (or the same worktree folder name when detached): a '
-                         'batch lists each issue once')
+                         "batch lists each root (an issue's or a slice's worktree) once")
     stacked = dict(stacked or {})
     unknown = sorted(set(stacked) - set(labels))
     if unknown:

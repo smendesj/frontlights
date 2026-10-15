@@ -973,8 +973,9 @@ def main():
     p.add_argument('--root', default='.')
     p.add_argument('--review', required=True, help='saved evidence output taken when the independent review was bound')
     p = sub.add_parser('browser-gate')
-    p.add_argument('--root', action='append', required=True, help='worktree of an issue of the batch; repeatable')
-    p.add_argument('--base', required=True, help='approved base of the batch (the branch its PRs target), the same for every --root')
+    p.add_argument('--root', action='append', required=True,
+                   help='worktree of the issue, or of one of its slices (named in --stacked with the branch of its issue); repeatable')
+    p.add_argument('--base', required=True, help='approved base of the issue (the branch its PR targets), the same for every --root')
     p.add_argument('--config', help='.frontlights/config.json (browserTest and browserTest.frontPaths)')
     p.add_argument('--toca', choices=['sim', 'nao', 'não', 'ausente'], help="the plan's `Toca o frontend:`")
     p.add_argument('--record', help='the batch result.json, which may not exist yet')

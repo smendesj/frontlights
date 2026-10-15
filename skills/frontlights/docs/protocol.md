@@ -19,8 +19,9 @@ A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para t
 pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
 slices de cada issue em ordem, numa branch e um PR por issue, com uma worktree por slice (branch
 `<prefixo>issue-<n>-s<k>` cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha,
-com o próprio `checkpoint-<id>.json`) e slices em paralelo só entre issues (o
-trabalho em volta da slice aberta sai em paralelo, regra do paralelismo abaixo);
+com o próprio `checkpoint-<id>.json`) e slices independentes em paralelo dentro da issue e entre issues (a
+slice que depende de outra ainda aberta é empilhada na branch dela; o
+trabalho em volta de cada slice aberta sai em paralelo, regra do paralelismo abaixo);
 empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
 publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
 de cada uma, o repositório, a concorrência, o empilhamento quando há família, a base das
@@ -157,7 +158,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 
 O teste de navegador roda quando algo que a sessão entrega muda o que a pessoa vê (o plano tem a seção
 `## Navegador e testes ligados` com `Toca o frontend: sim`, ou o `browser-gate` acha a mudança visível no
-diff), uma vez por lote de trabalho e antes da revisão independente de qualquer fatia que muda a tela, só
+diff), uma vez por issue e antes da revisão independente de qualquer fatia que muda a tela, só
 com o que o plano liga e nesta ordem: `checks regression`, `serve start`,
 `checks integration`, navegador e permissões entre contas, `checks smoke`, `serve stop`.
 O `frontlights.py browser-gate --config <config> --base <base> --root <worktree> ... [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente>
@@ -294,9 +295,10 @@ após conclusões ou descobertas.
 parte e tantos quantas forem as partes, lançados numa única mensagem e repostos à medida que terminam: as
 leituras das etapas 0 a 2 de uma vez; a leitura do código, as convenções, o rastreio campo a campo e a
 pesquisa, um subagente por área ou camada; na etapa 6, o maior número seguro de issues independentes, cada
-uma na própria worktree com o próprio agente, e, dentro de uma issue, o trabalho em volta da slice aberta
+uma na própria worktree com o próprio agente, e, dentro de uma issue, as slices independentes ao mesmo tempo, cada uma na própria worktree,
+mais o trabalho em volta de cada slice aberta
 (leitura para a próxima slice, suíte ampla, verificação de tipos, condutor do teste assistido e revisor
-independente), enquanto as slices continuam em ordem, uma por vez, na branch única da issue. Só espera o
+independente), respeitada a ordem de dependência (a slice dependente é empilhada na branch da anterior). Só espera o
 que depende de verdade: uma aprovação ainda não dada, um `Depende de`, um arquivo que duas partes
 editariam ou um recurso compartilhado (porta, banco, pasta de reservas, arquivo gerado; módulos de teste
 que dividem um deles rodam um por vez). Sem subagentes no ambiente, a sessão avisa numa linha e registra o

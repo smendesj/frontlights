@@ -554,9 +554,8 @@ relatório diz que foi assistido, não aprovado). Ele nunca escolhe por você ne
 resposta. O registro traz `rodadas` e `aprovacao`. Se um caso da DEPOIS falhar, a pergunta de falha
 vem antes e substitui esta.
 
-**Um teste por lote, antes da revisão.** O teste assistido é um só para tudo o que a sessão entrega
-junto (a issue e as sub-issues, e qualquer outra issue autorizada na mesma execução), nunca um por
-branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes,
+**Um teste por issue, antes da revisão.** O teste assistido é um por issue (a issue e as sub-issues
+que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes,
 antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
 pergunta, e um `pending` antes disso é esperado e não pergunta nada. O DEPOIS roda no estado entregue das
 fatias que já fecharam o ciclo: a própria branch, quando o lote tem uma só, ou uma worktree de integração
@@ -654,8 +653,8 @@ oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no p
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
 Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, cada CA na própria
-worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com slices em
-paralelo só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
+worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
+em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
 e começa. Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
@@ -674,9 +673,10 @@ próprio Claude Code não são do Frontlights e continuam valendo.
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
 não depende de outra coisa, com tantos subagentes quantas forem as partes: as leituras do início da
 sessão, a leitura do código e o rastreio por camada na entrevista e no plano, as issues independentes na
-implementação (cada uma na própria worktree) e, dentro de uma issue, o trabalho em volta da slice aberta
+implementação (cada uma na própria worktree) e, dentro de uma issue, as CAs independentes ao mesmo tempo, cada uma na própria worktree,
+mais o trabalho em volta de cada CA aberta
 (leitura para a próxima, suíte ampla, verificação de tipos, teste assistido e revisão independente),
-enquanto as slices continuam em ordem, uma por vez, na branch da issue. Só espera o que depende de verdade:
+respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
 só; o relato de um subagente é conferido antes de virar evidência.

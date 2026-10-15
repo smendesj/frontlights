@@ -314,7 +314,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
-  relatório. O teste é um por lote, antes da revisão, e o `browser-gate` confere no diff (não no texto do
+  relatório. O teste é um por issue (nunca um por slice, branch ou worktree), antes da revisão, e o `browser-gate` confere no diff (não no texto do
   plano) se algo visível mudou e se a decisão registrada ainda vale; ele é uma regra da skill conferida por
   um script, não uma barreira: um modelo que não o chame não é impedido por ele. A dispensa do teste (`dispensado`) é
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a

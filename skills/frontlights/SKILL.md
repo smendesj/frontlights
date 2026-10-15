@@ -103,8 +103,9 @@ refilled as each one lands: the read-only helpers of stages 0 to 2 (`update-chec
 `status` reads, `candidates`, `inspect`, the sub-issue reads) in one go, a read whose inputs
 a later answer changed run again; code reading, conventions, the field-by-field trace and
 research, one subagent per area or layer; in stage 6 the highest safe number of independent
-issues, each in its own worktree with its own agent, and, inside an issue, the legwork around
-the open slice: the next slice's reading, the broader suite, the type checks, the watched
+issues, each in its own worktree with its own agent, and, inside an issue, its independent slices,
+each in its own worktree with its own implementer, plus the legwork around the open slice of each: the
+next slice's reading, the broader suite, the type checks, the watched
 run's driver and the independent reviewer (`references/development.md`, "Dispatch and
 ownership"). Waiting is for a real dependency only: an approval not yet given, a `Depende de`,
 a file two pieces would both edit, or a shared resource (a port, a database, a reservation
@@ -346,8 +347,8 @@ top-level issue, never as a note in the PR body (the gate of that section).
 Read `references/development.md`, and `references/browser-testing.md` whenever a slice could
 change what the user sees: the plan says `Toca o frontend: sim`, or the repository has screen code
 the slice might reach, in which case `frontlights.py browser-gate` (its syntax is in that reference)
-answers from the diff even when the plan says `não`. The watched browser run is one per batch,
-never one per branch or worktree: it comes out when the last slice that changes the screen closes
+answers from the diff even when the plan says `não`. The watched browser run is one per issue, never one per slice,
+branch or worktree: it comes out when the last slice of the issue that changes the screen closes
 its TDD loop, before the independent review of any of them, covers all of them together, starts
 with the "pronto para assistir?" question and ends by asking the user to watch again, approve, ask
 for a change or go on. The run creates and later removes the test users, accounts and data its flow needs, so a
@@ -360,9 +361,11 @@ opens without a question: there is no concurrency question, no stacking question
 implementation authorization question. Each issue gets one issue branch and one PR, and each of
 its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
 branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
-slices are worked in order, in dependency order, one at a time; slice parallelism only between
-issues, the highest safe number of independent issues whose files do not overlap, while the legwork
-around the open slice fans out (the Fan out rule above). Stacking and the
+slices are worked in dependency order: independent slices (no `Depende de` between them and no file
+in common) run at once, each in its own worktree, and a slice that depends on one still open is
+stacked on the branch of the slice it depends on; the concurrency is the highest safe number of
+independent issues and slices whose files do not overlap, while the legwork
+around each open slice fans out (the Fan out rule above). Stacking and the
 family integration apply only to a family that already exists (an issue with sub-issues published
 before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap

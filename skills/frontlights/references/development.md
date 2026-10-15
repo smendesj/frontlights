@@ -39,7 +39,11 @@ of its acceptance criteria, stage 5) gets its own worktree and branch, `<branch_
 cut from the branch of the issue at its current tip (`git worktree add -b <branch_prefix>issue-<n>-s<k>
 <path> <issue-branch>`) and named in the charter's `worktrees` with its `slice`, so that `authorize`
 accepts on that worktree only an operation that names the same slice; the slices are worked
-in dependency order, one at a time. Each
+in dependency order: independent slices run at once (no `Depende de` between them and no file in
+common, each in its own worktree with its own implementer), and a slice that depends on a slice
+still open is cut from that slice's branch instead (stacked: `"base": "<slice-branch>"` in its
+worktree entry, named to `browser-gate` with `--stacked`, and merged into the branch of the issue
+after the slice it depends on). Each
 slice is one TDD loop at its own seams (the `Seams:` under its box), one checkpoint
 (`checkpoint --slice <id>` of `frontlights.py`, saved as `checkpoint-<id>.json` in the issue's records,
 one per slice worktree, which `resume` echoes so the next window starts at that slice, in that
@@ -50,10 +54,9 @@ and then comes the tick of its box: capture the body, tick that line only, run
 `closeout.py tick-check` before and after the write, and leave a short comment on the issue with
 the commit and the commands. The session may end in the middle of an issue: the handoff names
 the slice in progress with its worktree, and the slices already ticked, and a fresh session resumes at the first
-open box, in order, in that slice's worktree. Slices run in parallel between issues only; inside an issue, the fan-out rule of
-`SKILL.md` keeps the agents busy around the open slice (Dispatch and ownership, below). The watched
-run stays one per batch,
-when the last slice that changes the screen closes its loop; the independent review stays one
+open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
+`SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
+run stays one per issue, when the last slice that changes the screen closes its loop; the independent review stays one
 per issue, of the whole diff, before the PR, and the full suite runs once there. Stacking, the
 stacked wave and the family integration below apply only to a family that already exists (an
 issue with sub-issues published before this rule), never to the slices of one issue.
@@ -118,17 +121,18 @@ ports, databases and test data as well as Git. Recompute readiness and refill fr
 slots after each completion. A worker's report is a claim: read the diff and rerun the
 commands it names before it counts as evidence.
 
-**Fan out inside an issue.** The slices of one issue go one at a time, on its one branch, and
-the agents around the open slice do not wait for it. While one worker runs the TDD loop of
-the open slice in the issue's worktree, dispatch in the same message read-only workers that
+**Fan out inside an issue.** The independent slices of one issue go at once, one implementer per open
+slice, each in the slice's own worktree (Slices in order, above), and the agents around them do
+not wait. While the implementers run the TDD loops of the open slices, dispatch in the same message read-only workers that
 prepare the next slice (the code at its seams, the conventions, a draft of its first red
-test, reported as text the implementer rewrites in its own loop) and, when the loop closes,
+test, reported as text the implementer rewrites in its own loop) and, when a loop closes,
 run at once the broader suite, the type checks and the other measured commands that share no
 resource (a test module that shares a port, a database or a reservation folder with another
 runs one at a time, as the project's own rules say). The independent reviewer and the driver
 of the watched run are workers of their own, dispatched together with whatever else is ready;
-the reviewer is never the implementer. Only one worker edits the issue's worktree at a time,
-and only it commits there: the readers edit nothing, and a worker that needs a file outside
+the reviewer is never the implementer. Only one worker edits a slice's worktree at a time,
+and only it commits there; the merge of a closed slice into the branch of the issue is this
+session's: the readers edit nothing, and a worker that needs a file outside
 its owned paths stops and reports.
 
 An issue is `verified` for dependency readiness only when its acceptance evidence

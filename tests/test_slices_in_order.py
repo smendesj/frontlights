@@ -109,8 +109,8 @@ class SlicesInOrderTextTests(unittest.TestCase):
     def test_stage_6_works_the_slices_in_order_on_one_branch_and_one_pr_per_issue(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         body = flat(section(skill, '6. Bounded development') or '')
-        for phrase in ('one issue branch and one PR', 'its own worktree and branch', 'its slices are worked in order',
-                       'parallelism only between issues', 'a family that already exists', 'the order of the slices'):
+        for phrase in ('one issue branch and one PR', 'its own worktree and branch', 'its slices are worked in dependency order',
+                       'a family that already exists', 'the order of the slices'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertNotIn('Choose the highest safe parallelism; when a sub-issue', body)
@@ -121,13 +121,32 @@ class SlicesInOrderTextTests(unittest.TestCase):
         body = flat(section(text, 'Slices in order') or '')
         self.assertNotEqual(body, '')
         for phrase in ('one issue branch', 'delivered in one PR', 'its own worktree and branch',
-                       'in dependency order, one at a time',
+                       'in dependency order: independent slices run at once',
                        'one TDD loop', '`checkpoint --slice <id>`', 'first open box', 'tick of its box',
-                       '`closeout.py tick-check` before and after the write', 'one per batch',
+                       '`closeout.py tick-check` before and after the write', 'one per issue, when the last slice',
                        'one per issue, of the whole diff, before the PR', 'a family that already exists'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(text.index('## Slices in order'), text.index('## Dispatch and ownership'))
+
+    def test_independent_slices_run_at_once_and_a_dependent_one_is_stacked(self):
+        """Issue 31, S3: CAs sem `Depende de` entre si e sem arquivo em comum rodam juntas, cada uma na própria
+        worktree; a CA que depende de outra ainda aberta é empilhada na branch dela (`base` no charter, `--stacked`
+        no browser-gate); o cleanup oferece a branch de CA já na branch da issue; o teste assistido é um por issue."""
+        skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
+        for phrase in ('stacked on the branch of the slice it depends on', 'one per issue, never one per slice'):
+            with self.subTest(where='SKILL.md', phrase=phrase):
+                self.assertIn(phrase, skill)
+        body = flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Slices in order') or '')
+        for phrase in ('no `Depende de` between them and no file in common', '`"base": "<slice-branch>"`', '`--stacked`',
+                       'merged into the branch of the issue after the slice it depends on'):
+            with self.subTest(where='development.md', phrase=phrase):
+                self.assertIn(phrase, body)
+        self.assertIn('slice_merged_into_issue_branch', flat(read('skills', 'frontlights', 'references', 'closeout.md')))
+        security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
+        self.assertIn('O teste é um por issue', security)
+        self.assertIn('uma vez por issue e antes da revisão independente', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
+        self.assertIn('**Um teste por issue, antes da revisão.**', flat(read('README.md')))
 
     def test_each_slice_has_its_own_worktree_cut_from_the_issue_branch(self):
         """Issue 31, S2: a worktree e a branch de cada CA, o `slice` no charter, um checkpoint por worktree e o
@@ -165,8 +184,8 @@ class SlicesInOrderTextTests(unittest.TestCase):
     def test_the_browser_reference_says_what_a_slice_and_a_root_are(self):
         text = flat(read('skills', 'frontlights', 'references', 'browser-testing.md'))
         self.assertIn('a slice is a box', text)
-        self.assertIn("each `--root` is an issue's worktree", text)
-        self.assertNotIn("each `--root` is a slice's worktree", text)
+        self.assertIn("each `--root` is the worktree of an issue or of one of its slices", text)
+        self.assertNotIn("each `--root` is an issue's worktree", text)
 
     def test_the_protocol_the_readme_and_the_runbook_follow(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))

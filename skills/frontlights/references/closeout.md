@@ -140,7 +140,12 @@ belongs to the member branch that owns the file). A merge counts as a commit of 
 conflict resolved by hand, a file added to it): such a branch stays, as `integration_has_unique_commits`. `candidates` lists what can go, each with its issue, worktree
 path, branch, tip, pull requests, whether the remote branch goes too, its `cautions` (`remote_branch_gone`,
 `remote_branch_moved`, `origin_is_not_the_repository`, `frontlights_records`, `ignored_files`,
-`local_only_integration`, `branch_differs_from_authorization`) and the `commands` in the order to run them.
+`local_only_integration`, `slice_merged_into_issue_branch`, `branch_differs_from_authorization`) and the `commands` in the order to run them.
+A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
+pull request: it is offered, with the caution `slice_merged_into_issue_branch` and no remote command, once that
+branch contains its tip, it was never pushed and no pull request was opened from it; otherwise it stays as
+`slice_not_in_issue_branch`, `slice_pushed`, `slice_has_pull_request` or, when the authorization names no worktree
+of the issue itself, `slice_issue_branch_unknown`.
 `ignored_files` comes with `ignoredCount` and `ignored`, the first names of what Git ignores in that worktree: those
 files go away with it. `excluded` lists what stays and why, in `reasons`: `main_worktree`, `current_directory`,
 `detached_head`, `locked_worktree`, `checked_out_elsewhere`, `not_a_worktree`, `not_found`, `path_missing`,

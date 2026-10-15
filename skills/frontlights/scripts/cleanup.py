@@ -23,6 +23,10 @@ Operations (each prints one JSON object on stdout):
           request): it can go when its branch has no pull request and was never pushed, and every commit of its own
           is already part of a pull request that reached the base; a merge is one of its own when it carries content
           (a conflict resolved by hand, a file added to it).
+          A slice's worktree (an authorization entry with `slice`, issue 31) is delivered to the branch of its own
+          issue, never by a pull request: it can go when that branch (the entry of the same issue without `slice`)
+          contains its tip, it was never pushed and no pull request was opened from it; its remote branch is never
+          touched.
   verify  reread --worktree and --branch values and say whether each is gone (worktree unregistered and its
           folder absent, local branch absent, remote branch absent).
 
@@ -179,7 +183,9 @@ def authorized_worktrees(root, issues):
             if (isinstance(entry, dict) and closeout.valid_number(entry.get('issue')) and entry['issue'] in issues
                     and isinstance(entry.get('path'), str) and entry['path'].strip()):
                 branch = entry.get('branch')
-                found.append({'issue': entry['issue'], 'path': entry['path'], 'branch': branch if isinstance(branch, str) else None})
+                box = entry.get('slice')   # a slice's worktree (issue 31): judged against the branch of its issue
+                found.append({'issue': entry['issue'], 'path': entry['path'], 'branch': branch if isinstance(branch, str) else None,
+                              'slice': box if isinstance(box, str) and box.strip() else None})
     return found, protected
 
 
@@ -294,6 +300,29 @@ def integration_reasons(ctx, github, tip):
     return reasons
 
 
+def slice_reasons(ctx, github, tip, issue_branch):
+    """Why a slice's worktree stays (issue 31, S3): its branch is delivered to the branch of its own issue, never by a
+    pull request of its own, so it goes once that branch contains its tip, it was never pushed and no pull request
+    was opened from it."""
+    reasons = []
+    if github['heads']:
+        reasons.append('slice_has_pull_request')
+    if github['remote'] is not None:
+        reasons.append('slice_pushed')
+    if github['dependents']:
+        reasons.append('open_dependents')
+    if not isinstance(issue_branch, str) or not closeout.valid_branch(issue_branch):
+        reasons.append('slice_issue_branch_unknown')
+    elif not reasons:
+        issue_tip = local_tip(ctx['root'], issue_branch)
+        inside = None if issue_tip is None else is_ancestor(ctx['root'], tip, issue_tip)
+        if inside is None:
+            reasons.append('ancestry_unverifiable')
+        elif not inside:
+            reasons.append('slice_not_in_issue_branch')
+    return reasons
+
+
 def worktree_state(path):
     """(uncommitted, ignored): the lines of `git status` that are changes or new files, and the ignored names
     (`.frontlights` aside, which has its own caution), or None for the first when git could not tell."""
@@ -312,6 +341,7 @@ def assess(ctx, item, registered, github):
     branch = registered['branch'] if registered is not None else item['branch']
     tip = registered['head'] if registered is not None else (local_tip(ctx['root'], branch) if branch else None)
     integration = bool(item.get('integration'))
+    sliced = bool(item.get('slice'))
     if registered is not None and norm(registered['path']) == ctx['main']:
         return ['main_worktree'], None
     if registered is None and Path(item['path']).exists():
@@ -354,13 +384,17 @@ def assess(ctx, item, registered, github):
     if github is None or github['cut']:
         reasons.append('pull_requests_unreadable')
     else:
-        reasons += integration_reasons(ctx, github, tip) if integration else pull_reasons(ctx, github, tip)
+        reasons += (integration_reasons(ctx, github, tip) if integration
+                    else slice_reasons(ctx, github, tip, item.get('issue_branch')) if sliced
+                    else pull_reasons(ctx, github, tip))
     if reasons:
         return reasons, None
     remote = github['remote']
-    remove_remote = not integration and ctx['origin_ok'] and remote is not None and remote == tip
+    remove_remote = not integration and not sliced and ctx['origin_ok'] and remote is not None and remote == tip
     if integration:
         cautions.append('local_only_integration')
+    elif sliced:
+        cautions.append('slice_merged_into_issue_branch')
     elif remote is None:
         cautions.append('remote_branch_gone')
     elif not ctx['origin_ok']:
@@ -395,6 +429,10 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     main_entry = listing[0]
     records_root = root if (Path(root) / '.frontlights').is_dir() else main_entry['path']
     authorized, protected = authorized_worktrees(records_root, set(numbers))
+    issue_branches = {e['issue']: e['branch'] for e in authorized if not e.get('slice') and e['branch']}
+    for entry in authorized:
+        if entry.get('slice'):
+            entry['issue_branch'] = issue_branches.get(entry['issue'])
     items, seen = [], {}
     named = [{'issue': None, 'path': str(p), 'branch': None} for p in worktrees]
     named += [{'issue': None, 'path': str(p), 'branch': None, 'integration': True} for p in integrations]
