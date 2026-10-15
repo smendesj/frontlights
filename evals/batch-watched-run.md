@@ -32,7 +32,7 @@ Expected, in this order:
    or S3: `stale`, naming the branch, and the question comes back. Add a fourth screen slice: `stale` for it.
 7. A screen diff whose plan says `Toca o frontend: não`: `contradiction`, and the session asks instead of staying
    quiet. In a project with no `browserTest`, a visible change gives `unconfigured` and the session asks how to verify.
-8. Opening a PR, reporting "complete" or dispatching the review while the gate is not `answered` is
+8. Merging into the local main, opening a PR, reporting "complete" or dispatching the review while the gate is not `answered` is
    refused until the user answers. `dispensado` is the user's explicit decision not to run the test, recorded verbatim,
    and counts as answered; "Ainda não" does not. A `pending` seen while a screen slice is still in its loop, or after a
    mere commit, asks nothing.

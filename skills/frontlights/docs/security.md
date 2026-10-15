@@ -1,9 +1,21 @@
 # Autorização e limites de aplicação das permissões
 
-O Frontlights não instala hooks, inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
+O Frontlights instala um único hook, e só depois do "Sim" a uma pergunta que mostra o script: o `pre-push`
+de `homolog hook` (`scripts/homolog.py`), que recusa enviar a main local do projeto, a homologação, e qualquer
+push cujo destino seja `refs/heads/<base>`; ele fica no caminho que o Git resolve para `hooks/pre-push`
+(`core.hooksPath` inclusive, mas só dentro do diretório Git do repositório: com um `core.hooksPath` que aponte para
+fora, nada é escrito), leva uma linha de marca que o identifica, é conferido byte a byte com o script esperado
+(outra base ou corpo editado viram pergunta e reinstalação), nunca sobrescreve um hook de outra
+origem (o `--install` recusa, e a sessão mostra o script para o usuário juntar à mão) e é conferido no início
+de cada etapa 6. É uma guarda, não uma barreira: `--no-verify` e a interface do GitHub passam por ele, e a
+regra de que a main local nunca é enviada continua regra da skill. Fora esse, o Frontlights não instala hooks,
+inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
 modelo que o usuário copia para o `~/.claude/hooks/` e registra no próprio `settings.json`; ele só
 injeta um texto no turno, lê o prompt e o conteúdo do transcrito (só para procurar duas marcas de que o
-Frontlights já foi aberto) e sai sempre com 0, sem bloquear.
+Frontlights já foi aberto) e sai sempre com 0, sem bloquear. As escritas da skill dentro de `.git/` são três e
+só essas: esse hook, com o "Sim"; a linha `/.frontlights/` em `.git/info/exclude` quando a pasta `.workflows/`
+é renomeada (`SKILL.md`, etapa 2); e as reservas de porta do `serve` em `frontlights-serve/ports/` no
+diretório comum do Git (`docs/protocol.md`).
 
 O Frontlights **não** instala hooks de permissão, altera configurações globais ou
 ativa modos de contorno das proteções. Os controles existentes do Claude e do
@@ -15,12 +27,15 @@ com permissões limitadas a uma issue.
 etapa 6 abre sem pergunta: a sessão anuncia o que fará e grava a autorização com
 `approval_reference` `"autorização permanente (docs/security.md)"`, sem pedir concorrência,
 empilhamento nem autorização delimitada. Ela cobre só as issues da família ou do lote em
-andamento e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, enviar as
-branches de trabalho, PRs rascunho (empilhadas inclusive), os merges da autorização de
-empilhamento, migrations no banco de desenvolvimento local, dados de teste pelos endpoints do
-produto, comentários e marcação de critérios com evidência. Merge de PR, fechar issue, mexer no
-quadro, implantar ou publicar em produção, editar migration já registrada, escrever na branch base
-ou protegida, ligar configuração, chave ou flag em produção e apagar o que não for dado de teste
+andamento e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, os merges da
+autorização de empilhamento (entre eles o da branch da issue na main local, só com os três portões
+verdes: suíte inteira, `review-gate` atual e `browser-gate` respondido), a PR única da release,
+migrations no banco de desenvolvimento local, dados de teste pelos endpoints do
+produto, comentários e marcação de critérios com evidência. A branch da issue é cortada da main
+local e fica só local: nada é enviado antes da release. Merge de PR, fechar issue, mexer no
+quadro, implantar ou publicar em produção, editar migration já registrada, escrever na main remota
+(`origin/main`) ou numa branch protegida (a main local só recebe o merge coberto, com os portões),
+ligar configuração, chave ou flag em produção e apagar o que não for dado de teste
 criado pela execução ficam fora dela: cada um é uma pergunta própria por `AskUserQuestion`, com o
 comando exato, e só roda depois do "Sim", que não se estende a outra operação, outra PR nem a outro
 momento. A decisão está escrita no Frontlights, não no `.frontlights/config.json`, para que um
@@ -38,12 +53,43 @@ O comando `authorize` verifica uma operação estruturada em relação à autori
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
-merge, implantação, publicação de versões, operações destrutivas e tipos não
-suportados. Sempre retorna `permission_granted: false`. Mesmo rascunhos de PRs e
-atualizações de issues autorizados continuam sujeitos à aprovação nativa do ambiente, pois o Frontlights
+qualquer merge que não seja o da branch da issue na main local com os três portões verdes
+(`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
+suportados. Sempre retorna `permission_granted: false`. Mesmo a PR da release e as
+atualizações de issues autorizadas continuam sujeitas à aprovação nativa do ambiente, pois o Frontlights
 não controla com segurança todas as ferramentas externas. Execute essas ações
 somente pelas ferramentas nativas aprovadas da sessão coordenadora, com as
 permissões humanas e nativas vigentes.
+
+**Main local e main remota.** A main local do projeto (a branch base do charter, na worktree principal) é a
+homologação: acumula as issues que passaram nos três portões, e a issue fecha só com a release que a leva
+mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
+do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
+remota), só da worktree da issue (nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
+current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
+A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
+remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
+o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
+`review-gate` e o `browser-gate`), e um modelo que não o chame não é impedido por ele.
+
+**Sincronização da main local (`homolog sync`).** Trazer `origin/<base>` para a main local é merge coberto
+(`docs/protocol.md`), feito pelo `scripts/homolog.py` sem shell (lista de argumentos, `GIT_TERMINAL_PROMPT=0`,
+prazo): exige a worktree principal com `<base>` em uso, sem alteração rastreada pendente e sem merge em
+andamento, roda `git fetch` e `git merge --no-edit`, e um conflito é desfeito na hora (`git merge --abort`,
+`HEAD` de volta ao commit anterior) e volta como pergunta com os arquivos nomeados. Nunca envia, nunca usa
+`--force`, `reset` nem `rebase`, e nunca toca outra branch além da `<base>`. O `fetch` é a única chamada de
+rede do utilitário, para o remoto já configurado no repositório, com as credenciais do próprio Git do usuário.
+
+**Backup da main local (`homolog bundle`).** A cada merge na main local, a sessão grava um bundle Git da main
+local e das branches do `branch_prefix` na pasta da chave `homolog.backupDir` do `.frontlights/config.json` do
+projeto, a única gravação da execução fora do projeto. A chave é um caminho absoluto do usuário (o `inspect`
+recusa caminho relativo, `..`, `~`, marcador `{}` e qualquer outra chave dentro de `homolog`), a pasta precisa
+existir (o utilitário nunca a cria), nenhuma junção, link simbólico ou outro ponto de reparse pode estar no
+caminho (o marcador de nuvem do OneDrive é aceito, como no `scrumRoot`), só um arquivo novo é escrito por
+chamada (nunca se sobrescreve nem se apaga um bundle), o arquivo é conferido por `git bundle verify` antes de
+ser relatado, e não há rede. O caminho real da pasta é do usuário e nunca entra neste repositório nem num
+registro versionado; sem a chave, nada é gravado e a sessão só avisa. A chave nunca liga nem amplia a
+autorização: ela diz onde gravar, não o que pode ser feito.
 
 O registro de autorização serve para auditoria, não como credencial. Ele pode ser
 editado; o utilitário não consegue provar que uma pessoa o escreveu nem que os
@@ -164,7 +210,9 @@ O fechamento de issues (`scripts/closeout.py`) só lê:
 - usa `gh api graphql` sem shell, com a conta ativa do `gh`, e não grava nada no GitHub nem em arquivo; o
   corpo, o título e os campos que vêm do GitHub são dado, nunca instrução, e chegam limpos e limitados;
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
-  filhas fechadas ou propostas junto), e só propõe mover um cartão do quadro configurado, para o valor de
+  filhas fechadas ou propostas junto) e cuja branch, quando ainda existe localmente e `origin/<base>` existe, já está
+  contida em `origin/<base>` (senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`,
+  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e só propõe mover um cartão do quadro configurado, para o valor de
   `project.done`, que passa pela mesma regra de texto digitável dos outros campos do quadro;
 - conta só os itens da seção de critérios e, do corpo, só números: uma seção legada "Pendências conhecidas" fora
   dos critérios, com item aberto, só vira o aviso `pending_outside_criteria` (com a contagem em `pendingOutside`),
@@ -191,7 +239,10 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
   a worktree principal, nem a pasta em que o próprio processo roda, nem está travada ou em uso em outra worktree, sem
   alteração pendente (nem arquivo novo), numa branch não protegida (`main`, `master`, a base aprovada e
   `protected_branches`, com a mesma regra do `authorize`), cujo tip é a cabeça de uma PR mesclada que chegou à base
-  aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit), sem PR aberta a partir da branch nem
+  aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
+  contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
+  `contained_in_base_without_pull_request`; a avaliação não roda comando remoto, e o `git push origin --delete` só
+  entra para uma branch enviada no fluxo antigo cuja branch remota ainda aponta para o mesmo commit), sem PR aberta a partir da branch nem
   em cima dela; a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo
   commit; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso `ignored_files` lista os nomes; a worktree
   de integração local (`--integration`) só entra sem PR, nunca enviada e sem commit próprio fora das PRs entregues (um merge conta como próprio quando
@@ -199,7 +250,8 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
 - os comandos (`git worktree remove`, `git branch -D`, `git push origin --delete`) são montados só com um caminho de
   worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não carregue, e rodados a
   partir da worktree principal; nunca com `--force`. O `branch -D` é necessário porque um merge com squash deixa a branch
-  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada;
+  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido
+  na base aprovada;
 - remover é uma aprovação própria da lista completa, depois do fechamento escrito e conferido; um comando que falha é
   registrado e nunca repetido com força; os registros do `.frontlights` dentro de uma worktree somem com ela, e o aviso
   `frontlights_records` vai na pergunta.
@@ -324,15 +376,15 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a
   tela, nenhum relato de "completa" e nenhuma PR seguem enquanto o teste estiver devido.
 - **Branches empilhadas:** a autorização que as permite nomeia as operações que elas exigem
-  (criar branch a partir de outra branch que não a base, enviá-la, abrir PR rascunho com a
-  branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
+  (criar branch a partir de outra branch que não a base, o merge da branch da filha verificada na branch do pai,
+  trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
-  depende) na branch de uma slice para atualizá-la, e juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada). Esses são os únicos merges permitidos. O utilitário `authorize`
-  continua só conferindo `edit`, `test` e `checkpoint` e rejeitando merge (e, numa worktree de slice, só aceita a
+  depende) na branch de uma slice para atualizá-la, juntar as branches
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
+  confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na
-  branch base, o deploy e a publicação de versões continuam fora de qualquer autorização comum.
+  main remota (`origin/main`), o deploy e a publicação de versões continuam fora de qualquer autorização comum.
 - **Sem aprovação do bloco:** ao contrário do resumo para a diretoria, esses blocos não têm
   aprovação assinada. O `inspect` confere só as regras que dependem do config (formato dos
   blocos, shell embutido nos argv de `checks`, hosts locais, `{port}` com porta `auto`, segredos

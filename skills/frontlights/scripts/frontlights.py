@@ -362,6 +362,10 @@ def board_resolution(plan, project):
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
 SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
+# Issue 32, S1: the branch of an issue enters the LOCAL main only with these three gates green. The values
+# are the words the tools print: the full suite, `review-gate` (`current`) and `browser-gate` (`answered`,
+# or `not_needed` when nothing on the screen changed). The remote main (`origin/main`) is never a target.
+LOCAL_MAIN_GATES = {'full_suite': ('green',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
 
 
 def slices_of(issue):
@@ -574,7 +578,7 @@ def authorize(charter, operation):
     require(number(operation.get('issue')) and operation['issue'] in charter.get('issue_ids', []),
             'unapproved issue')
     kind = operation.get('kind')
-    require(kind in {'edit', 'test', 'checkpoint', 'draft_pr', 'issue_update'} and
+    require(kind in {'edit', 'test', 'checkpoint', 'draft_pr', 'issue_update', 'merge_into_local_main'} and
             kind in charter.get('operations', []), 'operation outside bounded authorization')
     if kind in {'draft_pr', 'issue_update'}:
         raise ValueError('external write requires native permission; this plugin cannot securely scope generic tools')
@@ -612,6 +616,28 @@ def authorize(charter, operation):
     if kind == 'test':
         argv = operation.get('argv')
         require(strings(argv) and argv in charter.get('verification_commands', []), 'unapproved verification argv')
+    elif kind == 'merge_into_local_main':
+        # Issue 32, S1: the branch of the issue (never a slice branch) enters the local main, the base branch
+        # of the charter, only with the three gates green; a remote-tracking name is never the target.
+        require(expected is None and given is None,
+                'only the branch of the issue enters the local main, never a slice branch')
+        base = charter.get('base')
+        require(isinstance(base, dict) and nonempty(base.get('branch')),
+                'the charter needs base.branch to name the local main')
+        require(not base['branch'].startswith(('origin/', 'refs/', 'remotes/')) and '..' not in base['branch'],
+                f'base.branch {base["branch"]!r} names a remote-tracking branch; the local main is a local branch')
+        target = operation.get('target')
+        require(nonempty(target), 'target required: the local main, the base branch of the charter')
+        if target != base['branch']:
+            # The base branch of the charter may carry a slash (release/main) and is accepted as it is; any other
+            # name with a slash reads as a remote-tracking branch, which is never the target.
+            require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
+            raise ValueError(f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
+        gates = operation.get('gates')
+        require(isinstance(gates, dict), 'gates required: full_suite, review_gate and browser_gate, each green')
+        for gate, green in LOCAL_MAIN_GATES.items():
+            require(gates.get(gate) in green,
+                    f'gate {gate} is not green: {gates.get(gate)!r} (green is {" or ".join(green)})')
     else:
         require(nonempty(operation.get('path')), 'target path required')
         target = Path(operation['path'])
@@ -825,11 +851,25 @@ def validate_test_blocks(config, path):
     return warnings
 
 
+def validate_homolog_block(config):
+    """Refuse an invalid `homolog` block (`homolog.backupDir`, the backup folder of `homolog bundle`) with the rule
+    of homolog.py. An absent, null or valid block adds nothing to the output, and the folder itself is not checked
+    here: inspect is read-only and `bundle` checks it at run time."""
+    if config.get('homolog') is None:
+        return
+    import homolog
+    try:
+        homolog.backup_dir(config)
+    except homolog.Refusal as refusal:
+        raise ValueError(str(refusal)) from None
+
+
 def inspect(config, root, config_path=None):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
     warnings = validate_test_blocks(config, config_path)
+    validate_homolog_block(config)
     repo = config['repository']
     result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
               'sources': {}, 'verification_commands': {},
@@ -975,7 +1015,7 @@ def main():
     p = sub.add_parser('browser-gate')
     p.add_argument('--root', action='append', required=True,
                    help='worktree of the issue, or of one of its slices (named in --stacked with the branch of its issue); repeatable')
-    p.add_argument('--base', required=True, help='approved base of the issue (the branch its PR targets), the same for every --root')
+    p.add_argument('--base', required=True, help='approved base of the issue (the local main, or the branch it is stacked on), the same for every --root')
     p.add_argument('--config', help='.frontlights/config.json (browserTest and browserTest.frontPaths)')
     p.add_argument('--toca', choices=['sim', 'nao', 'não', 'ausente'], help="the plan's `Toca o frontend:`")
     p.add_argument('--record', help='the batch result.json, which may not exist yet')
@@ -998,6 +1038,9 @@ def main():
     p = sub.add_parser('drift')
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
+    p = sub.add_parser('homolog', help='homolog.py: `hook`, `sync`, `bundle` and `release-plan` of the local main, '
+                                       'the homologation (issue 32)')
+    p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
     args = parser.parse_args()
     code = 0
     try:
@@ -1037,9 +1080,14 @@ def main():
             result = checkpoint(args.root, load(args.issue), args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':
             result = resume(args.root, load(args.checkpoint), load(args.issue), args.handoff)
+        elif args.command == 'homolog':
+            import homolog
+            code = homolog.main(args.homolog_args)  # prints its own JSON
+            result = None
         else:
             result = {'discrepancies': drift(load(args.snapshot), load(args.current))}
-        print(json.dumps(result, indent=2, ensure_ascii=True))
+        if result is not None:
+            print(json.dumps(result, indent=2, ensure_ascii=True))
         return code
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         print(json.dumps({'error': str(exc)}), file=sys.stderr)

@@ -190,7 +190,8 @@ how many there are and which, and what `board.status` allows. Options: "Sim, mos
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come
 back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or
 `done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked and the remedy
-(`gh auth refresh -s project`, or fix `project.done`).
+(`gh auth refresh -s project`, or fix `project.done`); and when an issue is excluded as `awaiting_release` (every box
+ticked, branch not yet in `origin/<base>`), say in one line that it closes with the release that carries it.
 
 The user's own request is the starting point and the authority on scope. Accept
 any kind of work: a product feature, a bug, a refactor, research, a one-off
@@ -366,9 +367,30 @@ missing login is never a reason to skip a case and no brief to a subagent forbid
 permission settings, confirmation requirements and integration access without
 exposing secrets. Do not disable hooks or request bypass mode.
 
+**Hook and sync, at the start of every stage 6.** Before the first branch of the run is cut, in a project
+with a remote, run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog hook --root <main worktree>
+--base <base>` (a check; exit code 0 when the `pre-push` hook of Frontlights is installed). Exit code 2 with
+`installed: false` is a question: show the `script` of the output in a code block and ask with
+`AskUserQuestion` "Instalar o hook `pre-push` que recusa enviar a main local?", options "Sim, instalar" and
+"Não, seguir sem o hook"; on "Sim" run `homolog hook --install --root <main worktree> --base <base>`, rerun
+the check and record the answer verbatim in the handoff; on "Não" go on and record that the hook is absent
+(the rule stays a rule of the skill). Exit code 2 with `foreign: true` means a `pre-push` hook of another
+origin: say so in one line, never overwrite it, show the script for the user to merge by hand, and go on.
+It is the only hook the skill installs and its only write in `.git/hooks/` (`docs/security.md` lists the
+three writes the skill makes inside `.git/`). Then `homolog sync --root <main worktree> --base <base>` brings
+`origin/<base>` into the local main (a covered merge: a fetch and a merge, never a push, a reset or a
+rebase): exit code 0 says in one line whether the local main advanced; exit code 2 names the files in
+conflict, the merge is already undone, and the question goes to the user with `AskUserQuestion` ("Resolver o
+conflito agora na worktree principal" or "Seguir sem sincronizar"); exit code 1 (a dirty main worktree,
+another branch checked out there, no remote branch) is said in one line and the sync stays pending in the
+handoff. A project without a remote (`repository: null`, no `origin`) gets neither the hook nor the sync,
+said in one line (`references/development.md`, "The start of stage 6").
+
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Each issue gets one issue branch and one PR, and each of
+implementation authorization question. Each issue gets one issue branch, cut from the local main (the
+base branch of the charter, checked out in the main worktree; never from `origin/main`), which stays
+local and is never pushed, and each of
 its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
 branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
 slices are worked in dependency order: independent slices (no `Depende de` between them and no file
@@ -386,10 +408,12 @@ this run does: the issue IDs, repository, concurrency, the branch and the order 
 each issue, stacking when a family exists, worktree base and branch prefix, the verification argv
 and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
-only: editing, testing, committing, pushing the work branches, opening draft PRs (stacked ones
-included) and retargeting them, the merges the stacking authorization names, running migrations
+only: editing, testing, committing, the merges the stacking authorization names (the merge of the
+branch of the issue into the local main with its three gates green among them, below), running migrations
 on the local development database, creating and removing test data through the product's own
-endpoints, commenting on the issues and ticking acceptance criteria with evidence. A batch of
+endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of an
+issue goes to GitHub before the release: its branches are never pushed, and the only pull request is
+the release's, offered at the end of each homologated issue. A batch of
 independent issues watched together gets the same local integration, and the authorization names
 that merge. Record the charter in `.frontlights/authorization.json` with the user in
 `approved_by` and `confirmed_by`, `"autorização permanente (docs/security.md)"` in
@@ -400,7 +424,9 @@ are still asked.
 **Denied operations are asked one at a time.** Merging a pull request, closing an issue,
 changing the board (adding an item, moving a card, editing a field), deploying or publishing to
 production, editing a migration already registered (on the base branch or applied anywhere but
-the local development database), writing the base branch or a protected branch, turning on a
+the local development database), writing the remote main (`origin/main`, the base branch on GitHub)
+or a protected branch (the local main is written only by the covered merge below, with its three gates
+green), turning on a
 setting, key or flag in production, and deleting anything but the test data the run created
 are never covered by the standing authorization. When one of them is the next step, ask with
 `AskUserQuestion` naming the exact operation and the exact command, with "Sim" first and "Não"
@@ -424,28 +450,46 @@ dependent's approved base, not just an author's report or an unmerged branch; un
 the stacking authorization that base is the dependency's own branch, so a child
 starts once its parent is verified there, without waiting for the merge. Park
 blocked work, continue independent work, and route worker questions to this
-session's tool. Do not merge pull requests, write the base branch, deploy, release,
+session's tool. Do not merge pull requests, write the remote main, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
-issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or
-batch's verified branches into a local integration branch that is never pushed.
+issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or
+batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the
+issue into the local main once its three gates are green (`references/development.md`, "Into the local
+main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
+`browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as
+`merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
+missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
+user, never a merge. Right after each merge into the local main, `homolog bundle --root <main worktree>
+--config <config>` writes a Git bundle of the local main and of the work branches into the folder of the
+`homolog.backupDir` key of `.frontlights/config.json` (covered; the only write the run makes outside the
+project, and only into that folder); without the key it writes nothing and the session says so in one line,
+naming the key, and asks nothing.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
-After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull
-request"): say so in one line, record it in the handoff, open no PR with a closing keyword and never merge
-without the user's "Sim". Once the PR is ready (review current, suite green, watched run answered), offer the
-merge with its own question; on "Não" the wait goes on. A
-merge into the approved base, confirmed by `closeout.py merge-status`, takes the session to stage 7 for the issues
-of that PR; a PR merged into another branch or closed unmerged closes nothing.
+**The release, offered at the end of each homologated issue** (`references/development.md`, "The release").
+Once the issue is in the local main and its bundle is written, run `homolog sync` again and `homolog release-plan
+--root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet and names
+the branch `<branch_prefix>release-<date>`. Show the list and ask with `AskUserQuestion` "Lançar a release com as
+issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
+from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
+the body from `templates/pr.md` when it exists, one block per issue with its three gates, never a closing
+keyword), then wait for the user's merge: say so in one line, record it in the handoff, and offer the merge with
+its own denied-operation question ("Mesclar a PR #<n> em <base>?") once the pull request is ready; never merge
+without the user's "Sim". A merge into the approved base, confirmed by `closeout.py merge-status`, is followed by
+`git pull --ff-only` on the local main (in the main worktree) and takes the session to stage 7 for the issues of
+the release; a pull request merged into another branch or closed unmerged closes nothing. On "Agora não" the
+issue stays homologated in the local main and the next homologated issue offers the release again, with
+everything accumulated.
 
 At each material boundary reconcile GitHub, preserve evidence and check context.
 `frontlights.py browser-gate` runs when the last slice that changes the screen closes its loop,
 before an independent review of such a slice is dispatched (it waits for the last screen slice to close its
 loop), before an issue is reported as reviewed
-or complete, before a PR is opened or updated, and when a session resumes with `teste_assistido`
+or complete, before the merge into the local main, before a PR is opened or updated, and when a session resumes with `teste_assistido`
 pending. Exit code 2 at those points (`pending`, `stale`, `contradiction` or `unconfigured`) is a
 question to the user, never a silent skip, and an issue that changes the screen is neither
-reviewed, reported complete nor given a PR while it is owed (`browser-testing.md` lists the
+reviewed, reported complete, merged into the local main nor given a PR while it is owed (`browser-testing.md` lists the
 options, including the user's explicit `dispensado`); exit code 2 earlier, while a slice that
 changes the screen is still in its loop, is expected and asks nothing. A watched
 run that is due (the last screen slice closed its loop, or the user said "Ainda não") and that the user has not answered yet is carried
@@ -457,7 +501,8 @@ updated, every open finding has its destination (the gate of the Follow-ups sect
 of `references/issues.md`): fixed, a new acceptance criterion of the source issue, a
 top-level issue, shown as not a defect with its evidence, or dropped by
 the user's explicit answer. "Cited in the PR" is never a destination, and an issue is not reported as reviewed or complete
-while one has none.
+while one has none. The merge into the local main waits for the same gate: an issue with a finding without a
+destination is not homologated.
 Finish with per-issue state, branch/PR, changes, measured commands/results,
 independent review against the exact diff, the findings left unfixed with the
 destination of each, risks and next action. Never present
@@ -466,7 +511,7 @@ fixture tests as live integration, human confirmation or independent review.
 ## 7. Closeout of finished issues (its own approval)
 
 Read `references/closeout.md`. It runs when the stage 1 closeout question is answered yes, when the wait of
-stage 6 finds a pull request merged into the approved base (or a family worked in stage 6 is reported merged),
+stage 6 finds the release's pull request merged into the approved base (and the local main brought up to it with `git pull --ff-only`),
 or when the user asks to close or move finished issues. It proposes closing every open issue and sub-issue
 whose acceptance criteria are all ticked (children before parents) and moving their board cards to Done, adds
 for a closed sub-issue the tick of the parent's item that cites it, shows the table and the exact commands in

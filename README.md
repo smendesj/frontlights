@@ -16,8 +16,9 @@ teste de navegador assistido (aplicado à mão na versão anterior) e a integra�
 exercitados em sessões reais de um projeto de produto; as [evidências de aceitação](docs/acceptance.md) dizem o que está provado, o que
 falta e os limites. A 1.0 sai depois de uma sessão real que cumpra os itens 12 e 13 do
 [roteiro](evals/runbook.md) com esta versão. **Não** são garantidos: a execução sem supervisão (a
-skill não instala hooks, então o teto de contexto e o escopo exato das permissões não são impostos
-por ele), o `authorize` (apenas consultivo) e qualquer sistema fora do Windows.
+skill instala só o hook `pre-push` da homologação, com o seu "Sim", e nenhum hook de permissão, então o teto de
+contexto e o escopo exato das permissões não são impostos por ela), o `authorize` (apenas consultivo) e
+qualquer sistema fora do Windows.
 
 ## Idioma
 
@@ -63,8 +64,9 @@ A skill define a ordem das etapas e lê o arquivo de cada etapa em `skills/front
 só quando chega nela. O `CLAUDE.md` da raiz orienta quem trabalha neste repositório; o Claude não
 o carrega nos projetos que usam a skill.
 
-Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). Nenhuma
-configuração ou rotina automática de interceptação (hook) é instalada.
+Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). O único hook que a skill
+instala é o `pre-push` da homologação (`homolog hook`), depois do seu "Sim" a uma pergunta que mostra o script;
+nenhuma configuração ou rotina automática de interceptação de permissões é instalada.
 
 #### Início por linguagem natural
 
@@ -132,7 +134,11 @@ defina o repositório exato no formato `proprietario/repositorio` e mantenha
 `.frontlights/` ignorado pelo Git desse projeto. Um projeto sem remoto usa
 `"repository": null`: o GitHub aparece como `unconfigured`, o plano usa
 `url: null` e as issues ficam em `.frontlights/issues/<n>/`, com `source: "local"`.
-As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`. Configure o RoadS somente quando o
+As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`, são cortadas da main local do
+projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
+aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
+com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
+trabalho (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
 
 ```json
@@ -284,7 +290,7 @@ aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, 
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
 houver uma aberta, o PR cita a issue sem palavra de fechamento (`Closes`, `Fixes`). Antes
-de relatar uma issue como revisada ou concluída, e antes de abrir ou atualizar um PR,
+de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
 pode ficar como texto, dito como "não é defeito" com a evidência. O `handoff` registra
@@ -576,7 +582,7 @@ O `python scripts/frontlights.py browser-gate --config <config> --base <base> --
 primeiros, 2 para os demais). Os caminhos visíveis vêm de `browserTest.frontPaths` (globs a partir da raiz do repositório: `*` não
 atravessa pasta, então `**/*.html` pega todas as páginas; testes e documentos nunca contam); sem ele, a
 estimativa sai do nome do arquivo e o `inspect` avisa. Cada fatia empilhada entra com `--stacked
-<sua branch>=<a branch que a PR dela mira>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
+<sua branch>=<a branch em que ela se apoia>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
 trabalho dela contar. O `result.json` é um por issue e fica na pasta dela (numa família que já existe, na
 pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
 `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`) e `pergunta`; `dispensado` é a sua
@@ -605,7 +611,8 @@ fechá-las e mover os cartões para Done. A lista vem completa, com as sub-issue
 ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
 aprovação dessa lista ele fecha (`gh issue close --reason completed`) e move, e relê o GitHub para conferir.
 Uma issue sem a seção de critérios, com critério desmarcado ou com filha ainda aberta que não esteja na mesma lista
-nunca entra. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
+nunca entra; uma issue cuja branch ainda não está em `origin/main` (a release que a leva não foi mesclada) fica fora
+como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
 pendências, com uma seção "Pendências conhecidas" fora dos critérios e item aberto nela, entra na lista com o
 aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim é sua, e, se você pedir, mover
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.
@@ -616,17 +623,23 @@ substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
 `python scripts/cleanup.py plan|verify ...`, e só leem.
 
-#### Esperar o merge, fechar, marcar no pai e limpar
+#### Homologar na main local, lançar a release, fechar e limpar
 
-Depois de abrir uma PR, o Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
+Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
+`review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
+backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
+as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
+agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` da main local,
+envia só ela e abre a PR única (uma parte por issue, com os três portões). Depois de abrir a PR da release, o
+Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
-independente. Quando a PR fica pronta (revisão em dia, suíte da família verde, teste assistido respondido e
+independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
 nenhum achado sem destino), ele pergunta "Mesclar a PR #<n> em <base>?", com "Sim, mesclar" e "Não, aguardar o
 merge"; só com o "Sim" roda `gh pr ready` e `gh pr merge --merge` (merge com commit, nunca `--admin`, `--auto` nem
-`--delete-branch`), e com o "Não" a espera continua. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
+`--delete-branch`), e com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
 fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
-filha na branch do pai, PR fechada sem merge ou PR não encontrada não fecham nada. Se o ambiente não oferece gatilho, ou
+issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
 a sessão acaba, a pergunta de fechamento do início da próxima sessão encontra o trabalho mesclado.
 
 Com o merge confirmado, em aprovações separadas, nesta ordem:
@@ -639,7 +652,8 @@ Com o merge confirmado, em aprovações separadas, nesta ordem:
    desmarcado não é oferecida: o Frontlights diz quais faltam.
 2. **Limpeza**, só depois de o fechamento ser escrito e conferido: pergunta se pode remover as worktrees e branches criados
    que deixaram de ser necessários (`cleanup.py plan`). Só entram os que têm o tip igual à cabeça de uma PR mesclada que
-   chegou à base aprovada (o filho empilhado, pelo pai), sem alteração pendente, sem PR aberta a partir ou em cima da
+   chegou à base aprovada (o filho empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch
+   de uma issue que chegou ao GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da
    branch, que não são protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota só é
    apagada se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit. Nunca usa `--force`; a
    lista e os comandos são mostrados na íntegra antes, e `cleanup.py verify` confere depois. Uma worktree com registros
@@ -659,21 +673,27 @@ entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
-oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
+merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
+espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, cada CA na própria
+Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local (nunca de
+`origin/main`), que fica só local, nunca é enviada e entra na main local por um merge com três portões verdes
+(suíte inteira, `review-gate` em dia e `browser-gate` respondido), cada CA na própria
 worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
 em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
-e começa. Cada slice
+e começa; antes, no início de cada etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado
+só com o seu "Sim" a uma pergunta que mostra o script) e traz `origin/main` para a main local (`homolog sync`;
+um conflito é desfeito e vira pergunta). Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,
-commitar, enviar as branches, abrir PRs rascunho empilhadas, rodar a migration no banco de
+commitar, mesclar a branch da issue na main local com os três portões verdes, rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
-marcar critérios nas issues. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
-migration já registrada, escrever na branch base ou protegida, ligar configuração, chave ou flag em
+marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
+fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
+migration já registrada, escrever na main remota (`origin/main`) ou numa branch protegida, ligar configuração, chave ou flag em
 produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
 "Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
 assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
@@ -710,12 +730,12 @@ para as que não serão tocadas, o motivo com a evidência do rastreio de cada c
 consumidor no back e a coluna no banco (um rastreio inconclusivo bloqueia a aprovação do plano até ser provado). Uma filha com `needs-decision`, ou sem abordagem
 definida, entra na entrevista da mesma sessão. Numa família que já existe (issue com sub-issues
 publicadas antes da regra das slices), quando uma filha depende do pai, a
-autorização permanente usa **branches empilhadas** (você pode pedir para esperar o merge do pai): a filha sai da branch do
-pai assim que ele está verificado nela, o PR dela tem como base a branch do pai e, depois que
-uma pessoa faz o merge do pai, o PR é redirecionado para a base em que o pai entrou, trazendo-a
-por merge (nunca rebase nem push forçado; com squash no pai, conflitos nos trechos que a filha
-divide com ele são esperados e resolvidos nesse merge). A concorrência usada é o número de filhas independentes
-cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na base aprovada.
+autorização permanente usa **branches empilhadas** (você pode pedir para esperar o pai chegar à main local): a filha sai
+da branch do pai assim que ele está verificado nela; a filha verificada é mesclada na branch do pai, e a família
+entra na main local pela branch do pai, com as filhas dentro, pelos três portões, sem PR por filha e sem push
+(nunca rebase nem push forçado; conflitos nos trechos que uma filha divide com outra são resolvidos no merge
+e mostrados ao revisor). A concorrência usada é o número de filhas independentes
+cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na main local.
 Na entrevista, depois de confirmar o problema (numa só pergunta quando a issue já
 o define), a skill levanta as convenções do código afetado e propõe ao menos três
 abordagens de implementação realmente diferentes. Cada uma informa se segue ou
@@ -762,7 +782,7 @@ módulo, então vale igual para o `discover` e para o runner. A suíte rápida r
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
-slice, rode os módulos que a slice toca; antes da revisão independente e do PR, a suíte inteira sem a
+slice, rode os módulos que a slice toca; antes da revisão independente e do merge na main local, a suíte inteira sem a
 variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover -s tests -v`: o runner não
 deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
 pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.

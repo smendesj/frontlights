@@ -16,25 +16,71 @@ where applicable; they are advisory preflight, not sandbox enforcement.
 The user decided, permanently and for every project, that the opening question of
 stage 6 (concurrency, stacking and the bounded implementation authorization) is not
 asked. Covered, for the issues of the family or batch at hand: editing, testing,
-committing, pushing the work branches, opening and retargeting draft PRs (stacked ones
-included), the merges the stacking authorization names, running migrations on the
+committing, the merges the stacking authorization names (the merge of the branch of the issue
+into the local main with its three gates green among them, "Into the local main" below), running migrations on the
 local development database, creating and removing test data through the product's own
-endpoints, commenting on the issues and ticking acceptance criteria with evidence.
+endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of
+an issue goes to GitHub before the release: the branches of the issue and of its slices are never
+pushed, and the only pull request is the release's, offered at the end of each homologated issue.
 
 Never covered, and asked one operation at a time with `AskUserQuestion` ("Sim" first,
 "Não" second, the exact operation and command in the question): merging a pull
 request, closing an issue, changing the board, deploying or publishing to production,
 editing a migration already registered (on the base branch or applied anywhere but the
-local development database), writing the base branch or a protected branch, turning on
+local development database), writing the remote main (`origin/main`, the base branch on GitHub) or a
+protected branch (the local main is written only by the covered merge, with its three gates green), turning on
 a setting, key or flag in production, and deleting anything but the test data the run
 created. Run it only after "Sim" and record the answer verbatim in the handoff. A
 "Sim" covers that one operation, never another one, another PR or a later moment; "Não",
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
-## Slices in order: one issue branch, one worktree per slice, one PR per issue
+## The start of stage 6: the pre-push hook and the sync of the local main
 
-An issue is worked on one issue branch and delivered in one PR; each of its slices (the boxes
+Both run in the main worktree of the project (where the local main is checked out), in a project with a
+remote, before the first branch of the run is cut; a project without a remote (`repository: null`, no
+`origin`) gets neither, and the session says so in one line. The helper is `scripts/homolog.py`, reached as
+`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog <operation> ...`; it prints one JSON object with
+`ok`, `exitCode`, `operation` and `message`: exit code 0 done, 1 refused or failed, 2 a question for the user.
+
+**The hook.** `homolog hook --root <main worktree> --base <base>` checks the `pre-push` hook at the path Git
+resolves (`core.hooksPath` included) and answers `installed`, `ours`, `foreign`, `path` and `script`, the
+exact text `--install` would write, plus `current` (ours and equal to that text) and `outsideRepository`. Exit
+code 0: installed, Frontlights' (a marker line names it) and current. Exit code 2 with `current: false` (ours,
+but another base baked in or an edited body): say so and offer `--install`, which rewrites it. Exit code 2 with
+`outsideRepository: true` and `current: false` (`core.hooksPath` sends the hooks outside the repository's Git dir
+and no current hook of ours is there): nothing is written in either mode, say so in one line and go on; a hook of
+ours that is current in that folder (installed by hand) answers exit code 0. Exit
+code 2 with `installed: false`: show `script` in a code block and ask "Instalar o hook `pre-push` que recusa
+enviar a main local?" ("Sim, instalar" / "Não, seguir sem o hook"); on "Sim", `homolog hook --install --root
+<main worktree> --base <base>` writes it (idempotent when it is already ours), the check is rerun and the
+answer goes verbatim to the handoff; on "Não", the run goes on and the handoff says the hook is absent. Exit
+code 2 with `foreign: true`: a `pre-push` of another origin exists; it is never overwritten (`--install`
+refuses with exit code 1), the session says so in one line, shows `script` for the user to merge by hand and
+goes on. The hook is POSIX `sh`: it reads the refs Git hands a `pre-push` and exits 1, with a message in the
+user's language, when a line pushes `refs/heads/<base>` from the local side or into the remote side (`git
+push origin main` and `git push origin x:main` alike, and `git push --all` or `--mirror`, which carry that ref);
+everything else passes. It is the only hook the skill
+installs, a guard and not a barrier: `--no-verify` and GitHub's own interface pass it, and the rule that the
+local main is never pushed stays a rule of the skill.
+
+**The sync.** `homolog sync --root <main worktree> --base <base> [--remote origin]` is the covered merge of
+`origin/<base>` into the local main: it requires the main worktree to have `<base>` checked out, no tracked
+change pending and no merge in progress (exit code 1 names what blocks; untracked files are fine), runs
+`git fetch <remote>` and `git merge --no-edit <remote>/<base>` (a fast-forward when possible), and answers
+`before`, `after`, `advanced`, `fastForward` and `remoteTip`. A conflict is undone on the spot (`git merge
+--abort`, the worktree clean again, `HEAD` back at `before`) and comes back as exit code 2 with `conflict:
+true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito agora na worktree principal"
+/ "Seguir sem sincronizar") and never resolves a conflict in the local main silently. The sync never pushes,
+never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
+not, the two commits, a conflict and its answer) in the handoff.
+
+## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
+
+An issue is worked on one issue branch, cut from the local main (the base branch of the charter,
+checked out in the main worktree, never `origin/main`: `git branch <branch_prefix>issue-<n> main`),
+which stays local and is never pushed, and delivered by one merge into the local main once its three
+gates are green ("Into the local main", below); each of its slices (the boxes
 of its acceptance criteria, stage 5) gets its own worktree and branch, `<branch_prefix>issue-<n>-s<k>`,
 cut from the branch of the issue at its current tip (`git worktree add -b <branch_prefix>issue-<n>-s<k>
 <path> <issue-branch>`) and named in the charter's `worktrees` with its `slice`, so that `authorize`
@@ -63,9 +109,9 @@ the slice in progress with its worktree, and the slices already ticked, and a fr
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
 `SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
 run stays one per issue, when the last slice that changes the screen closes its loop; the independent review stays one
-per issue, of the whole diff, before the PR, and the full suite runs once there. The stacked wave
-and the family integration below (draft PRs whose base is a dependency's branch, their retargeting
-and the wait for the parent's merge) apply only to a family that already exists (an issue with
+per issue, of the whole diff, before the merge into the local main, and the full suite runs once there. The stacked wave
+and the family integration below (children merged into the parent's branch, and the family entering
+the local main as one) apply only to a family that already exists (an issue with
 sub-issues published before this rule); a slice stacked on another slice uses only the branch cut,
 the `base` of its worktree entry and `--stacked`, as said above.
 
@@ -78,7 +124,7 @@ modules that start real processes and ports (`tests.test_serve_ports` and
 `tests.test_checks_integration`), each one reported as skipped with a reason that names the
 variable; any other value, or no variable, runs everything. The runner runs the safe modules in
 parallel and the five sensitive ones in a serial queue, one at a time; `--report <file>` writes
-the JSON of the run as evidence. Before the independent review and before the PR, run the whole
+the JSON of the run as evidence. Before the independent review and before the merge into the local main, run the whole
 suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
 without CI in the project: the runner does not make the whole suite faster than `discover`, a
 project without CI has no other net, and the CI of this repository runs the same `discover` and
@@ -155,23 +201,22 @@ issues), so give the command a longer timeout.
 
 ## Stacked branches: parent and children without waiting for the merge
 
-Making children wait for the parent's merge serializes the family behind a human
+Making children wait for the parent to reach the base serializes the family behind a human
 step. So, in a family that already exists, whenever an issue of the family depends on another one (a child that
 lists its parent in `Depends on`, or a sibling chain), stage 6 **stacks** the
 dependent on its dependency's branch. Under the standing authorization this is not
 asked: the announcement says it. The choice "Como as filhas se apoiam no pai?" comes
 back as a question only when the user asks to change it, with "Empilhadas no pai (Recomendada)" first (each child branches from the
-parent's branch and its PR targets that branch) and "Esperar o merge do pai" second
-(each child starts from the approved base once the parent is merged). The announcement warns
-that a squash-merge of the parent makes the later merge of the base conflict on the
-hunks the child shares with it, and that merging the parent PR with a merge commit
-avoids that. Record the stacking in the
+parent's branch and, once verified, is merged into it) and "Esperar o merge do pai" second
+(each child starts from the local main once the parent is in it). No branch of the family is
+pushed and no pull request is opened for the parent or a child: the family enters the local main as one,
+through the parent's branch, once its three gates are green ("Into the local main", below), and reaches
+GitHub with the release. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
-not the base, push it (and the dependency's branch), open a draft PR whose base is the
-dependency's branch, retarget that PR, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), and `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed. Those are the only merges it allows: it never covers merging a PR, writing
-the base branch, deploying or releasing. When the user chose to wait, a dependent
-stays parked until its dependency is in the approved base.
+not the base, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), `git merge` of a verified child's branch into its parent's branch, `git merge` of a family's or batch's verified
+branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
+the remote main, deploying or releasing. When the user chose to wait, a dependent
+stays parked until its dependency is in the local main.
 
 **Concurrency.** Recommend as ceiling the number of independent children whose
 `ownership` does not overlap, and never less than the first wave. Read the stacked
@@ -196,37 +241,33 @@ question says so.
   each dependent's `Depends on` yourself. Children of one parent stack on the
   parent, never on each other; a child that needs a sibling's code lists it in
   `Depends on` and stacks on that sibling's branch.
-- Push the dependency's branch before the child's PR: the base must exist on the
-  remote and be current, or the child's diff would carry the dependency's unpushed
-  commits. The child's draft PR has that branch as base (`gh pr create --draft --base
-  <dependency-branch>`) and names in its body the PR it is stacked on, so the review
-  sees only the child's own diff. Draft PRs keep the permission and native approval of
-  the charter.
 - When the dependency's branch moves after the child started (review fixes), the
   child brings it in with `git merge <dependency-branch>`, reruns its tests and
   refreshes the evidence; the new hashes invalidate the earlier review. Check
-  `git merge-base --is-ancestor` at each material boundary.
-- After a human merges the parent PR (the wait below is how the session learns it), run `git fetch origin` and retarget each child
-  PR to the base the parent's PR merged into (`<parent-pr-base>`, which is the
-  approved base branch and not always the default one). GitHub usually does it when
-  the parent branch is deleted on merge; reread the PR's base to confirm, otherwise
-  `gh pr edit <child-pr> --base <parent-pr-base>`. Then bring the base in with `git
-  merge origin/<parent-pr-base>` and rerun the tests. Use a merge, never a rebase or a
-  force-push. A merge commit of the parent merges cleanly; a squash or rebase merge
-  rewrites its commits, so conflicts on the hunks the child shares with the parent are
-  expected: resolve them in the merge commit, keeping the child's own changes on top of
-  the parent's content that the base already has, and show those hunks to the reviewer.
-  The merge changes HEAD, so refresh the evidence and have the reviewer look again; what
-  remains to review is the child's own diff.
-- A conflict on anything beyond the parent's own content already in the base, or a
-  dependency closed without being merged, is a stop condition: park the child and ask.
+  `git merge-base --is-ancestor` at each material boundary. Use a merge, never a rebase or a
+  force-push.
+- A verified child is merged into its parent's branch (`git merge --no-ff <child-branch>` in the
+  parent's worktree, a covered merge) once its review is current and its tests are green. The merge
+  changes the parent's HEAD, so the parent's evidence is refreshed and its reviewer looks again at what
+  the child brought. A child merged into the parent while a sibling is still open is brought into that
+  sibling with `git merge <parent-branch>`: conflicts on the hunks the child shares with the sibling are
+  resolved in that merge commit, keeping the sibling's own changes on top of what the parent already has,
+  and shown to the reviewer.
+- The family enters the local main through the parent's branch, with every verified child merged into
+  it, by the three gates of "Into the local main": the full suite at the parent's tip, a review current
+  for each branch and the watched run answered for the family. A child not verified yet keeps the family
+  out: it is parked with its question and the parent waits, unless the user chooses to let the parent go
+  alone (then the child starts over from the local main once the parent is in it, as in "Esperar o merge
+  do pai").
+- A conflict on anything beyond the parent's own content, or a dependency closed without being
+  merged, is a stop condition: park the child and ask.
 
-## Integrating a family before its PRs
+## Integrating a family before the local main
 
 Each branch passing alone does not prove the family works together: a test of one child
 can assert the very behavior another child changes on purpose, and a clean Git merge
-does not make a green suite. Before any PR of a family with more than one branch is
-opened, integrate it locally: an integration worktree from the parent's branch that
+does not make a green suite. Before a family with more than one branch enters the local
+main, integrate it locally: an integration worktree from the parent's branch that
 merges every verified child branch (local only: never pushed, never a PR), then run
 the full relevant suite and the type checks. The watched browser run already happened, once
 for the batch and before the reviews; `browser-gate` says whether its record still covers this
@@ -234,8 +275,8 @@ code, and `stale` asks again. When a local integration worktree already served t
 integration is the same one: reuse it and redo it after a fix. Findings follow the destination ladder; a fix goes to the branch that owns
 the file, never to the integration branch, and the integration is redone after it.
 A batch of independent issues watched together (no parent) gets the same kind of local
-integration worktree, cut from the approved base; the stage 6 authorization names that merge even
-when no stacking question is asked. The PRs open only after an integration with a green suite, and each branch still needs
+integration worktree, cut from the local main; the stage 6 authorization names that merge even
+when no stacking question is asked. The family enters the local main only after an integration with a green suite, and each branch still needs
 its own current review (`review-gate`). Record the integration worktree, the merged
 HEADs and the results in the handoff. The integration branch is evidence, never delivered.
 
@@ -352,7 +393,7 @@ They must not author the changes under review. Bind review to `frontlights.py
 evidence --root <worktree>` hashes/HEAD and save that output with the review result
 (`.frontlights/issues/<n>/review.json`). Run `frontlights.py review-gate --root
 <worktree> --review <review.json>` before reporting an issue as reviewed, before
-opening or updating a PR and after every commit: exit code 0 means the review still
+the merge into the local main, before opening or updating a PR and after every commit: exit code 0 means the review still
 covers the code, exit code 2 means it is stale. Any commit, edit or new file after the
 review makes it stale (bringing a base into the branch included), whatever its size:
 rerun the suite, take new evidence and have the independent reviewer look again. A
@@ -365,7 +406,7 @@ acceptance criterion in the source issue, top-level issue only for new scope; ne
 new sub-issue), decided as one batch.
 
 **Gate on the findings.** Before an issue is reported as reviewed or complete, and before
-a PR is opened or updated, every open finding (review, tests, live check, any other
+the merge into the local main and before a PR is opened or updated, every open finding (review, tests, live check, any other
 verification pass) has a destination GitHub tracks, or is fixed, or is shown as not a
 defect with its evidence, or is dropped by the user's explicit answer: the gate of the
 Follow-ups section. A line in the PR body, a comment or the chat is never a
@@ -405,56 +446,124 @@ evidence; tick an acceptance criterion in the issue body only with evidence for 
 (a test, a measured result, a reviewed diff), because the closeout of stage 7 trusts
 the ticks; a criterion born from a finding is ticked the same way, once the work it
 names is done and its evidence exists. Closing an issue and moving its card are never part of this: they have
-their own approval (`references/closeout.md`). Draft PRs are covered by the standing authorization and still go through
-the host's native approval. Never
-merge a pull request, write the base branch, deploy, release, delete data or close
+their own approval (`references/closeout.md`). The release's pull request is covered by the standing authorization and still goes through
+the host's native approval; the branches of issues and slices are never pushed. Never
+merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or batch's verified branches into a local integration branch that is never pushed. Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,
 the findings left unfixed with the destination of each, remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
 
-## After the pull request: waiting for the merge
+## Into the local main: the three gates
 
-Opening a PR does not end the work on an issue, and the session does not expect to be told that it was merged.
-By default, as soon as a PR of the family is open, the session waits for the user's merge. The user can say
-"não aguardar" at any time: the wait ends and the closeout question of the next session picks the work up.
+The local main of the project (the base branch of the charter, checked out in the main worktree) is the
+homologation bench: it accumulates every issue that passed its three gates, and nothing of it reaches
+GitHub before the release. The remote main (`origin/main`) is never written outside the release's pull
+request, and `authorize` tells the two apart: the local main is the only target of the covered merge
+below, and a target with a slash (`origin/main`, `upstream/main`) is refused as the remote main.
 
-- **Say it and record it.** One line to the user, in their language: which PRs the session waits for and what
-  happens at the merge. In the handoff (`Aguardando o merge`): each PR number with its issue, head and base
-  branch, the approved base, and when the wait began.
-- **No closing keyword.** A PR opened by Frontlights never carries `Closes`, `Fixes`, `Resolves` or a variant of
-  them, in its body or in its commits: closing an issue has its own approval, and a merge that closed it would skip
-  that approval and ignore the criteria still unticked. Cite the issue by number instead.
-- **Offer the merge when the PR is ready.** A PR is ready when its review is current (`review-gate` exit code 0),
-  the family's integration suite is green, `browser-gate` says `answered` (or `not_needed`) and no finding lacks a
-  destination. Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first
-  and "Não, aguardar o merge" second; one question per PR, up to four in one call, a stacked parent before its
-  children. The question names the commands: `gh pr ready <n>` and `gh pr merge <n> --merge` (a merge commit, so the
-  stacked children merge cleanly; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its own
-  approval). On "Sim", run them, then `merge-status` as below; a child PR is offered only once it has been
-  retargeted to the base its parent merged into. On "Não", the wait goes on unchanged.
-- **What wakes the session.** Whatever the host offers: a subscription to the PR's activity, or a background
-  monitor that runs `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" merge-status --config <config> --prs 12,13
-  --base <approved base>` every few minutes. Either is only a trigger. On every wake run `merge-status` and act only
-  on its answer, never on the notification. A subscription to the PR's activity may not report a merge at all, so the
-  monitor is the dependable trigger: it prints one short line only when the set of `ready` or `settled` PRs changes
-  (never the whole JSON every cycle) and uses the skill's resolved path, because `${CLAUDE_SKILL_DIR}` may be unset
-  in a background shell. The user can also say "mesclei", and the session runs `merge-status` at once. A monitor must run with the same GitHub account as the session's `gh`
-  for that repository. When the host offers neither, say so in the handoff and stop waiting: nothing is lost, the
-  closeout question of the next session finds the merged work.
-- **What counts as merged.** `ready` lists the PRs merged into the approved base. A PR merged into another
-  branch (a stacked parent), closed without a merge, or not found is never ready: its issue is not proposed for
-  closing, and the session says why. With stacked branches a child's PR targets its parent's branch and, merged
-  there, shows as `merged_elsewhere`: its work reaches the base through the parent, so its issue enters the closeout
-  together with the parent's, once the parent's PR is `ready` with a `mergedAt` later than the child's (both are in
-  `merge-status`). A child PR not merged yet is retargeted when the parent merges (rule above), and the wait goes on
-  for it.
-- **At the merge.** When at least one PR is ready, read `references/closeout.md` and run it for the issues of the
-  ready PRs: the closing (with the tick in a parent, for a sub-issue) and the cleanup of worktrees and branches are two
-  separate approvals, in that order. An issue whose criteria are not all ticked is not offered: say which are left, and tick only what
-  the evidence supports. The PRs still open keep waiting.
-- **Other work goes on.** The wait never blocks independent issues. It ends when every PR is merged or closed, or
-  when the user ends it.
+When the last slice of the issue is merged into the branch of the issue, in this order:
+
+1. **Bring the local main in first.** In the issue's worktree, `git merge main` (one of the covered merges,
+   a base into the issue's own branch), so the tip of the branch already contains the local main and the
+   merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
+   shown to the reviewer as part of the diff.
+2. **Gate 1, the full suite.** Run the whole suite at that tip (`python -m unittest discover -s tests -v` in
+   this repository, the project's equivalent elsewhere; never the fast suite), and record the command, the
+   count and the exit code in the handoff. Red means the issue is not homologated: the failure goes back
+   to its slice's loop, or to the user as a question.
+3. **Gate 2, the review.** The independent review of the whole diff (Review, checkpoints and renewal, above)
+   is bound to that tip, and `frontlights.py review-gate --root <issue-worktree> --review <review.json>`
+   answers `current` (exit code 0). `stale` means a review again, never the merge.
+4. **Gate 3, the watched run.** `frontlights.py browser-gate` answers `answered` (the user approved or said
+   to go on) or `not_needed` (nothing on the screen changed), exit code 0; `pending`, `stale`,
+   `contradiction` or `unconfigured` is the question of `browser-testing.md`, never the merge.
+5. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
+   authorize --charter .frontlights/authorization.json --operation .frontlights/issues/<n>/merge-local-main.json`,
+   with `kind` `merge_into_local_main`, the issue's worktree and branch, `target` the base branch of the
+   charter and `gates` `{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}` (or
+   `not_needed`); `examples/operation-merge-local-main.json` shows the shape. With `scope_check: pass`, in the
+   main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
+   or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
+   gates to make them pass.
+6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
+   `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
+   .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and every
+   branch under the `branch_prefix`, into the folder named by `homolog.backupDir` in `.frontlights/config.json`
+   (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,
+   and the real path never enters a repository), verifies it with `git bundle verify` and reports `path`,
+   `refs` and `bytes`. The folder must already exist; nothing else is written there and old bundles are never
+   deleted. Exit code 1 with `configured: false` means no folder is configured: say so in one line, name the
+   key, ask nothing and go on; any other refusal (a missing folder, a junction in its path, a Git failure) is
+   said in one line and recorded in the handoff as a backup not taken.
+7. **Record it.** The handoff's line "Merge na main local" takes the three gates with the evidence of each,
+   the output of `authorize`, the commit of the merge and the bundle's path (or "sem backup configurado");
+   the branch of the issue stays local, never pushed.
+
+`authorize` is a preflight, not a barrier: it reads no Git and proves neither that the suite ran nor that the
+review is current (the commands, `review-gate` and `browser-gate` do), the host's own permission prompts still
+apply, and a model that does not call it is not stopped by it. The issue is homologated once it is in the
+local main; it closes only with the release that carries it merged (stage 7).
+
+## The release: from the local main to GitHub
+
+The local main accumulates homologated issues; nothing of them reaches GitHub until the release, offered by the
+session at the end of each homologated issue (right after the merge into the local main and the bundle). The user
+can decline ("Agora não") as often as they like: the work stays in the local main, and the next homologated issue
+offers the release again with everything accumulated.
+
+- **Plan it.** Run `homolog sync` once more (the local main may be behind `origin/<base>`; a conflict is a
+  question, as at the start of stage 6), then `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog
+  release-plan --root <main worktree> --base <base>`: it reads the issue branches from the authorization records,
+  lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the commits
+  `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>` (the date in São Paulo, `-2`, `-3`
+  when the name is taken). Exit code 2 says there is nothing to release, or that the local main is behind and
+  must be synced first: say so in one line. It only reads.
+- **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
+  com as issues #a, #b agora?", with "Sim, lançar" first and "Agora não" second; one question per release.
+- **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
+  `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
+  hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
+  #a, #b" --body-file <file>`. The body follows `templates/pr.md` when it exists (the model of the pull request):
+  one block per issue (what it delivers, the three gates with the evidence of each) and the risk of the merge for
+  the whole; it cites the issues by number. **No closing keyword.** A pull request opened by Frontlights never
+  carries `Closes`, `Fixes`, `Resolves` or a variant of them, in its body or in its commits: closing an issue has
+  its own approval, and a merge that closed it would skip that approval and ignore the criteria still unticked.
+- **Wait for the merge.** Opening the pull request does not end the work, and the session does not expect to be
+  told that it was merged. By default, as soon as the release's pull request is open, the session waits for the
+  user's merge. The user can say "não aguardar" at any time: the wait ends and the closeout question of the next
+  session picks the work up. One line to the user, in their language: which pull request the session waits for
+  and what happens at the merge. In the handoff (the `Release` line): the pull request number with its issues,
+  head and base branch, the approved base, and when the wait began.
+- **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
+  issue in it are recorded, the pull request has no conflict with the base and no finding lacks a destination.
+  Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
+  aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
+  merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its
+  own approval). On "Sim", run them, then `merge-status` as below. On "Não", the wait goes on unchanged.
+- **What wakes the session.** Whatever the host offers: a subscription to the pull request's activity, or a
+  background monitor that runs `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" merge-status --config <config>
+  --prs <n> --base <approved base>` every few minutes. Either is only a trigger. On every wake run `merge-status`
+  and act only on its answer, never on the notification. A subscription to the PR's activity may not report a
+  merge at all, so the monitor is the dependable trigger: it prints one short line only when the set of `ready` or
+  `settled` PRs changes (never the whole JSON every cycle) and uses the skill's resolved path, because
+  `${CLAUDE_SKILL_DIR}` may be unset in a background shell. The user can also say "mesclei", and the session runs
+  `merge-status` at once. A monitor must run with the same GitHub account as the session's `gh` for that
+  repository. When the host offers neither, say so in the handoff and stop waiting: nothing is lost, the closeout
+  question of the next session finds the merged work.
+- **What counts as merged.** `ready` lists the PRs merged into the approved base. A PR merged into another branch,
+  closed without a merge, or not found is never ready: its issues are not proposed for closing, and the session
+  says why.
+- **At the merge.** With the release's pull request `ready`: in the main worktree, on the local main, `git pull
+  --ff-only origin <base>` (the local main was already inside the release, so it moves forward without a merge
+  commit; if it does not fast-forward, stop and ask instead of merging or resetting). Then read
+  `references/closeout.md` and run it for the issues of the release: the closing (with the tick in a parent, for
+  a sub-issue) and the cleanup of worktrees and branches are two separate approvals, in that order. An issue whose
+  criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports. The
+  cleanup now offers the issue branches that `origin/<base>` contains, pull request or not
+  (`contained_in_base_without_pull_request`).
+- **Other work goes on.** The wait never blocks independent issues. It ends when the release's pull request is
+  merged or closed, or when the user ends it.

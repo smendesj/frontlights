@@ -28,6 +28,16 @@ An open issue is a candidate only when its body has an acceptance-criteria secti
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
 closed issue (completed) whose card is outside Done needs only the move.
 
+The local base is the homologation bench of the project (issue 32): an issue's branch reaches GitHub only through
+the release. So an issue whose branch still exists locally and is not yet contained in `<remote>/<base>` is kept
+out with `awaiting_release` (its `branch`, `tip`, `base` and `remote`), and is a candidate again once the release
+is merged. `--base` defaults to the `base.branch` of the newest authorization record that names the issue (else
+`main`), `--remote` to `origin`. Git is read through `homolog` (`rev-parse` and `merge-base` only, nothing is
+written) and never blocks on a doubt: a branch already deleted, no record and no `<prefix>issue-<n>` branch, no
+remote ref or a root that is not a repository mean no exclusion. `releaseCheck` says what happened: `checked`
+(at least one branch was compared), `unavailable` (Git could not answer: the root is not a repository) or
+`skipped` (nothing to compare, or no remote ref).
+
 A known leftover is an acceptance criterion like any other, so it is counted with the others. A body written
 before that rule may hold the leftovers in a section of their own ("Pendencias conhecidas") outside the
 criteria: such a candidate is still proposed, with the `pending_outside_criteria` caution and the number of
@@ -263,6 +273,15 @@ def read_record(path):
         return None
 
 
+def authorization_records(root):
+    """The .frontlights/authorization*.json files of the project, oldest name first (the newest record is the
+    last one, as homolog reads them)."""
+    try:
+        return sorted((Path(root) / '.frontlights').glob('authorization*.json'))
+    except OSError:
+        return []
+
+
 def record_numbers(root, repository=None):
     """The issue numbers this project's records name: folders of .frontlights/issues, `issue_ids` of
     .frontlights/authorization*.json and the `id` of each issue of .frontlights/plan.json that is already
@@ -278,11 +297,7 @@ def record_numbers(root, repository=None):
                     found.add(int(entry.name))
     except OSError:
         pass
-    try:
-        authorizations = sorted(base.glob('authorization*.json'))
-    except OSError:
-        authorizations = []
-    for path in authorizations:
+    for path in authorization_records(root):
         data = read_record(path)
         ids = data.get('issue_ids') if isinstance(data, dict) else None
         if isinstance(ids, list):
@@ -543,16 +558,75 @@ def read_board_views(gh, repository, numbers, board, info):
     return read_views(gh, repository, numbers, board, False)
 
 
+# ---------------------------------------------------------------- release check
+
+def valid_remote(name):
+    """A remote name this helper will type into a ref: a plain branch-like name without a slash."""
+    return valid_branch(name) and '/' not in name
+
+
+def release_defaults(root, numbers, base, remote):
+    """(base, remote, prefix) for the release check: the base given, else the `base.branch` of the newest
+    authorization record whose `issue_ids` name one of `numbers` (else `main`); the remote given, else `origin`;
+    the `branch_prefix` of the newest record that has a valid one (else `claude/`)."""
+    prefix = None
+    for path in reversed(authorization_records(root)):
+        data = read_record(path)
+        if not isinstance(data, dict):
+            continue
+        candidate = data.get('branch_prefix', 'claude/')
+        if prefix is None and isinstance(candidate, str) and candidate.endswith('/') and valid_branch(candidate[:-1]):
+            prefix = candidate
+        ids = data.get('issue_ids')
+        branch = data.get('base', {}).get('branch') if isinstance(data.get('base'), dict) else None
+        if (base is None and isinstance(ids, list) and any(n in ids for n in numbers) and valid_branch(branch)):
+            base = branch
+    return base or 'main', remote or 'origin', prefix or 'claude/'
+
+
+def release_check(root, numbers, base, remote):
+    """({number: detail} for the issues whose branch is not yet in `<remote>/<base>`, status). The branch of an
+    issue is the one its authorization records name (homolog.issue_branches) or, without one, `<prefix>issue-<n>`
+    when that branch exists locally. Only `rev-parse` and `merge-base` run, through homolog, and nothing is
+    written. Status: `checked` when at least one branch was compared with the remote ref, `unavailable` when Git
+    could not answer at all (the root is not a repository, or Git is missing), `skipped` otherwise (no branch to
+    compare, or no remote ref). A doubt never excludes an issue."""
+    import homolog  # noqa: PLC0415  (lazy: homolog runs Git; this module itself never runs a command)
+    base, remote, prefix = release_defaults(root, numbers, base, remote)
+    found = {}
+    try:
+        homolog.worktree(root)
+        remote_ref = f'refs/remotes/{remote}/{base}'
+        if homolog.rev(root, remote_ref) is None:
+            return found, 'skipped', base, remote
+        mapping, _ = homolog.issue_branches(root)
+        compared = False
+        for number in numbers:
+            branch = mapping.get(number, f'{prefix}issue-{number}')
+            tip = homolog.rev(root, f'refs/heads/{branch}')
+            if tip is None:
+                continue   # already cleaned up, or never created: the helper cannot tell and does not block
+            contained = homolog.ancestry(root, tip, remote_ref)
+            compared = compared or contained is not None
+            if contained is False:
+                found[number] = {'branch': branch, 'tip': tip, 'base': base, 'remote': remote}
+    except homolog.Refusal:
+        return {}, 'unavailable', base, remote
+    return found, 'checked' if compared else 'skipped', base, remote
+
+
 # ---------------------------------------------------------------- eligibility
 
 def issue_url(repository, number):
     return f'https://github.com/{repository}/issues/{number}'
 
 
-def assess(views, repository, board, info):
+def assess(views, repository, board, info, unreleased=None):
     """Split the scope: the candidates (in closing order), the issues left out with the reason, how many
-    closed issues need nothing, and how many closed ones could not be checked for the move."""
+    closed issues need nothing, and how many closed ones could not be checked for the move. `unreleased` maps
+    the issues whose branch is not yet in the remote base to the detail of the `awaiting_release` reason."""
     status = info['status']
+    unreleased = unreleased or {}
     cards_known = status in ('available', 'done_option_missing')
     done_field, done_value = (board['done']['field'], board['done']['value']) if board else (None, None)
     memo = {}
@@ -598,6 +672,8 @@ def assess(views, repository, board, info):
                 result = ('no_criteria', {'criteria': counts})
             elif counts['checked'] < counts['total']:
                 result = ('unchecked_criteria', {'criteria': counts})
+            elif number in unreleased:
+                result = ('awaiting_release', dict(unreleased[number]))
             else:
                 result = ('ok', {})
         memo[number] = result
@@ -727,17 +803,20 @@ def board_note(info):
     return ''
 
 
-def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None):
+def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base=None, remote=None):
     """Read only: the issues that can be closed (and moved to Done) now, with the commands to type once the
-    user approves, in closing order; the issues left out and why."""
+    user approves, in closing order; the issues left out and why (an issue whose branch is not yet in
+    `<remote>/<base>` waits for the release)."""
     gh = gh or rs.gh_default
     repository, board = load_project(config)
     numbers = None if explicit is None else parse_numbers(explicit)
     require(not (all_flag and numbers is not None), '--issues and --all cannot be used together; choose one')
+    require(base is None or valid_branch(base), '--base must be a plain branch name')
+    require(remote is None or valid_remote(remote), '--remote must be a plain remote name, such as origin')
     scope = scope_numbers(root, numbers, all_flag, gh, repository)
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'scope': scope,
               'board': unread_board(board), 'candidates': [], 'excluded': [], 'alreadyDone': 0, 'closedUnchecked': 0,
-              'ask': False}
+              'releaseCheck': 'skipped', 'ask': False}
     if not scope['numbers']:
         result['message'] = ('The repository has no open issue, so there is nothing to close.' if scope['mode'] == 'all' else
                              'No issue was worked on in this project (no folder in .frontlights/issues, no id in an '
@@ -747,9 +826,11 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None):
     info, _ = board_state(gh, board)
     result['board'] = info
     views = read_board_views(gh, repository, scope['numbers'], board, info)
-    ordered, excluded, already, unchecked = assess(views, repository, board, info)
+    open_numbers = [n for n, view in sorted(views.items()) if view is not None and view['state'] == 'OPEN']
+    unreleased, release_status, _, _ = release_check(root, open_numbers, base, remote)
+    ordered, excluded, already, unchecked = assess(views, repository, board, info, unreleased)
     add_parent_ticks(gh, repository, ordered, views)
-    result.update(candidates=ordered, excluded=excluded, alreadyDone=already, ask=bool(ordered))
+    result.update(candidates=ordered, excluded=excluded, alreadyDone=already, ask=bool(ordered), releaseCheck=release_status)
     result['closedUnchecked'] = unchecked
     moves = sum(c['action'] == 'move_only' for c in ordered)
     parts = [f'{len(ordered)} issue(s) can be closed or moved to Done ({len(ordered) - moves} to close, {moves} only to move).'
@@ -762,6 +843,10 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None):
     if ticks:
         parts.append('Sub-issue(s) ' + ', '.join(f'#{n}' for n in ticks)
                      + ' have an item to tick in their parent (parentTicks): show the lines and ask.')
+    waiting = [e['number'] for e in excluded if e['reason'] == 'awaiting_release']
+    if waiting:
+        parts.append('Issue(s) ' + ', '.join(f'#{n}' for n in waiting) + ' wait for the release (awaiting_release): '
+                     'their branch is not yet in the remote base; offer the release, do not close them.')
     if excluded:
         parts.append(f'{len(excluded)} excluded (see excluded for the reason of each).')
     if already:
@@ -837,8 +922,8 @@ def read_pull_requests(gh, repository, numbers):
 
 def pull_request_entry(number, node, expected):
     """What the session needs from one pull request: `status` is `open`, `merged_into_base` (the only one that
-    lets an issue be proposed for closing), `merged_elsewhere` (merged into another branch, such as a stacked
-    parent), `closed_unmerged`, `not_found` or `unknown`."""
+    lets an issue be proposed for closing), `merged_elsewhere` (merged into a branch that is not the approved
+    base), `closed_unmerged`, `not_found` or `unknown`."""
     if node is None:
         return {'number': number, 'status': 'not_found'}
     state = node.get('state') if isinstance(node.get('state'), str) else None
@@ -928,7 +1013,7 @@ def op_tick_check(before, after, lines):
 def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, **options):
     try:
         if operation == 'candidates':
-            result = op_candidates(config, root, issues, all_flag, gh)
+            result = op_candidates(config, root, issues, all_flag, gh, options.get('base'), options.get('remote'))
         elif operation == 'verify':
             result = op_verify(config, root, issues, gh)
         elif operation == 'merge-status':
@@ -964,6 +1049,9 @@ def build_parser():
         command.add_argument('--issues', help='issue numbers, such as 12,13' + ('' if name == 'candidates' else ' (required)'))
         if name == 'candidates':
             command.add_argument('--all', action='store_true', dest='all_flag', help='every open issue of the repository')
+            command.add_argument('--base', help='the base branch the release lands in; without it, the base.branch of the '
+                                                'newest authorization record that names the issue, else main')
+            command.add_argument('--remote', help='the remote that holds the released base (default origin)')
     status = sub.add_parser('merge-status', allow_abbrev=False)
     status.add_argument('--config', required=True, help="the project's .frontlights/config.json")
     status.add_argument('--prs', help='pull request numbers, such as 12,13 (required)')
@@ -980,6 +1068,7 @@ def main(argv=None):
         args = build_parser().parse_args(argv)
         result = run(args.operation, getattr(args, 'config', None), getattr(args, 'root', '.'), getattr(args, 'issues', None),
                      getattr(args, 'all_flag', False), prs=getattr(args, 'prs', None), base=getattr(args, 'base', None),
+                     remote=getattr(args, 'remote', None),
                      before=getattr(args, 'before', None), after=getattr(args, 'after', None),
                      lines=getattr(args, 'lines', None))
     except Refusal as error:

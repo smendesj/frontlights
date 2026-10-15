@@ -1,5 +1,6 @@
-"""Aguardar o merge, fechar, marcar no pai e limpar worktrees e branches: o texto da skill, das referências, dos
-modelos, dos docs e do eval diz o mesmo que os scripts `closeout.py` e `cleanup.py` fazem.
+"""A release (da main local ao GitHub), a espera do merge dela, fechar, marcar no pai e limpar worktrees e branches:
+o texto da skill, das referências, dos modelos, dos docs e do eval diz o mesmo que os scripts `closeout.py` e
+`cleanup.py` fazem.
 
 Seams: o texto de `SKILL.md`, `references/development.md`, `references/closeout.md`, `templates/handoff.md`,
 `docs/`, `README.md` e `evals/`; os scripts têm os próprios testes (`test_closeout.py`, `test_cleanup.py`). A espera
@@ -30,16 +31,18 @@ def section(text, heading, marks='##'):
 class WaitTests(unittest.TestCase):
     def setUp(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
-        self.wait = ' '.join(section(text, 'After the pull request: waiting for the merge').split())
+        self.wait = ' '.join(section(text, 'The release: from the local main to GitHub').split())
 
     def test_the_wait_is_the_default_and_the_user_can_end_it(self):
-        for phrase in ('By default, as soon as a PR of the family is open, the session waits for the user\'s merge',
-                       '"não aguardar"', 'the closeout question of the next session picks the work up'):
+        for phrase in ("By default, as soon as the release's pull request is open, the session waits for the user's merge",
+                       '"não aguardar"', 'the closeout question of the next session picks the work up',
+                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
+                       'the release branch is the only branch of the flow that is pushed'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
     def test_it_is_said_to_the_user_and_recorded_in_the_handoff(self):
-        for phrase in ('One line to the user, in their language', '`Aguardando o merge`', 'head and base branch',
+        for phrase in ('One line to the user, in their language', 'the `Release` line', 'head and base branch',
                        'the approved base'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
@@ -55,7 +58,7 @@ class WaitTests(unittest.TestCase):
                        'may not report a merge at all, so the monitor is the dependable trigger',
                        'prints one short line only when the set of `ready` or `settled` PRs changes',
                        '`${CLAUDE_SKILL_DIR}` may be unset in a background shell', 'The user can also say "mesclei"',
-                       'closeout.py" merge-status --config <config> --prs 12,13 --base <approved base>',
+                       'closeout.py" merge-status --config <config> --prs <n> --base <approved base>',
                        'the same GitHub account as the session\'s `gh`',
                        'When the host offers neither, say so in the handoff and stop waiting'):
             with self.subTest(phrase=phrase):
@@ -63,10 +66,9 @@ class WaitTests(unittest.TestCase):
 
     def test_only_a_merge_into_the_approved_base_counts(self):
         for phrase in ('`ready` lists the PRs merged into the approved base',
-                       'A PR merged into another branch (a stacked parent), closed without a merge, or not found is never ready',
-                       'shows as `merged_elsewhere`: its work reaches the base through the parent',
-                       "its issue enters the closeout together with the parent's, once the parent's PR is `ready` with a `mergedAt` later than the child's",
-                       'A child PR not merged yet is retargeted when the parent merges'):
+                       'A PR merged into another branch, closed without a merge, or not found is never ready',
+                       '`git pull --ff-only origin <base>`', 'if it does not fast-forward, stop and ask instead of merging or resetting',
+                       '`contained_in_base_without_pull_request`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
@@ -78,11 +80,13 @@ class WaitTests(unittest.TestCase):
                 self.assertIn(phrase, self.wait)
 
     def test_the_stacking_rule_points_to_the_wait_and_the_skill_states_it_in_stage_six(self):
-        self.assertIn('the wait below is how the session learns it', flat('skills', 'frontlights', 'references', 'development.md'))
+        self.assertIn('the family enters the local main as one', flat('skills', 'frontlights', 'references', 'development.md'))
         stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        for phrase in ("After a PR is opened, wait for the user's merge by default", '"After the pull request"',
-                       'open no PR with a closing keyword and never merge',
-                       'a PR merged into another branch or closed unmerged closes nothing'):
+        for phrase in ('**The release, offered at the end of each homologated issue**', '"The release"',
+                       '"Lançar a release com as issues #a, #b agora?"', 'never a closing keyword',
+                       'never merge without the user\'s "Sim"', '`git pull --ff-only` on the local main',
+                       'a pull request merged into another branch or closed unmerged closes nothing',
+                       'the next homologated issue offers the release again'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage6)
 
@@ -93,9 +97,9 @@ class CloseoutReferenceTests(unittest.TestCase):
         self.flat = ' '.join(self.text.split())
 
     def test_a_merge_is_one_of_the_ways_into_the_closeout(self):
-        for phrase in ('when the wait for the merge of stage 6', 'finds a pull request merged into the approved base',
-                       'pass `--issues` with the issues of the pull requests `merge-status` lists as `ready`',
-                       'the merge of a child into its parent\'s branch closes nothing',
+        for phrase in ('when the release of stage 6', 'finds its pull request merged into the approved base',
+                       'pass `--issues` with the issues `release-plan` listed for that release',
+                       'the merge of an issue into the local main, or of a child into its parent\'s branch, closes nothing',
                        'comes back in `excluded` as `unchecked_criteria`: say which criteria are left'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
@@ -139,6 +143,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                        "Run it from the folder the session stands in, with `--root` pointing at the project's main worktree",
                        'the helper never offers the folder it runs in', '`--integration` names the local-only worktree of a family',
                        'it goes only when its branch holds no commit of its own that is not already in a pull request that reached the base',
+                       '`contained_in_base_without_pull_request`', 'the branch of an issue that reached GitHub through a release',
                        '`ignored_files` comes with `ignoredCount` and `ignored`', 'those files go away with it',
                        'the remote branch goes only when `origin` is this repository',
                        'that the files in `ignored` go too (name them)',
@@ -180,7 +185,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                      'not_found', 'integration_has_pull_request', 'integration_pushed', 'integration_has_unique_commits',
                      'ignored_files', 'local_only_integration', 'origin_is_not_the_repository',
                      'slice_not_in_issue_branch', 'slice_has_pull_request', 'slice_pushed', 'slice_issue_branch_unknown',
-                     'slice_is_issue_branch', 'slice_merged_into_issue_branch'):
+                     'slice_is_issue_branch', 'slice_merged_into_issue_branch', 'contained_in_base_without_pull_request'):
             with self.subTest(code=code):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')
@@ -197,7 +202,7 @@ class CloseoutReferenceTests(unittest.TestCase):
 class StageSevenAndTemplatesTests(unittest.TestCase):
     def test_stage_seven_names_the_wake_the_tick_and_the_cleanup(self):
         stage7 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 7.')[1].split())
-        for phrase in ('when the wait of stage 6 finds a pull request merged into the approved base',
+        for phrase in ("when the wait of stage 6 finds the release's pull request merged into the approved base",
                        "adds for a closed sub-issue the tick of the parent's item that cites it",
                        'asks separately whether to remove the worktrees and branches the work created',
                        '`scripts/cleanup.py`, its own approval'):
@@ -206,7 +211,7 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
 
     def test_the_handoff_template_has_the_wait_and_the_closing_and_cleanup_lines(self):
         text = flat('skills', 'frontlights', 'templates', 'handoff.md')
-        for phrase in ('Aguardando o merge (cada PR com a issue', 'ou "não aguardar" com a resposta literal do usuário',
+        for phrase in ('Release (a saída do `release-plan`', 'Aguardando o merge da PR única', 'ou "não aguardar" com a resposta literal do usuário',
                        'Fechamento e limpeza (a lista aprovada de cada um, a resposta literal, os comandos rodados',
                        '`closeout.py verify`, `tick-check` e `cleanup.py verify`'):
             with self.subTest(phrase=phrase):
@@ -216,7 +221,8 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
 class DocsAndEvalsTests(unittest.TestCase):
     def test_the_documents_carry_the_rules(self):
         cases = {
-            ('README.md',): ('#### Esperar o merge, fechar, marcar no pai e limpar', 'aguarda o seu merge por padrão',
+            ('README.md',): ('#### Homologar na main local, lançar a release, fechar e limpar', 'aguarda o seu merge por padrão',
+                             '"Lançar a release com as issues #a, #b agora?"', 'a branch `<prefixo>release-<data>`',
                              'nunca leva palavra de fechamento', 'só vale o merge **na branch base aprovada**',
                              '`closeout.py tick-check` antes e depois', 'Sem item citando a filha, ela só fecha',
                              '`cleanup.py plan`', 'Nunca usa `--force`', 'Responder "Não agora" ao fechamento não gera a pergunta da limpeza',
@@ -225,13 +231,17 @@ class DocsAndEvalsTests(unittest.TestCase):
                              '`python scripts/cleanup.py plan|verify ...`', 'os arquivos que o Git ignora (um `.env`, `node_modules`) também',
                              'A worktree de integração local da família (nunca enviada, sem PR)',
                              'só é apagada se `origin` é o repositório configurado'),
-            ('skills', 'frontlights', 'docs', 'protocol.md'): ('| Espera do merge |', '| Limpeza |', 'Aguardando o merge', 'só `merged_into_base` vale',
+            ('skills', 'frontlights', 'docs', 'protocol.md'): ('| Release |', '| Limpeza |', 'Aguardando o merge', 'só `merged_into_base` vale',
+                                      '"Lançar a release com as issues #a, #b agora?"', '`contained_in_base_without_pull_request`',
+                                      'a família entra na main local pela branch do pai, com as filhas dentro', 'nem entra na main local, nem tem PR',
                                       '(`parentTicks`: números de linha', '`closeout.py tick-check` confere antes e depois',
                                       '`scripts/cleanup.py plan|verify`', 'nunca com `--force`'),
             ('skills', 'frontlights', 'docs', 'security.md'): ('A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:',
                                       'o gatilho do ambiente (inscrição na PR ou monitor) não é prova',
                                       'um item que cita outras issues junto nunca é marcado', 'nunca com `--force`',
                                       'cujo tip é a cabeça de uma PR mesclada que chegou à base aprovada',
+                                      'ou, sem PR nenhuma, cujo tip já está contido em `origin/<base>`',
+                                      'o merge da branch da filha verificada na branch do pai',
                                       'a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit',
                                       'usa `git --no-optional-locks` sem shell', 'o aviso `ignored_files` lista os nomes',
                                       'a worktree de integração local (`--integration`) só entra sem PR'),
@@ -244,8 +254,9 @@ class DocsAndEvalsTests(unittest.TestCase):
 
     def test_the_eval_the_runbook_and_the_record_cover_the_case(self):
         text = flat('evals', 'merge-wait-and-cleanup.md')
-        for phrase in ('the session says in one line that it waits for the merge', 'The notification alone is never taken as proof',
-                       '`merged_elsewhere`', 'marcar no corpo de #P a linha L', 'the item that cites two issues is listed as not ticked',
+        for phrase in ('the session says in one line that it waits for the merge', 'the notification alone is never taken as proof',
+                       '"Lançar a release com as issues #a, #b agora?"', 'pushes only that branch', '`git pull --ff-only`',
+                       '`contained_in_base_without_pull_request`', 'marcar no corpo de #P a linha L', 'the item that cites two issues is listed as not ticked',
                        'exactly the listed line with `[ ]` turned into `[x]`', '`tick-check` answers `ok` before the write and on the reread',
                        'Only after the closing is written and verified, a second question', 'with no `--force`',
                        '"Não agora" to the closing asks no cleanup question', 'the next `/frontlights` start asks the closeout question',

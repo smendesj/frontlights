@@ -14,11 +14,15 @@ Operations (each prints one JSON object on stdout):
           --worktree PATH named by hand, split into what can be removed now, with the commands in the order to run
           them, and what stays and why. A worktree and its branch can be removed only when it is not the main one,
           nor the folder this process runs in, nor locked or checked out elsewhere, it has nothing uncommitted, the
-          branch is not protected, its tip is the head of a pull request that was merged, that pull request reached
-          the approved base (directly, or through a stacked parent that did), and no open pull request is based on
-          the branch or comes from it. The remote branch is deleted only when `origin` is the configured repository
-          and the branch still points at that same commit. Ignored files go away with the worktree: they are named
-          in the `ignored_files` caution.
+          branch is not protected, no open pull request is based on the branch or comes from it, and the work was
+          delivered: either its tip is the head of a pull request that was merged and that pull request reached
+          the approved base (directly, or through a stacked parent that did), or it has no pull request at all and
+          the approved base (`origin/<base>` when the remote-tracking ref exists, else the local branch) already
+          contains its tip (issue 32: delivered by a merge into the local main; the
+          `contained_in_base_without_pull_request` caution says so). A pull request closed without a merge is not
+          the absence of one: that branch stays. The remote branch is deleted only when `origin` is the configured
+          repository and the branch still points at that same commit. Ignored files go away with the worktree:
+          they are named in the `ignored_files` caution.
           --integration PATH names the local-only integration worktree of a family (never pushed, never a pull
           request): it can go when its branch has no pull request and was never pushed, and every commit of its own
           is already part of a pull request that reached the base; a merge is one of its own when it carries content
@@ -260,22 +264,33 @@ def reaches_base(ctx, pull, tip, depth=0):
 # ---------------------------------------------------------------- assessment
 
 def pull_reasons(ctx, github, tip):
-    """Why a branch that carried a pull request stays, and (for the integration pass) the heads it delivered."""
+    """Why an issue branch stays, and (for the integration pass) the heads it delivered. With pull requests, its tip
+    must be the head of a merged one that reached the approved base. With none at all (issue 32: delivered by a merge
+    into the local main), the approved base must already contain its tip; `assess` then adds the
+    `contained_in_base_without_pull_request` caution."""
     reasons = []
     heads = github['heads']
-    if any(p.get('state') == 'OPEN' for p in heads):
-        reasons.append('open_pr')
-    merged = [p for p in heads if p.get('state') == 'MERGED']
-    matching = [p for p in merged if p.get('headRefOid') == tip]
-    if not merged:
-        reasons.append('no_merged_pr')
-    elif not matching:
-        reasons.append('newer_than_merged_pr')
+    if not heads:
+        base = base_ref(ctx['root'], ctx['base'])
+        inside = None if base is None or tip is None else is_ancestor(ctx['root'], tip, base)
+        if inside is None:
+            reasons.append('ancestry_unverifiable')
+        elif not inside:
+            reasons.append('no_merged_pr')
     else:
-        verdicts = [(p, reaches_base(ctx, p, tip)) for p in matching]
-        ctx['delivered'].update(p['headRefOid'] for p, v in verdicts if v is True and OID.fullmatch(p['headRefOid'] or ''))
-        if not any(v is True for _, v in verdicts):
-            reasons.append('merged_into_other_branch' if all(v is False for _, v in verdicts) else 'ancestry_unverifiable')
+        if any(p.get('state') == 'OPEN' for p in heads):
+            reasons.append('open_pr')
+        merged = [p for p in heads if p.get('state') == 'MERGED']
+        matching = [p for p in merged if p.get('headRefOid') == tip]
+        if not merged:
+            reasons.append('no_merged_pr')
+        elif not matching:
+            reasons.append('newer_than_merged_pr')
+        else:
+            verdicts = [(p, reaches_base(ctx, p, tip)) for p in matching]
+            ctx['delivered'].update(p['headRefOid'] for p, v in verdicts if v is True and OID.fullmatch(p['headRefOid'] or ''))
+            if not any(v is True for _, v in verdicts):
+                reasons.append('merged_into_other_branch' if all(v is False for _, v in verdicts) else 'ancestry_unverifiable')
     if github['dependents']:
         reasons.append('open_dependents')
     return reasons
@@ -408,12 +423,19 @@ def assess(ctx, item, registered, github):
         cautions.append('local_only_integration')
     elif sliced:
         cautions.append('slice_merged_into_issue_branch')
-    elif remote is None:
-        cautions.append('remote_branch_gone')
-    elif not ctx['origin_ok']:
-        cautions.append('origin_is_not_the_repository')
-    elif not remove_remote:
-        cautions.append('remote_branch_moved')
+    else:
+        if not github['heads']:
+            cautions.append('contained_in_base_without_pull_request')   # issue 32: a merge into the local main, no pull request
+        # The remote cautions stand on their own, so a branch delivered without a pull request but pushed under
+        # the old flow still says what its remote branch is up to. Without a pull request, no remote branch means
+        # it was never pushed: nothing is gone.
+        if remote is None:
+            if github['heads']:
+                cautions.append('remote_branch_gone')
+        elif not ctx['origin_ok']:
+            cautions.append('origin_is_not_the_repository')
+        elif not remove_remote:
+            cautions.append('remote_branch_moved')
     main = ctx['main_path']
     commands = []
     if registered is not None:

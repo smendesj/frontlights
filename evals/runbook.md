@@ -71,9 +71,9 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     opens with no stacking or concurrency question: its announcement stacks the dependent
     child on the parent's branch and sets a concurrency equal to the independent children.
     Confirm the child worktree starts from the parent's branch (`git merge-base --is-ancestor`),
-    its draft PR has that branch as base, and nothing is merged. After a human merges the
-    parent, confirm the PR is retargeted and the base comes in by merge, with no rebase
-    or force-push.
+    no branch of the family is pushed and no pull request is opened for the parent or the child; once the
+    child is verified, confirm it is merged into the parent's branch and the family enters the local main
+    through the parent's branch, with no rebase or force-push.
 13. Watched browser run. On an issue that touches the frontend, confirm the "pronto
     para assistir?" question comes before any window opens, the window is a visible
     Chrome, the strip reads "ANTES: main" and then "DEPOIS: branch <name>", each case
@@ -118,17 +118,20 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     "fecha com N pendências fora dos critérios".
 
 17. Merge wait, closing, parent tick and cleanup (`evals/merge-wait-and-cleanup.md`). On a disposable family (a parent whose body
-    has an unticked item citing a sub-issue, two sub-issues with their own branches, worktrees and draft PRs, one stacked on
-    the parent), let the session open the PRs. Confirm it says in one line that it waits, records "Aguardando o merge" and
-    puts no closing keyword in a PR or commit. Merge the stacked child into the parent's branch: `merge-status` reports it
-    merged elsewhere and nothing is offered. Merge into the approved base: the closeout question lists the sub-issue with
+    has an unticked item citing a sub-issue, two sub-issues with their own branches and worktrees, one stacked on the
+    parent) that has just entered the local main through the parent's branch, let the session offer the release and open
+    its single PR. Confirm it says in one line that it waits, records "Aguardando o merge" in the `Release` line and
+    puts no closing keyword in the PR or a commit. Merge a branch of your own into `origin/main`: `merge-status` reports
+    the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
+    with `git pull --ff-only` and the closeout question lists the sub-issue with
     "marcar no corpo de #P a linha L", the line shown in full, and the approved write changes the parent body only on
     that line (`tick-check` ok before and after). After the closing is verified, a second question offers to remove the
     worktrees and branches; the main worktree, the folder the session stands in, a worktree with uncommitted changes and a
     branch with an open pull request stay, with their reasons; no command uses `--force`; `cleanup.py verify` reports
     everything gone. "Não agora" to the closing asks no cleanup question; without a wake mechanism the next `/frontlights`
-    start finds the merged work. The cleanup question names the files a worktree ignores, and the local-only integration
-    worktree of the family goes only when it holds no commit of its own outside the delivered pull requests.
+    start finds the merged work. The cleanup question names the files a worktree ignores, offers the issue branches that
+    `origin/main` now contains (`contained_in_base_without_pull_request`), and the local-only integration
+    worktree of the family goes only when it holds no commit of its own outside what reached the base.
 
 18. Progress question in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start
@@ -216,6 +219,28 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the offer before acting on a family, the batch request, one approval per family, the before and the after
     shown in full, the old body kept, the children closed and archived only after their own "Sim", and a family
     with more than five open children cut into top-level issues linked by `--blocked-by`.
+27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
+    from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session
+    brings the local main into the branch, runs the whole suite at that tip, has the independent review bound to it
+    (`review-gate` `current`) and `browser-gate` `answered` or `not_needed`, writes the `merge_into_local_main`
+    operation and runs `authorize` before `git merge --no-ff` on the local main; an operation with a red gate, a
+    slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's
+    "Merge na main local" line carries the three gates, the `authorize` output and the merge commit. Then, at the
+    start of a stage 6 in a clone with a remote, confirm `homolog hook` exits 2 and the question shows the script,
+    "Sim" installs it and `git push origin main` is refused while a work branch still pushes; and that `homolog sync`
+    advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
+    the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that
+    the merge into the local main is followed by one `.bundle` file there which `git bundle verify` accepts, and that
+    without the key the session says in one line that no backup is configured and asks nothing. Then, with two issues
+    in the local main and none of them in `origin/main`, confirm `homolog release-plan` lists both and names
+    `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" cuts and pushes only the release branch and
+    opens one pull request with a block per issue and no closing keyword, the merge is asked with "Mesclar a PR #<n> em
+    <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the
+    closeout offers the issues of the release; and that `cleanup plan` offers an issue branch without a pull request
+    once `origin/main` contains its tip, and keeps it as `no_merged_pr` before. Finally, with an issue whose boxes are
+    all ticked and whose branch is in the local main but not in `origin/main`, confirm the stage 1 closeout question is
+    not asked and the session says in one line that the issue waits for the release (`awaiting_release`), and that after
+    the release is merged the same issue is offered for closing.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

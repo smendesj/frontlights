@@ -1,4 +1,4 @@
-"""A etapa 6 trabalha as slices de uma issue em ordem, numa branch e um PR por issue: cada slice é um ciclo de
+"""A etapa 6 trabalha as slices de uma issue em ordem, numa branch por issue, cortada da main local: cada slice é um ciclo de
 TDD, um ponto de retomada e uma caixa marcada com evidência; uma sessão nova retoma pela primeira caixa aberta.
 
 Seams: `frontlights.checkpoint`/`resume` com `--slice`, e os manifestos de texto da skill, da referência da etapa
@@ -107,10 +107,10 @@ class SliceCheckpointTests(unittest.TestCase):
 
 
 class SlicesInOrderTextTests(unittest.TestCase):
-    def test_stage_6_works_the_slices_in_order_on_one_branch_and_one_pr_per_issue(self):
+    def test_stage_6_works_the_slices_in_order_on_one_branch_merged_into_the_local_main(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         body = flat(section(skill, '6. Bounded development') or '')
-        for phrase in ('one issue branch and one PR', 'its own worktree and branch', 'its slices are worked in dependency order',
+        for phrase in ('one issue branch, cut from the local main', 'its own worktree and branch', 'its slices are worked in dependency order',
                        'a family that already exists', 'the order of the slices'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
@@ -121,11 +121,11 @@ class SlicesInOrderTextTests(unittest.TestCase):
         text = read('skills', 'frontlights', 'references', 'development.md')
         body = flat(section(text, 'Slices in order') or '')
         self.assertNotEqual(body, '')
-        for phrase in ('one issue branch', 'delivered in one PR', 'its own worktree and branch',
+        for phrase in ('one issue branch', 'delivered by one merge into the local main', 'its own worktree and branch',
                        'in dependency order: independent slices run at once',
                        'one TDD loop', '`checkpoint --slice <id>`', 'first open box', 'tick of its box',
                        '`closeout.py tick-check` before and after the write', 'one per issue, when the last slice',
-                       'one per issue, of the whole diff, before the PR', 'a family that already exists'):
+                       'one per issue, of the whole diff, before the merge into the local main', 'a family that already exists'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(text.index('## Slices in order'), text.index('## Dispatch and ownership'))
@@ -192,7 +192,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         readme = flat(read('README.md'))
         for text, name in ((protocol, 'protocol'), (readme, 'README')):
-            for phrase in ('slices de cada issue em ordem', 'uma branch e um PR por issue', 'família que já existe'):
+            for phrase in ('slices de cada issue em ordem', 'uma branch por issue, cortada da main local', 'família que já existe'):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
         runbook = flat(read('evals', 'runbook.md'))
