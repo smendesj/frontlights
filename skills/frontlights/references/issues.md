@@ -319,7 +319,7 @@ Findings from an independent review, a test run, a live check or another verific
 pass that belong to an issue never become one new issue each. Classify every finding
 by the first of the three destinations that fits:
 
-1. Fix it in the same PR, when it is inside the issue's approved scope and ownership.
+1. Fix it in the issue branch (the same PR, at the release), when it is inside the issue's approved scope and ownership.
 2. A new acceptance criterion in the source issue, written as a checklist item
    (`- [ ] ...`) inside its acceptance-criteria section, for a leftover that belongs to
    that outcome (recipe: "A leftover as an acceptance criterion", below). The issue is
@@ -421,7 +421,7 @@ lines and those removed ones. Until then the closeout only warns about it
 ### The gate: no open finding without a destination
 
 Before an issue is reported as reviewed or complete, and before a PR is opened or
-updated, list every open finding of the review, the tests, the live check and any other
+updated, and before the merge into the local main, list every open finding of the review, the tests, the live check and any other
 verification pass, the ones of earlier rounds included, each with its destination: fixed
 (the commit), new criterion (the issue and the exact text), top-level issue (its number),
 not a defect, or dropped by the user. The report shows that list.

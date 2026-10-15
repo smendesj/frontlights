@@ -54,7 +54,8 @@ code 2 with `foreign: true`: a `pre-push` of another origin exists; it is never 
 refuses with exit code 1), the session says so in one line, shows `script` for the user to merge by hand and
 goes on. The hook is POSIX `sh`: it reads the refs Git hands a `pre-push` and exits 1, with a message in the
 user's language, when a line pushes `refs/heads/<base>` from the local side or into the remote side (`git
-push origin main` and `git push origin x:main` alike); everything else passes. It is the only hook the skill
+push origin main` and `git push origin x:main` alike, and `git push --all` or `--mirror`, which carry that ref);
+everything else passes. It is the only hook the skill
 installs, a guard and not a barrier: `--no-verify` and GitHub's own interface pass it, and the rule that the
 local main is never pushed stays a rule of the skill.
 

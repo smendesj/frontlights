@@ -290,7 +290,7 @@ aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, 
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
 houver uma aberta, o PR cita a issue sem palavra de fechamento (`Closes`, `Fixes`). Antes
-de relatar uma issue como revisada ou concluída, e antes de abrir ou atualizar um PR,
+de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
 pode ficar como texto, dito como "não é defeito" com a evidência. O `handoff` registra

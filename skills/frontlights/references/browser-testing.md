@@ -250,7 +250,7 @@ When the user will watch:
   again, and never go on with a cut-off window.
 - **Two passes, same scenario and same account.** ANTES runs the `Fluxo:` on the
   approved base of the batch (`main`, or the default branch); an issue stacked on a
-  parent that is not part of the batch uses that parent's branch, the base of its PR.
+  parent that is not part of the batch uses that parent's branch.
   Serve it from a checkout of that
   base, a detached-HEAD worktree made with `git worktree add` because the base
   branch is already checked out elsewhere; for that stacked issue the

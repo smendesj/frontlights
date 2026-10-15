@@ -136,7 +136,7 @@ lote antes de a sessão escrever o corpo (`gh issue edit --body-file`, com o cor
 guardado, só acréscimo, exceto na migração de uma seção legada, releitura e diferença
 conferidas) e a escrita é registrada no
 documento de passagem de contexto. Antes de relatar uma issue como revisada ou concluída,
-e antes de abrir ou atualizar um PR, todo achado em aberto precisa de destino rastreável
+antes do merge na main local e antes de abrir ou atualizar um PR, todo achado em aberto precisa de destino rastreável
 (corrigido, critério novo ou issue de topo); "citado no corpo do PR" nunca é
 destino, e só ruído que não é defeito pode ficar como texto, dito como tal e com a
 evidência. O pai de uma família que já existe só é dado como concluído com as filhas
@@ -298,9 +298,9 @@ o horário da consulta ao GitHub. Uma issue concluída só libera dependentes qu
 suas alterações verificadas estão na base aprovada dessas dependentes; confira o
 histórico e as diferenças reais do Git. Com a autorização de **branches empilhadas**, a
 base aprovada de uma dependente é a branch da própria dependência: a filha sai dela quando a
-dependência está `verified` ali, o PR dela tem essa branch como base e, depois do merge feito
-por uma pessoa, o PR é redirecionado para a base em que o pai entrou e traz essa base por merge
-(nunca rebase nem push forçado). O `schedule` só lê `status` e não vê uma issue que depende de
+dependência está `verified` ali, a filha verificada é mesclada na branch do pai (merge coberto), e a
+família entra na main local pela branch do pai, com as filhas dentro, pelos três portões; nenhuma PR por
+filha, nenhum push (nunca rebase nem push forçado). O `schedule` só lê `status` e não vê uma issue que depende de
 duas branches sem merge: essa conferência é manual. Uma issue e as sub-issues abertas dela
 entram juntas no plano e na autorização; `Parent` é pertencimento e só `Depends on` impede o
 início. Responsabilidade desconhecida usa `*` e
@@ -392,8 +392,8 @@ revisão, registre explicitamente a pendência. O relatório do autor nunca subs
 uma verificação independente. A evidência a que a revisão ficou vinculada é salva em
 `.frontlights/issues/<n>/review.json`, e `frontlights.py review-gate --root <worktree> --review <arquivo>`
 a compara com a atual: saída 0 (`current`) vale, saída 2 (`stale`) significa que houve commit, edição ou
-arquivo novo depois da revisão, e a issue não é relatada como revisada nem tem PR aberto ou atualizado
-sem nova revisão. Uma família de branches é integrada localmente, com a suíte completa verde, antes de
-qualquer PR dela. A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
+arquivo novo depois da revisão, e a issue não é relatada como revisada, nem entra na main local, nem tem PR
+aberto ou atualizado sem nova revisão. Uma família de branches é integrada localmente, com a suíte completa
+verde, antes de entrar na main local. A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
 linha "Achados sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de
 origem, que só fecha com ela tratada, concluída e marcada com evidência.

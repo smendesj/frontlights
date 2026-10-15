@@ -237,7 +237,9 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
   a worktree principal, nem a pasta em que o próprio processo roda, nem está travada ou em uso em outra worktree, sem
   alteração pendente (nem arquivo novo), numa branch não protegida (`main`, `master`, a base aprovada e
   `protected_branches`, com a mesma regra do `authorize`), cujo tip é a cabeça de uma PR mesclada que chegou à base
-  aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit), sem PR aberta a partir da branch nem
+  aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
+  contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
+  `contained_in_base_without_pull_request`, sem comando remoto), sem PR aberta a partir da branch nem
   em cima dela; a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo
   commit; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso `ignored_files` lista os nomes; a worktree
   de integração local (`--integration`) só entra sem PR, nunca enviada e sem commit próprio fora das PRs entregues (um merge conta como próprio quando
@@ -245,7 +247,8 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
 - os comandos (`git worktree remove`, `git branch -D`, `git push origin --delete`) são montados só com um caminho de
   worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não carregue, e rodados a
   partir da worktree principal; nunca com `--force`. O `branch -D` é necessário porque um merge com squash deixa a branch
-  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada;
+  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido
+  na base aprovada;
 - remover é uma aprovação própria da lista completa, depois do fechamento escrito e conferido; um comando que falha é
   registrado e nunca repetido com força; os registros do `.frontlights` dentro de uma worktree somem com ela, e o aviso
   `frontlights_records` vai na pergunta.
@@ -370,8 +373,8 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a
   tela, nenhum relato de "completa" e nenhuma PR seguem enquanto o teste estiver devido.
 - **Branches empilhadas:** a autorização que as permite nomeia as operações que elas exigem
-  (criar branch a partir de outra branch que não a base, enviá-la, abrir PR rascunho com a
-  branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
+  (criar branch a partir de outra branch que não a base, o merge da branch da filha verificada na branch do pai,
+  trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
   depende) na branch de uma slice para atualizá-la, juntar as branches
 verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
