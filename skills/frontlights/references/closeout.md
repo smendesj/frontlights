@@ -24,7 +24,12 @@ the check could not run and go on.
 When the release's merge woke the session, pass `--issues` with the issues `release-plan` listed for that release
 (the sub-issues of a family included): an explicit list is taken as it is. Only the release merged into the approved
 base counts; the merge of an issue into the local main, or of a child into its parent's branch, closes nothing by
-itself (the issue closes with the release that carries it, as `development.md` says). An issue that reached the base
+itself (the issue closes with the release that carries it, as `development.md` says): `candidates` keeps such an
+issue out as `awaiting_release` until `origin/<base>` holds its branch (`--base` and `--remote`, defaulting to the
+`base.branch` of the authorization records and `origin`; the branch comes from the `worktrees` of those records or
+from `<branch_prefix>issue-<n>`), reading Git only with `rev-parse` and `merge-base` through `homolog.py`, and never
+excludes on a doubt: a branch already gone, no remote-tracking ref or a root that is not a repository leave the
+issue as it is, and `releaseCheck` says `checked`, `skipped` or `unavailable`. An issue that reached the base
 but still has an unticked criterion comes back in `excluded` as `unchecked_criteria`: say which
 criteria are left, and tick only what the evidence supports (never to get the issue closed).
 
@@ -51,8 +56,10 @@ it is a write of the Follow-ups recipe in `issues.md`, done only when the user a
 and outside this list. This step never moves them.
 
 `excluded` lists what is not ready and why (`unchecked_criteria` and `no_criteria` with the counts,
-`open_children` with the children, `truncated` when a list was cut, `not_found` and `unreadable`): that
-needs work or a decision, not closing. `order` is 1-based and is the order to close in. `closedUnchecked`
+`open_children` with the children, `awaiting_release` with the branch, its tip, the base and the remote when every
+box is ticked but the branch of the issue is not yet in `origin/<base>`, `truncated` when a list was cut, `not_found`
+and `unreadable`): that needs work, a decision or the release, not closing. An `awaiting_release` is said to the
+user in one line (the issue closes with the release that carries it) and never proposed. `order` is 1-based and is the order to close in. `closedUnchecked`
 counts closed issues whose card could not be checked because the board was not readable, and `alreadyDone`
 counts the closed ones that need nothing. Tell the user briefly, never propose it. Ticking a criterion belongs
 to the verification of the issue, with evidence (a test, a measured result, a reviewed diff), under the

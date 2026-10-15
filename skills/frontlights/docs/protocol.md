@@ -67,7 +67,9 @@ somente pela afirmação do usuário na sessão atual.
 O fechamento (`scripts/closeout.py`, só leitura) propõe fechar toda issue aberta, e toda sub-issue, com a seção
 de critérios de aceitação e todos os itens marcados (e as filhas fechadas ou propostas junto, filhas antes dos
 pais) e mover o cartão para o valor `project.done` (padrão `Status` / `Done`); uma issue já fechada como concluída com o cartão
-fora de Done só é movida. Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
+fora de Done só é movida; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
+fora como `awaiting_release` até a release que a leva ser mesclada (o `candidates` lê só `rev-parse` e `merge-base`,
+pelo `homolog.py`, e na dúvida não exclui). Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
 conferência relê o GitHub. Nenhuma outra autorização cobre essa escrita.
 
 A release é oferecida ao fim de cada issue homologada (`references/development.md`, "The release"): depois de

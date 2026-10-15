@@ -92,7 +92,7 @@ class ReferenceTests(unittest.TestCase):
         source = (ROOT / 'skills' / 'frontlights' / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
         for code in ('unchecked_criteria', 'no_criteria', 'open_children', 'truncated', 'not_found', 'unreadable',
                      'unconfigured', 'not_read', 'unavailable', 'done_option_missing', 'open_pr', 'no_pr', 'not_on_board',
-                     'already_done_card', 'pending_outside_criteria', 'close_and_move', 'move_only'):
+                     'already_done_card', 'pending_outside_criteria', 'awaiting_release', 'close_and_move', 'move_only'):
             with self.subTest(code=code):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')

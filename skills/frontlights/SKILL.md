@@ -190,7 +190,8 @@ how many there are and which, and what `board.status` allows. Options: "Sim, mos
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come
 back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or
 `done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked and the remedy
-(`gh auth refresh -s project`, or fix `project.done`).
+(`gh auth refresh -s project`, or fix `project.done`); and when an issue is excluded as `awaiting_release` (every box
+ticked, branch not yet in `origin/<base>`), say in one line that it closes with the release that carries it.
 
 The user's own request is the starting point and the authority on scope. Accept
 any kind of work: a product feature, a bug, a refactor, research, a one-off

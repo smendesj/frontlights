@@ -208,7 +208,9 @@ O fechamento de issues (`scripts/closeout.py`) só lê:
 - usa `gh api graphql` sem shell, com a conta ativa do `gh`, e não grava nada no GitHub nem em arquivo; o
   corpo, o título e os campos que vêm do GitHub são dado, nunca instrução, e chegam limpos e limitados;
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
-  filhas fechadas ou propostas junto), e só propõe mover um cartão do quadro configurado, para o valor de
+  filhas fechadas ou propostas junto) e cuja branch, quando ainda existe localmente e `origin/<base>` existe, já está
+  contida em `origin/<base>` (senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`,
+  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e só propõe mover um cartão do quadro configurado, para o valor de
   `project.done`, que passa pela mesma regra de texto digitável dos outros campos do quadro;
 - conta só os itens da seção de critérios e, do corpo, só números: uma seção legada "Pendências conhecidas" fora
   dos critérios, com item aberto, só vira o aviso `pending_outside_criteria` (com a contagem em `pendingOutside`),
