@@ -3,7 +3,9 @@
 O Frontlights instala um único hook, e só depois do "Sim" a uma pergunta que mostra o script: o `pre-push`
 de `homolog hook` (`scripts/homolog.py`), que recusa enviar a main local do projeto, a homologação, e qualquer
 push cujo destino seja `refs/heads/<base>`; ele fica no caminho que o Git resolve para `hooks/pre-push`
-(`core.hooksPath` inclusive), leva uma linha de marca que o identifica, nunca sobrescreve um hook de outra
+(`core.hooksPath` inclusive, mas só dentro do diretório Git do repositório: com um `core.hooksPath` que aponte para
+fora, nada é escrito), leva uma linha de marca que o identifica, é conferido byte a byte com o script esperado
+(outra base ou corpo editado viram pergunta e reinstalação), nunca sobrescreve um hook de outra
 origem (o `--install` recusa, e a sessão mostra o script para o usuário juntar à mão) e é conferido no início
 de cada etapa 6. É uma guarda, não uma barreira: `--no-verify` e a interface do GitHub passam por ele, e a
 regra de que a main local nunca é enviada continua regra da skill. Fora esse, o Frontlights não instala hooks,

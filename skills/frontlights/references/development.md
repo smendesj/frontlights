@@ -45,7 +45,11 @@ remote, before the first branch of the run is cut; a project without a remote (`
 
 **The hook.** `homolog hook --root <main worktree> --base <base>` checks the `pre-push` hook at the path Git
 resolves (`core.hooksPath` included) and answers `installed`, `ours`, `foreign`, `path` and `script`, the
-exact text `--install` would write. Exit code 0: installed and Frontlights' (a marker line names it). Exit
+exact text `--install` would write, plus `current` (ours and equal to that text) and `outsideRepository`. Exit
+code 0: installed, Frontlights' (a marker line names it) and current. Exit code 2 with `current: false` (ours,
+but another base baked in or an edited body): say so and offer `--install`, which rewrites it. Exit code 2 with
+`outsideRepository: true` (`core.hooksPath` sends the hooks outside the repository's Git dir): nothing is
+written in either mode, say so in one line and go on. Exit
 code 2 with `installed: false`: show `script` in a code block and ask "Instalar o hook `pre-push` que recusa
 enviar a main local?" ("Sim, instalar" / "Não, seguir sem o hook"); on "Sim", `homolog hook --install --root
 <main worktree> --base <base>` writes it (idempotent when it is already ours), the check is rerun and the
