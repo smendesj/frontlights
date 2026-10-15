@@ -104,6 +104,15 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'base'):
             frontlights.authorize(without_base, self.op)
 
+    def test_a_base_branch_with_a_slash_is_accepted_and_its_remote_tracking_name_is_not(self):
+        c = dict(self.c, base={'branch': 'release/main', 'commit': 'abc1234'})
+        result = frontlights.authorize(c, dict(self.op, target='release/main'))
+        self.assertEqual(result['scope_check'], 'pass')
+        with self.assertRaisesRegex(ValueError, 'remote'):
+            frontlights.authorize(c, dict(self.op, target='origin/release/main'))
+        with self.assertRaisesRegex(ValueError, 'not the base branch'):
+            frontlights.authorize(c, dict(self.op, target='main'))
+
     def test_a_slice_branch_does_not_enter_the_local_main(self):
         op = dict(self.op, worktree=str(self.slice), branch='claude/issue-1-s2', slice='S2')
         with self.assertRaisesRegex(ValueError, 'slice'):
@@ -448,8 +457,56 @@ class HomologHookAndSyncTests(unittest.TestCase):
         code, again = self.hook('--install')
         self.assertEqual((code, again['written']), (0, True))
         code, check = self.hook('--check')
-        self.assertEqual((code, check['installed'], check['ours'], check['foreign']), (0, True, True, False))
+        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
+                         (0, True, True, False, True))
+        self.assertEqual((first['current'], again['current'], check['outsideRepository']), (True, True, False))
         self.assertEqual(path.read_bytes(), first['script'].encode('utf-8'))
+
+    def test_a_hook_of_another_base_is_ours_but_not_current_and_install_rewrites_it(self):
+        code, master = self.hook('--install', '--base', 'master')
+        self.assertEqual((code, master['written'], master['current']), (0, True, True))
+        path = Path(master['path'])
+        self.assertIn('refs/heads/master', path.read_text(encoding='utf-8'))
+        code, check = self.hook('--check', '--base', 'main')
+        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
+                         (2, True, True, False, False))
+        self.assertIn('--install', check['message'])
+        self.assertIn('difere', check['message'])
+        self.assertIn('refs/heads/master', path.read_text(encoding='utf-8'))   # --check wrote nothing
+        code, main = self.hook('--install', '--base', 'main')
+        self.assertEqual((code, main['written'], main['ours'], main['current']), (0, True, True, True))
+        self.assertEqual(path.read_bytes(), main['script'].encode('utf-8'))
+        self.assertIn('refs/heads/main', path.read_text(encoding='utf-8'))
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['current']), (0, True))
+
+    def test_a_tampered_hook_that_keeps_the_marker_is_not_current(self):
+        _, installed = self.hook('--install')
+        path = Path(installed['path'])
+        path.write_bytes(installed['script'].replace('exit 1', 'exit 0').encode('utf-8'))
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
+                         (2, True, True, False, False))
+        self.assertIn('difere', check['message'])
+        # a CRLF copy of the expected script is still current: only the line endings differ
+        path.write_bytes(installed['script'].replace('\n', '\r\n').encode('utf-8'))
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['current']), (0, True))
+
+    def test_a_hooks_folder_outside_the_repository_is_refused_and_nothing_is_written(self):
+        elsewhere = Path(self.temp.name) / 'hooks-elsewhere'
+        elsewhere.mkdir()
+        self.git(self.work, 'config', 'core.hooksPath', str(elsewhere))
+        code, install = self.hook('--install')
+        self.assertEqual((code, install['ok'], install['written'], install['outsideRepository']), (1, False, False, True))
+        self.assertIn('core.hooksPath', install['message'])
+        self.assertEqual(list(elsewhere.iterdir()), [])
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['ok'], check['outsideRepository'], check['installed']), (2, False, True, False))
+        self.assertEqual(Path(check['path']).parent, elsewhere.resolve())
+        self.assertIn('core.hooksPath', check['message'])
+        self.assertEqual(list(elsewhere.iterdir()), [])
+        self.assertFalse((self.work / '.git' / 'hooks' / 'pre-push').exists())
 
     def test_the_hook_refuses_pushing_the_local_main_and_lets_other_branches_through(self):
         self.hook('--install')
@@ -914,6 +971,25 @@ class HomologReleasePlanTests(unittest.TestCase):
                 code, result = self.plan('--prefix', prefix)
                 self.assertEqual(code, 1, result)
                 self.assertIn('prefixo', result['message'])
+
+    def test_a_remote_tracking_release_branch_of_the_day_is_skipped_too(self):
+        self.deliver(1)
+        code, first = self.plan()
+        self.assertEqual(code, 0, first)
+        name = first['releaseBranch']
+        self.git(self.work, 'update-ref', f'refs/remotes/origin/{name}', 'HEAD')
+        _, second = self.plan()
+        self.assertEqual(second['releaseBranch'], f'{name}-2')
+        _, elsewhere = self.plan('--remote', 'upstream')   # another remote does not hold the name
+        self.assertEqual(elsewhere['releaseBranch'], name)
+
+    def test_the_help_texts_name_the_four_operations(self):
+        for text in (read('skills', 'frontlights', 'scripts', 'homolog.py').split('"""')[1],
+                     read('skills', 'frontlights', 'scripts', 'frontlights.py')):
+            for operation in ('`hook`', '`sync`', '`bundle`', '`release-plan`'):
+                self.assertIn(operation, text)
+        self.assertNotIn('Later slices add', read('skills', 'frontlights', 'scripts', 'homolog.py'))
+        self.assertNotIn('`hook` and `sync` of the local main', read('skills', 'frontlights', 'scripts', 'frontlights.py'))
 
     def test_records_without_an_authorization_map_no_issue_and_ask(self):
         self.deliver(1)

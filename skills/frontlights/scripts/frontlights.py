@@ -626,9 +626,11 @@ def authorize(charter, operation):
                 'the charter needs base.branch to name the local main')
         target = operation.get('target')
         require(nonempty(target), 'target required: the local main, the base branch of the charter')
-        require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
-        require(target == base['branch'],
-                f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
+        if target != base['branch']:
+            # The base branch of the charter may carry a slash (release/main) and is accepted as it is; any other
+            # name with a slash reads as a remote-tracking branch, which is never the target.
+            require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
+            raise ValueError(f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
         gates = operation.get('gates')
         require(isinstance(gates, dict), 'gates required: full_suite, review_gate and browser_gate, each green')
         for gate, green in LOCAL_MAIN_GATES.items():
@@ -1034,7 +1036,8 @@ def main():
     p = sub.add_parser('drift')
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
-    p = sub.add_parser('homolog', help='homolog.py: `hook` and `sync` of the local main, the homologation (issue 32)')
+    p = sub.add_parser('homolog', help='homolog.py: `hook`, `sync`, `bundle` and `release-plan` of the local main, '
+                                       'the homologation (issue 32)')
     p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
     args = parser.parse_args()
     code = 0
