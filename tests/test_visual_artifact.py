@@ -95,5 +95,43 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         self.assertIn('| 28. Artefato visual no grilling e na lista de CAs (issue 33) |', acceptance)
 
 
+class ArtifactInTheSliceQuizTests(unittest.TestCase):
+    """Issue 33, S2: a lista numerada das CAs cita, por CA, a seção do artefato com o que ela entrega; ensaio a seco."""
+
+    def test_the_numbered_list_cites_the_artifact_section_of_each_slice(self):
+        issues = read('skills', 'frontlights', 'references', 'issues.md')
+        quiz = flat(section(issues, 'Slices as acceptance criteria'))
+        for phrase in ('for each slice, the section of the artifact that shows what it delivers',
+                       'the drawing of each slice', 'the same URL as the grilling',
+                       'the quiz itself stays the same', 'a slice whose drawing shows nothing demonstrable is horizontal'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, quiz)
+        skill = read('skills', 'frontlights', 'SKILL.md')
+        stage5 = flat(skill.split('## 5.')[1].split('## 6.')[0])
+        self.assertIn('for each slice, the section of the artifact with what it delivers', stage5)
+        self.assertIn('updated on the same URL as the grilling', stage5)
+        protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('cada slice com a seção do artefato que mostra o que ela entrega', protocol)
+        readme = flat(read('README.md'))
+        self.assertIn('cada CA com a seção do artefato que mostra o que ela entrega', readme)
+
+    def test_the_dry_run_and_the_runbook_cover_the_artifact(self):
+        case = read('evals', 'grilling-artifact.md')
+        self.assertTrue(case.startswith('# Visual artifact in the grilling and in the list of slices (manual; no model score claimed)'))
+        for phrase in ('Setup:', 'Expected', 'Reject:', 'the same URL', 'fictitious', 'artefato indisponível',
+                       'one section per slice', 'never one page per round'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, case)
+        runbook = read('evals', 'runbook.md')
+        item = '28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33).'
+        self.assertIn(item, runbook)
+        self.assertLess(runbook.index('27. Local main as homologation'), runbook.index(item))
+        self.assertLess(runbook.index(item), runbook.index('Only after all required checks pass'))
+        acceptance = read('docs', 'acceptance.md')
+        row = next(l for l in acceptance.splitlines() if l.startswith('| 28. '))
+        self.assertIn('S2:', row)
+        self.assertIn('`evals/grilling-artifact.md`', row)
+
+
 if __name__ == '__main__':
     unittest.main()

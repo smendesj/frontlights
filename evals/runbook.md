@@ -241,6 +241,14 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     all ticked and whose branch is in the local main but not in `origin/main`, confirm the stage 1 closeout question is
     not asked and the session says in one line that the issue waits for the release (`awaiting_release`), and that after
     the release is merged the same issue is offered for closing.
+28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33). On a
+    disposable request that changes one screen, confirm the session publishes one artifact at the problem round
+    with the before built from the real template and fictitious data only, updates it on the same URL at the
+    solution round (one after per approach) and at each branch that changes what the user sees, records the URL
+    once in the discovery log, draws a flow-and-layers diagram when there is no screen, and, at the stage 5 quiz,
+    lists for each slice the section of the artifact that shows what it delivers while asking the same quiz;
+    and that a host without the artifact tool gets one line and "artefato indisponível" in the log, never a
+    silent skip.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact
