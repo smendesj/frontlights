@@ -1,9 +1,19 @@
 # Autorização e limites de aplicação das permissões
 
-O Frontlights não instala hooks, inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
+O Frontlights instala um único hook, e só depois do "Sim" a uma pergunta que mostra o script: o `pre-push`
+de `homolog hook` (`scripts/homolog.py`), que recusa enviar a main local do projeto, a homologação, e qualquer
+push cujo destino seja `refs/heads/<base>`; ele fica no caminho que o Git resolve para `hooks/pre-push`
+(`core.hooksPath` inclusive), leva uma linha de marca que o identifica, nunca sobrescreve um hook de outra
+origem (o `--install` recusa, e a sessão mostra o script para o usuário juntar à mão) e é conferido no início
+de cada etapa 6. É uma guarda, não uma barreira: `--no-verify` e a interface do GitHub passam por ele, e a
+regra de que a main local nunca é enviada continua regra da skill. Fora esse, o Frontlights não instala hooks,
+inclusive o de lembrete: o `templates/frontlights-prompt-hook.py` é um
 modelo que o usuário copia para o `~/.claude/hooks/` e registra no próprio `settings.json`; ele só
 injeta um texto no turno, lê o prompt e o conteúdo do transcrito (só para procurar duas marcas de que o
-Frontlights já foi aberto) e sai sempre com 0, sem bloquear.
+Frontlights já foi aberto) e sai sempre com 0, sem bloquear. As escritas da skill dentro de `.git/` são três e
+só essas: esse hook, com o "Sim"; a linha `/.frontlights/` em `.git/info/exclude` quando a pasta `.workflows/`
+é renomeada (`SKILL.md`, etapa 2); e as reservas de porta do `serve` em `frontlights-serve/ports/` no
+diretório comum do Git (`docs/protocol.md`).
 
 O Frontlights **não** instala hooks de permissão, altera configurações globais ou
 ativa modos de contorno das proteções. Os controles existentes do Claude e do
@@ -59,6 +69,14 @@ A main local continua protegida como branch de trabalho (`edit` e `test` nela s�
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
 `review-gate` e o `browser-gate`), e um modelo que não o chame não é impedido por ele.
+
+**Sincronização da main local (`homolog sync`).** Trazer `origin/<base>` para a main local é merge coberto
+(`docs/protocol.md`), feito pelo `scripts/homolog.py` sem shell (lista de argumentos, `GIT_TERMINAL_PROMPT=0`,
+prazo): exige a worktree principal com `<base>` em uso, sem alteração rastreada pendente e sem merge em
+andamento, roda `git fetch` e `git merge --no-edit`, e um conflito é desfeito na hora (`git merge --abort`,
+`HEAD` de volta ao commit anterior) e volta como pergunta com os arquivos nomeados. Nunca envia, nunca usa
+`--force`, `reset` nem `rebase`, e nunca toca outra branch além da `<base>`. O `fetch` é a única chamada de
+rede do utilitário, para o remoto já configurado no repositório, com as credenciais do próprio Git do usuário.
 
 O registro de autorização serve para auditoria, não como credencial. Ele pode ser
 editado; o utilitário não consegue provar que uma pessoa o escreveu nem que os
@@ -343,7 +361,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
   depende) na branch de uma slice para atualizá-la, juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
   confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na

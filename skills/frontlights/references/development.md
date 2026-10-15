@@ -35,6 +35,40 @@ created. Run it only after "Sim" and record the answer verbatim in the handoff. 
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
+## The start of stage 6: the pre-push hook and the sync of the local main
+
+Both run in the main worktree of the project (where the local main is checked out), in a project with a
+remote, before the first branch of the run is cut; a project without a remote (`repository: null`, no
+`origin`) gets neither, and the session says so in one line. The helper is `scripts/homolog.py`, reached as
+`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog <operation> ...`; it prints one JSON object with
+`ok`, `exitCode`, `operation` and `message`: exit code 0 done, 1 refused or failed, 2 a question for the user.
+
+**The hook.** `homolog hook --root <main worktree> --base <base>` checks the `pre-push` hook at the path Git
+resolves (`core.hooksPath` included) and answers `installed`, `ours`, `foreign`, `path` and `script`, the
+exact text `--install` would write. Exit code 0: installed and Frontlights' (a marker line names it). Exit
+code 2 with `installed: false`: show `script` in a code block and ask "Instalar o hook `pre-push` que recusa
+enviar a main local?" ("Sim, instalar" / "Não, seguir sem o hook"); on "Sim", `homolog hook --install --root
+<main worktree> --base <base>` writes it (idempotent when it is already ours), the check is rerun and the
+answer goes verbatim to the handoff; on "Não", the run goes on and the handoff says the hook is absent. Exit
+code 2 with `foreign: true`: a `pre-push` of another origin exists; it is never overwritten (`--install`
+refuses with exit code 1), the session says so in one line, shows `script` for the user to merge by hand and
+goes on. The hook is POSIX `sh`: it reads the refs Git hands a `pre-push` and exits 1, with a message in the
+user's language, when a line pushes `refs/heads/<base>` from the local side or into the remote side (`git
+push origin main` and `git push origin x:main` alike); everything else passes. It is the only hook the skill
+installs, a guard and not a barrier: `--no-verify` and GitHub's own interface pass it, and the rule that the
+local main is never pushed stays a rule of the skill.
+
+**The sync.** `homolog sync --root <main worktree> --base <base> [--remote origin]` is the covered merge of
+`origin/<base>` into the local main: it requires the main worktree to have `<base>` checked out, no tracked
+change pending and no merge in progress (exit code 1 names what blocks; untracked files are fine), runs
+`git fetch <remote>` and `git merge --no-edit <remote>/<base>` (a fast-forward when possible), and answers
+`before`, `after`, `advanced`, `fastForward` and `remoteTip`. A conflict is undone on the spot (`git merge
+--abort`, the worktree clean again, `HEAD` back at `before`) and comes back as exit code 2 with `conflict:
+true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito agora na worktree principal"
+/ "Seguir sem sincronizar") and never resolves a conflict in the local main silently. The sync never pushes,
+never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
+not, the two commits, a conflict and its answer) in the handoff.
+
 ## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 
 An issue is worked on one issue branch, cut from the local main (the base branch of the charter,
@@ -175,7 +209,7 @@ avoids that. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
 not the base, push it (and the dependency's branch), open a draft PR whose base is the
 dependency's branch, retarget that PR, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), and `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed, and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
+branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
 the remote main, deploying or releasing. When the user chose to wait, a dependent
 stays parked until its dependency is in the approved base.
 
@@ -415,7 +449,7 @@ their own approval (`references/closeout.md`). The release's pull request is cov
 the host's native approval; the branches of issues and slices are never pushed. Never
 merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or batch's verified branches into a local integration branch that is never pushed, and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,

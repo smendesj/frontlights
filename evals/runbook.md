@@ -222,7 +222,11 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     (`review-gate` `current`) and `browser-gate` `answered` or `not_needed`, writes the `merge_into_local_main`
     operation and runs `authorize` before `git merge --no-ff` on the local main; an operation with a red gate, a
     slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's
-    "Merge na main local" line carries the three gates, the `authorize` output and the merge commit.
+    "Merge na main local" line carries the three gates, the `authorize` output and the merge commit. Then, at the
+    start of a stage 6 in a clone with a remote, confirm `homolog hook` exits 2 and the question shows the script,
+    "Sim" installs it and `git push origin main` is refused while a work branch still pushes; and that `homolog sync`
+    advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
+    the files with the main worktree left clean.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

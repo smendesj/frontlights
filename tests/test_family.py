@@ -222,6 +222,8 @@ class FamilyRulesTextTests(unittest.TestCase):
                    "of a slice's branch into the branch of its own issue when its loop closes, "
                    "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
                    "of a family's or batch's verified branches into a local integration branch that is never pushed, "
+                   "of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone "
+                   "and becomes a question), "
                    "and of the branch of the issue into the local main once its three gates are green")
         for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
             with self.subTest(file=name[-1]):

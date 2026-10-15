@@ -16,8 +16,9 @@ teste de navegador assistido (aplicado à mão na versão anterior) e a integra�
 exercitados em sessões reais de um projeto de produto; as [evidências de aceitação](docs/acceptance.md) dizem o que está provado, o que
 falta e os limites. A 1.0 sai depois de uma sessão real que cumpra os itens 12 e 13 do
 [roteiro](evals/runbook.md) com esta versão. **Não** são garantidos: a execução sem supervisão (a
-skill não instala hooks, então o teto de contexto e o escopo exato das permissões não são impostos
-por ele), o `authorize` (apenas consultivo) e qualquer sistema fora do Windows.
+skill instala só o hook `pre-push` da homologação, com o seu "Sim", e nenhum hook de permissão, então o teto de
+contexto e o escopo exato das permissões não são impostos por ela), o `authorize` (apenas consultivo) e
+qualquer sistema fora do Windows.
 
 ## Idioma
 
@@ -63,8 +64,9 @@ A skill define a ordem das etapas e lê o arquivo de cada etapa em `skills/front
 só quando chega nela. O `CLAUDE.md` da raiz orienta quem trabalha neste repositório; o Claude não
 o carrega nos projetos que usam a skill.
 
-Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). Nenhuma
-configuração ou rotina automática de interceptação (hook) é instalada.
+Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). O único hook que a skill
+instala é o `pre-push` da homologação (`homolog hook`), depois do seu "Sim" a uma pergunta que mostra o script;
+nenhuma configuração ou rotina automática de interceptação de permissões é instalada.
 
 #### Início por linguagem natural
 
@@ -669,7 +671,9 @@ Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, co
 worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
 em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
-e começa. Cada slice
+e começa; antes, no início de cada etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado
+só com o seu "Sim" a uma pergunta que mostra o script) e traz `origin/main` para a main local (`homolog sync`;
+um conflito é desfeito e vira pergunta). Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,

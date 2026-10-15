@@ -1020,6 +1020,8 @@ def main():
     p = sub.add_parser('drift')
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
+    p = sub.add_parser('homolog', help='homolog.py: `hook` and `sync` of the local main, the homologation (issue 32)')
+    p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
     args = parser.parse_args()
     code = 0
     try:
@@ -1059,9 +1061,14 @@ def main():
             result = checkpoint(args.root, load(args.issue), args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':
             result = resume(args.root, load(args.checkpoint), load(args.issue), args.handoff)
+        elif args.command == 'homolog':
+            import homolog
+            code = homolog.main(args.homolog_args)  # prints its own JSON
+            result = None
         else:
             result = {'discrepancies': drift(load(args.snapshot), load(args.current))}
-        print(json.dumps(result, indent=2, ensure_ascii=True))
+        if result is not None:
+            print(json.dumps(result, indent=2, ensure_ascii=True))
         return code
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         print(json.dumps({'error': str(exc)}), file=sys.stderr)
