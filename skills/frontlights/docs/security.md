@@ -42,6 +42,13 @@ momento. A decisão está escrita no Frontlights, não no `.frontlights/config.j
 repositório clonado não consiga ligá-la nem ampliá-la. É uma regra da skill, não uma barreira: os
 pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights não os altera.
 
+**Artefato do grilling.** A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
+host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso leva só dados fictícios.
+O antes é montado do template real do componente (HTML e CSS lidos do repositório), mas nenhum dado real,
+segredo, endpoint, nome de pessoa, cliente ou organização entra na página; os prints do produto em execução
+são do teste assistido, nunca do artefato. Sem ferramenta de artefatos, a sessão segue em texto e registra
+"artefato indisponível" no log de descoberta. É regra da skill, não barreira: nenhum script monta a página.
+
 **Subagentes.** O paralelismo (`docs/protocol.md`) não cria autoridade: um subagente trabalha sob as
 mesmas permissões nativas da sessão, e o "Sim" de uma operação negada vale para a sessão coordenadora que
 o perguntou, nunca para um agente que a execute por ela. O brief diz o que o agente nunca faz (perguntar ao
