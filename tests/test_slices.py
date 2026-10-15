@@ -101,6 +101,15 @@ class SlicesInThePlanTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 frontlights.validate_plan(plan(issue(1, value)))
 
+    def test_an_issue_holds_at_most_five_slices(self):
+        """Issue curta (issue 31, S1): até cinco caixas S<n>; a sexta é recusada com o teto na mensagem, e o
+        excedente vira issue de topo ligada por blocked-by (regra de texto, abaixo)."""
+        five = [slice_(1)] + [slice_(n, ['S1']) for n in range(2, 6)]
+        frontlights.validate_plan(plan(issue(1, five)))
+        self.assertEqual(frontlights.SLICES_MAX, 5)
+        with self.assertRaisesRegex(ValueError, r'1: .*6 slices.*no máximo 5.*issues de topo'):
+            frontlights.validate_plan(plan(issue(1, five + [slice_(6, ['S1'])])))
+
     def test_the_example_plan_carries_slices_and_still_schedules(self):
         example = json.loads(read('skills', 'frontlights', 'examples', 'plan.json'))
         sliced = [i for i in example['issues'] if i.get('slices')]
@@ -150,6 +159,28 @@ class SlicesTextTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat(criteria))
         self.assertNotIn('## Verificação da fatia vertical', template)
+
+    def test_the_cap_of_five_slices_is_written_where_the_cut_is_made(self):
+        """Issue 31, S1: o teto de cinco CAs por issue, o corte do excedente em issues de topo com blocked-by e as
+        caixas de pendência fora da conta aparecem na etapa 5, na referência, no modelo, no protocolo, no README e
+        no ensaio."""
+        skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '5. Slices') or '')
+        for phrase in ('at most five slices', 'top-level issues', '`--blocked-by`', 'leftover boxes do not count'):
+            with self.subTest(where='SKILL.md', phrase=phrase):
+                self.assertIn(phrase, skill)
+        reference = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),
+                                 'Slices as acceptance criteria') or '')
+        for phrase in ('at most five slices', 'sixth', 'top-level issues', '`--blocked-by`', 'Leftover boxes do not count',
+                       '`validate-plan` refuses the sixth'):
+            with self.subTest(where='issues.md', phrase=phrase):
+                self.assertIn(phrase, reference)
+        template = flat(section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Critérios de aceitação') or '')
+        for phrase in ('no máximo cinco', 'issues de topo', 'pendência não conta'):
+            with self.subTest(where='templates/issue.md', phrase=phrase):
+                self.assertIn(phrase, template)
+        self.assertIn('até cinco por issue', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
+        self.assertIn('no máximo cinco CAs', flat(read('README.md')))
+        self.assertIn('more than five slices', flat(read('evals', 'vertical-slices.md')))
 
     def test_the_protocol_the_readme_and_the_evals_follow(self):
         protocol = read('skills', 'frontlights', 'docs', 'protocol.md')

@@ -18,7 +18,8 @@ Reject: separate database/backend/frontend issues without a working seam; a slic
 answer to what can be demoed; a criterion already true at the base commit; the body shown
 before the numbered list; acceptance copied verbatim from the whole issue body; hidden
 shared-file contention; claiming `validate-plan` semantically proved verticality; creation
-before approval.
+before approval; more than five slices in one issue (the excess is cut into top-level issues
+linked by `--blocked-by`, never squeezed into one body).
 
 Prerequisite case: if no storage abstraction exists, a tiny tested persistence
 seam may be a prerequisite only with a named consumer and executable demonstration.

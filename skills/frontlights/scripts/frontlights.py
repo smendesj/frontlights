@@ -361,6 +361,7 @@ def board_resolution(plan, project):
 
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
+SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
 
 
 def slices_of(issue):
@@ -372,6 +373,11 @@ def slices_of(issue):
         return None
     label = issue['id']
     require(isinstance(slices, list) and slices, f'{label}: slices precisa ser uma lista com ao menos uma slice')
+    # A short issue: the sixth slice is cut out into top-level issues linked by --blocked-by (issue 31, S1).
+    # Leftover boxes (P1, P2) are added later, outside the plan, so they never count here.
+    require(len(slices) <= SLICES_MAX,
+            f'{label}: {len(slices)} slices: uma issue tem no máximo {SLICES_MAX}; o excedente vira issues de topo '
+            f'ligadas por --blocked-by (sub-issue só em caso raro)')
     seen = []
     for item in slices:
         require(isinstance(item, dict),

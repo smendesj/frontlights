@@ -197,6 +197,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     which run one after the other; the reviewer is a different agent from the implementer and the session reruns
     the commands the workers report; no worker asks the user, writes GitHub or edits outside its paths; and a
     host without subagents is reported as a capacity limit in one line.
+26. Short issues (`evals/vertical-slices.md`, issue 31). Approve a body whose honest cut needs six slices: confirm
+    the numbered list shows two top-level issues of at most five slices each, the second blocked by the first,
+    never one issue with six boxes; `validate-plan` on a plan with a six-slice issue exits with the cap in the
+    message; and a leftover box added later from a review does not count toward the cap.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

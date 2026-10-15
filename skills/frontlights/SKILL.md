@@ -309,7 +309,9 @@ sized for one TDD loop and one checkpoint. Prefactoring, when there is any, is t
 and blocks the others; a wide refactor is the declared exception, cut as expand, migrate in
 batches and contract. Each slice becomes one acceptance-criteria box of the issue, in
 dependency order, blockers first, with the sub-items Entrega, Seams, Camadas and Depende de,
-and every criterion fails at the base commit. The issue (with the sub-issues it already has)
+and every criterion fails at the base commit. A short issue holds at most five slices: the
+sixth is cut out into top-level issues linked by `--blocked-by` (a sub-issue only in a rare
+case), and leftover boxes do not count toward the cap. The issue (with the sub-issues it already has)
 covers every layer the requirement needs and records the layers analysed and, for each one
 not touched, why; the layers are known only after reading every layer (front end, back end,
 migrations and schema, tests, documentation) and tracing each screen field, button or action

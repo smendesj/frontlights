@@ -40,7 +40,9 @@ As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice,
 resultado observável de ponta a ponta, e logo abaixo os sub-itens sem caixa. Prefactoring,
 quando houver, é a primeira slice e nomeia o seam que funciona, o teste e o consumidor que
 depende dele; refatoração larga é a exceção declarada: expandir, migrar por lotes e contrair,
-cada passo uma slice. Todo critério falha no commit de partida; o que já é verdadeiro antes
+cada passo uma slice. Uma issue curta tem no máximo cinco caixas `S<n>`: a sexta vira issues de
+topo ligadas por blocked-by (sub-issue só em caso raro), e a caixa de pendência não conta no
+teto. Todo critério falha no commit de partida; o que já é verdadeiro antes
 do trabalho não é critério. Cada caixa fecha só com evidência. Uma slice estacionada ganha, como
 último sub-item da caixa, `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, antes da
 marcação; não copie esse sub-item para uma slice que não está estacionada, porque o RoadS lê

@@ -686,7 +686,9 @@ As slices da issue são os critérios de aceitação: uma caixa por slice, em or
 com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
 e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
 só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
-contrair, e todo critério falha no commit de partida.
+contrair, e todo critério falha no commit de partida. Uma issue curta tem no máximo cinco CAs,
+cada uma uma fatia vertical completa e curta; a sexta vira issues de topo ligadas por blocked-by, e a
+caixa de pendência não conta no teto.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
 lê as filhas no GitHub e leva todas na mesma execução (entrevista, plano e implementação),
 nunca só o pai; nenhuma sub-issue nova é criada. A fatia vertical é a issue mais as filhas, e

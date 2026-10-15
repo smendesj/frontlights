@@ -50,11 +50,18 @@ a criterion. A leftover from a review joins the same section as one more box (Fo
 The x/y GitHub shows for the issue is the progress of the slices, and the summary of the
 roadmap counts them as the parts of the delivery.
 
+**A short issue holds at most five slices.** Each one is a complete but short vertical slice,
+one TDD loop of hours, not days, so the user can test it by hand soon after it lands. When the
+cut needs a sixth, the body is too big for one issue: cut the excess into top-level issues of
+up to five slices each, published blockers first and linked by `--blocked-by`; a sub-issue
+only in a rare case. Leftover boxes do not count toward the cap: they arrive later, from a
+review or a test, and `validate-plan` never sees them.
+
 Record the slices in `plan.json` under `slices` of each issue (`examples/plan.json`): `id`
 (`S1`, `S2`, ...), `title`, `delivers`, `seams`, `layers` and `depends_on` (ids that come
-earlier in the list). `validate-plan` refuses a slice without `delivers`, with an unknown,
-later or repeated dependency, or without seams and layers; with `slices` present,
-`acceptance` and `vertical_check` are optional, because the slices carry both.
+earlier in the list). `validate-plan` refuses the sixth slice of an issue, a slice without
+`delivers`, with an unknown, later or repeated dependency, or without seams and layers; with
+`slices` present, `acceptance` and `vertical_check` are optional, because the slices carry both.
 
 **The quiz comes before the body.** Show the numbered list of the slices first, each with
 its title, "Depende de" and what it delivers, and ask with `AskUserQuestion` whether the
@@ -160,7 +167,8 @@ this checks structure, DAG, the slices of each issue, board fields, labels, body
 missing cross-layer tests, hidden sequencing, generated/shared files, migrations,
 ports, shared services, dependency cycles and context size. Add dependencies or
 shared ownership for resources that cannot safely run together. Split oversized
-issues into independently acceptable outcomes. See `evals/vertical-slices.md`.
+issues into independently acceptable outcomes: more than five slices is the measurable sign
+(the cap above). See `evals/vertical-slices.md`.
 
 Before asking for approval, show the complete plan in the user's language: the
 table of issues with their dependencies and ownership, and the full body of every
