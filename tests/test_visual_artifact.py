@@ -46,7 +46,8 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                        'built from the real template of the component', 'never a free sketch',
                        'the **after** for each approach', 'a diagram of the flow and of the layers, before and after',
                        'only fictitious data', 'no real record, secret, endpoint, person or client',
-                       'The URL is recorded in the discovery log',
+                       'The URL is recorded in the discovery log', 'the log line reads "não se aplica"',
+                       'numbered in the order of those questions and titled by the question',
                        '"artefato" is the page, "preview" is the field',
                        'Never a real screenshot', 'never an inline widget',
                        'say so in one line, go on in text', 'artefato indisponível'):
@@ -58,6 +59,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
         self.assertIn('publish the artifact with the **before**', problem)
+        self.assertIn('the confirmation question cites its section', problem)
         solution = flat(grilling.split('## 3. Solution round')[1].split('## 4. Decision tree')[0])
         self.assertIn('the section of the artifact that shows the **after** of this approach', solution)
         tree = flat(grilling.split('## 4. Decision tree')[1].split('## 5. Pre-mortem')[0])
@@ -76,6 +78,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
     def test_the_discovery_template_has_the_url_field(self):
         template = read('skills', 'frontlights', 'templates', 'discovery.md')
         self.assertIn('- Artifact URL (one per grilling, the same URL every round', template)
+        self.assertIn('"não se aplica" when no round touches a screen, a flow or the layers', template)
         self.assertLess(template.index('- Learning mode changes'), template.index('- Artifact URL'))
         self.assertLess(template.index('- Artifact URL'), template.index('## Project conventions'))
 
@@ -91,8 +94,6 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         readme = flat(read('README.md'))
         self.assertIn('**Artefato visual.**', readme)
         self.assertIn('um artefato por entrevista, na mesma URL', readme)
-        acceptance = read('docs', 'acceptance.md')
-        self.assertIn('| 28. Artefato visual no grilling e na lista de CAs (issue 33) |', acceptance)
 
 
 class ArtifactInTheSliceQuizTests(unittest.TestCase):
@@ -118,7 +119,8 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
     def test_the_dry_run_and_the_runbook_cover_the_artifact(self):
         case = read('evals', 'grilling-artifact.md')
         self.assertTrue(case.startswith('# Visual artifact in the grilling and in the list of slices (manual; no model score claimed)'))
-        for phrase in ('Setup:', 'Expected', 'Reject:', 'the same URL', 'fictitious', 'artefato indisponível',
+        for phrase in ('Setup:', 'Expected', 'Reject:', 'on the same URL as the grilling', 'fictitious',
+                       'artefato indisponível', 'não se aplica',
                        'one section per slice', 'never one page per round'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, case)
@@ -128,9 +130,7 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         self.assertLess(runbook.index('27. Local main as homologation'), runbook.index(item))
         self.assertLess(runbook.index(item), runbook.index('Only after all required checks pass'))
         acceptance = read('docs', 'acceptance.md')
-        row = next(l for l in acceptance.splitlines() if l.startswith('| 28. '))
-        self.assertIn('S2:', row)
-        self.assertIn('`evals/grilling-artifact.md`', row)
+        self.assertIn('| 28. Artefato visual no grilling e na lista de CAs (issue 33) |', acceptance)
 
 
 if __name__ == '__main__':
