@@ -248,7 +248,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     once in the discovery log, draws a flow-and-layers diagram when there is no screen, and, at the stage 5 quiz,
     lists for each slice the section of the artifact that shows what it delivers while asking the same quiz;
     and that a host without the artifact tool gets one line and "artefato indisponível" in the log, never a
-    silent skip.
+    silent skip; and that a request touching no screen, flow or layer gets no page, "não se aplica" in the log
+    and a stage 5 list that says once it carries no section.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact
