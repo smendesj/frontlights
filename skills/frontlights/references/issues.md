@@ -64,11 +64,18 @@ earlier in the list). `validate-plan` refuses the sixth slice of an issue, a sli
 `slices` present, `acceptance` and `vertical_check` are optional, because the slices carry both.
 
 **The quiz comes before the body.** Show the numbered list of the slices first, each with
-its title, "Depende de" and what it delivers, and ask with `AskUserQuestion` whether the
+its title, "Depende de", what it delivers and, for each slice, the section of the artifact that
+shows what it delivers: the artifact of the grilling (`references/grilling.md`, "The artifact"),
+updated on the same URL as the grilling with one section per slice, where the drawing of each
+slice is the screen, the flow or the layers as they stand once that slice lands, with fictitious
+data only (without the artifact tool, the list says "artefato indisponível" once and goes on in
+text). Then ask with `AskUserQuestion` whether the
 granularity is right (too coarse, too fine), whether the dependencies are real (each slice
-depends only on what truly gates it) and whether any slice should merge or split; iterate
+depends only on what truly gates it) and whether any slice should merge or split; the quiz
+itself stays the same, the drawing only makes each answer visible. Iterate
 until the user approves the breakdown. A slice with no answer to "what can be demoed when
-this is done?" is horizontal: fix it before the quiz, with no extra question. Only then show
+this is done?" is horizontal, and a slice whose drawing shows nothing demonstrable is horizontal
+too: fix it before the quiz, with no extra question. Only then show
 the complete body under the show-before-approval rule.
 
 **One write per issue.** The approval of the plan names the writes, one write per issue: a

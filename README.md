@@ -716,7 +716,8 @@ só; o relato de um subagente é conferido antes de virar evidência.
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na
 primeira rodada que toca tela, fluxo ou camadas e atualizado a cada rodada, com uma seção por pergunta: o
 antes da tela montado do template real do componente, o depois por abordagem e, sem tela, o diagrama de
-fluxo e de camadas. Só dados fictícios entram na página; a URL fica no log de descoberta; "preview"
+fluxo e de camadas; na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do artefato que mostra o
+que ela entrega. Só dados fictícios entram na página; a URL fica no log de descoberta; "preview"
 continua sendo só o campo das opções da pergunta. Sem a ferramenta, a sessão avisa numa linha e segue em
 texto.
 
