@@ -23,7 +23,7 @@ def flat(text):
     return ' '.join(text.split())
 
 
-def section(text, heading):
+def section_containing(text, heading):
     match = re.search(r'(?m)^(#+) [^\n]*' + re.escape(heading) + r'[^\n]*\n', text)
     if not match:
         return ''
@@ -37,7 +37,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
 
     def test_grilling_has_one_artifact_on_one_url(self):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
-        artifact = flat(section(grilling, 'The artifact'))
+        artifact = flat(section_containing(grilling, 'The artifact'))
         self.assertNotEqual(artifact, '')
         for phrase in ('one **artifact** per grilling',
                        'created at the first round that touches a screen, a flow or the layers',
@@ -100,7 +100,7 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
 
     def test_the_numbered_list_cites_the_artifact_section_of_each_slice(self):
         issues = read('skills', 'frontlights', 'references', 'issues.md')
-        quiz = flat(section(issues, 'Slices as acceptance criteria'))
+        quiz = flat(section_containing(issues, 'Slices as acceptance criteria'))
         for phrase in ('for each slice, the section of the artifact that shows what it delivers',
                        'the drawing of each slice', 'the same URL as the grilling',
                        'the quiz itself stays the same', 'a slice whose drawing shows nothing demonstrable is horizontal'):

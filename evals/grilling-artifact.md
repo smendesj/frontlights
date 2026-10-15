@@ -26,10 +26,13 @@ Expected, in this order:
    fixed before the quiz, with no extra question.
 6. In the host without the tool: one line says the visual is not available, the interview and the quiz go on in
    text, and the log's "Artifact URL" line reads "artefato indisponível".
+7. A request that touches no screen, flow or layer (a wording change in a document): no artifact is published,
+   nothing is said about it beyond the log's "Artifact URL" line reading "não se aplica".
 
 Reject: a real screenshot of the running product in the grilling, or an inline widget instead of the page; a
 free sketch where the template exists in the repository; a page per round, or a new URL after the first
 publication; real data, a secret, an endpoint, a person or a client on the page; a question that touches the
 screen, the flow or the layers without citing a section; the quiz changed into something other than
 granularity, dependencies and merge or split; a slice drawn in the list but with no answer to "what can be
-demoed"; a script that builds the page; the session skipping the artifact in silence when the tool is missing.
+demoed"; a script that builds the page; the session skipping the artifact in silence when the tool is missing; a page published for a request that
+touches no screen, flow or layer.

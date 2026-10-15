@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
-| Descoberta | Entrevistar, ler código, registrar decisões e publicar o artefato (uma página por grilling, na mesma URL, só com dados fictícios) | Resultado, limites e escolhas aprovados; a URL do artefato no log de descoberta |
+| Descoberta | Entrevistar, ler código, registrar decisões e publicar o artefato (uma página por grilling, na mesma URL, só com dados fictícios) | Resultado, limites e escolhas aprovados; a URL do artefato no log de descoberta (ou "artefato indisponível", sem a ferramenta; "não se aplica", quando nenhuma rodada toca tela, fluxo ou camadas) |
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |

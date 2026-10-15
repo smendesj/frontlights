@@ -47,7 +47,8 @@ So there is one **artifact** per grilling: a private page published with the hos
 tool (`Artifact` in Claude Code, a claude.ai page that also opens on the phone), created at
 the first round that touches a screen, a flow or the layers and updated at every later round
 **on the same URL**, never one page per round. It carries one section per question that
-touches a screen, a flow or the layers, named by the question, with:
+touches a screen, a flow or the layers, numbered in the order of those questions and titled
+by the question (so "seção 2" is the second question that touched the screen), with:
 
 - the **before** of the screen, built from the real template of the component (its HTML,
   the CSS that styles it and the fields it shows, read from the repository), never a free
@@ -64,13 +65,16 @@ discovery log (`templates/discovery.md`, "Artifact URL") at the first publicatio
 not change afterwards. Never a real screenshot of the running product (that belongs to the
 watched run) and never an inline widget: the page is the only visual. When the host has no
 artifact tool, say so in one line, go on in text, and record "artefato indisponível" in the log.
+When no round of the grilling touches a screen, a flow or the layers (a document, say), there
+is no artifact, and the log line reads "não se aplica".
 
 ## 1. Problem round
 
 1. Summarize the observation or issue, source/timestamp, affected users and the
    observed pain. When the change touches a screen, a flow or the layers, publish the
    artifact with the **before** (above) before the problem is confirmed, so the user
-   confirms what they see, not what they imagine.
+   confirms what they see, not what they imagine, and the confirmation question cites
+   its section.
 2. Separate evidence from inference and untested assumptions. Read relevant code
    and existing issues; identify duplicates, contradictions and missing context.
 3. When an issue already answers outcome, users, success measure and boundaries,
@@ -205,7 +209,7 @@ for deepening.
 ## Recording
 
 Record everything in `templates/discovery.md`: depth, learning mode, conventions
-with example paths, the URL of the artifact (or "artefato indisponível"), approaches
+with example paths, the URL of the artifact (or "artefato indisponível", or "não se aplica"), approaches
 considered (chosen and rejected, with reasons and pattern fit), branch decisions, concepts
 explained, pre-mortem, unresolved questions, approval references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing
