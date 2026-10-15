@@ -668,7 +668,8 @@ nada a impõe mecanicamente, e o gatilho do ambiente nunca vale como prova do me
 
 Verificação de atualização da skill (sem pergunta; mostra o comando de atualização
 quando há versão nova no GitHub) →
-pedido e dimensionamento → inspeção → entrevista de decisões → corpo da issue escrito sem nova
+pedido e dimensionamento → inspeção → entrevista de decisões (com um artefato visual, uma página privada
+na mesma URL do início ao fim) → corpo da issue escrito sem nova
 entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
@@ -710,6 +711,16 @@ respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
 só; o relato de um subagente é conferido antes de virar evidência.
+
+**Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
+página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na
+primeira rodada que toca tela, fluxo ou camadas e atualizado a cada rodada que toca uma delas, com uma seção
+por pergunta: o antes da tela montado do template real do componente, o depois por abordagem e, sem tela, o
+diagrama de fluxo e de camadas; na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do artefato
+que mostra o que ela entrega. Só dados fictícios entram na página; a URL fica no log de descoberta (ou "artefato
+indisponível", ou "não se aplica", quando nenhuma rodada toca tela, fluxo ou camadas, e aí a lista das CAs segue
+sem seção); "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a sessão avisa numa
+linha e segue em texto.
 
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
