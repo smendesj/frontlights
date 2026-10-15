@@ -84,8 +84,9 @@ of `references/issues.md`), implemented only under an authorization that names i
 acting on a family, the session offers its conversion into one issue with slices, one box
 per open sub-issue, with one approval per family (`references/issues.md`, "Converting a
 family"); a request to tidy a set of issues into that shape ("arrume as issues do MVP") runs,
-after stages 0 to 2, the same conversion in batch, one family at a time, and nothing else of
-stages 3 to 6.
+after stages 0 to 2, the same conversion in batch, one family at a time (the cut of a family
+with more than five open children into top-level issues included, created as stage 5 creates
+any issue), and nothing else of stages 3 to 6.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,
@@ -219,7 +220,7 @@ why in one sentence:
 - **Conversion.** A request to tidy a set of issues into the short shape ("arrume as issues
   do MVP"): stages 0 to 2 as always, then, instead of stages 3 to 6, the conversion of
   `references/issues.md` ("Converting a family"), in batch, one family at a time, one approval
-  per family.
+  per family; the top-level issues of a cut family are created as stage 5 creates any issue.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
 do. Do not silently downgrade a path the user asked for: if they asked for the issue body
