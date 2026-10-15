@@ -211,7 +211,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     worktree is cut from S2's branch (`"base"` in its charter entry) and `browser-gate` names it with `--stacked`;
     `cleanup plan` offers S2's branch once it is in the issue branch (caution `slice_merged_into_issue_branch`, no
     remote command) and keeps it as `slice_not_in_issue_branch` before; and the watched run is asked once for the
-    issue, when its last screen slice closes.
+    issue, when its last screen slice closes. Finally, the conversion of families (`evals/family-conversion.md`):
+    the offer before acting on a family, the batch request, one approval per family, the before and the after
+    shown in full, the old body kept, the children closed and archived only after their own "Sim", and a family
+    with more than five open children cut into top-level issues linked by `--blocked-by`.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

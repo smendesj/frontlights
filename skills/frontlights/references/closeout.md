@@ -28,6 +28,10 @@ parent's PR becomes `ready` with a later `mergedAt`, as `development.md` says). 
 request merged but that still has an unticked criterion comes back in `excluded` as `unchecked_criteria`: say which
 criteria are left, and tick only what the evidence supports (never to get the issue closed).
 
+A sub-issue closed by conversion (`--reason "not planned"`, with the comment `Convertida em CA S<k> da #<n>`,
+`references/issues.md`, "Converting a family") is history: it is no candidate, needs no tick in its parent, and
+the parent's new boxes are what this closeout counts.
+
 An open issue is a **candidate** only when it has an acceptance-criteria section and every criterion of it is
 ticked, and every one of its sub-issues is closed or a candidate in the same batch (children close before
 their parents). A closed issue whose card is not in Done is a candidate to be moved only, but only when it was closed as completed (one

@@ -152,7 +152,11 @@ escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permi
 texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
 migração de uma seção legada, pedida por você, também remove os itens movidos, e a linha `Bloqueada:` de uma
 slice que destravou é apagada antes da marcação), a releitura confere a diferença e nenhum utilitário do
-Frontlights faz essa escrita. O Frontlights não impede a sessão de
+Frontlights faz essa escrita. A conversão de uma família em issue + CAs (`references/issues.md`,
+"Converting a family") é a única exceção: o corpo do pai é substituído, só depois de o antes e o depois
+serem mostrados por inteiro e aprovados, uma aprovação por família; o corpo anterior fica guardado em
+`.frontlights/issues/<n>/`, a diferença é relida, e o fechamento das filhas convertidas e o ajuste do
+quadro continuam operações negadas, cada uma com a própria pergunta e o "Sim". O Frontlights não impede a sessão de
 encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
 que impede que a issue seja proposta para fechar com o critério aberto.
 

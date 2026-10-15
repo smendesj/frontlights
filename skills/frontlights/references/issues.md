@@ -183,6 +183,50 @@ literal UTF-8 bodies, not interpolated shell strings. Keep native permissions.
 If a network response is uncertain, reread/list issues before retrying to avoid
 duplicates. Record partial publication and resume remaining writes idempotently.
 
+## Converting a family into one issue with slices
+
+A family that already exists (a parent with sub-issues published before the no-new-sub-issue rule) is
+the old shape of a delivery. The short shape is one issue whose slices are its boxes, each slice its own
+worktree (`development.md`, "Slices in order"). The conversion turns the first into the second. It runs
+in two situations, with the same procedure:
+
+- **Offered.** Whenever the session is about to act on a family (stage 2 read it: the issue has open
+  sub-issues), before the grilling, ask with `AskUserQuestion`: "Converter a família #<n> em uma issue
+  com CAs antes de seguir?", options "Sim, converter" (first, recommended) and "Não, trabalhar como
+  família". On no, the family is grilled, planned and worked as a family (`grilling.md`, "Sub-issues of
+  the issue"). On yes, convert it, then go on from the converted issue.
+- **In batch.** When the user asks for a set of issues to be tidied into the short model ("arrume as
+  issues do MVP", a milestone, a label, a list of numbers), list the families of that scope (`gh issue
+  list` with the filter the user named, then `subIssuesSummary` of each), say how many there are and
+  which, and convert them one at a time, in the order the user names or by number; no grilling.
+
+**The procedure, per family.** Read the parent and its open sub-issues (closed sub-issues are history
+and stay out). Write the new body of the parent from `templates/issue.md`: the spec sections carry what
+the old body and the children's bodies already say (never a decision the user did not make), and each
+open child becomes one box `S<k>` with its Entrega (the child's outcome), Seams, Camadas and Depende de
+(from its `blockedBy` or `Depends on`), in dependency order; a child already partly done keeps its ticked
+criteria as sub-items of its box, and the box is ticked only when every one of them is. When the family
+has more than five open children, one body is too big: cut them into two or more top-level issues of
+up to five slices each, published blockers first and linked by `--blocked-by`; the parent becomes the
+first of them, or closes as "dividida em #a, #b" when nothing of it is left. Show the before and the
+after in full, under the show-before-approval rule: the current body of the parent and the list of its
+children, then the new body (or bodies) and the commands. Ask one approval per family, with
+`AskUserQuestion`; a family the user declines stays as it is.
+
+**The writes, after the approval.** The body of the parent is replaced: this is the only exception to
+the append-only rule of the leftover, allowed only here, only after the approval of that exact text. Capture
+the old body to `.frontlights/issues/<n>/body-before-<ts>.md`, write the new one with `gh issue edit <n>
+--repo <repo> --body-file <file>`, reread it and check the difference against the approved text. A new
+top-level issue of a cut family is created as stage 5 creates any issue (board, labels, `--blocked-by`),
+never with a parent. Then the converted children: close each one with `gh issue close <c> --repo <repo>
+--reason "not planned" --comment "Convertida em CA S<k> da #<n>"`, and take its card off the board with
+`gh project item-archive <number> --owner <owner> --id <item-id>`. Closing an issue and changing the
+board are denied operations: ask them with their own questions, one per family, each listing every
+exact command, and run them only after "Sim". A converted child is history for the closeout
+(`closeout.md`): it is no candidate and needs no tick in the parent. Record the conversion in
+`.frontlights/issues/<n>/handoff.md` (the children, the boxes they became, the commands and the literal
+answers). Until the conversion lands, a session that acts on the family works it as a family.
+
 ## Project board
 
 When `.frontlights/config.json` has `project` (reported by `inspect` as

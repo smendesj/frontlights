@@ -80,7 +80,11 @@ parent's branch (stage 6). No new sub-issue is ever created, on any path and at 
 stage: a family that already exists (children published before this rule) is read,
 worked and closed as before, and a finding during stage 6, from review or tests, becomes
 a new acceptance criterion of its source issue or a top-level issue (the Follow-ups ladder
-of `references/issues.md`), implemented only under an authorization that names it.
+of `references/issues.md`), implemented only under an authorization that names it. Before
+acting on a family, the session offers its conversion into one issue with slices, one box
+per open sub-issue, with one approval per family (`references/issues.md`, "Converting a
+family"); a request to tidy a set of issues into that shape ("arrume as issues do MVP") runs
+the same conversion in batch, one family at a time, and nothing else.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,
@@ -211,6 +215,9 @@ why in one sentence:
   under stage 6. Publish issues only if the user wants them.
 - **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
+- **Conversion.** A request to tidy a set of issues into the short shape ("arrume as issues
+  do MVP"): no grilling, no plan of its own; the conversion of `references/issues.md`
+  ("Converting a family"), in batch, one family at a time, one approval per family.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
 do. Do not silently downgrade a path the user asked for: if they asked for the issue body

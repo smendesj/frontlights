@@ -254,6 +254,14 @@ destinos: corrigir no mesmo PR, critério de aceitação novo na issue de origem
 escopo novo ou problema que atravessa várias issues, issue de topo, nunca uma sub-issue
 nova. O lote inteiro é decidido numa única pergunta.
 
+**Conversão de famílias.** Antes de agir numa família (pai com sub-issues abertas), o Frontlights
+oferece convertê-la numa issue só, com uma CA por filha aberta; um pedido como "arrume as issues
+do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois são mostrados por
+inteiro, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
+filhas são fechadas como "Convertida em CA S<k> da #<n>" e saem do quadro só com o "Sim" de cada
+operação, e uma família com mais de cinco filhas vira duas ou mais issues de topo ligadas por
+blocked-by. Nunca uma sub-issue nova.
+
 O Frontlights não cria sub-issues: uma família que já existe (filhas publicadas antes
 desta regra) continua lida, trabalhada e fechada como antes, filhas antes dos pais, e o
 `validate-plan` recusa uma issue proposta com `parent` ou `parent_external`, ou sem o `url`

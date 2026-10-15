@@ -98,7 +98,10 @@ pelo GitHub, que a issue está no quadro com os valores aprovados. Projeto local
 Regra do quadro: toda issue de topo entra no quadro; sub-issue entra só pelo pai.
 Nenhuma sub-issue nova é criada: uma família que já existe (filhas publicadas antes desta
 regra) é lida, trabalhada e fechada como antes, e o `validate-plan` recusa uma issue
-proposta com `parent`. As dependências entre as issues de um plano nascem como relação
+proposta com `parent`. A conversão de família em issue + CAs (`references/issues.md`), oferecida
+antes de agir numa família e feita em lote a pedido, é a única escrita que substitui um corpo: uma
+aprovação por família, o corpo anterior guardado, as filhas fechadas como convertidas e o quadro
+ajustado só com o "Sim" de cada operação. As dependências entre as issues de um plano nascem como relação
 nativa do GitHub (`gh issue create --blocked-by`, bloqueadoras publicadas primeiro, na
 ordem de `frontlights.py publish-order`) e são relidas em `blockedBy`; a linha `Depends
 on:` do corpo é texto de apoio. Achados de revisão, testes ou conferência seguem a seção
