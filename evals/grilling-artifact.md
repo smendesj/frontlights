@@ -14,7 +14,7 @@ Expected, in this order:
    of the form for each of the three approaches; each option's `preview` stays text (files, pattern fit,
    effort, seam) and names the section that shows its after. A decision-tree branch that changes what the user
    sees updates the page again on the same URL and cites its section; a branch that does not (a naming
-   decision, say) adds nothing to the page, never one page per round: the URL never changes.
+   decision, say) adds nothing to the page. There is never one page per round: the URL never changes.
 3. A request without a screen (an API change that adds a layer) gets, in the same place, a diagram of the flow
    and of the layers, before and after, instead of a form.
 4. The discovery log carries the URL in its "Artifact URL" line, written at the first publication and never
@@ -26,13 +26,14 @@ Expected, in this order:
    fixed before the quiz, with no extra question.
 6. In the host without the tool: one line says the visual is not available, the interview and the quiz go on in
    text, and the log's "Artifact URL" line reads "artefato indisponível".
-7. A request that touches no screen, flow or layer (a wording change in a document): no artifact is published,
-   nothing is said about it beyond the log's "Artifact URL" line reading "não se aplica".
+7. A request that touches no screen, flow or layer (a wording change in a document), even in the host without
+   the tool: no artifact is published, the log's "Artifact URL" line reads "não se aplica", and the stage 5 list
+   says once that it carries no section and goes on with the same quiz.
 
 Reject: a real screenshot of the running product in the grilling, or an inline widget instead of the page; a
 free sketch where the template exists in the repository; a page per round, or a new URL after the first
 publication; real data, a secret, an endpoint, a person or a client on the page; a question that touches the
 screen, the flow or the layers without citing a section; the quiz changed into something other than
 granularity, dependencies and merge or split; a slice drawn in the list but with no answer to "what can be
-demoed"; a script that builds the page; the session skipping the artifact in silence when the tool is missing; a page published for a request that
-touches no screen, flow or layer.
+demoed"; a script that builds the page; the session skipping the artifact in silence when the tool is missing;
+a page published for a request that touches no screen, flow or layer.

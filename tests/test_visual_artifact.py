@@ -104,13 +104,16 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         quiz = flat(section_containing(issues, 'Slices as acceptance criteria'))
         for phrase in ('for each slice, the section of the artifact that shows what it delivers',
                        'the drawing of each slice', 'the same URL as the grilling',
-                       'the quiz itself stays the same', 'a slice whose drawing shows nothing demonstrable is horizontal'):
+                       'the quiz itself stays the same', 'a slice whose drawing shows nothing demonstrable is horizontal',
+                       'numbered after the grilling\'s sections and titled by the slice',
+                       'when the grilling\'s log reads "não se aplica"', 'the list carries no section and says so once'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, quiz)
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage5 = flat(skill.split('## 5.')[1].split('## 6.')[0])
-        self.assertIn('for each slice, the section of the artifact with what it delivers', stage5)
+        self.assertIn('the section of the artifact with what it delivers', stage5)
         self.assertIn('on the same URL as the grilling', stage5)
+        self.assertIn('no section, said once, when the grilling\'s log reads "não se aplica"', stage5)
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('cada slice com a seção do artefato que mostra o que ela entrega', protocol)
         readme = flat(read('README.md'))

@@ -66,10 +66,12 @@ earlier in the list). `validate-plan` refuses the sixth slice of an issue, a sli
 **The quiz comes before the body.** Show the numbered list of the slices first, each with
 its title, "Depende de", what it delivers and, for each slice, the section of the artifact that
 shows what it delivers: the artifact of the grilling (`references/grilling.md`, "The artifact"),
-updated on the same URL as the grilling with one section per slice, where the drawing of each
+updated on the same URL as the grilling with one section per slice, numbered after the
+grilling's sections and titled by the slice (its S-number and title), where the drawing of each
 slice is the screen, the flow or the layers as they stand once that slice lands, with fictitious
-data only (without the artifact tool, the list says "artefato indisponível" once and goes on in
-text). Then ask with `AskUserQuestion` whether the
+data only. Without the artifact tool, the list says "artefato indisponível" once and goes on in
+text; when the grilling's log reads "não se aplica" (no round touched a screen, a flow or the
+layers), the list carries no section and says so once. Then ask with `AskUserQuestion` whether the
 granularity is right (too coarse, too fine), whether the dependencies are real (each slice
 depends only on what truly gates it) and whether any slice should merge or split; the quiz
 itself stays the same, the drawing only makes each answer visible. Iterate

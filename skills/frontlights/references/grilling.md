@@ -209,9 +209,10 @@ for deepening.
 ## Recording
 
 Record everything in `templates/discovery.md`: depth, learning mode, conventions
-with example paths, the URL of the artifact (or "artefato indisponível", or "não se aplica"), approaches
-considered (chosen and rejected, with reasons and pattern fit), branch decisions, concepts
-explained, pre-mortem, unresolved questions, approval references and evidence. If a small research/prototype step
+with example paths, the URL of the artifact (or "artefato indisponível", or "não se
+aplica"), approaches considered (chosen and rejected, with reasons and pattern fit),
+branch decisions, concepts explained, pre-mortem, unresolved questions, approval
+references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing
 authority. For a family, record the approaches and decisions of each sub-issue in the
 same tables, naming the issue number in the first column. Do not start product
