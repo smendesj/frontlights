@@ -297,7 +297,13 @@ existing code pattern unless it is concretely worse for the problem, and say so
 when it is. Sub-issues join the same interview instead of being left out: one
 labelled `needs-decision`, or whose body names no approach, gets its own solution
 round in this session; the ones that already settle theirs are confirmed together
-in one question (`references/grilling.md`). Keep facts, inferences and assumptions separate. Optional
+in one question (`references/grilling.md`). There is one artifact per grilling: a private page
+published with the host's artifact tool, created at the first round that touches a screen, a flow
+or the layers and updated on the same URL, with one section per such question (the before of the
+screen built from the real template, the after per approach, a diagram of the flow and of the
+layers without a screen), only fictitious data, and the URL in the discovery log
+(`references/grilling.md`, "The artifact"); without the tool, say so in one line and go on in
+text. Keep facts, inferences and assumptions separate. Optional
 research/prototypes are driven by uncertainty and do not authorize product
 mutations.
 
