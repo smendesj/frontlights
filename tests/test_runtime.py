@@ -129,7 +129,7 @@ class ReleaseManifestTests(unittest.TestCase):
     def test_grilling_offers_learning_mode_with_depth_and_keeps_three_approaches(self):
         skill = ROOT / 'skills' / 'frontlights'
         flat = ' '.join((skill / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
-        depth = flat.split('## 0. Depth')[1].split('## 1. Problem round')[0]
+        depth = flat.split('## 0. Depth')[1].split('## The artifact')[0]
         for phrase in ('"Qual profundidade de grilling?"', '"Ativar o modo aprendizado?"',
                        'in the same `AskUserQuestion` call', '"Desligado"',
                        'Read `references/learning.md` before writing the first explanation',

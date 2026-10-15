@@ -40,10 +40,42 @@ learning-mode line whenever the mode changes and add the change, with the
 question where it happened, to the log's learning-mode changes line. Record both
 choices.
 
+## The artifact: the picture of each round
+
+Text alone makes the user imagine a screen, a flow or a set of layers from the options.
+So there is one **artifact** per grilling: a private page published with the host's artifact
+tool (`Artifact` in Claude Code, a claude.ai page that also opens on the phone), created at
+the first round that touches a screen, a flow or the layers and updated at every later round
+**on the same URL**, never one page per round. It carries one section per question that
+touches a screen, a flow or the layers, numbered in the order of those questions and titled
+by the question (so "seção 2" is the second question that touched the screen), with:
+
+- the **before** of the screen, built from the real template of the component (its HTML,
+  the CSS that styles it and the fields it shows, read from the repository), never a free
+  sketch;
+- the **after** for each approach of the solution round and, in the decision tree, for each
+  option that changes what the user sees;
+- without a screen, a diagram of the flow and of the layers, before and after.
+
+The page lives outside the machine, so it carries only fictitious data: made-up names, numbers
+and texts; no real record, secret, endpoint, person or client enters it. The question cites
+the section ("artefato, seção 2: depois por abordagem"; without a screen, "seção 1: fluxo e
+camadas, antes" and "seção 2: fluxo e camadas, depois por abordagem"); the option `preview` stays the text of the
+option, so "artefato" is the page, "preview" is the field. The URL is recorded in the
+discovery log (`templates/discovery.md`, "Artifact URL") at the first publication and does
+not change afterwards. Never a real screenshot of the running product (that belongs to the
+watched run) and never an inline widget: the page is the only visual. When the host has no
+artifact tool, say so in one line, go on in text, and record "artefato indisponível" in the log.
+When no round of the grilling touches a screen, a flow or the layers (a document, say), there
+is no artifact, and the log line reads "não se aplica".
+
 ## 1. Problem round
 
 1. Summarize the observation or issue, source/timestamp, affected users and the
-   observed pain.
+   observed pain. When the change touches a screen, a flow or the layers, publish the
+   artifact with the **before** (above) before the problem is confirmed, so the user
+   confirms what they see, not what they imagine, and the confirmation question cites
+   its section.
 2. Separate evidence from inference and untested assumptions. Read relevant code
    and existing issues; identify duplicates, contradictions and missing context.
 3. When an issue already answers outcome, users, success measure and boundaries,
@@ -95,7 +127,9 @@ For every approach, the option `preview` shows:
 - **pattern fit:** follows the convention (cite the example path) or breaks it
   (why, and the cost of the divergence);
 - effort, risk, reversibility and compatibility;
-- how it would be tested, at which public seam.
+- how it would be tested, at which public seam;
+- the section of the artifact that shows the **after** of this approach, when the
+  approach touches a screen, a flow or the layers (the artifact, above).
 
 Recommend first, with the reason in one line. Prefer the approach that follows
 the project's pattern unless section 2 justifies breaking it. Record rejected
@@ -115,6 +149,9 @@ Pick the branches by kind of work:
 | Refactor | target boundary, migration order, behavior preservation evidence, pattern it converges to, rollback |
 | Integration | contract and versioning, authentication (never secrets in the repository), failure and retry, test doubles vs. live verification, rate and cost |
 | Document | audience, structure, sources of truth, maintenance owner |
+
+A branch that touches a screen, a flow or the layers cites the section of the artifact
+that shows it, updated for that round on the same URL (the artifact, above).
 
 Technical branches (every branch except scope, priority and other product
 questions) follow the slot rule of `references/learning.md`. With learning mode
@@ -173,9 +210,10 @@ for deepening.
 ## Recording
 
 Record everything in `templates/discovery.md`: depth, learning mode, conventions
-with example paths, approaches considered (chosen and rejected, with reasons and
-pattern fit), branch decisions, concepts explained, pre-mortem, unresolved
-questions, approval references and evidence. If a small research/prototype step
+with example paths, the URL of the artifact (or "artefato indisponível", or "não se
+aplica"), approaches considered (chosen and rejected, with reasons and pattern fit),
+branch decisions, concepts explained, pre-mortem, unresolved questions, approval
+references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing
 authority. For a family, record the approaches and decisions of each sub-issue in the
 same tables, naming the issue number in the first column. Do not start product
