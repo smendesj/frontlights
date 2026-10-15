@@ -16,6 +16,13 @@ Operations (each prints one JSON object on stdout):
          --no-edit <remote>/<base>`, a fast-forward when possible. A conflict is aborted at once, the worktree is
          checked clean again at the commit it stood on, and the conflicting files are reported for the session to
          ask the user. It never pushes, never touches another branch, never uses --force, reset or rebase.
+  bundle write one Git bundle of the local base and of every local branch under `--prefix` (default `claude/`)
+         into the folder that `homolog.backupDir` in the config names (`backup_dir` validates the key, and
+         `inspect` reuses it). Without the key it says there is no folder and writes nothing. The folder must exist and
+         must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
+         storage, not redirection, and is allowed); it is never created. The file is
+         `<root folder>-<YYYYmmdd>-<HHMMSS>.bundle` in local time, `-2`, `-3`... when the name is taken: nothing
+         is ever overwritten or deleted. `git bundle verify` must accept the file before it is reported.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
 session (hook missing or foreign on --check; a conflict on sync). A refusal is JSON, never a traceback.
@@ -27,11 +34,16 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 GIT_TIMEOUT = 45
 FETCH_TIMEOUT = 120
+BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
+BACKUP_KEYS = {'backupDir'}                     # the only key of the `homolog` block of the config
+CONTROL = re.compile(r'[\x00-\x1f\x7f]')
+REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
 MARKER_LINES = 3         # the marker sits among the first lines of the hook
 MARKER = '# frontlights pre-push hook v1 (homolog hook)'
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]*')   # a plain branch or remote name: safe inside the hook's quotes
@@ -214,14 +226,158 @@ def op_sync(root, base, remote):
     return result
 
 
+# ---------------------------------------------------------------- bundle
+
+def backup_dir(config):
+    """The folder `homolog.backupDir` names, as a Path, or None when no backup is configured.
+
+    `homolog` absent or null is None; otherwise it must be an object whose only key is `backupDir`, so a typo never
+    passes in silence. `backupDir` absent or null is None; otherwise a non-empty string with an absolute path (a
+    drive or UNC root on Windows), without `..` segments, not starting with `~`, without `{placeholder}` braces,
+    NUL or control characters. The folder need not exist: `inspect` is read-only and the folder may be a synced
+    cloud folder; `bundle` checks it at run time. A refusal never repeats the value.
+    """
+    block = config.get('homolog')
+    if block is None:
+        return None
+    require(isinstance(block, dict), 'homolog precisa ser um objeto com a chave backupDir')
+    unknown = [str(key)[:40] for key in block if key not in BACKUP_KEYS]
+    if unknown:
+        raise Refusal(f'homolog tem a chave desconhecida `{unknown[0]}`; a única chave aceita é backupDir')
+    value = block.get('backupDir')
+    if value is None:
+        return None
+    require(isinstance(value, str) and value.strip(),
+            'homolog.backupDir precisa ser um texto não vazio com o caminho absoluto da pasta de backup')
+    path = Path(value)
+    require(path.is_absolute() and '..' not in path.parts and not value.startswith('~')
+            and not CONTROL.search(value) and '{' not in value and '}' not in value,
+            'homolog.backupDir precisa ser um caminho absoluto (com unidade ou raiz UNC no Windows), sem `..` nem `~`, '
+            'sem chaves `{}` nem caracteres de controle')
+    return path
+
+
+def load_config(path):
+    """The config object at `path`; a Refusal when unreadable or not a JSON object."""
+    try:
+        config = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        raise Refusal(f'não foi possível ler o config em {path}: confira o caminho e o JSON')
+    require(isinstance(config, dict), f'o config em {path} precisa ser um objeto JSON')
+    return config
+
+
+def reparse_tag(path):
+    """0 for an ordinary entry, the reparse tag otherwise; -1 when unreadable (as roadmap_sync does for scrumRoot)."""
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return -1
+    attributes = getattr(info, 'st_file_attributes', 0)
+    if attributes & REPARSE_POINT:
+        return getattr(info, 'st_reparse_tag', -1)
+    return -1 if os.path.islink(path) else 0
+
+
+def cloud_tag(tag):
+    # OneDrive Files On Demand and other sync providers use IO_REPARSE_TAG_CLOUD_*: storage, not
+    # redirection, so it is allowed. Every other reparse point is refused.
+    return tag > 0 and (tag & 0xFFFF0FFF) == 0x9000001A
+
+
+def check_backup_folder(folder):
+    """The folder must exist as a directory, with no junction, symbolic link or non-cloud reparse point from the
+    folder up to the root of its drive or share. It is never created."""
+    require(folder.is_dir(), f'a pasta de backup homolog.backupDir não existe ou não é uma pasta: {folder}')
+    cursor = os.path.abspath(str(folder))
+    while True:
+        parent = os.path.dirname(cursor)
+        if parent == cursor:
+            return
+        tag = reparse_tag(cursor)
+        require(tag == 0 or cloud_tag(tag), f'a pasta de backup homolog.backupDir passa por uma junção, link simbólico '
+                                             f'ou outro reparse point em {cursor}; use uma pasta comum')
+        cursor = parent
+
+
+def branch_prefix(value):
+    require(bool(NAME.fullmatch(value or '')) and '..' not in value and value.endswith('/'),
+            'o prefixo das branches precisa ser um nome simples terminado em `/`, como claude/')
+    return value
+
+
+def bundle_refs(root, base, prefix):
+    """`refs/heads/<base>` and every local branch under `prefix`, as full ref names (never ambiguous with a tag)."""
+    require(rev(root, f'refs/heads/{base}'), f'a branch base `{base}` não existe neste repositório')
+    code, out, err = git(root, 'for-each-ref', '--format=%(refname)', f'refs/heads/{prefix}')
+    require(code == 0, f'`git for-each-ref` falhou: {trimmed(err)}')
+    branches = [line.strip() for line in out.splitlines() if line.strip()]
+    return [f'refs/heads/{base}'] + [ref for ref in branches if ref != f'refs/heads/{base}']
+
+
+def short(ref):
+    return ref[len('refs/heads/'):] if ref.startswith('refs/heads/') else ref
+
+
+def fresh_file(folder, stem, suffix='.bundle'):
+    """A path in `folder` that does not exist yet: `<stem>.bundle`, then `<stem>-2.bundle`, `<stem>-3.bundle`..."""
+    candidate = folder / f'{stem}{suffix}'
+    counter = 2
+    while candidate.exists():
+        candidate = folder / f'{stem}-{counter}{suffix}'
+        counter += 1
+    return candidate
+
+
+def bundle_name(root):
+    """`<root folder>-<YYYYmmdd>-<HHMMSS>` in the machine's local time."""
+    stamp = datetime.now().astimezone().strftime('%Y%m%d-%H%M%S')
+    return f'{Path(os.path.abspath(root)).name or "repo"}-{stamp}'
+
+
+def write_bundle(root, folder, refs):
+    """Creates the bundle, has Git verify it and returns (path, refs it carries as short names)."""
+    path = fresh_file(folder, bundle_name(root))
+    code, _, err = git(root, 'bundle', 'create', str(path), *refs, timeout=BUNDLE_TIMEOUT)
+    require(code == 0, f'`git bundle create` falhou: {trimmed(err)}')
+    code, _, err = git(root, 'bundle', 'verify', str(path), timeout=BUNDLE_TIMEOUT)
+    require(code == 0, f'`git bundle verify` recusou o arquivo gravado: {trimmed(err)}')
+    code, out, err = git(root, 'bundle', 'list-heads', str(path))
+    require(code == 0, f'`git bundle list-heads` falhou: {trimmed(err)}')
+    heads = [short(line.split()[-1]) for line in out.splitlines() if line.strip()]
+    return path, heads
+
+
+def op_bundle(root, config_path, base, prefix):
+    worktree(root)
+    base = plain_name(base, 'a branch base')
+    prefix = branch_prefix(prefix)
+    folder = backup_dir(load_config(config_path))
+    if folder is None:
+        return {'configured': False, 'written': False, 'exitCode': 1,
+                'message': 'não há pasta de backup configurada (homolog.backupDir); nada foi gravado'}
+    result = {'configured': True, 'written': False}
+    try:
+        check_backup_folder(folder)
+        path, heads = write_bundle(root, folder, bundle_refs(root, base, prefix))
+    except Refusal as error:
+        result.update(exitCode=1, message=str(error))
+        return result
+    result.update(written=True, verified=True, path=str(path), refs=heads, bytes=path.stat().st_size, exitCode=0,
+                  message=f'Bundle {path.name} gravado em {folder} com {len(heads)} ref(s): {", ".join(heads)}.')
+    return result
+
+
 # ---------------------------------------------------------------- command line
 
-def run(operation, root, base='main', remote='origin', install=False):
+def run(operation, root, base='main', remote='origin', install=False, config=None, prefix='claude/'):
     try:
         if operation == 'hook':
             result = op_hook(root, base, install)
         elif operation == 'sync':
             result = op_sync(root, base, remote)
+        elif operation == 'bundle':
+            result = op_bundle(root, config, base, prefix)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -244,7 +400,7 @@ def build_parser():
     parser = JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('hook', 'sync'):
+    for name in ('hook', 'sync', 'bundle'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', required=True, help="the project's main worktree")
         command.add_argument('--base', default='main', help='the base branch, the local homologation (default main)')
@@ -252,8 +408,11 @@ def build_parser():
             mode = command.add_mutually_exclusive_group()
             mode.add_argument('--check', action='store_true', help='report the hook without writing (the default)')
             mode.add_argument('--install', action='store_true', help='write the hook when missing or already ours')
-        else:
+        elif name == 'sync':
             command.add_argument('--remote', default='origin', help='the remote the base is fetched from (default origin)')
+        else:
+            command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.backupDir names the folder')
+            command.add_argument('--prefix', default='claude/', help='the work branches to include: every local branch under it (default claude/)')
     return parser
 
 
@@ -261,7 +420,7 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
         result = run(args.operation, args.root, args.base, getattr(args, 'remote', 'origin'),
-                     getattr(args, 'install', False))
+                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', 'claude/'))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

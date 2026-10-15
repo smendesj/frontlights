@@ -488,8 +488,19 @@ When the last slice of the issue is merged into the branch of the issue, in this
    main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
    or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
    gates to make them pass.
-6. **Record it.** The handoff's line "Merge na main local" takes the three gates with the evidence of each,
-   the output of `authorize` and the commit of the merge; the branch of the issue stays local, never pushed.
+6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
+   `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
+   .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and every
+   branch under the `branch_prefix`, into the folder named by `homolog.backupDir` in `.frontlights/config.json`
+   (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,
+   and the real path never enters a repository), verifies it with `git bundle verify` and reports `path`,
+   `refs` and `bytes`. The folder must already exist; nothing else is written there and old bundles are never
+   deleted. Exit code 1 with `configured: false` means no folder is configured: say so in one line, name the
+   key, ask nothing and go on; any other refusal (a missing folder, a junction in its path, a Git failure) is
+   said in one line and recorded in the handoff as a backup not taken.
+7. **Record it.** The handoff's line "Merge na main local" takes the three gates with the evidence of each,
+   the output of `authorize`, the commit of the merge and the bundle's path (or "sem backup configurado");
+   the branch of the issue stays local, never pushed.
 
 `authorize` is a preflight, not a barrier: it reads no Git and proves neither that the suite ran nor that the
 review is current (the commands, `review-gate` and `browser-gate` do), the host's own permission prompts still
