@@ -51,18 +51,19 @@ class FanOutRuleTests(unittest.TestCase):
     def test_slices_stay_in_order_while_the_work_around_them_fans_out(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage6 = flat(section(skill, '6. Bounded development'))
-        self.assertIn('one at a time; slice parallelism only between issues', stage6)
-        self.assertIn('the legwork around the open slice fans out', stage6)
+        self.assertIn('independent slices (no `Depende de` between them and no file in common) run at once', stage6)
+        self.assertIn('the legwork around each open slice fans out', stage6)
+        self.assertNotIn('slice parallelism only between issues', stage6)
         development = read('skills', 'frontlights', 'references', 'development.md')
         slices = flat(section(development, 'Slices in order'))
-        self.assertIn('in dependency order, one at a time', slices)
-        self.assertIn('Slices run in parallel between issues only', slices)
+        self.assertIn('in dependency order: independent slices run at once', slices)
+        self.assertIn('Slices run in parallel inside an issue and between issues', slices)
         dispatch = flat(section(development, 'Dispatch and ownership'))
         for phrase in ('all launched in one message', 'A worker never calls `AskUserQuestion`',
                        "A worker's report is a claim", '**Fan out inside an issue.**',
                        'dispatch in the same message read-only workers', 'runs one at a time',
-                       'the reviewer is never the implementer',
-                       "Only one worker edits the issue's worktree at a time", 'the readers edit nothing'):
+                       'the reviewer is never the implementer', 'one implementer per open slice',
+                       "Only one worker edits a slice's worktree at a time", 'the readers edit nothing'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, dispatch)
 
@@ -77,12 +78,13 @@ class FanOutRuleTests(unittest.TestCase):
     def test_the_documents_in_portuguese_say_the_same(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         for phrase in ('**Paralelismo.**', 'um subagente por parte', 'lançados numa única mensagem',
-                       'slices continuam em ordem, uma por vez', 'recurso compartilhado',
+                       'slices independentes ao mesmo tempo, cada uma na própria worktree', 'recurso compartilhado',
                        'nunca serializa em silêncio', 'A sessão coordenadora é uma só',
                        'afirmação, não evidência', 'o revisor nunca é o autor'):
             with self.subTest(file='protocol', phrase=phrase):
                 self.assertIn(phrase, protocol)
-        self.assertIn('slices em paralelo só entre issues', protocol)
+        self.assertIn('slices independentes em paralelo dentro da issue e entre issues', protocol)
+        self.assertNotIn('slices em paralelo só entre issues', protocol)
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
         for phrase in ('**Subagentes.**', 'não cria autoridade', 'nunca para um agente que a execute por ela',
                        'continuam valendo para cada agente', 'antes de virar evidência'):
@@ -90,11 +92,12 @@ class FanOutRuleTests(unittest.TestCase):
                 self.assertIn(phrase, security)
         readme = flat(read('README.md'))
         for phrase in ('**Paralelismo máximo.**', 'em todo projeto', 'tantos subagentes quantas forem as partes',
-                       'slices continuam em ordem, uma por vez', 'sessão coordenadora, que é uma só',
+                       'CAs independentes ao mesmo tempo, cada uma na própria worktree', 'sessão coordenadora, que é uma só',
                        'conferido antes de virar evidência'):
             with self.subTest(file='README', phrase=phrase):
                 self.assertIn(phrase, readme)
-        self.assertIn('slices em paralelo só entre issues', readme)
+        self.assertIn('CAs independentes em paralelo dentro da issue e entre issues', readme)
+        self.assertNotIn('slices em paralelo só entre issues', readme)
 
     def test_acceptance_runbook_and_eval_track_it(self):
         self.assertIn('| 25. Paralelismo em toda etapa | Pendente |', flat(read('docs', 'acceptance.md')))

@@ -35,17 +35,20 @@ what to do next), `checks smoke` (it reuses the running serve),
 `serve stop`. The commands below read `browserTest` and `checks` from the project's
 `.frontlights/config.json` (main worktree included, as stage 2 says).
 
-## One watched run per batch
+## One watched run per issue
 
-There is one watched run per batch of work, never one per branch or worktree. The batch is
-every issue the session delivers together, one branch each (an issue with the sub-issues it
-already has, and any other issue authorized in the same run), and inside each issue its slices:
-in this reference a slice is a box of an issue's acceptance criteria (stage 5), and each
-`--root` is an issue's worktree. A slice that only changes tests or only the API does not hold
-the question back.
+There is one watched run per issue, never one per slice, branch or worktree. In this reference a
+slice is a box of an issue's acceptance criteria (stage 5), each slice has its own worktree and
+branch cut from the branch of the issue (`development.md`, "Slices in order"), and each `--root`
+is the worktree of an issue or of one of its slices. The batch of the run is the issue with its
+slices; a family that already exists (an issue with the sub-issues it already has) keeps one run
+for the family, its sub-issues being roots too. A slice that only changes tests or only the API
+does not hold the question back.
 
 **When the question comes out.** Only at these points, each one after `browser-gate`: (a) when the
-last slice that changes the screen has closed its TDD loop, the normal moment, which comes before
+last slice that changes the screen has closed its TDD loop and every slice already closed is merged
+into the branch of the issue (the issue's worktree is a root: a merge after the record changes its
+code and turns the gate `stale`, like any later code change), the normal moment, which comes before
 the independent review of any of them (a review of work the user then asks to change is wasted);
 (b) before an independent review of a slice that changes the screen is dispatched, once no other
 slice that changes the screen is still in its loop (otherwise that review waits for (a)); (c) before an
@@ -58,8 +61,9 @@ comes back later is a new decision (`stale`). The session does not
 wait for the sibling slices, their reviews or the family integration.
 
 **What runs.** One ANTES on the approved base of the batch and one DEPOIS on the delivered state of
-the slices that have closed their loop at that moment: the branch itself when the batch has one
-branch, otherwise a local integration worktree (never pushed) that merges them, the one the family
+the slices that have closed their loop at that moment: the branch of the issue itself when every such
+slice is already merged into it, otherwise a local integration worktree (never pushed) that merges
+the issue branch and the slice branches still open, the one the family
 integration of `development.md` reuses and redoes after a fix. Every `Fluxo:` of the batch runs in
 those same two passes. A slice that closes its loop after the run and changes what a `Fluxo:`
 exercises (the same screen or route) makes the session ask again by hand, with the options of `stale`, because the gate cannot see
@@ -68,10 +72,12 @@ that; until it is answered the report says "implementada, aguardando teste assis
 **The gate.** `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" browser-gate --config <config>
 --base <base> --root <worktree> [--root <worktree> ...] [--stacked <branch>=<target> ...] --toca
 <sim|nao|ausente> --record <result.json>`. `--base` is the approved base of the batch, the same for
-every `--root`; each `--root` is an issue's worktree; each issue stacked on another branch (the base
+every `--root`; each `--root` is the worktree of an issue or of one of its slices; a slice's worktree is
+named with `--stacked <its branch>=<the branch of its issue>` (or the branch of the slice it is
+stacked on), and each issue stacked on another branch (the base
 the stacking authorization records for it, in a family that already exists) is named with
 `--stacked <its branch>=<the branch its PR targets>`, so only its own changes count (an API-only
-child stacked on a parent that changes the screen is then no visible root); without `--stacked`
+slice or child stacked on a branch that changes the screen is then no visible root); without `--stacked`
 every root is measured from `--base`; `--toca` is `sim` when any issue's plan says `Toca o
 frontend: sim`, else what the plans say (`by_root` lists the visible files of each root, so compare
 each issue with its own plan);
@@ -105,8 +111,9 @@ warns about that. Limits: a script or an image inside a test or documentation fo
 when `frontPaths` names it, markdown pages never count, and an HTML fixture inside a test folder is
 asked about (answer `dispensado`).
 
-**The record.** The batch has one `result.json`, in the folder of its lead issue (the parent of a
-family, or the lowest-numbered issue of the batch): `.frontlights/issues/<lead>/browser/result.json`.
+**The record.** The issue has one `result.json`, in its own folder, `.frontlights/issues/<n>/browser/result.json`,
+whatever the number of its slices; a family that already exists keeps the one record of the family in the
+folder of its lead issue (the parent): `.frontlights/issues/<lead>/browser/result.json`.
 Besides the fields of the Evidence section it carries `situacao` (`pendente`, `ainda-nao`,
 `aprovado`, `prosseguir`, `sem-assistir`, `dispensado` or `alteracao`), `lote` with `issues` (the
 numbers) and `roots` (copied from the `browser-gate` output taken when the answer was recorded,
@@ -209,9 +216,9 @@ and the issue never counts as passed on that test.
 ## Watched run: before and after, with the user watching
 
 Whenever the plan turns the browser test on (`Toca o frontend: sim`) or `browser-gate`
-finds a visible change, ask once per batch (the section above), before the browser opens its
+finds a visible change, ask once per issue (the section above), before the browser opens its
 first window (the servers may already be up), with `AskUserQuestion`: "Pronto para
-assistir ao teste de navegador da issue #<n>?" (for a batch, "das issues #<n>, #<m> e #<k>",
+assistir ao teste de navegador da issue #<n>?" (for a family that already exists, "das issues #<n>, #<m> e #<k>",
 each one named in the text). The text says what comes: first the
 base (ANTES), then the delivered state (DEPOIS), each case twice, and the window stays open
 for about 5 minutes at the end; that the run creates the test data the `Fluxo:` needs (users, accounts and
@@ -249,8 +256,8 @@ When the user will watch:
   branch is already checked out elsewhere; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
   --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
-  delivered state (the batch's single branch, or the local integration of the slices that
-  closed their loop), served from its worktree. Give both servers an `auto` port of their
+  delivered state (the branch of the issue, or the local integration of it with the slices that
+  closed their loop and are not merged yet), served from its worktree. Give both servers an `auto` port of their
   own. A process with a fixed port runs one pass at a time, in this order: stop the
   issue's own server (the standard order started it earlier), start ANTES, run it,
   `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts, then
@@ -392,7 +399,7 @@ never a reason to skip a case, shorten a pass, park the run or ask the user to s
   production, staging or a shared remote database. Never read, change or reuse a real person's or customer's
   user, profile or data: the run touches only what it created or the logins of `browserTest.users`.
 - **Record.** Before the first creation write `.frontlights/issues/<n>/browser/dados-de-teste.json` (the
-  lead issue's folder) and add each item as it is created: its kind and id, `removido: false`. Never the
+  issue's folder; the lead issue's for a family that already exists) and add each item as it is created: its kind and id, `removido: false`. Never the
   login, the password or a whole row. The password of a created login goes only into a git-ignored local
   file of the project and reaches the browser through an environment variable of the process; never into
   a record, a caption, the strip, a screenshot, the conversation or a brief.
@@ -448,8 +455,8 @@ the answer is recorded verbatim.
 ## Evidence
 
 Before each browser run, take `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" evidence --root <worktree>`.
-Write `.frontlights/issues/<n>/browser/result.json` (for a batch, `<n>` is its lead issue and
-the file is the batch's) with timestamp, branch,
+Write `.frontlights/issues/<n>/browser/result.json` (for a family that already exists, `<n>` is its lead
+issue and the file is the family's) with timestamp, branch,
 `head`, `diff_sha256`, the account used (`conta 1` or `conta 2`, never the login),
 each step and its result, console and network errors, screenshot file names, the
 failure kind and the user's answer. A watched run adds `assistido` (true or
@@ -485,7 +492,7 @@ delivery, so this costs at most one extra capture per delivery and nothing leave
   data and no local path: crop, or choose another view of the same result, or take no print for that case. Test
   data only. JPEG or PNG, at most 1 MB and about 1920 px wide. Look at every image yourself and retake the
   blurry, empty or error ones.
-- **Where.** `.frontlights/issues/<n>/browser/resumo/` (the lead issue's folder) of the project's **main
+- **Where.** `.frontlights/issues/<n>/browser/resumo/` (the issue's folder; the lead issue's for a family) of the project's **main
   worktree** (the first one `git worktree list` shows), never of a linked one:
   the cleanup of the delivered worktrees takes their `.frontlights` records with them, and the summary comes
   days later. A `candidates.json` lists each print:

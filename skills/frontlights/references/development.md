@@ -32,24 +32,42 @@ created. Run it only after "Sim" and record the answer verbatim in the handoff. 
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
-## Slices in order: one branch and one PR per issue
+## Slices in order: one issue branch, one worktree per slice, one PR per issue
 
-An issue is worked on one branch, in one worktree, and delivered in one PR; its slices (the
-boxes of its acceptance criteria, stage 5) are worked in dependency order, one at a time. Each
+An issue is worked on one issue branch and delivered in one PR; each of its slices (the boxes
+of its acceptance criteria, stage 5) gets its own worktree and branch, `<branch_prefix>issue-<n>-s<k>`,
+cut from the branch of the issue at its current tip (`git worktree add -b <branch_prefix>issue-<n>-s<k>
+<path> <issue-branch>`) and named in the charter's `worktrees` with its `slice`, so that `authorize`
+accepts on that worktree only an operation that names the same slice; the slices are worked
+in dependency order: independent slices run at once (no `Depende de` between them and no file in
+common, judged before their loops from the `Seams:` and `Camadas:` of their boxes, each in its own
+worktree with its own implementer; a collision found during a loop stacks the later slice on the
+earlier one), and a slice that depends on a slice
+still open is cut from that slice's branch instead (stacked: `"base": "<slice-branch>"` in its
+worktree entry, named to `browser-gate` with `--stacked`, and merged into the branch of the issue
+after the slice it depends on; once that slice is merged, the stacked one brings the branch of the
+issue into its own branch, `git merge <issue-branch>` in its worktree, one of the covered merges
+below, and its `--stacked` target becomes the branch of the issue, so the earlier slice's branch may
+go). A conflict in the merge of a slice into the branch of the issue is resolved by this session in
+the issue's worktree, committed there, and shown to the independent reviewer as part of the diff. Each
 slice is one TDD loop at its own seams (the `Seams:` under its box), one checkpoint
-(`checkpoint --slice <id>` of `frontlights.py`, which `resume` echoes so the next window starts
-at that slice) and, when its loop closes with evidence (the affected test modules green, the
-measured commands), the tick of its box: capture the body, tick that line only, run
+(`checkpoint --slice <id>` of `frontlights.py`, saved as `checkpoint-<id>.json` in the issue's records,
+one per slice worktree, which `resume` echoes so the next window starts at that slice, in that
+worktree) and, when its loop closes with evidence (the affected test modules green, the
+measured commands), the slice branch is merged into the branch of the issue (`git merge --no-ff
+<branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below)
+and then comes the tick of its box: capture the body, tick that line only, run
 `closeout.py tick-check` before and after the write, and leave a short comment on the issue with
 the commit and the commands. The session may end in the middle of an issue: the handoff names
-the slice in progress and the slices already ticked, and a fresh session resumes at the first
-open box, in order. Slices run in parallel between issues only; inside an issue, the fan-out rule of
-`SKILL.md` keeps the agents busy around the open slice (Dispatch and ownership, below). The watched
-run stays one per batch,
-when the last slice that changes the screen closes its loop; the independent review stays one
-per issue, of the whole diff, before the PR, and the full suite runs once there. Stacking, the
-stacked wave and the family integration below apply only to a family that already exists (an
-issue with sub-issues published before this rule), never to the slices of one issue.
+the slice in progress with its worktree, and the slices already ticked, and a fresh session resumes at the first
+open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
+`SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
+run stays one per issue, when the last slice that changes the screen closes its loop; the independent review stays one
+per issue, of the whole diff, before the PR, and the full suite runs once there. The stacked wave
+and the family integration below (draft PRs whose base is a dependency's branch, their retargeting
+and the wait for the parent's merge) apply only to a family that already exists (an issue with
+sub-issues published before this rule); a slice stacked on another slice uses only the branch cut,
+the `base` of its worktree entry and `--stacked`, as said above.
 
 **Which tests run when.** Per slice, run the test modules the slice touches and the type checks;
 the fast suite is how the whole is checked between slices, when the project has one. In the
@@ -111,17 +129,18 @@ ports, databases and test data as well as Git. Recompute readiness and refill fr
 slots after each completion. A worker's report is a claim: read the diff and rerun the
 commands it names before it counts as evidence.
 
-**Fan out inside an issue.** The slices of one issue go one at a time, on its one branch, and
-the agents around the open slice do not wait for it. While one worker runs the TDD loop of
-the open slice in the issue's worktree, dispatch in the same message read-only workers that
+**Fan out inside an issue.** The independent slices of one issue go at once, one implementer per open
+slice, each in the slice's own worktree (Slices in order, above), and the agents around them do
+not wait. While the implementers run the TDD loops of the open slices, dispatch in the same message read-only workers that
 prepare the next slice (the code at its seams, the conventions, a draft of its first red
-test, reported as text the implementer rewrites in its own loop) and, when the loop closes,
+test, reported as text the implementer rewrites in its own loop) and, when a loop closes,
 run at once the broader suite, the type checks and the other measured commands that share no
 resource (a test module that shares a port, a database or a reservation folder with another
 runs one at a time, as the project's own rules say). The independent reviewer and the driver
 of the watched run are workers of their own, dispatched together with whatever else is ready;
-the reviewer is never the implementer. Only one worker edits the issue's worktree at a time,
-and only it commits there: the readers edit nothing, and a worker that needs a file outside
+the reviewer is never the implementer. Only one worker edits a slice's worktree at a time,
+and only it commits there; the merge of a closed slice into the branch of the issue is this
+session's: the readers edit nothing, and a worker that needs a file outside
 its owned paths stops and reports.
 
 An issue is `verified` for dependency readiness only when its acceptance evidence
@@ -149,7 +168,7 @@ hunks the child shares with it, and that merging the parent PR with a merge comm
 avoids that. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
 not the base, push it (and the dependency's branch), open a draft PR whose base is the
-dependency's branch, retarget that PR, `git merge` of a base into the issue's own branch, and `git merge` of a family's or batch's verified
+dependency's branch, retarget that PR, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), and `git merge` of a family's or batch's verified
 branches into a local integration branch that is never pushed. Those are the only merges it allows: it never covers merging a PR, writing
 the base branch, deploying or releasing. When the user chose to wait, a dependent
 stays parked until its dependency is in the approved base.
@@ -312,8 +331,8 @@ sandbox controls still apply. Unexpected effects stop the affected issue.
 
 When anything the issue changes is visible on the screen (its `## Navegador e testes ligados`
 says so, or `frontlights.py browser-gate` finds it in the diff), the watched run belongs to the
-whole batch, not to this issue alone: [browser-testing.md](browser-testing.md) asks "pronto
-para assistir?" once the last slice of the batch that changes the screen has closed its loop,
+issue as a whole, not to this slice alone: [browser-testing.md](browser-testing.md) asks "pronto
+para assistir?" once the last slice of the issue that changes the screen has closed its loop and every closed slice is merged into the branch of the issue,
 before the independent review of any of them, and ends with the user's choice of watching
 again, approving, asking for a change or going on; its records join the evidence below. Any brief that hands the
 run to a subagent carries that reference's rule on test data: create what the flow needs, remove it afterwards.
@@ -322,7 +341,7 @@ while a screen slice is still in its loop it is not (the handoff lists the open 
 
 ## Review, checkpoints and renewal
 
-A slice that changes what the user sees waits for the batch's watched run, and the review of the
+A slice that changes what the user sees waits for the issue's watched run, and the review of the
 first screen slice waits until the last one has closed its loop and the user has answered:
 `browser-gate` has to say `answered` (exit code 0) before its independent reviewer is dispatched, (the points where
 the question comes out are listed in browser-testing.md); exit code 2 at those points is a question to
@@ -390,7 +409,7 @@ their own approval (`references/closeout.md`). Draft PRs are covered by the stan
 the host's native approval. Never
 merge a pull request, write the base branch, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, and of a family's or batch's verified branches into a local integration branch that is never pushed. Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or batch's verified branches into a local integration branch that is never pushed. Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,

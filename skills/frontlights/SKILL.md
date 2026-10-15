@@ -80,7 +80,13 @@ parent's branch (stage 6). No new sub-issue is ever created, on any path and at 
 stage: a family that already exists (children published before this rule) is read,
 worked and closed as before, and a finding during stage 6, from review or tests, becomes
 a new acceptance criterion of its source issue or a top-level issue (the Follow-ups ladder
-of `references/issues.md`), implemented only under an authorization that names it.
+of `references/issues.md`), implemented only under an authorization that names it. Before
+acting on a family, the session offers its conversion into one issue with slices, one box
+per open sub-issue, with one approval per family (`references/issues.md`, "Converting a
+family"); a request to tidy a set of issues into that shape ("arrume as issues do MVP") runs,
+after stages 0 to 2, the same conversion in batch, one family at a time (the cut of a family
+with more than five open children into top-level issues included, created as stage 5 creates
+any issue), and nothing else of stages 3 to 6.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,
@@ -103,8 +109,9 @@ refilled as each one lands: the read-only helpers of stages 0 to 2 (`update-chec
 `status` reads, `candidates`, `inspect`, the sub-issue reads) in one go, a read whose inputs
 a later answer changed run again; code reading, conventions, the field-by-field trace and
 research, one subagent per area or layer; in stage 6 the highest safe number of independent
-issues, each in its own worktree with its own agent, and, inside an issue, the legwork around
-the open slice: the next slice's reading, the broader suite, the type checks, the watched
+issues, each in its own worktree with its own agent, and, inside an issue, its independent slices,
+each in its own worktree with its own implementer, plus the legwork around the open slice of each: the
+next slice's reading, the broader suite, the type checks, the watched
 run's driver and the independent reviewer (`references/development.md`, "Dispatch and
 ownership"). Waiting is for a real dependency only: an approval not yet given, a `Depende de`,
 a file two pieces would both edit, or a shared resource (a port, a database, a reservation
@@ -210,6 +217,10 @@ why in one sentence:
   under stage 6. Publish issues only if the user wants them.
 - **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
+- **Conversion.** A request to tidy a set of issues into the short shape ("arrume as issues
+  do MVP"): stages 0 to 2 as always, then, instead of stages 3 to 6, the conversion of
+  `references/issues.md` ("Converting a family"), in batch, one family at a time, one approval
+  per family; the top-level issues of a cut family are created as stage 5 creates any issue.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
 do. Do not silently downgrade a path the user asked for: if they asked for the issue body
@@ -309,7 +320,9 @@ sized for one TDD loop and one checkpoint. Prefactoring, when there is any, is t
 and blocks the others; a wide refactor is the declared exception, cut as expand, migrate in
 batches and contract. Each slice becomes one acceptance-criteria box of the issue, in
 dependency order, blockers first, with the sub-items Entrega, Seams, Camadas and Depende de,
-and every criterion fails at the base commit. The issue (with the sub-issues it already has)
+and every criterion fails at the base commit. A short issue holds at most five slices: the
+sixth is cut out into top-level issues linked by `--blocked-by` (never a new sub-issue), and
+leftover boxes do not count toward the cap. The issue (with the sub-issues it already has)
 covers every layer the requirement needs and records the layers analysed and, for each one
 not touched, why; the layers are known only after reading every layer (front end, back end,
 migrations and schema, tests, documentation) and tracing each screen field, button or action
@@ -344,8 +357,8 @@ top-level issue, never as a note in the PR body (the gate of that section).
 Read `references/development.md`, and `references/browser-testing.md` whenever a slice could
 change what the user sees: the plan says `Toca o frontend: sim`, or the repository has screen code
 the slice might reach, in which case `frontlights.py browser-gate` (its syntax is in that reference)
-answers from the diff even when the plan says `não`. The watched browser run is one per batch,
-never one per branch or worktree: it comes out when the last slice that changes the screen closes
+answers from the diff even when the plan says `não`. The watched browser run is one per issue, never one per slice,
+branch or worktree: it comes out when the last slice of the issue that changes the screen closes
 its TDD loop, before the independent review of any of them, covers all of them together, starts
 with the "pronto para assistir?" question and ends by asking the user to watch again, approve, ask
 for a change or go on. The run creates and later removes the test users, accounts and data its flow needs, so a
@@ -355,10 +368,16 @@ exposing secrets. Do not disable hooks or request bypass mode.
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Each issue gets one branch, one worktree and one PR, and
-its slices are worked in order, in dependency order, one at a time; slice parallelism only between
-issues, the highest safe number of independent issues whose files do not overlap, while the legwork
-around the open slice fans out (the Fan out rule above). Stacking and the
+implementation authorization question. Each issue gets one issue branch and one PR, and each of
+its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
+branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
+slices are worked in dependency order: independent slices (no `Depende de` between them and no file
+in common) run at once, each in its own worktree, judged before their loops from the `Seams:` and
+`Camadas:` of their boxes (a collision found during a loop stacks the later slice on the earlier one),
+and a slice that depends on one still open is
+stacked on the branch of the slice it depends on; the concurrency is the highest safe number of
+independent issues and slices whose files do not overlap, while the legwork
+around each open slice fans out (the Fan out rule above). Stacking and the
 family integration apply only to a family that already exists (an issue with sub-issues published
 before this rule), where a child that depends on its parent is stacked on the parent's branch,
 with the concurrency set to the number of independent children whose files do not overlap
@@ -407,7 +426,9 @@ starts once its parent is verified there, without waiting for the merge. Park
 blocked work, continue independent work, and route worker questions to this
 session's tool. Do not merge pull requests, write the base branch, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, and of a family's or batch's verified branches into a local integration branch that is never pushed.
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
+issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or
+batch's verified branches into a local integration branch that is never pushed.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
 After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull

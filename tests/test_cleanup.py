@@ -129,6 +129,87 @@ class CleanupCase(unittest.TestCase):
         return [e['reasons'] for e in result['excluded']]
 
 
+class SliceWorktreeTests(CleanupCase):
+    """Issue 31, S3: a worktree de uma CA (entrada com `slice` na autorização) pode ir embora sem PR, quando a branch
+    dela já está na branch da issue, não foi enviada e não tem PR; antes disso, fica."""
+
+    def slice_worktree(self, name, slice_id, start, commit=True):
+        path, branch = self.base / name, f'claude/{name}'
+        self.git('worktree', 'add', '-q', '-b', branch, str(path), start)
+        if commit:
+            (path / f'{name}.txt').write_text(name)
+            self.git('add', '.', cwd=path)
+            self.git('commit', '-q', '-m', name, cwd=path)
+        self.entries.append({'issue': 12, 'path': str(path), 'branch': branch, 'slice': slice_id, 'ownership': ['src']})
+        self.authorize()
+        return path, branch, self.git('rev-parse', 'HEAD', cwd=path)
+
+    def test_a_slice_freshly_cut_with_nothing_of_its_own_is_not_offered_as_merged(self):
+        _, issue_branch, _ = self.worktree('issue-12')
+        _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', issue_branch, commit=False)
+        result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], ['slice_not_in_issue_branch'])
+
+    def test_an_entry_with_slice_that_points_at_the_issue_branch_is_never_offered(self):
+        issue_path, issue_branch, _ = self.worktree('issue-12', record=False)
+        self.entries.append({'issue': 12, 'path': str(issue_path), 'branch': issue_branch, 'slice': 'S9', 'ownership': ['src']})
+        self.entries.append({'issue': 12, 'path': str(issue_path), 'branch': issue_branch, 'ownership': ['src']})
+        self.authorize()
+        result, _ = self.plan({issue_branch: {'heads': []}})
+        self.assertEqual(result['candidates'], [])
+        self.assertEqual([e['reasons'] for e in result['excluded']], [['slice_is_issue_branch']])
+
+    def test_when_the_issue_branch_is_gone_the_slice_is_judged_against_the_base(self):
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        s1_path, s1_branch, s1_tip = self.slice_worktree('issue-12-s1', 'S1', issue_branch)
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        self.git('worktree', 'remove', str(issue_path))
+        self.git('branch', '-D', issue_branch)
+        result, _ = self.plan({s1_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}, {s1_branch: ['slice_issue_branch_unknown']})
+        self.git('merge', '-q', '--no-ff', '-m', 'issue', s1_tip)   # the base (main, checked out in the root) now holds the slice
+        result, _ = self.plan({s1_branch: {'heads': []}})
+        entry = self.only(result)
+        self.assertEqual((entry['branch'], entry['cautions']), (s1_branch, ['slice_merged_into_issue_branch']))
+
+    def test_the_slices_of_an_issue_come_before_the_issue_in_the_candidates(self):
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', issue_branch)
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        issue_tip = self.git('rev-parse', 'HEAD', cwd=issue_path)
+        result, _ = self.plan({issue_branch: merged(issue_tip), s1_branch: {'heads': []}})
+        self.assertEqual([(c['branch'], c['slice']) for c in result['candidates']], [(s1_branch, 'S1'), (issue_branch, None)])
+
+    def test_a_slice_branch_merged_into_the_issue_branch_can_go_without_a_pull_request(self):
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', issue_branch)
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}, {issue_branch: ['no_merged_pr']})
+        entry = {c['branch']: c for c in result['candidates']}[s1_branch]
+        self.assertEqual((entry['issue'], entry['cautions'], entry['deleteRemoteBranch'], entry['pullRequests']),
+                         (12, ['slice_merged_into_issue_branch'], False, []))
+        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
+
+    def test_a_slice_still_outside_the_issue_branch_pushed_or_with_a_pull_request_stays(self):
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        _, s1_branch, s1_tip = self.slice_worktree('issue-12-s1', 'S1', issue_branch)
+        result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], ['slice_not_in_issue_branch'])
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        for info, reason in (({'heads': [pull(9, oid=s1_tip)]}, 'slice_has_pull_request'),
+                             ({'heads': [], 'remote': s1_tip}, 'slice_pushed')):
+            with self.subTest(reason=reason):
+                result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: info})
+                self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], [reason])
+
+    def test_a_slice_whose_issue_worktree_is_not_in_the_authorization_cannot_be_judged(self):
+        self.git('branch', 'claude/issue-12')
+        _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', 'claude/issue-12')
+        result, _ = self.plan({s1_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], ['slice_issue_branch_unknown'])
+
+
 class RemovableTests(CleanupCase):
     def test_a_merged_clean_worktree_comes_with_the_commands_in_the_order_to_run_them(self):
         path, branch, tip = self.worktree('wt12')

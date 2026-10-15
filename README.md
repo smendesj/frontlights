@@ -254,6 +254,14 @@ destinos: corrigir no mesmo PR, critério de aceitação novo na issue de origem
 escopo novo ou problema que atravessa várias issues, issue de topo, nunca uma sub-issue
 nova. O lote inteiro é decidido numa única pergunta.
 
+**Conversão de famílias.** Antes de agir numa família (pai com sub-issues abertas), o Frontlights
+oferece convertê-la numa issue só, com uma CA por filha aberta; um pedido como "arrume as issues
+do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois são mostrados por
+inteiro, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
+filhas são fechadas como "Convertida em CA S<k> da #<n>" e saem do quadro só com o "Sim" de cada
+operação, e uma família com mais de cinco filhas vira duas ou mais issues de topo ligadas por
+blocked-by. Nunca uma sub-issue nova.
+
 O Frontlights não cria sub-issues: uma família que já existe (filhas publicadas antes
 desta regra) continua lida, trabalhada e fechada como antes, filhas antes dos pais, e o
 `validate-plan` recusa uma issue proposta com `parent` ou `parent_external`, ou sem o `url`
@@ -531,7 +539,7 @@ print limpo (sem a faixa, sem a barra do navegador, sem identidade nem dado de p
 `.frontlights` delas), com um `candidates.json` que diz a parte, a entrega (`cover`), o repositório, o instante e os arquivos visíveis com o id Git que tinham. Nada sai do projeto nessa hora: o resumo só copia o
 que você escolher na etapa dos prints.
 
-Antes de abrir o navegador, o Frontlights pergunta (uma vez por lote de trabalho) se você está
+Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
 pronto para assistir. Com o sim, o teste roda em um Chrome de janela visível, nunca oculta e com
 perfil descartável, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
 na página "ANTES: main") e depois a branch entregue ("DEPOIS: branch X"). Cada caso roda duas
@@ -554,13 +562,13 @@ relatório diz que foi assistido, não aprovado). Ele nunca escolhe por você ne
 resposta. O registro traz `rodadas` e `aprovacao`. Se um caso da DEPOIS falhar, a pergunta de falha
 vem antes e substitui esta.
 
-**Um teste por lote, antes da revisão.** O teste assistido é um só para tudo o que a sessão entrega
-junto (a issue e as sub-issues, e qualquer outra issue autorizada na mesma execução), nunca um por
-branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes,
-antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
+**Um teste por issue, antes da revisão.** O teste assistido é um por issue (a issue e as sub-issues
+que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes
+e toda fatia já fechada está mesclada na branch da issue (um merge depois do registro reabre a pergunta,
+como `stale`), antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
 pergunta, e um `pending` antes disso é esperado e não pergunta nada. O DEPOIS roda no estado entregue das
-fatias que já fecharam o ciclo: a própria branch, quando o lote tem uma só, ou uma worktree de integração
-local, nunca enviada, que junta todas; a integração da família reaproveita essa worktree e não repete o teste.
+fatias que já fecharam o ciclo: a branch da issue, quando toda fatia de tela já está mesclada nela, ou uma worktree de integração
+local, nunca enviada, que junta a branch da issue e as fatias ainda abertas; a integração da família reaproveita essa worktree e não repete o teste.
 
 O `python scripts/frontlights.py browser-gate --config <config> --base <base> --root <worktree> ...
 [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente> --record <result.json>` lê o diff, não o texto do plano, e devolve
@@ -568,8 +576,9 @@ O `python scripts/frontlights.py browser-gate --config <config> --base <base> --
 primeiros, 2 para os demais). Os caminhos visíveis vêm de `browserTest.frontPaths` (globs a partir da raiz do repositório: `*` não
 atravessa pasta, então `**/*.html` pega todas as páginas; testes e documentos nunca contam); sem ele, a
 estimativa sai do nome do arquivo e o `inspect` avisa. Cada fatia empilhada entra com `--stacked
-<sua branch>=<a branch que a PR dela mira>`, para só o trabalho dela contar. O `result.json` do lote fica na
-pasta da issue líder e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
+<sua branch>=<a branch que a PR dela mira>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
+trabalho dela contar. O `result.json` é um por issue e fica na pasta dela (numa família que já existe, na
+pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
 `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`) e `pergunta`; `dispensado` é a sua
 decisão explícita de não rodar o teste, gravada com a resposta literal. Depois de uma decisão, só
 código que não é teste nem documento volta a abrir a pergunta (`stale`). "Ainda não" mantém a pendência:
@@ -653,8 +662,9 @@ implementação, anunciada sem pergunta → desenvolvimento orientado a testes (
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com slices em
-paralelo só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
+Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, cada CA na própria
+worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
+em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
 e começa. Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
@@ -673,9 +683,10 @@ próprio Claude Code não são do Frontlights e continuam valendo.
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
 não depende de outra coisa, com tantos subagentes quantas forem as partes: as leituras do início da
 sessão, a leitura do código e o rastreio por camada na entrevista e no plano, as issues independentes na
-implementação (cada uma na própria worktree) e, dentro de uma issue, o trabalho em volta da slice aberta
+implementação (cada uma na própria worktree) e, dentro de uma issue, as CAs independentes ao mesmo tempo, cada uma na própria worktree,
+mais o trabalho em volta de cada CA aberta
 (leitura para a próxima, suíte ampla, verificação de tipos, teste assistido e revisão independente),
-enquanto as slices continuam em ordem, uma por vez, na branch da issue. Só espera o que depende de verdade:
+respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
 só; o relato de um subagente é conferido antes de virar evidência.
@@ -686,7 +697,9 @@ As slices da issue são os critérios de aceitação: uma caixa por slice, em or
 com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
 e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
 só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
-contrair, e todo critério falha no commit de partida.
+contrair, e todo critério falha no commit de partida. Uma issue curta tem no máximo cinco CAs,
+cada uma uma fatia vertical completa e curta; a sexta vira issues de topo ligadas por blocked-by, e a
+caixa de pendência não conta no teto.
 Uma issue e as sub-issues abertas dela andam juntas: ao agir sobre uma issue, o Frontlights
 lê as filhas no GitHub e leva todas na mesma execução (entrevista, plano e implementação),
 nunca só o pai; nenhuma sub-issue nova é criada. A fatia vertical é a issue mais as filhas, e

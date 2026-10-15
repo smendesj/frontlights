@@ -361,6 +361,7 @@ def board_resolution(plan, project):
 
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
+SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
 
 
 def slices_of(issue):
@@ -372,6 +373,11 @@ def slices_of(issue):
         return None
     label = issue['id']
     require(isinstance(slices, list) and slices, f'{label}: slices precisa ser uma lista com ao menos uma slice')
+    # A short issue: the sixth slice is cut out into top-level issues linked by --blocked-by (issue 31, S1).
+    # Leftover boxes (P1, P2) are added later, outside the plan, so they never count here.
+    require(len(slices) <= SLICES_MAX,
+            f'{label}: {len(slices)} slices: uma issue tem no máximo {SLICES_MAX}; o excedente vira issues de topo '
+            f'ligadas por --blocked-by (nunca uma sub-issue nova)')
     seen = []
     for item in slices:
         require(isinstance(item, dict),
@@ -577,6 +583,13 @@ def authorize(charter, operation):
                Path(w['path']).resolve(strict=True) == worktree]
     require(len(matches) == 1, 'unapproved or ambiguous worktree')
     selected = matches[0]
+    # A slice's worktree (issue 31, S2): the charter entry names the box (`slice`), and an operation
+    # on it names the same box, so a worker never edits another slice's worktree by mistake.
+    expected, given = selected.get('slice'), operation.get('slice')
+    if expected is not None or given is not None:
+        require(isinstance(expected, str) and SLICE_ID_RULE.fullmatch(expected),
+                'the worktree entry needs a slice label such as S2 when the operation names one')
+        require(given == expected, f'operation for slice {given!r} on the worktree of slice {expected!r}')
     branch = operation.get('branch')
     extra = charter.get('protected_branches', [])
     require(isinstance(extra, list) and all(nonempty(p) and p.strip('/') for p in extra),
@@ -960,8 +973,9 @@ def main():
     p.add_argument('--root', default='.')
     p.add_argument('--review', required=True, help='saved evidence output taken when the independent review was bound')
     p = sub.add_parser('browser-gate')
-    p.add_argument('--root', action='append', required=True, help='worktree of an issue of the batch; repeatable')
-    p.add_argument('--base', required=True, help='approved base of the batch (the branch its PRs target), the same for every --root')
+    p.add_argument('--root', action='append', required=True,
+                   help='worktree of the issue, or of one of its slices (named in --stacked with the branch of its issue); repeatable')
+    p.add_argument('--base', required=True, help='approved base of the issue (the branch its PR targets), the same for every --root')
     p.add_argument('--config', help='.frontlights/config.json (browserTest and browserTest.frontPaths)')
     p.add_argument('--toca', choices=['sim', 'nao', 'não', 'ausente'], help="the plan's `Toca o frontend:`")
     p.add_argument('--record', help='the batch result.json, which may not exist yet')

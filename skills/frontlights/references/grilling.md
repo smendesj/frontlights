@@ -135,8 +135,10 @@ change the approach.
 ## Sub-issues of the issue (same session)
 
 When the work comes from an issue with open sub-issues (`SKILL.md`, "An issue and
-its sub-issues move together"), they are grilled in this session, after the
-parent's problem and solution rounds. Never leave one out to "decide later".
+its sub-issues move together") and the user declined the conversion offered before the
+grilling (`references/issues.md`, "Converting a family"), they are grilled in this session, after the
+parent's problem and solution rounds. Never leave one out to "decide later". A converted
+family has no sub-issues left: its boxes are grilled as the slices of one issue.
 
 - Triage each by reading its body and the code. **Decided:** the body names an
   approach and its conventions, and they fit the parent's chosen approach.

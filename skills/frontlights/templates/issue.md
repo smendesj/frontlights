@@ -40,7 +40,9 @@ As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice,
 resultado observável de ponta a ponta, e logo abaixo os sub-itens sem caixa. Prefactoring,
 quando houver, é a primeira slice e nomeia o seam que funciona, o teste e o consumidor que
 depende dele; refatoração larga é a exceção declarada: expandir, migrar por lotes e contrair,
-cada passo uma slice. Todo critério falha no commit de partida; o que já é verdadeiro antes
+cada passo uma slice. Uma issue curta tem no máximo cinco caixas `S<n>`: a sexta vira issues de
+topo ligadas por blocked-by (nunca uma sub-issue nova), e a caixa de pendência não conta no
+teto. Todo critério falha no commit de partida; o que já é verdadeiro antes
 do trabalho não é critério. Cada caixa fecha só com evidência. Uma slice estacionada ganha, como
 último sub-item da caixa, `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, antes da
 marcação; não copie esse sub-item para uma slice que não está estacionada, porque o RoadS lê
@@ -105,8 +107,9 @@ Contas e processos vêm de `browserTest` no `.frontlights/config.json` do projet
 nunca deste texto: aqui não entram login, senha nem URL.
 
 `Toca o frontend:` é uma declaração, e o `browser-gate` a confere com o diff: uma mudança visível
-com `não` vira pergunta. O teste assistido é um por lote de trabalho, antes da revisão, não um por
-issue nem por branch.
+com `não` vira pergunta. O teste assistido é um por issue, antes da revisão, não um por CA, branch
+ou worktree; a pergunta sai quando a última CA que muda a tela fecha o ciclo e toda CA já fechada
+está mesclada na branch da issue.
 
 ## Dependências
 

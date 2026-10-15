@@ -87,6 +87,37 @@ class GateTestCase(unittest.TestCase):
         return subprocess.run(args + list(extra), capture_output=True, text=True, encoding='utf-8')
 
 
+class SliceRootsTests(GateTestCase):
+    """Issue 31, S3: as raízes podem ser as worktrees das CAs de uma issue, cada uma medida a partir da branch da
+    issue (`--stacked <branch da CA>=<branch da issue>`; caracterização: o `--stacked` já existia na base), e cada
+    raiz entra uma vez (a mensagem nova)."""
+
+    def stacked_slice(self, name, on, **files):
+        root = Path(self.tmp.name) / name
+        self.git(self.main, 'worktree', 'add', '-b', name, str(root), on)
+        for path, text in files.items():
+            self.write(root, path, text)
+        self.git(root, 'add', '.')
+        self.git(root, 'commit', '-m', name)
+        return root
+
+    def test_slice_roots_stacked_on_the_issue_branch_are_measured_from_it(self):
+        self.slice('issue-7', **{SCREEN: 'issue\n'})
+        s1 = self.stacked_slice('issue-7-s1', 'issue-7', **{API: 's1\n'})
+        s2 = self.stacked_slice('issue-7-s2', 'issue-7', **{TEMPLATE: 's2\n'})
+        result = self.gate([s1, s2], toca='sim', stacked={'issue-7-s1': 'issue-7', 'issue-7-s2': 'issue-7'})
+        self.assertEqual((result['status'], result['front_files']), ('pending', [TEMPLATE]))
+        self.assertEqual(list(result['roots']), ['issue-7-s2'])   # the visible roots: S1 inherits nothing from the issue branch
+        self.assertEqual(result['by_root'], {'issue-7-s1': [], 'issue-7-s2': [TEMPLATE]})
+        unstacked = self.gate([s1, s2], toca='sim')
+        self.assertEqual(sorted(unstacked['roots']), ['issue-7-s1', 'issue-7-s2'])   # measured from main, both carry the issue's screen change
+
+    def test_two_roots_on_one_branch_are_refused_naming_each_root_once(self):
+        a = self.slice('slice-a')
+        with self.assertRaisesRegex(ValueError, r"each root \(an issue's or a slice's worktree\) once"):
+            self.gate([a, a])
+
+
 class DetectionTests(GateTestCase):
     def test_nothing_changed_and_a_plan_that_says_no_needs_no_test(self):
         a = self.slice('slice-a')
@@ -742,8 +773,10 @@ class GateDocumentationTests(unittest.TestCase):
 
     def test_the_rule_is_in_the_browser_reference_the_skill_and_the_development_reference(self):
         browser = self.flat('skills', 'frontlights', 'references', 'browser-testing.md')
-        for phrase in ('browser-gate', 'one watched run per batch', 'before the independent review', 'lote.roots',
-                       'situacao', 'ainda-nao', 'never one per branch or worktree', 'teste_assistido'):
+        for phrase in ('browser-gate', 'one watched run per issue', 'before the independent review', 'lote.roots',
+                       'situacao', 'ainda-nao', 'never one per slice, branch or worktree', 'teste_assistido',
+                       "each `--root` is the worktree of an issue or of one of its slices",
+                       '`--stacked <its branch>=<the branch of its issue>`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, browser)
         development = self.flat('skills', 'frontlights', 'references', 'development.md')
@@ -762,8 +795,9 @@ class GateDocumentationTests(unittest.TestCase):
                      ('evals', 'batch-watched-run.md'), ('evals', 'runbook.md')):
             with self.subTest(doc=name[-1]):
                 self.assertIn('dispensado', self.flat(*name))
-        self.assertIn('19. One watched run per batch (`evals/batch-watched-run.md`)', self.flat('evals', 'runbook.md'))
-        self.assertIn('| 19. Teste assistido por lote, antes da revisão | Pendente |', self.flat('docs', 'acceptance.md'))
+        self.assertIn('19. One watched run per issue (`evals/batch-watched-run.md`)', self.flat('evals', 'runbook.md'))
+        self.assertIn('| 19. Teste assistido por issue, antes da revisão | Pendente |', self.flat('docs', 'acceptance.md'))
+        self.assertIn('One watched run per issue', self.flat('evals', 'batch-watched-run.md'))
 
 
 if __name__ == '__main__':

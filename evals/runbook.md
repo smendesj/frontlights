@@ -139,12 +139,13 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     and asks nothing but that registration question. Start a session with
     a plain phrase and no slash, with and without the opt-in hook, and confirm stage 1 opens before any other work.
 
-19. One watched run per batch (`evals/batch-watched-run.md`). On a disposable family with two slices that change a screen and
-    one API-only slice, confirm `browser-gate` is `pending` once the last screen slice closes its loop, before any
-    independent review of those slices, and that one "pronto para assistir?" covers both. "Ainda não" keeps it owed in
+19. One watched run per issue (`evals/batch-watched-run.md`). On a disposable issue with two slices that change a screen and
+    one API-only slice, each in its own worktree, confirm `browser-gate` (slice roots named with `--stacked`) is
+    `pending` once the last screen slice closes its loop, before the independent review of the issue, and that one
+    "pronto para assistir?" covers both, never one per slice, branch or worktree. "Ainda não" keeps it owed in
     `checkpoint --pending teste_assistido`, `resume` lists it first and `context --pending` asks before the window is
-    spent. After "Aprovado", a test or document edit and a change to the API-only slice keep `answered`; a screen file
-    or the parent's API code gives `stale`. A visible diff with the plan saying `não` gives `contradiction`, and no PR
+    spent. After "Aprovado", a test or document edit, or a change kept in the API-only slice's own worktree, keeps
+    `answered`; a merge into the issue branch after the record, a screen file or API code gives `stale`. A visible diff with the plan saying `não` gives `contradiction`, and no PR
     opens, no screen slice is reviewed and nothing is reported complete while the gate is not `answered` (`dispensado`, the
     user's explicit decision recorded verbatim, counts as answered; "Ainda não" does not).
 
@@ -192,11 +193,29 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 25. Fan-out in every stage (`evals/fan-out.md`). On a disposable issue with three slices (S2 and S3 depending on
     S1) in a project whose suite has two modules sharing a port reservation folder, confirm the session launches
     the read-only helpers of stages 0 to 2 in one message, one reading subagent per layer before the solution
-    round, and in stage 6 one implementer in the issue's worktree with, in the same message, read-only workers
-    preparing S2; when S1 closes its loop the broader modules run at once except the two that share the folder,
-    which run one after the other; the reviewer is a different agent from the implementer and the session reruns
+    round, and in stage 6 one implementer in S1's worktree with, in the same message, read-only workers
+    preparing S2 and S3; when S1 closes its loop its branch is merged into the issue branch and the broader modules
+    run at once except the two that share the folder, which run one after the other; S2 and S3 then run at once,
+    each in its own worktree; the reviewer is a different agent from the implementer and the session reruns
     the commands the workers report; no worker asks the user, writes GitHub or edits outside its paths; and a
     host without subagents is reported as a capacity limit in one line.
+26. Short issues (`evals/vertical-slices.md`, issue 31). Approve a body whose honest cut needs six slices: confirm
+    the numbered list shows two top-level issues of at most five slices each, the second blocked by the first,
+    never one issue with six boxes; `validate-plan` on a plan with a six-slice issue exits with the cap in the
+    message; and a leftover box added later from a review does not count toward the cap. Then, on an issue with
+    two slices, confirm the announcement names one issue branch and one worktree and branch per slice
+    (`<prefix>issue-<n>-s1`, `-s2`, cut from the issue branch), the charter's `worktrees` carry `slice`, an
+    `authorize` operation that names S1 on the S2 worktree is refused, each slice worktree gets its own
+    `checkpoint-<id>.json`, and when S1's loop closes its branch is merged into the issue branch before its box
+    is ticked, with no question asked for that merge. Then, on an issue with S2 and S3 independent of each other
+    and S4 depending on S2: confirm S2 and S3 run at once, each in its own worktree with its own implementer; S4's
+    worktree is cut from S2's branch (`"base"` in its charter entry) and `browser-gate` names it with `--stacked`;
+    `cleanup plan` offers S2's branch once it is in the issue branch (caution `slice_merged_into_issue_branch`, no
+    remote command) and keeps it as `slice_not_in_issue_branch` before; and the watched run is asked once for the
+    issue, when its last screen slice closes. Finally, the conversion of families (`evals/family-conversion.md`):
+    the offer before acting on a family, the batch request, one approval per family, the before and the after
+    shown in full, the old body kept, the children closed and archived only after their own "Sim", and a family
+    with more than five open children cut into top-level issues linked by `--blocked-by`.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

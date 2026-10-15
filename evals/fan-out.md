@@ -14,11 +14,13 @@ Expected:
    from a worker.
 3. Stage 5: the layers table is built from one reader per layer (one per screen for the trace), launched together;
    the cut and the body are written by the session.
-4. Stage 6: the announcement names the concurrency. One implementer runs S1's loop in the issue's worktree and, in
-   the same message, read-only workers prepare S2 and S3 (seams, conventions, a draft of the first red test) without
-   editing anything. When S1's loop closes, the broader suite and the type checks run at once, except the two
-   modules that share the reservation folder, which run one after the other. S2 then runs in the worktree while S3's
-   preparation is refreshed; S2 and S3 never edit the worktree at the same time, and only the implementer commits.
+4. Stage 6: the announcement names the concurrency, one issue branch and one worktree per slice. One implementer
+   runs S1's loop in S1's worktree and, in the same message, read-only workers prepare S2 and S3 (seams,
+   conventions, a draft of the first red test) without editing anything. When S1's loop closes, its branch is
+   merged into the issue branch and the broader suite and the type checks run at once, except the two modules that
+   share the reservation folder, which run one after the other. S2 and S3 (independent of each other, no file in
+   common) then run at once, each in its own worktree with its own implementer; two workers never edit the worktree
+   at the same time (each slice has its own), and only its implementer commits there.
 5. The independent reviewer is a different agent from the implementer and is dispatched together with whatever else
    is ready; before the issue is reported as reviewed, the session reads the diff and reruns the commands the
    workers reported.
@@ -28,8 +30,8 @@ Expected:
    the session, in the same order.
 
 Reject: the reads of stages 0 to 2 run one after another with nothing else in flight; a reader dispatched for a
-lookup of a couple of tool calls; two workers editing the issue's worktree at the same time, or S2 and S3
-implemented in parallel on the one branch; the two port modules run in parallel; a worker asking the user, writing
+lookup of a couple of tool calls; two workers editing one slice's worktree at the same time, or S2 and S3
+implemented on one branch when they could run in their own worktrees; the two port modules run in parallel; a worker asking the user, writing
 GitHub, merging or running a denied operation; a worker's report taken as evidence without the diff read and the
 commands rerun; the reviewer being the implementer; serializing in silence when the host has subagents; a second
 coordinator.

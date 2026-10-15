@@ -219,6 +219,8 @@ class FamilyRulesTextTests(unittest.TestCase):
 
     def test_the_merge_rule_names_the_only_merges_stacking_allows(self):
         allowed = ("the only merges allowed are the ones the stacking authorization names: of a base into an issue's own branch, "
+                   "of a slice's branch into the branch of its own issue when its loop closes, "
+                   "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
                    "and of a family's or batch's verified branches into a local integration branch that is never pushed")
         for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
             with self.subTest(file=name[-1]):
@@ -233,6 +235,55 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertEqual(len(stacked), 1)
         self.assertEqual(stacked[0]['base'], 'claude/issue-1')
         self.assertTrue(stacked[0]['branch'].startswith(charter['branch_prefix']))
+
+
+class FamilyConversionTextTests(unittest.TestCase):
+    """Issue 31, S4: uma família existente (pai com sub-issues) vira issue + CAs, por pedido em lote ("arrume as
+    issues do MVP") ou por oferta quando a sessão vai agir numa família: o antes e o depois mostrados por inteiro,
+    uma aprovação por família, o corpo do pai substituído (única exceção ao só-acréscimo, com o anterior guardado),
+    as filhas fechadas como convertidas com o "Sim", o quadro ajustado com o "Sim", e mais de cinco filhas viram
+    issues de topo ligadas por blocked-by. Nunca uma sub-issue nova."""
+
+    def test_the_skill_offers_the_conversion_and_takes_the_batch_request(self):
+        skill = flat(read('skills', 'frontlights', 'SKILL.md'))
+        for phrase in ('offers its conversion into one issue with slices', 'a request to tidy a set of issues',
+                       'one approval per family', '"Converting a family"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, skill)
+
+    def test_the_reference_defines_the_procedure(self):
+        text = read('skills', 'frontlights', 'references', 'issues.md')
+        body = section(text, 'Converting a family into one issue with slices') or ''
+        self.assertNotEqual(body, '')
+        flat_body = flat(body)
+        for phrase in ('one approval per family', 'the only exception to the append-only rule', 'body-before-<ts>.md',
+                       'Convertida em CA S<k> da #<n>', '--reason "not planned"', 'more than five open children',
+                       'up to five slices each', '`--blocked-by`', 'dividida em #a, #b', 'the before and the after',
+                       'gh project item-archive', 'closed sub-issues are history', '**In batch.**', '**Offered.**',
+                       'never as nested boxes', 'dividida em #a, #b") and changing the board are denied operations'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat_body)
+        self.assertNotRegex(body, r'gh issue create [^`]*--parent')
+        self.assertNotIn('sub_issues --method POST', body)
+
+    def test_the_other_documents_follow(self):
+        self.assertIn('declined the conversion', flat(read('skills', 'frontlights', 'references', 'grilling.md')))
+        self.assertIn('closed by conversion', flat(read('skills', 'frontlights', 'references', 'closeout.md')))
+        security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
+        for phrase in ('conversão de uma família', 'única exceção', 'corpo anterior fica guardado'):
+            with self.subTest(file='security', phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertIn('conversão de família', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
+        readme = flat(read('README.md'))
+        for phrase in ('**Conversão de famílias.**', 'uma aprovação por família', 'arrume as issues'):
+            with self.subTest(file='README', phrase=phrase):
+                self.assertIn(phrase, readme)
+        case = flat(read('evals', 'family-conversion.md'))
+        for phrase in ('one approval per family', 'Reject:', 'more than five'):
+            with self.subTest(file='eval', phrase=phrase):
+                self.assertIn(phrase, case)
+        self.assertIn('family-conversion.md', flat(read('evals', 'runbook.md')))
+        self.assertIn('conversão de famílias', flat(read('docs', 'acceptance.md')))
 
 
 class WatchedRunTextTests(unittest.TestCase):

@@ -6,16 +6,17 @@ that changes what they see on the screen?
 browser run (`skills/frontlights/references/browser-testing.md`) covers the visible change. It reads the
 Git diff, not the plan's text, so a screen change the plan forgot to declare is still caught.
 
-One batch is one decision: the roots are the worktrees of every issue the session finished and means to
-deliver together (the issue, its sub-issues, and any other issue authorized in the same run). The gate
+One issue is one decision: the roots are the worktrees of the issue and of its slices (each slice has its own
+worktree and branch, cut from the branch of the issue, so a slice root is named with `--stacked <its
+branch>=<the branch of its issue>`), and, for a family that already exists, of its sub-issues. The gate
 finds the visible changes of each root and compares them with the record of the watched run kept for the
-whole batch (`.frontlights/issues/<lead>/browser/result.json`), never one record per branch.
+issue (`.frontlights/issues/<n>/browser/result.json`), never one record per slice or branch.
 
-Inputs: `--root` (repeatable) the worktrees, `--base` the approved base of the batch (normally the default
+Inputs: `--root` (repeatable) the worktrees, `--base` the approved base of the issue (normally the default
 branch), the same for every root, `--config` the project's `.frontlights/config.json` (its
 `browserTest.frontPaths` names the visible paths; absent, a conservative default applies, and an absent
 config also silences `unconfigured`), `--toca` what the plan's `Toca o frontend:` says (`sim`, `nao` or
-`ausente`; `sim` when any issue of the batch says it), `--record` the result.json (it may not exist).
+`ausente`; `sim` when any issue of a family says it), `--record` the result.json (it may not exist).
 
 What a root changes. Each root is measured from the commit it shares with the base, except an issue stacked on
 another branch, which the caller names with `--stacked <its branch>=<the branch its PR targets>` (what the
@@ -303,7 +304,7 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
     labels = [place['label'] for place in places]
     if len(set(labels)) != len(labels):
         raise ValueError('two --root entries are on the same branch (or the same worktree folder name when detached): a '
-                         'batch lists each issue once')
+                         "batch lists each root (an issue's or a slice's worktree) once")
     stacked = dict(stacked or {})
     unknown = sorted(set(stacked) - set(labels))
     if unknown:
@@ -378,13 +379,15 @@ def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--root', action='append', required=True, help='worktree of an issue of the batch; repeatable')
-    parser.add_argument('--base', required=True, help='approved base of the batch, the same for every root')
+    parser.add_argument('--root', action='append', required=True,
+                        help='worktree of the issue, or of one of its slices (named in --stacked); repeatable')
+    parser.add_argument('--base', required=True, help='approved base of the issue, the same for every root')
     parser.add_argument('--config', help="the project's .frontlights/config.json (browserTest.frontPaths, browserTest)")
     parser.add_argument('--toca', choices=sorted(k for k in TOCA if k), help="the plan's `Toca o frontend:`")
-    parser.add_argument('--record', help='the batch result.json (may not exist yet)')
+    parser.add_argument('--record', help="the issue's result.json (may not exist yet)")
     parser.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
-                        help='the branch of a stacked issue and the branch its PR targets; repeatable')
+                        help='the branch of a slice (or of a stacked issue) and the branch it is measured from: the branch '
+                             'of its issue, or the one its PR targets; repeatable')
     args = parser.parse_args()
     try:
         result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked)

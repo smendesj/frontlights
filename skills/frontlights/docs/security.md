@@ -152,7 +152,11 @@ escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permi
 texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
 migração de uma seção legada, pedida por você, também remove os itens movidos, e a linha `Bloqueada:` de uma
 slice que destravou é apagada antes da marcação), a releitura confere a diferença e nenhum utilitário do
-Frontlights faz essa escrita. O Frontlights não impede a sessão de
+Frontlights faz essa escrita. A conversão de uma família em issue + CAs (`references/issues.md`,
+"Converting a family") é a única exceção: o corpo do pai é substituído, só depois de o antes e o depois
+serem mostrados por inteiro e aprovados, uma aprovação por família; o corpo anterior fica guardado em
+`.frontlights/issues/<n>/`, a diferença é relida, e o fechamento das filhas convertidas e o ajuste do
+quadro continuam operações negadas, cada uma com a própria pergunta e o "Sim". O Frontlights não impede a sessão de
 encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
 que impede que a issue seja proposta para fechar com o critério aberto.
 
@@ -314,16 +318,19 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
-  relatório. O teste é um por lote, antes da revisão, e o `browser-gate` confere no diff (não no texto do
+  relatório. O teste é um por issue (nunca um por slice, branch ou worktree), antes da revisão, e o `browser-gate` confere no diff (não no texto do
   plano) se algo visível mudou e se a decisão registrada ainda vale; ele é uma regra da skill conferida por
   um script, não uma barreira: um modelo que não o chame não é impedido por ele. A dispensa do teste (`dispensado`) é
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a
   tela, nenhum relato de "completa" e nenhuma PR seguem enquanto o teste estiver devido.
 - **Branches empilhadas:** a autorização que as permite nomeia as operações que elas exigem
   (criar branch a partir de outra branch que não a base, enviá-la, abrir PR rascunho com a
-  branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue e juntar as branches
+  branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
+  da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
+  depende) na branch de uma slice para atualizá-la, e juntar as branches
 verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada). Esses são os únicos merges permitidos. O utilitário `authorize`
-  continua só conferindo `edit`, `test` e `checkpoint` e rejeitando merge, e essas operações
+  continua só conferindo `edit`, `test` e `checkpoint` e rejeitando merge (e, numa worktree de slice, só aceita a
+  operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na
   branch base, o deploy e a publicação de versões continuam fora de qualquer autorização comum.
 - **Sem aprovação do bloco:** ao contrário do resumo para a diretoria, esses blocos não têm
