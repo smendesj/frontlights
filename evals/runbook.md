@@ -228,7 +228,13 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
     the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that
     the merge into the local main is followed by one `.bundle` file there which `git bundle verify` accepts, and that
-    without the key the session says in one line that no backup is configured and asks nothing.
+    without the key the session says in one line that no backup is configured and asks nothing. Then, with two issues
+    in the local main and none of them in `origin/main`, confirm `homolog release-plan` lists both and names
+    `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" cuts and pushes only the release branch and
+    opens one pull request with a block per issue and no closing keyword, the merge is asked with "Mesclar a PR #<n> em
+    <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the
+    closeout offers the issues of the release; and that `cleanup plan` offers an issue branch without a pull request
+    once `origin/main` contains its tip, and keeps it as `no_merged_pr` before.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

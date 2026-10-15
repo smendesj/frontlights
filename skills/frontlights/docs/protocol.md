@@ -11,7 +11,7 @@
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes (suíte inteira, `review-gate` atual, `browser-gate` respondido); cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Espera do merge | Ler o estado das PRs abertas (`closeout.py merge-status`) e oferecer o merge da PR pronta; só com o "Sim" o merge é feito | Resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
+| Release | Ao fim de cada issue homologada: `homolog sync`, `homolog release-plan` (só leitura), a oferta da release ("Lançar a release com as issues #a, #b agora?") e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
@@ -70,17 +70,25 @@ pais) e mover o cartão para o valor `project.done` (padrão `Status` / `Done`);
 fora de Done só é movida. Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
 conferência relê o GitHub. Nenhuma outra autorização cobre essa escrita.
 
-Depois de abrir uma PR, a sessão aguarda o merge por padrão e registra isso no handoff ("Aguardando o merge"); a PR
+A release é oferecida ao fim de cada issue homologada (`references/development.md`, "The release"): depois de
+`homolog sync`, o `homolog release-plan` (só leitura) lista as issues que estão na main local e ainda não em
+`origin/main` e nomeia a branch `<prefixo>release-<data>`; a sessão mostra a lista e pergunta "Lançar a release com as
+issues #a, #b agora?" ("Sim, lançar" / "Agora não"). Com o "Sim", cortar a branch da main local, enviá-la (a única
+branch do fluxo que é enviada) e abrir a PR única (corpo pelo `templates/pr.md` quando existir, uma parte por issue
+com os três portões) são operações cobertas. Depois de abrir a PR da release, a sessão aguarda o merge por padrão e
+registra isso no handoff ("Aguardando o merge", na linha `Release`); a PR
 nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits. O aviso do ambiente
 (inscrição na PR ou um monitor) é só o gatilho: a cada despertar roda `closeout.py merge-status --prs ... --base
-<base aprovada>`, e só `merged_into_base` vale; merge em outra branch (pai empilhado), PR fechada sem merge ou não
-encontrada não fecha nada. Com o merge confirmado, o fechamento roda só para as issues dessas PRs, que só aparecem com
-todos os critérios marcados. Para uma sub-issue, a mesma aprovação inclui marcar no corpo do pai o item que a cita
+<base aprovada>`, e só `merged_into_base` vale; merge em outra branch, PR fechada sem merge ou não
+encontrada não fecha nada. Com o merge confirmado, `git pull --ff-only` traz a main local até ele e o fechamento roda
+só para as issues da release, que só aparecem com todos os critérios marcados; "Agora não" deixa a issue homologada na
+main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma sub-issue, a mesma aprovação inclui marcar no corpo do pai o item que a cita
 (`parentTicks`: números de linha, só itens que citam apenas essa filha; a escrita troca só `[ ]` por `[x]`, e
 `closeout.py tick-check` confere antes e depois). Depois do fechamento escrito e conferido, uma aprovação própria
 pergunta se pode remover as worktrees e branches criados e que deixaram de ser necessários (`scripts/cleanup.py
 plan|verify`): só entram os que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
-empilhado, pelo pai), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são protegidos, nem
+empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao GitHub
+pela release; cautela `contained_in_base_without_pull_request`), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são protegidos, nem
 a worktree principal, nem a pasta em que a sessão está; nunca com `--force`. Os arquivos ignorados pelo Git vão junto com a worktree e são
 listados antes da aprovação, e a worktree de integração local da família entra quando não guarda commit próprio (nem merge com conteúdo
 próprio) fora das PRs entregues.
@@ -330,7 +338,7 @@ módulos de portas do `serve` e de integração do `checks`, cada um relatado co
 cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os cinco
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
-Fica para o fim, antes da revisão independente e do PR, a suíte inteira sem a variável, uma vez, pelo
+Fica para o fim, antes da revisão independente e do merge na main local, a suíte inteira sem a variável, uma vez, pelo
 `python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
 obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede; a CI do GitHub deste
 repositório roda o mesmo `discover` e não define a variável.

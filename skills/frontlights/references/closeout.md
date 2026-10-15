@@ -1,8 +1,8 @@
 # Closing finished issues
 
-Read this when the stage 1 closeout question is answered yes, when the wait for the merge of stage 6
-(`development.md`, "After the pull request") finds a pull request merged into the approved base, when a family
-worked in stage 6 is reported merged, or when the user asks to close or move finished issues. Everything the user reads
+Read this when the stage 1 closeout question is answered yes, when the release of stage 6
+(`development.md`, "The release") finds its pull request merged into the approved base and the local main brought
+up to it, or when the user asks to close or move finished issues. Everything the user reads
 stays in Portuguese. Closing is a write on GitHub with **its own approval**: no implementation
 authorization, no merged PR and no green test stands in for it. The helper only reads; the session
 writes, with its own `gh`, and only what the user approved.
@@ -21,11 +21,11 @@ their sub-issues, down the tree. `--issues` names an explicit list. `--all` swee
 repository and is used only when the user asks for it. With no repository or no `gh`, say in one line that
 the check could not run and go on.
 
-When a merge woke the session, pass `--issues` with the issues of the pull requests `merge-status` lists as
-`ready` and, for a family, the sub-issues that merged with them: an explicit list is taken as it is. Only a merge
-into the approved base counts; the merge of a child into its parent's branch closes nothing by itself (its issue joins the closeout when the
-parent's PR becomes `ready` with a later `mergedAt`, as `development.md` says). An issue whose pull
-request merged but that still has an unticked criterion comes back in `excluded` as `unchecked_criteria`: say which
+When the release's merge woke the session, pass `--issues` with the issues `release-plan` listed for that release
+(the sub-issues of a family included): an explicit list is taken as it is. Only the release merged into the approved
+base counts; the merge of an issue into the local main, or of a child into its parent's branch, closes nothing by
+itself (the issue closes with the release that carries it, as `development.md` says). An issue that reached the base
+but still has an unticked criterion comes back in `excluded` as `unchecked_criteria`: say which
 criteria are left, and tick only what the evidence supports (never to get the issue closed).
 
 A sub-issue closed by conversion (`--reason "not planned"`, with the comment `Convertida em CA S<k> da #<n>`,
@@ -128,8 +128,9 @@ output in the handoff, with the `tick-check` result of each parent.
 
 Ask this only after the closing of the approved list was written and verified; when the user answered "Não agora"
 to the closing, ask nothing here. The worktrees and branches the work created (the `worktrees` of the
-authorization for these issues, plus an integration worktree the handoff names) are not needed once their pull
-requests were merged into the approved base, and removing them is a write of its own, with **its own approval**.
+authorization for these issues, plus an integration worktree the handoff names) are not needed once the release
+that carries them was merged into the approved base (for a branch with no pull request, once `origin/<base>`
+contains its tip), and removing them is a write of its own, with **its own approval**.
 
 ```powershell
 python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base>
@@ -144,7 +145,8 @@ belongs to the member branch that owns the file). A merge counts as a commit of 
 conflict resolved by hand, a file added to it): such a branch stays, as `integration_has_unique_commits`. `candidates` lists what can go, each with its issue, its slice (null outside a slice's worktree), worktree
 path, branch, tip, pull requests, whether the remote branch goes too, its `cautions` (`remote_branch_gone`,
 `remote_branch_moved`, `origin_is_not_the_repository`, `frontlights_records`, `ignored_files`,
-`local_only_integration`, `slice_merged_into_issue_branch`, `branch_differs_from_authorization`) and the `commands` in the order to run them.
+`local_only_integration`, `slice_merged_into_issue_branch`, `contained_in_base_without_pull_request`,
+`branch_differs_from_authorization`) and the `commands` in the order to run them.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
 pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch` and
 no remote command, once that branch contains a commit of its own, it was never pushed and no pull request was
@@ -161,9 +163,12 @@ files go away with it. `excluded` lists what stays and why, in `reasons`: `main_
 `pull_requests_unreadable`, `integration_has_pull_request`, `integration_pushed` and
 `integration_has_unique_commits`: each needs work or a decision, never removal. `alreadyClean` counts what is gone
 already. A branch is offered only when its tip is the head of a merged pull request that reached the approved base
-(a stacked child through its parent), nothing is uncommitted, no pull request is open from or on top of it, and it is
-not protected; the remote branch goes only when `origin` is this repository and the branch still points at that
-commit.
+(a stacked child through its parent) or, with no pull request at all, when the approved base (`origin/<base>` when
+the remote-tracking ref exists, the local base otherwise) already contains its tip, the caution
+`contained_in_base_without_pull_request`: the branch of an issue that reached GitHub through a release, never pushed
+itself, so it has no remote command; in both cases nothing is uncommitted, no pull request is open from or on top of
+it, and it is not protected; the remote branch goes only when `origin` is this repository and the branch still points
+at that commit.
 
 Show in the conversation, in full and in the user's language, one table with a row per candidate (issue, worktree,
 branch, pull requests, remote branch, cautions) and the exact `commands`, then the `excluded` with their reasons;
@@ -178,7 +183,8 @@ Record the answer verbatim with a reference; never answer for the user.
 
 Run the approved `commands` in order (each carries `git -C <main worktree>`), each value as one double-quoted argument: first
 `git worktree remove`, then `git branch -D` (right here, because a squash merge leaves the branch "unmerged" for Git
-and the plan offers it only when its tip is the head of a merged pull request), then, when listed, `git push origin
+and the plan offers it only when its tip is the head of a merged pull request or already contained in the approved
+base), then, when listed, `git push origin
 --delete`. Never add `--force` or `-f`. A command that fails (a path too long for Windows, a folder in use) is recorded
 and reported, and never retried with force; the rest of that item's commands are not run (a branch whose worktree
 could not be removed keeps both), and the next item goes on. Then verify:

@@ -4,7 +4,9 @@ por merge com três portões verdes; nada vai ao GitHub até a release.
 Seams: `frontlights.py authorize` (S1); o texto de `SKILL.md`, `references/development.md`, `docs/protocol.md`,
 `docs/security.md`, `templates/handoff.md`, `examples/authorization.json`, `README.md`, `docs/acceptance.md` e
 `evals/runbook.md` (S1); `scripts/homolog.py` (`hook` e `sync`) e a entrada `frontlights.py homolog` (S2);
-`scripts/homolog.py` (`bundle` e `backup_dir`) e a validação de `homolog.backupDir` no `inspect` (S3).
+`scripts/homolog.py` (`bundle` e `backup_dir`) e a validação de `homolog.backupDir` no `inspect` (S3);
+`scripts/homolog.py` (`release-plan`) e a entrada `frontlights.py homolog release-plan` (S4; a regra do
+`cleanup.py plan` para a branch entregue sem PR está em `test_cleanup.py`).
 """
 import json
 import os
@@ -146,8 +148,8 @@ class LocalMainTextTests(unittest.TestCase):
         text = read('skills', 'frontlights', 'references', 'development.md')
         self.assertEqual(text.count('## Into the local main: the three gates'), 1)
         self.assertLess(text.index('## Review, checkpoints and renewal'), text.index('## Into the local main'))
-        self.assertLess(text.index('## Into the local main'), text.index('## After the pull request'))
-        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## After the pull request')[0].split())
+        self.assertLess(text.index('## Into the local main'), text.index('## The release'))
+        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
         for phrase in ('homologation bench', 'refused as the remote main', '**Bring the local main in first.**',
                        '`git merge main`', '**Gate 1, the full suite.**', 'never the fast suite',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
@@ -272,7 +274,7 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
-        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## After the pull request')[0].split())
+        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
         for phrase in ('6. **Back it up.**', '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
                        '`configured: false`', 'name the key, ask nothing and go on', '7. **Record it.**',
                        '"sem backup configurado"'):
@@ -291,6 +293,49 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertEqual(example['homolog'], {'backupDir': None})
         self.assertIn('S3: `homolog bundle` grava', flat('docs', 'acceptance.md'))
         self.assertIn('one `.bundle` file there which `git bundle verify` accepts', flat('evals', 'runbook.md'))
+
+    def test_the_release_replaces_the_pull_request_per_issue(self):
+        """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
+        textos que diziam "antes do PR" dizem "antes do merge na main local"."""
+        skill = stage(6)
+        for phrase in ('**The release, offered at the end of each homologated issue**', '`homolog release-plan',
+                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
+                       '`gh pr create --base <base> --head <release branch>`', '`templates/pr.md` when it exists',
+                       '`git pull --ff-only` on the local main', 'before the merge into the local main, before a PR is opened or updated'):
+            with self.subTest(file='SKILL.md', phrase=phrase):
+                self.assertIn(phrase, skill)
+        self.assertNotIn("After a PR is opened, wait for the user's merge by default", skill)
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        self.assertNotIn('## After the pull request', text)
+        self.assertIn('## The release: from the local main to GitHub', text)
+        self.assertIn('## Integrating a family before the local main', text)
+        body = ' '.join(text.split('## The release: from the local main to GitHub')[1].split())
+        for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
+                       '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
+                       '**No closing keyword.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
+                       '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
+                       '`git pull --ff-only origin <base>`', '**Other work goes on.**'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, body)
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada', 'a única\nbranch do fluxo que é enviada'.replace('\n', ' '),
+                       '"Agora não" deixa a issue homologada na main local'):
+            with self.subTest(file='protocol.md', phrase=phrase):
+                self.assertIn(phrase, protocol)
+        self.assertNotIn('| Espera do merge |', protocol)
+        closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
+        for phrase in ('when the release of stage 6', 'the issue closes with the release that carries it',
+                       '`contained_in_base_without_pull_request`'):
+            with self.subTest(file='closeout.md', phrase=phrase):
+                self.assertIn(phrase, closeout)
+        readme = flat('README.md')
+        for phrase in ('#### Homologar na main local, lançar a release, fechar e limpar', '`homolog release-plan`',
+                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)'):
+            with self.subTest(file='README.md', phrase=phrase):
+                self.assertIn(phrase, readme)
+        self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
+        self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 
     def test_the_acceptance_record_and_the_runbook_track_it(self):
         self.assertIn('| 27. Homologação na main local: merge com portões e release por PR única (issue 32) | Pendente |',
@@ -681,6 +726,196 @@ class HomologBundleTests(unittest.TestCase):
                               capture_output=True, text=True, encoding='utf-8', env=self.env, timeout=120)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertNotIn('homolog', json.loads(done.stdout))
+
+
+class HomologReleasePlanTests(unittest.TestCase):
+    """S4: `homolog release-plan` lista as issues que estão na main local e ainda não em `origin/main`, conta os
+    commits à frente e atrás e nomeia a branch da release sem criar nada: só lê o Git e os registros. Só
+    repositórios temporários: o remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica
+    fora da fixture."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(self.base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
+                        GIT_TERMINAL_PROMPT='0')
+        (self.base / 'gitconfig').write_text('', encoding='utf-8')
+        self.origin = self.base / 'origin.git'
+        self.work = self.base / 'work'
+        self.other = self.base / 'other'
+        self.git(None, 'init', '-q', '--bare', '-b', 'main', str(self.origin))
+        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
+        self.configure(self.work)
+        self.commit(self.work, 'README.md', 'first\n', 'first')
+        self.git(self.work, 'remote', 'add', 'origin', str(self.origin))
+        self.git(self.work, 'push', '-q', '-u', 'origin', 'main')
+        self.git(None, 'clone', '-q', str(self.origin), str(self.other))
+        self.configure(self.other)
+        (self.work / '.frontlights').mkdir()
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'issue': 2, 'branch': 'claude/issue-2'},
+                    {'issue': 1, 'branch': 'claude/issue-1-s2', 'slice': 'S2'})
+
+    def git(self, cwd, *args, check=True):
+        prefix = ['git', '-C', str(cwd)] if cwd else ['git']
+        done = subprocess.run([*prefix, *args], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              env=self.env, stdin=subprocess.DEVNULL, timeout=60)
+        if check:
+            self.assertEqual(done.returncode, 0, f'git {" ".join(args)}: {done.stderr}')
+        return done
+
+    def configure(self, repo):
+        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'),
+                           ('commit.gpgsign', 'false')):
+            self.git(repo, 'config', key, value)
+
+    def commit(self, repo, name, content, message):
+        (repo / name).write_text(content, encoding='utf-8')
+        self.git(repo, 'add', name)
+        self.git(repo, 'commit', '-q', '-m', message)
+        return self.sha(repo)
+
+    def sha(self, repo, ref='HEAD'):
+        return self.git(repo, 'rev-parse', ref).stdout.strip()
+
+    def cli(self, *args, script=HOMOLOG):
+        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=180)
+        try:
+            result = json.loads(done.stdout)
+        except json.JSONDecodeError:
+            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
+        self.assertEqual(result['exitCode'], done.returncode)
+        return done.returncode, result
+
+    def record(self, *entries, name='authorization.json', **extra):
+        """An authorization record in the `.frontlights` of the main worktree with the given `worktrees` entries."""
+        data = {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': list(entries), **extra}
+        (self.work / '.frontlights' / name).write_text(json.dumps(data), encoding='utf-8')
+
+    def deliver(self, number):
+        """An issue branch cut from the local main with one commit, merged back into it with --no-ff."""
+        branch = f'claude/issue-{number}'
+        self.git(self.work, 'switch', '-q', '-c', branch)
+        self.commit(self.work, f'issue-{number}.txt', f'{number}\n', f'issue {number}')
+        self.git(self.work, 'switch', '-q', 'main')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of issue {number} into the local main', branch)
+        return branch
+
+    def plan(self, *flags, script=HOMOLOG):
+        return self.cli('release-plan', '--root', str(self.work), *flags, script=script)
+
+    def test_the_release_lists_only_the_issues_still_outside_the_remote_main(self):
+        self.deliver(1)
+        self.git(self.work, 'push', '-q', 'origin', 'main')
+        remote_main = self.sha(self.origin, 'main')
+        self.deliver(2)
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['ok'], result['ready'], result['release'], result['ahead'], result['behind'], result['skipped']),
+                         (True, True, [2], 2, 0, 0))
+        self.assertEqual((result['base'], result['remote'], result['localMain'], result['remoteMain']),
+                         ('main', 'origin', self.sha(self.work), remote_main))
+        self.assertEqual([i['issue'] for i in result['issues']], [1, 2])
+        one, two = result['issues']
+        self.assertEqual((one['branch'], one['present'], one['inLocalMain'], one['inRemoteMain']),
+                         ('claude/issue-1', True, True, True))
+        self.assertEqual((two['branch'], two['tip'], two['present'], two['inLocalMain'], two['inRemoteMain']),
+                         ('claude/issue-2', self.sha(self.work, 'claude/issue-2'), True, True, False))
+        self.assertRegex(result['releaseBranch'], r'^claude/release-\d{4}-\d{2}-\d{2}$')
+        self.assertIn('#2', result['message'])
+        self.assertIn(result['releaseBranch'], result['message'])
+        # it only reads: the release branch was not created, nothing was pushed, the worktree is untouched
+        missing = self.git(self.work, 'rev-parse', '--verify', '--quiet', f"refs/heads/{result['releaseBranch']}", check=False)
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertEqual(self.sha(self.origin, 'main'), remote_main)
+        self.assertEqual(self.git(self.work, 'status', '--porcelain', '--untracked-files=no').stdout, '')
+
+    def test_nothing_ahead_is_a_question_not_a_release(self):
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['ok'], result['ready'], result['ahead'], result['behind'], result['release']),
+                         (False, False, 0, 0, []))
+        self.assertIn('nada a liberar', result['message'])
+        self.assertEqual([(i['issue'], i['present']) for i in result['issues']], [(1, False), (2, False)])
+
+    def test_a_local_main_behind_the_remote_asks_for_the_sync_first(self):
+        self.deliver(1)
+        self.commit(self.other, 'remote.txt', 'remote\n', 'remote work')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        self.git(self.work, 'fetch', '-q', 'origin')
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['ready'], result['ahead'], result['behind'], result['release']), (False, 2, 1, [1]))
+        self.assertIn('sync', result['message'])
+        self.assertEqual(result['remoteMain'], self.sha(self.other))
+
+    def test_without_the_remote_ref_it_refuses_and_names_the_sync(self):
+        self.deliver(1)
+        self.git(self.work, 'update-ref', '-d', 'refs/remotes/origin/main')
+        code, result = self.plan()
+        self.assertEqual(code, 1, result)
+        self.assertEqual((result['ok'], result['ready'], result['ahead'], result['behind'], result['remoteMain'], result['release']),
+                         (False, False, None, None, None, []))
+        self.assertIn('sync', result['message'])
+        self.assertEqual({i['issue']: (i['inLocalMain'], i['inRemoteMain']) for i in result['issues']},
+                         {1: (True, None), 2: (None, None)})
+
+    def test_a_slice_entry_is_ignored_a_gone_branch_is_absent_and_malformed_entries_are_counted(self):
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'issue': 1, 'branch': 'claude/issue-1-s2', 'slice': 'S2'},
+                    {'issue': 'x', 'branch': 'claude/x'}, {'issue': 3, 'branch': 'bad name'},
+                    {'issue': 4, 'branch': 'other/issue-4'}, {'issue': 0, 'branch': 'claude/issue-0'}, 'not an entry')
+        (self.work / '.frontlights' / 'authorization-2.json').write_text('[1, 2]', encoding='utf-8')
+        (self.work / '.frontlights' / 'authorization-3.json').write_text('{broken', encoding='utf-8')
+        self.git(self.work, 'branch', 'claude/issue-1-s2')   # the slice branch exists; the issue branch does not
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertEqual([i['issue'] for i in result['issues']], [1])
+        entry = result['issues'][0]
+        self.assertEqual((entry['branch'], entry['present'], entry['tip'], entry['inLocalMain'], entry['inRemoteMain']),
+                         ('claude/issue-1', False, None, None, None))
+        self.assertEqual(result['skipped'], 7)   # five entries and two files
+
+    def test_an_existing_release_branch_of_the_day_is_never_reused(self):
+        self.deliver(1)
+        code, first = self.plan()
+        self.assertEqual(code, 0, first)
+        name = first['releaseBranch']
+        self.git(self.work, 'branch', name)
+        _, second = self.plan()
+        self.assertEqual(second['releaseBranch'], f'{name}-2')
+        self.git(self.work, 'branch', f'{name}-2')
+        _, third = self.plan()
+        self.assertEqual(third['releaseBranch'], f'{name}-3')
+        code, result = self.plan('--prefix', 'rel/')
+        self.assertEqual(code, 0, result)
+        self.assertRegex(result['releaseBranch'], r'^rel/release-\d{4}-\d{2}-\d{2}$')
+        for prefix in ('claude', '../x/', 'cl aude/'):
+            with self.subTest(prefix=prefix):
+                code, result = self.plan('--prefix', prefix)
+                self.assertEqual(code, 1, result)
+                self.assertIn('prefixo', result['message'])
+
+    def test_records_without_an_authorization_map_no_issue_and_ask(self):
+        self.deliver(1)
+        empty = self.base / 'elsewhere'
+        (empty / '.frontlights').mkdir(parents=True)
+        for folder in (empty, self.base / 'absent'):
+            with self.subTest(folder=folder.name):
+                code, result = self.plan('--records', str(folder))
+                self.assertEqual(code, 2, result)
+                self.assertEqual((result['issues'], result['release'], result['ready'], result['ahead'], result['skipped']),
+                                 ([], [], False, 2, 0))
+                self.assertIn('nenhuma branch de issue', result['message'])
+        code, same = self.plan('--records', str(self.work))
+        self.assertEqual((code, same['release']), (0, [1]))
+
+    def test_the_frontlights_entry_gives_the_same_plan_as_the_module(self):
+        self.deliver(1)
+        code, direct = self.plan()
+        self.assertEqual(direct['operation'], 'release-plan')
+        routed_code, routed = self.cli('homolog', 'release-plan', '--root', str(self.work), script=FRONTLIGHTS)
+        self.assertEqual((routed_code, routed), (code, direct))
 
 
 if __name__ == '__main__':
