@@ -16,25 +16,31 @@ where applicable; they are advisory preflight, not sandbox enforcement.
 The user decided, permanently and for every project, that the opening question of
 stage 6 (concurrency, stacking and the bounded implementation authorization) is not
 asked. Covered, for the issues of the family or batch at hand: editing, testing,
-committing, pushing the work branches, opening and retargeting draft PRs (stacked ones
-included), the merges the stacking authorization names, running migrations on the
+committing, the merges the stacking authorization names (the merge of the branch of the issue
+into the local main with its three gates green among them, "Into the local main" below), running migrations on the
 local development database, creating and removing test data through the product's own
-endpoints, commenting on the issues and ticking acceptance criteria with evidence.
+endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of
+an issue goes to GitHub before the release: the branches of the issue and of its slices are never
+pushed, and the only pull request is the release's, offered at the end of each homologated issue.
 
 Never covered, and asked one operation at a time with `AskUserQuestion` ("Sim" first,
 "Não" second, the exact operation and command in the question): merging a pull
 request, closing an issue, changing the board, deploying or publishing to production,
 editing a migration already registered (on the base branch or applied anywhere but the
-local development database), writing the base branch or a protected branch, turning on
+local development database), writing the remote main (`origin/main`, the base branch on GitHub) or a
+protected branch (the local main is written only by the covered merge, with its three gates green), turning on
 a setting, key or flag in production, and deleting anything but the test data the run
 created. Run it only after "Sim" and record the answer verbatim in the handoff. A
 "Sim" covers that one operation, never another one, another PR or a later moment; "Não",
 silence or another answer leaves it undone and the work goes on without it. The host's
 own permission prompts are not Frontlights' to remove and still apply.
 
-## Slices in order: one issue branch, one worktree per slice, one PR per issue
+## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 
-An issue is worked on one issue branch and delivered in one PR; each of its slices (the boxes
+An issue is worked on one issue branch, cut from the local main (the base branch of the charter,
+checked out in the main worktree, never `origin/main`: `git branch <branch_prefix>issue-<n> main`),
+which stays local and is never pushed, and delivered by one merge into the local main once its three
+gates are green ("Into the local main", below); each of its slices (the boxes
 of its acceptance criteria, stage 5) gets its own worktree and branch, `<branch_prefix>issue-<n>-s<k>`,
 cut from the branch of the issue at its current tip (`git worktree add -b <branch_prefix>issue-<n>-s<k>
 <path> <issue-branch>`) and named in the charter's `worktrees` with its `slice`, so that `authorize`
@@ -63,7 +69,7 @@ the slice in progress with its worktree, and the slices already ticked, and a fr
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
 `SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
 run stays one per issue, when the last slice that changes the screen closes its loop; the independent review stays one
-per issue, of the whole diff, before the PR, and the full suite runs once there. The stacked wave
+per issue, of the whole diff, before the merge into the local main, and the full suite runs once there. The stacked wave
 and the family integration below (draft PRs whose base is a dependency's branch, their retargeting
 and the wait for the parent's merge) apply only to a family that already exists (an issue with
 sub-issues published before this rule); a slice stacked on another slice uses only the branch cut,
@@ -169,8 +175,8 @@ avoids that. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
 not the base, push it (and the dependency's branch), open a draft PR whose base is the
 dependency's branch, retarget that PR, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), and `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed. Those are the only merges it allows: it never covers merging a PR, writing
-the base branch, deploying or releasing. When the user chose to wait, a dependent
+branches into a local integration branch that is never pushed, and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
+the remote main, deploying or releasing. When the user chose to wait, a dependent
 stays parked until its dependency is in the approved base.
 
 **Concurrency.** Recommend as ceiling the number of independent children whose
@@ -405,16 +411,56 @@ evidence; tick an acceptance criterion in the issue body only with evidence for 
 (a test, a measured result, a reviewed diff), because the closeout of stage 7 trusts
 the ticks; a criterion born from a finding is ticked the same way, once the work it
 names is done and its evidence exists. Closing an issue and moving its card are never part of this: they have
-their own approval (`references/closeout.md`). Draft PRs are covered by the standing authorization and still go through
-the host's native approval. Never
-merge a pull request, write the base branch, deploy, release, delete data or close
+their own approval (`references/closeout.md`). The release's pull request is covered by the standing authorization and still goes through
+the host's native approval; the branches of issues and slices are never pushed. Never
+merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or batch's verified branches into a local integration branch that is never pushed. Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or batch's verified branches into a local integration branch that is never pushed, and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,
 the findings left unfixed with the destination of each, remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
+
+## Into the local main: the three gates
+
+The local main of the project (the base branch of the charter, checked out in the main worktree) is the
+homologation bench: it accumulates every issue that passed its three gates, and nothing of it reaches
+GitHub before the release. The remote main (`origin/main`) is never written outside the release's pull
+request, and `authorize` tells the two apart: the local main is the only target of the covered merge
+below, and a target with a slash (`origin/main`, `upstream/main`) is refused as the remote main.
+
+When the last slice of the issue is merged into the branch of the issue, in this order:
+
+1. **Bring the local main in first.** In the issue's worktree, `git merge main` (one of the covered merges,
+   a base into the issue's own branch), so the tip of the branch already contains the local main and the
+   merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
+   shown to the reviewer as part of the diff.
+2. **Gate 1, the full suite.** Run the whole suite at that tip (`python -m unittest discover -s tests -v` in
+   this repository, the project's equivalent elsewhere; never the fast suite), and record the command, the
+   count and the exit code in the handoff. Red means the issue is not homologated: the failure goes back
+   to its slice's loop, or to the user as a question.
+3. **Gate 2, the review.** The independent review of the whole diff (Review, checkpoints and renewal, above)
+   is bound to that tip, and `frontlights.py review-gate --root <issue-worktree> --review <review.json>`
+   answers `current` (exit code 0). `stale` means a review again, never the merge.
+4. **Gate 3, the watched run.** `frontlights.py browser-gate` answers `answered` (the user approved or said
+   to go on) or `not_needed` (nothing on the screen changed), exit code 0; `pending`, `stale`,
+   `contradiction` or `unconfigured` is the question of `browser-testing.md`, never the merge.
+5. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
+   authorize --charter .frontlights/authorization.json --operation .frontlights/issues/<n>/merge-local-main.json`,
+   with `kind` `merge_into_local_main`, the issue's worktree and branch, `target` the base branch of the
+   charter and `gates` `{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}` (or
+   `not_needed`); `examples/operation-merge-local-main.json` shows the shape. With `scope_check: pass`, in the
+   main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
+   or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
+   gates to make them pass.
+6. **Record it.** The handoff's line "Merge na main local" takes the three gates with the evidence of each,
+   the output of `authorize` and the commit of the merge; the branch of the issue stays local, never pushed.
+
+`authorize` is a preflight, not a barrier: it reads no Git and proves neither that the suite ran nor that the
+review is current (the commands, `review-gate` and `browser-gate` do), the host's own permission prompts still
+apply, and a model that does not call it is not stopped by it. The issue is homologated once it is in the
+local main; it closes only with the release that carries it merged (stage 7).
 
 ## After the pull request: waiting for the merge
 

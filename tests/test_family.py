@@ -199,7 +199,7 @@ class FamilyRulesTextTests(unittest.TestCase):
                        'gh pr create --draft --base <dependency-branch>',
                        'git fetch origin', '<parent-pr-base>', 'git merge origin/<parent-pr-base>',
                        'never a rebase or a force-push', 'conflicts on the hunks the child shares',
-                       'it never covers merging a PR, writing the base branch, deploying or releasing',
+                       'it never covers merging a PR, writing the remote main, deploying or releasing',
                        "Push the dependency's branch before the child's PR",
                        'only `"base": "<dependency-branch>"`'):
             with self.subTest(phrase=phrase):
@@ -221,12 +221,13 @@ class FamilyRulesTextTests(unittest.TestCase):
         allowed = ("the only merges allowed are the ones the stacking authorization names: of a base into an issue's own branch, "
                    "of a slice's branch into the branch of its own issue when its loop closes, "
                    "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
-                   "and of a family's or batch's verified branches into a local integration branch that is never pushed")
+                   "of a family's or batch's verified branches into a local integration branch that is never pushed, "
+                   "and of the branch of the issue into the local main once its three gates are green")
         for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
             with self.subTest(file=name[-1]):
                 text = flat(read(*name))
                 self.assertIn(allowed, text)
-                self.assertRegex(text, r'(Do not|Never) merge (pull requests|a pull request), write the base branch')
+                self.assertRegex(text, r'(Do not|Never) merge (pull requests|a pull request), write the remote main')
 
     def test_example_authorization_shows_a_stacked_worktree_base(self):
         import json

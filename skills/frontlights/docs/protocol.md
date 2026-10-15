@@ -10,14 +10,17 @@
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
-| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração e revisão independente |
+| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes (suíte inteira, `review-gate` atual, `browser-gate` respondido); cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
 | Espera do merge | Ler o estado das PRs abertas (`closeout.py merge-status`) e oferecer o merge da PR pronta; só com o "Sim" o merge é feito | Resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
 A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
 pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
-slices de cada issue em ordem, numa branch e um PR por issue, com uma worktree por slice (branch
+slices de cada issue em ordem, numa branch por issue, cortada da main local (a branch base do charter, na
+worktree principal, nunca `origin/main`), que fica só local, nunca é enviada e entra na main local por um
+merge com três portões verdes (suíte inteira no tip da branch, `review-gate` atual e `browser-gate`
+respondido ou `not_needed`, conferidos pelo `authorize` como `merge_into_local_main`), com uma worktree por slice (branch
 `<prefixo>issue-<n>-s<k>` cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha,
 com o próprio `checkpoint-<id>.json`) e slices independentes em paralelo dentro da issue e entre issues (a
 slice que depende de outra ainda aberta é empilhada na branch dela; o
@@ -28,16 +31,18 @@ de cada uma, o repositório, a concorrência, o empilhamento quando há família
 worktrees, os testes e as condições de parada, e grava `authorization.json` com o usuário em
 `approved_by` e `confirmed_by`,
 `"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
-horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, enviar as
-branches de trabalho, abrir e redirecionar PRs rascunho (empilhadas inclusive), os merges que a
-autorização de empilhamento nomeia, rodar migrations no banco de desenvolvimento local, criar e
+horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, os merges que a
+autorização de empilhamento nomeia (entre eles o da branch da issue na main local, só com os três portões
+verdes), rodar migrations no banco de desenvolvimento local, criar e
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
-evidência. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
+evidência. Nada da issue vai ao GitHub antes da release: as branches da issue e das slices nunca são
+enviadas, e a única PR é a da release, oferecida ao fim de cada issue homologada. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
 apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
 da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR,
 fechar issue, mexer no quadro, implantar ou publicar
-em produção, editar uma migration já registrada, escrever na branch base ou protegida, ligar
+em produção, editar uma migration já registrada, escrever na main remota (`origin/main`, a branch base no
+GitHub) ou numa branch protegida (a main local só recebe o merge coberto, com os três portões), ligar
 configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
 Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando
 exato; só roda depois do "Sim", que vale só para ela, e a resposta literal vai para o handoff. As

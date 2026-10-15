@@ -362,6 +362,10 @@ def board_resolution(plan, project):
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
 SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
+# Issue 32, S1: the branch of an issue enters the LOCAL main only with these three gates green. The values
+# are the words the tools print: the full suite, `review-gate` (`current`) and `browser-gate` (`answered`,
+# or `not_needed` when nothing on the screen changed). The remote main (`origin/main`) is never a target.
+LOCAL_MAIN_GATES = {'full_suite': ('green',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
 
 
 def slices_of(issue):
@@ -574,7 +578,7 @@ def authorize(charter, operation):
     require(number(operation.get('issue')) and operation['issue'] in charter.get('issue_ids', []),
             'unapproved issue')
     kind = operation.get('kind')
-    require(kind in {'edit', 'test', 'checkpoint', 'draft_pr', 'issue_update'} and
+    require(kind in {'edit', 'test', 'checkpoint', 'draft_pr', 'issue_update', 'merge_into_local_main'} and
             kind in charter.get('operations', []), 'operation outside bounded authorization')
     if kind in {'draft_pr', 'issue_update'}:
         raise ValueError('external write requires native permission; this plugin cannot securely scope generic tools')
@@ -612,6 +616,24 @@ def authorize(charter, operation):
     if kind == 'test':
         argv = operation.get('argv')
         require(strings(argv) and argv in charter.get('verification_commands', []), 'unapproved verification argv')
+    elif kind == 'merge_into_local_main':
+        # Issue 32, S1: the branch of the issue (never a slice branch) enters the local main, the base branch
+        # of the charter, only with the three gates green; a remote-tracking name is never the target.
+        require(expected is None and given is None,
+                'only the branch of the issue enters the local main, never a slice branch')
+        base = charter.get('base')
+        require(isinstance(base, dict) and nonempty(base.get('branch')),
+                'the charter needs base.branch to name the local main')
+        target = operation.get('target')
+        require(nonempty(target), 'target required: the local main, the base branch of the charter')
+        require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
+        require(target == base['branch'],
+                f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
+        gates = operation.get('gates')
+        require(isinstance(gates, dict), 'gates required: full_suite, review_gate and browser_gate, each green')
+        for gate, green in LOCAL_MAIN_GATES.items():
+            require(gates.get(gate) in green,
+                    f'gate {gate} is not green: {gates.get(gate)!r} (green is {" or ".join(green)})')
     else:
         require(nonempty(operation.get('path')), 'target path required')
         target = Path(operation['path'])
