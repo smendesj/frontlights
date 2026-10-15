@@ -459,7 +459,11 @@ main"): the full suite green at the tip of the branch of the issue, `review-gate
 `browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as
 `merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
 missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
-user, never a merge.
+user, never a merge. Right after each merge into the local main, `homolog bundle --root <main worktree>
+--config <config>` writes a Git bundle of the local main and of the work branches into the folder of the
+`homolog.backupDir` key of `.frontlights/config.json` (covered; the only write the run makes outside the
+project, and only into that folder); without the key it writes nothing and the session says so in one line,
+naming the key, and asks nothing.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
 After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull

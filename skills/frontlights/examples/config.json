@@ -2,6 +2,9 @@
   "repository": "OWNER/REPOSITORY",
   "project": null,
   "roads": null,
+  "homolog": {
+    "backupDir": null
+  },
   "roadmapSync": {
     "enabled": false,
     "endpoint": "https://roads.example.com/api/frontlights",
@@ -13,15 +16,37 @@
     "maxSprintItems": 4,
     "markCompleted": true,
     "issueTargets": {
-      "PRODUTO": {"repository": "OWNER/REPOSITORY", "project": {"owner": "OWNER", "number": 1}}
+      "PRODUTO": {
+        "repository": "OWNER/REPOSITORY",
+        "project": {
+          "owner": "OWNER",
+          "number": 1
+        }
+      }
     },
     "progress": {
       "enabled": false,
       "path": "progress-report",
       "collectors": [
-        {"name": "usage", "command": ["node", "COLLECTOR_SCRIPT", "--start", "{start}", "--end", "{end}"], "timeoutSeconds": 300}
+        {
+          "name": "usage",
+          "command": [
+            "node",
+            "COLLECTOR_SCRIPT",
+            "--start",
+            "{start}",
+            "--end",
+            "{end}"
+          ],
+          "timeoutSeconds": 300
+        }
       ],
-      "pushCommand": ["node", "PUSH_SCRIPT", "--draft", "{draft}"],
+      "pushCommand": [
+        "node",
+        "PUSH_SCRIPT",
+        "--draft",
+        "{draft}"
+      ],
       "factsFile": null,
       "usageFile": null,
       "draftGuide": "docs/progress-draft.md",
@@ -30,19 +55,65 @@
   },
   "browserTest": {
     "baseUrl": "http://127.0.0.1:{port}/",
-    "frontPaths": ["web/src/**"],
+    "frontPaths": [
+      "web/src/**"
+    ],
     "users": [
-      {"login": "usuario1@exemplo.test", "password": "senha-ficticia"},
-      {"login": "usuario2@exemplo.test", "password": "senha-ficticia"}
+      {
+        "login": "usuario1@exemplo.test",
+        "password": "senha-ficticia"
+      },
+      {
+        "login": "usuario2@exemplo.test",
+        "password": "senha-ficticia"
+      }
     ],
     "processes": [
-      {"name": "web", "argv": ["python", "APP_SCRIPT", "{port}"], "port": "auto", "health": "http://127.0.0.1:{port}/health", "timeoutSeconds": 60}
+      {
+        "name": "web",
+        "argv": [
+          "python",
+          "APP_SCRIPT",
+          "{port}"
+        ],
+        "port": "auto",
+        "health": "http://127.0.0.1:{port}/health",
+        "timeoutSeconds": 60
+      }
     ]
   },
   "checks": {
     "backend": "web",
-    "regression": {"argv": ["python", "-m", "unittest", "discover", "-s", "tests"], "timeoutSeconds": 900},
-    "integration": {"argv": ["python", "INTEGRATION_SCRIPT", "{backend_url}"], "timeoutSeconds": 300},
-    "smoke": {"target": "web", "paths": ["/", "/health"], "expectStatus": [200, 302], "timeoutSeconds": 30}
+    "regression": {
+      "argv": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "timeoutSeconds": 900
+    },
+    "integration": {
+      "argv": [
+        "python",
+        "INTEGRATION_SCRIPT",
+        "{backend_url}"
+      ],
+      "timeoutSeconds": 300
+    },
+    "smoke": {
+      "target": "web",
+      "paths": [
+        "/",
+        "/health"
+      ],
+      "expectStatus": [
+        200,
+        302
+      ],
+      "timeoutSeconds": 30
+    }
   }
 }

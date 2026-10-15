@@ -847,11 +847,25 @@ def validate_test_blocks(config, path):
     return warnings
 
 
+def validate_homolog_block(config):
+    """Refuse an invalid `homolog` block (`homolog.backupDir`, the backup folder of `homolog bundle`) with the rule
+    of homolog.py. An absent, null or valid block adds nothing to the output, and the folder itself is not checked
+    here: inspect is read-only and `bundle` checks it at run time."""
+    if config.get('homolog') is None:
+        return
+    import homolog
+    try:
+        homolog.backup_dir(config)
+    except homolog.Refusal as refusal:
+        raise ValueError(str(refusal)) from None
+
+
 def inspect(config, root, config_path=None):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
     warnings = validate_test_blocks(config, config_path)
+    validate_homolog_block(config)
     repo = config['repository']
     result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
               'sources': {}, 'verification_commands': {},

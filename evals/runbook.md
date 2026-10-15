@@ -226,7 +226,9 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     start of a stage 6 in a clone with a remote, confirm `homolog hook` exits 2 and the question shows the script,
     "Sim" installs it and `git push origin main` is refused while a work branch still pushes; and that `homolog sync`
     advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
-    the files with the main worktree left clean.
+    the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that
+    the merge into the local main is followed by one `.bundle` file there which `git bundle verify` accepts, and that
+    without the key the session says in one line that no backup is configured and asks nothing.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact
