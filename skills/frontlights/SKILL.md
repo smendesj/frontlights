@@ -83,8 +83,9 @@ a new acceptance criterion of its source issue or a top-level issue (the Follow-
 of `references/issues.md`), implemented only under an authorization that names it. Before
 acting on a family, the session offers its conversion into one issue with slices, one box
 per open sub-issue, with one approval per family (`references/issues.md`, "Converting a
-family"); a request to tidy a set of issues into that shape ("arrume as issues do MVP") runs
-the same conversion in batch, one family at a time, and nothing else.
+family"); a request to tidy a set of issues into that shape ("arrume as issues do MVP") runs,
+after stages 0 to 2, the same conversion in batch, one family at a time, and nothing else of
+stages 3 to 6.
 
 **Secrets and numbers.** A filter, log or file listing that may hold credentials (the
 passwords of test accounts included) is masked before it is printed. If one leaks anyway,

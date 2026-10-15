@@ -259,7 +259,8 @@ class FamilyConversionTextTests(unittest.TestCase):
         for phrase in ('one approval per family', 'the only exception to the append-only rule', 'body-before-<ts>.md',
                        'Convertida em CA S<k> da #<n>', '--reason "not planned"', 'more than five open children',
                        'up to five slices each', '`--blocked-by`', 'dividida em #a, #b', 'the before and the after',
-                       'gh project item-archive', 'closed sub-issues are history', '**In batch.**', '**Offered.**'):
+                       'gh project item-archive', 'closed sub-issues are history', '**In batch.**', '**Offered.**',
+                       'never as nested boxes', 'dividida em #a, #b") and changing the board are denied operations'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_body)
         self.assertNotRegex(body, r'gh issue create [^`]*--parent')

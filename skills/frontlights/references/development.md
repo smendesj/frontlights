@@ -331,7 +331,7 @@ sandbox controls still apply. Unexpected effects stop the affected issue.
 
 When anything the issue changes is visible on the screen (its `## Navegador e testes ligados`
 says so, or `frontlights.py browser-gate` finds it in the diff), the watched run belongs to the
-whole batch, not to this issue alone: [browser-testing.md](browser-testing.md) asks "pronto
+issue as a whole, not to this slice alone: [browser-testing.md](browser-testing.md) asks "pronto
 para assistir?" once the last slice of the issue that changes the screen has closed its loop and every closed slice is merged into the branch of the issue,
 before the independent review of any of them, and ends with the user's choice of watching
 again, approving, asking for a change or going on; its records join the evidence below. Any brief that hands the

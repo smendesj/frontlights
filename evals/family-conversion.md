@@ -8,8 +8,8 @@ Case 1, offered. Start the session on family A ("frontlights, ataque a issue #A"
 family (three open, one closed, said in one line), and before any grilling the session asks "Converter a família
 #A em uma issue com CAs antes de seguir?" with "Sim, converter" first. On "Não, trabalhar como família", the
 family is grilled and worked as before. On "Sim, converter": the session shows the current body of #A and the
-list of its children, then the new body with three boxes S1 to S3 (the partly done child keeps its two ticked
-criteria as sub-items of its box, which stays open), Entrega, Seams, Camadas and Depende de filled from the
+list of its children, then the new body with three boxes S1 to S3 (the partly done child says what it already
+delivered as plain text in its Entrega, with no nested box, and its box stays open), Entrega, Seams, Camadas and Depende de filled from the
 children's bodies and `blockedBy`, and the exact commands; one approval for the family; the body of #A is
 replaced only after it, with the old one in `.frontlights/issues/A/body-before-<ts>.md` and the difference
 reread; then one question listing the three `gh issue close ... --reason "not planned" --comment "Convertida em
@@ -25,7 +25,8 @@ when nothing of it is left); one approval per family; every denied write with it
 Case 3, refused. "Não" to family B leaves it exactly as it is, and a later session that acts on it works it as
 a family.
 
-Reject: a new sub-issue, `gh issue create --parent` or `sub_issues --method POST` anywhere; a parent body
+Reject: a new sub-issue, `gh issue create --parent` or `sub_issues --method POST` anywhere; a ticked box nested
+under a box (the closeout counts every box); a parent body
 replaced without the before and the after shown in full or without the approval of that family; the old
 body not captured; a child closed, or its card moved, without its own "Sim"; six or more boxes in one
 issue; a decision in the new body that the user never made; a closed sub-issue reopened or converted;

@@ -141,15 +141,15 @@ never offers the folder it runs in, and the commands it prints carry `git -C <ma
 anywhere. `--integration` names the local-only worktree of a family (never pushed, never a pull request): it goes
 only when its branch holds no commit of its own that is not already in a pull request that reached the base (a fix
 belongs to the member branch that owns the file). A merge counts as a commit of its own when it carries content (a
-conflict resolved by hand, a file added to it): such a branch stays, as `integration_has_unique_commits`. `candidates` lists what can go, each with its issue, worktree
+conflict resolved by hand, a file added to it): such a branch stays, as `integration_has_unique_commits`. `candidates` lists what can go, each with its issue, its slice (null outside a slice's worktree), worktree
 path, branch, tip, pull requests, whether the remote branch goes too, its `cautions` (`remote_branch_gone`,
 `remote_branch_moved`, `origin_is_not_the_repository`, `frontlights_records`, `ignored_files`,
 `local_only_integration`, `slice_merged_into_issue_branch`, `branch_differs_from_authorization`) and the `commands` in the order to run them.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
 pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch` and
 no remote command, once that branch contains a commit of its own, it was never pushed and no pull request was
-opened from it; otherwise it stays as `slice_not_in_issue_branch` (also a slice freshly cut, with nothing of its own
-merged yet), `slice_pushed`, `slice_has_pull_request`, `slice_is_issue_branch` (an entry with `slice` that points at
+opened from it; otherwise it stays as `slice_not_in_issue_branch` (also a slice freshly cut or merged fast-forward, with nothing of its own
+merged yet; the rule's `git merge --no-ff` keeps the issue's tip ahead of the slice's), `slice_pushed`, `slice_has_pull_request`, `slice_is_issue_branch` (an entry with `slice` that points at
 the issue's own branch) or `slice_issue_branch_unknown` (the authorization names no worktree of the issue itself, or
 the branch of the issue is already gone and the approved base does not hold the slice's tip; when the base holds it,
 the slice is offered).
