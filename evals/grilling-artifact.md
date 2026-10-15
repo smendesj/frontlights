@@ -18,7 +18,7 @@ Expected, in this order:
 3. A request without a screen (an API change that adds a layer) gets, in the same place, a diagram of the flow
    and of the layers, before and after, instead of a form.
 4. The discovery log carries the URL in its "Artifact URL" line, written at the first publication and never
-   changed; the log's approaches table keeps citing sections of that one page.
+   changed; every section cited in the interview belongs to that one page.
 5. Stage 5, the quiz: the numbered list of the slices shows, for each slice, its title, "Depende de", what it
    delivers and the section of the artifact that shows what it delivers, one section per slice on the same URL
    as the grilling (the form as it stands once that slice lands); then the quiz asks the same three things as

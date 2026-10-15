@@ -60,7 +60,7 @@ by the question (so "seção 2" is the second question that touched the screen),
 The page lives outside the machine, so it carries only fictitious data: made-up names, numbers
 and texts; no real record, secret, endpoint, person or client enters it. The question cites
 the section ("artefato, seção 2: depois por abordagem"; without a screen, "seção 1: fluxo e
-camadas, antes e depois"); the option `preview` stays the text of the
+camadas, antes" and "seção 2: fluxo e camadas, depois por abordagem"); the option `preview` stays the text of the
 option, so "artefato" is the page, "preview" is the field. The URL is recorded in the
 discovery log (`templates/discovery.md`, "Artifact URL") at the first publication and does
 not change afterwards. Never a real screenshot of the running product (that belongs to the
