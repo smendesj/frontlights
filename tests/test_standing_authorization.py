@@ -43,23 +43,25 @@ class StandingAuthorizationTests(unittest.TestCase):
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('running migrations on the local development database',
                        "creating and removing test data through the product's own endpoints",
-                       'ticking acceptance criteria with evidence', 'pushing the work branches'):
+                       'ticking acceptance criteria with evidence',
+                       'the merge of the branch of the issue into the local main with its three gates green'):
             for name, text in (('SKILL.md', skill), ('development.md', development)):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name)
             for phrase in ('rodar a migration' if name == ('README.md',) else 'migrations no banco de desenvolvimento local',
-                           'endpoints do produto', 'PRs rascunho'):
+                           'endpoints do produto', 'main local'):
                 with self.subTest(file=name[-1], phrase=phrase):
                     self.assertIn(phrase, text)
 
     def test_every_denied_operation_is_listed_in_every_document(self):
         english = ('merging a pull request', 'closing an issue', 'changing the board',
                    'deploying or publishing to production', 'editing a migration already registered',
-                   'writing the base branch or a protected branch', 'turning on a setting, key or flag in production')
+                   'writing the remote main (`origin/main`, the base branch on GitHub) or a protected branch',
+                   'turning on a setting, key or flag in production')
         portuguese = ('merge de PR', 'fechar issue', 'mexer no quadro', 'produção', 'migration já registrada',
-                      'branch base ou protegida', 'chave ou flag em produção')
+                      'escrever na main remota (`origin/main`', 'chave ou flag em produção')
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in english:

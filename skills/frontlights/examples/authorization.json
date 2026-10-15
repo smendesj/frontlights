@@ -6,9 +6,10 @@
   "approval_reference": "",
   "expires_at": "2000-01-01T00:00:00+00:00",
   "monitoring": {"mode": "local", "confirmed_by": "", "phone_connected": false},
+  "base": {"branch": "main", "commit": "REPLACE_WITH_BASE_COMMIT"},
   "protected_branches": ["main", "master"],
   "branch_prefix": "claude/",
-  "operations": ["edit", "test", "checkpoint"],
+  "operations": ["edit", "test", "checkpoint", "merge_into_local_main"],
   "worktrees": [
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-1", "ownership": ["src", "tests", "docs/evidence"]},
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_SLICE_WORKTREE_PATH", "branch": "claude/issue-1-s2", "slice": "S2", "ownership": ["src/edit", "tests/edit"]},

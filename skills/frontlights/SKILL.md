@@ -368,7 +368,9 @@ exposing secrets. Do not disable hooks or request bypass mode.
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Each issue gets one issue branch and one PR, and each of
+implementation authorization question. Each issue gets one issue branch, cut from the local main (the
+base branch of the charter, checked out in the main worktree; never from `origin/main`), which stays
+local and is never pushed, and each of
 its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
 branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
 slices are worked in dependency order: independent slices (no `Depende de` between them and no file
@@ -386,10 +388,12 @@ this run does: the issue IDs, repository, concurrency, the branch and the order 
 each issue, stacking when a family exists, worktree base and branch prefix, the verification argv
 and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
-only: editing, testing, committing, pushing the work branches, opening draft PRs (stacked ones
-included) and retargeting them, the merges the stacking authorization names, running migrations
+only: editing, testing, committing, the merges the stacking authorization names (the merge of the
+branch of the issue into the local main with its three gates green among them, below), running migrations
 on the local development database, creating and removing test data through the product's own
-endpoints, commenting on the issues and ticking acceptance criteria with evidence. A batch of
+endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of an
+issue goes to GitHub before the release: its branches are never pushed, and the only pull request is
+the release's, offered at the end of each homologated issue. A batch of
 independent issues watched together gets the same local integration, and the authorization names
 that merge. Record the charter in `.frontlights/authorization.json` with the user in
 `approved_by` and `confirmed_by`, `"autorização permanente (docs/security.md)"` in
@@ -400,7 +404,9 @@ are still asked.
 **Denied operations are asked one at a time.** Merging a pull request, closing an issue,
 changing the board (adding an item, moving a card, editing a field), deploying or publishing to
 production, editing a migration already registered (on the base branch or applied anywhere but
-the local development database), writing the base branch or a protected branch, turning on a
+the local development database), writing the remote main (`origin/main`, the base branch on GitHub)
+or a protected branch (the local main is written only by the covered merge below, with its three gates
+green), turning on a
 setting, key or flag in production, and deleting anything but the test data the run created
 are never covered by the standing authorization. When one of them is the next step, ask with
 `AskUserQuestion` naming the exact operation and the exact command, with "Sim" first and "Não"
@@ -424,11 +430,17 @@ dependent's approved base, not just an author's report or an unmerged branch; un
 the stacking authorization that base is the dependency's own branch, so a child
 starts once its parent is verified there, without waiting for the merge. Park
 blocked work, continue independent work, and route worker questions to this
-session's tool. Do not merge pull requests, write the base branch, deploy, release,
+session's tool. Do not merge pull requests, write the remote main, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
-issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or
-batch's verified branches into a local integration branch that is never pushed.
+issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or
+batch's verified branches into a local integration branch that is never pushed, and of the branch of the
+issue into the local main once its three gates are green (`references/development.md`, "Into the local
+main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
+`browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as
+`merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
+missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
+user, never a merge.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
 After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull

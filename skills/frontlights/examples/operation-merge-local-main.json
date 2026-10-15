@@ -1,0 +1,13 @@
+{
+  "repository": "OWNER/REPOSITORY",
+  "issue": 1,
+  "kind": "merge_into_local_main",
+  "worktree": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH",
+  "branch": "claude/issue-1",
+  "target": "main",
+  "gates": {
+    "full_suite": "green",
+    "review_gate": "current",
+    "browser_gate": "answered"
+  }
+}

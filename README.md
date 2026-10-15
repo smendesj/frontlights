@@ -132,7 +132,8 @@ defina o repositório exato no formato `proprietario/repositorio` e mantenha
 `.frontlights/` ignorado pelo Git desse projeto. Um projeto sem remoto usa
 `"repository": null`: o GitHub aparece como `unconfigured`, o plano usa
 `url: null` e as issues ficam em `.frontlights/issues/<n>/`, com `source: "local"`.
-As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`. Configure o RoadS somente quando o
+As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`, são cortadas da main local do
+projeto (a homologação) e ficam só locais até a release. Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
 
 ```json
@@ -662,7 +663,9 @@ implementação, anunciada sem pergunta → desenvolvimento orientado a testes (
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, cada CA na própria
+Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local (nunca de
+`origin/main`), que fica só local, nunca é enviada e entra na main local por um merge com três portões verdes
+(suíte inteira, `review-gate` em dia e `browser-gate` respondido), cada CA na própria
 worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
 em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
@@ -670,10 +673,11 @@ e começa. Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,
-commitar, enviar as branches, abrir PRs rascunho empilhadas, rodar a migration no banco de
+commitar, mesclar a branch da issue na main local com os três portões verdes, rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
-marcar critérios nas issues. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
-migration já registrada, escrever na branch base ou protegida, ligar configuração, chave ou flag em
+marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
+fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
+migration já registrada, escrever na main remota (`origin/main`) ou numa branch protegida, ligar configuração, chave ou flag em
 produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
 "Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
 assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,

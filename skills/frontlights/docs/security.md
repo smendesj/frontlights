@@ -15,12 +15,15 @@ com permissões limitadas a uma issue.
 etapa 6 abre sem pergunta: a sessão anuncia o que fará e grava a autorização com
 `approval_reference` `"autorização permanente (docs/security.md)"`, sem pedir concorrência,
 empilhamento nem autorização delimitada. Ela cobre só as issues da família ou do lote em
-andamento e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, enviar as
-branches de trabalho, PRs rascunho (empilhadas inclusive), os merges da autorização de
-empilhamento, migrations no banco de desenvolvimento local, dados de teste pelos endpoints do
-produto, comentários e marcação de critérios com evidência. Merge de PR, fechar issue, mexer no
-quadro, implantar ou publicar em produção, editar migration já registrada, escrever na branch base
-ou protegida, ligar configuração, chave ou flag em produção e apagar o que não for dado de teste
+andamento e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, os merges da
+autorização de empilhamento (entre eles o da branch da issue na main local, só com os três portões
+verdes: suíte inteira, `review-gate` atual e `browser-gate` respondido), a PR única da release,
+migrations no banco de desenvolvimento local, dados de teste pelos endpoints do
+produto, comentários e marcação de critérios com evidência. A branch da issue é cortada da main
+local e fica só local: nada é enviado antes da release. Merge de PR, fechar issue, mexer no
+quadro, implantar ou publicar em produção, editar migration já registrada, escrever na main remota
+(`origin/main`) ou numa branch protegida (a main local só recebe o merge coberto, com os portões),
+ligar configuração, chave ou flag em produção e apagar o que não for dado de teste
 criado pela execução ficam fora dela: cada um é uma pergunta própria por `AskUserQuestion`, com o
 comando exato, e só roda depois do "Sim", que não se estende a outra operação, outra PR nem a outro
 momento. A decisão está escrita no Frontlights, não no `.frontlights/config.json`, para que um
@@ -38,12 +41,24 @@ O comando `authorize` verifica uma operação estruturada em relação à autori
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
-merge, implantação, publicação de versões, operações destrutivas e tipos não
-suportados. Sempre retorna `permission_granted: false`. Mesmo rascunhos de PRs e
-atualizações de issues autorizados continuam sujeitos à aprovação nativa do ambiente, pois o Frontlights
+qualquer merge que não seja o da branch da issue na main local com os três portões verdes
+(`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
+suportados. Sempre retorna `permission_granted: false`. Mesmo a PR da release e as
+atualizações de issues autorizadas continuam sujeitas à aprovação nativa do ambiente, pois o Frontlights
 não controla com segurança todas as ferramentas externas. Execute essas ações
 somente pelas ferramentas nativas aprovadas da sessão coordenadora, com as
 permissões humanas e nativas vigentes.
+
+**Main local e main remota.** A main local do projeto (a branch base do charter, na worktree principal) é a
+homologação: acumula as issues que passaram nos três portões, e a issue fecha só com a release que a leva
+mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
+do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
+remota), só da worktree da issue (nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
+current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
+A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
+remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
+o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
+`review-gate` e o `browser-gate`), e um modelo que não o chame não é impedido por ele.
 
 O registro de autorização serve para auditoria, não como credencial. Ele pode ser
 editado; o utilitário não consegue provar que uma pessoa o escreveu nem que os
@@ -327,12 +342,12 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   (criar branch a partir de outra branch que não a base, enviá-la, abrir PR rascunho com a
   branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
-  depende) na branch de uma slice para atualizá-la, e juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada). Esses são os únicos merges permitidos. O utilitário `authorize`
-  continua só conferindo `edit`, `test` e `checkpoint` e rejeitando merge (e, numa worktree de slice, só aceita a
+  depende) na branch de uma slice para atualizá-la, juntar as branches
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
+  confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na
-  branch base, o deploy e a publicação de versões continuam fora de qualquer autorização comum.
+  main remota (`origin/main`), o deploy e a publicação de versões continuam fora de qualquer autorização comum.
 - **Sem aprovação do bloco:** ao contrário do resumo para a diretoria, esses blocos não têm
   aprovação assinada. O `inspect` confere só as regras que dependem do config (formato dos
   blocos, shell embutido nos argv de `checks`, hosts locais, `{port}` com porta `auto`, segredos
