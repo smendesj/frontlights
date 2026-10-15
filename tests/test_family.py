@@ -196,11 +196,10 @@ class FamilyRulesTextTests(unittest.TestCase):
                        '"Esperar o merge do pai"', 'schedule --limit 24', 'throwaway copy',
                        'git merge-base --is-ancestor', 'Stack on one dependency only',
                        'unless one already contains the other',
-                       'gh pr create --draft --base <dependency-branch>',
-                       'git fetch origin', '<parent-pr-base>', 'git merge origin/<parent-pr-base>',
+                       "A verified child is merged into its parent's branch", 'the family enters the local main as one',
                        'never a rebase or a force-push', 'conflicts on the hunks the child shares',
                        'it never covers merging a PR, writing the remote main, deploying or releasing',
-                       "Push the dependency's branch before the child's PR",
+                       'No branch of the family is pushed and no pull request is opened for the parent or a child',
                        'only `"base": "<dependency-branch>"`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)

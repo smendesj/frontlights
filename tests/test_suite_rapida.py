@@ -139,7 +139,7 @@ class FastSuiteTextTests(unittest.TestCase):
                        'skip the modules that start real processes and ports',
                        'reported as skipped with a reason that names the variable',
                        'any other value, or no variable, runs everything',
-                       'Before the independent review and before the PR, run the whole suite without the variable',
+                       'Before the independent review and before the merge into the local main, run the whole suite without the variable',
                        'with or without CI in the project'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -148,7 +148,7 @@ class FastSuiteTextTests(unittest.TestCase):
         text = flat('README.md')
         for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
                        'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
-                       'antes da revisão independente e do PR, a suíte inteira sem a variável',
+                       'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
                        'com ou sem CI no projeto', 'A CI do GitHub não define a variável'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -158,7 +158,7 @@ class FastSuiteTextTests(unittest.TestCase):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que a slice toca',
                        'a suíte rápida é a forma de conferir o todo entre slices',
-                       'antes da revisão independente e do PR, a suíte inteira sem a variável',
+                       'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
                        'obrigatória com ou sem CI no projeto'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)

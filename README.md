@@ -582,7 +582,7 @@ O `python scripts/frontlights.py browser-gate --config <config> --base <base> --
 primeiros, 2 para os demais). Os caminhos visíveis vêm de `browserTest.frontPaths` (globs a partir da raiz do repositório: `*` não
 atravessa pasta, então `**/*.html` pega todas as páginas; testes e documentos nunca contam); sem ele, a
 estimativa sai do nome do arquivo e o `inspect` avisa. Cada fatia empilhada entra com `--stacked
-<sua branch>=<a branch que a PR dela mira>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
+<sua branch>=<a branch em que ela se apoia>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
 trabalho dela contar. O `result.json` é um por issue e fica na pasta dela (numa família que já existe, na
 pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
 `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`) e `pergunta`; `dispensado` é a sua
@@ -622,17 +622,23 @@ substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
 `python scripts/cleanup.py plan|verify ...`, e só leem.
 
-#### Esperar o merge, fechar, marcar no pai e limpar
+#### Homologar na main local, lançar a release, fechar e limpar
 
-Depois de abrir uma PR, o Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
+Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
+`review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
+backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
+as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
+agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` da main local,
+envia só ela e abre a PR única (uma parte por issue, com os três portões). Depois de abrir a PR da release, o
+Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
-independente. Quando a PR fica pronta (revisão em dia, suíte da família verde, teste assistido respondido e
+independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
 nenhum achado sem destino), ele pergunta "Mesclar a PR #<n> em <base>?", com "Sim, mesclar" e "Não, aguardar o
 merge"; só com o "Sim" roda `gh pr ready` e `gh pr merge --merge` (merge com commit, nunca `--admin`, `--auto` nem
-`--delete-branch`), e com o "Não" a espera continua. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
+`--delete-branch`), e com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
 fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
-filha na branch do pai, PR fechada sem merge ou PR não encontrada não fecham nada. Se o ambiente não oferece gatilho, ou
+issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
 a sessão acaba, a pergunta de fechamento do início da próxima sessão encontra o trabalho mesclado.
 
 Com o merge confirmado, em aprovações separadas, nesta ordem:
@@ -645,7 +651,8 @@ Com o merge confirmado, em aprovações separadas, nesta ordem:
    desmarcado não é oferecida: o Frontlights diz quais faltam.
 2. **Limpeza**, só depois de o fechamento ser escrito e conferido: pergunta se pode remover as worktrees e branches criados
    que deixaram de ser necessários (`cleanup.py plan`). Só entram os que têm o tip igual à cabeça de uma PR mesclada que
-   chegou à base aprovada (o filho empilhado, pelo pai), sem alteração pendente, sem PR aberta a partir ou em cima da
+   chegou à base aprovada (o filho empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch
+   de uma issue que chegou ao GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da
    branch, que não são protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota só é
    apagada se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit. Nunca usa `--force`; a
    lista e os comandos são mostrados na íntegra antes, e `cleanup.py verify` confere depois. Uma worktree com registros
@@ -665,7 +672,8 @@ entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
-oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
+merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
+espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
 Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local (nunca de
@@ -773,7 +781,7 @@ módulo, então vale igual para o `discover` e para o runner. A suíte rápida r
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
-slice, rode os módulos que a slice toca; antes da revisão independente e do PR, a suíte inteira sem a
+slice, rode os módulos que a slice toca; antes da revisão independente e do merge na main local, a suíte inteira sem a
 variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover -s tests -v`: o runner não
 deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
 pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.

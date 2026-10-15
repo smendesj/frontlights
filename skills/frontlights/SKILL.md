@@ -466,21 +466,29 @@ project, and only into that folder); without the key it writes nothing and the s
 naming the key, and asks nothing.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
-After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull
-request"): say so in one line, record it in the handoff, open no PR with a closing keyword and never merge
-without the user's "Sim". Once the PR is ready (review current, suite green, watched run answered), offer the
-merge with its own question; on "Não" the wait goes on. A
-merge into the approved base, confirmed by `closeout.py merge-status`, takes the session to stage 7 for the issues
-of that PR; a PR merged into another branch or closed unmerged closes nothing.
+**The release, offered at the end of each homologated issue** (`references/development.md`, "The release").
+Once the issue is in the local main and its bundle is written, run `homolog sync` again and `homolog release-plan
+--root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet and names
+the branch `<branch_prefix>release-<date>`. Show the list and ask with `AskUserQuestion` "Lançar a release com as
+issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
+from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
+the body from `templates/pr.md` when it exists, one block per issue with its three gates, never a closing
+keyword), then wait for the user's merge: say so in one line, record it in the handoff, and offer the merge with
+its own denied-operation question ("Mesclar a PR #<n> em <base>?") once the pull request is ready; never merge
+without the user's "Sim". A merge into the approved base, confirmed by `closeout.py merge-status`, is followed by
+`git pull --ff-only` on the local main (in the main worktree) and takes the session to stage 7 for the issues of
+the release; a pull request merged into another branch or closed unmerged closes nothing. On "Agora não" the
+issue stays homologated in the local main and the next homologated issue offers the release again, with
+everything accumulated.
 
 At each material boundary reconcile GitHub, preserve evidence and check context.
 `frontlights.py browser-gate` runs when the last slice that changes the screen closes its loop,
 before an independent review of such a slice is dispatched (it waits for the last screen slice to close its
 loop), before an issue is reported as reviewed
-or complete, before a PR is opened or updated, and when a session resumes with `teste_assistido`
+or complete, before the merge into the local main, before a PR is opened or updated, and when a session resumes with `teste_assistido`
 pending. Exit code 2 at those points (`pending`, `stale`, `contradiction` or `unconfigured`) is a
 question to the user, never a silent skip, and an issue that changes the screen is neither
-reviewed, reported complete nor given a PR while it is owed (`browser-testing.md` lists the
+reviewed, reported complete, merged into the local main nor given a PR while it is owed (`browser-testing.md` lists the
 options, including the user's explicit `dispensado`); exit code 2 earlier, while a slice that
 changes the screen is still in its loop, is expected and asks nothing. A watched
 run that is due (the last screen slice closed its loop, or the user said "Ainda não") and that the user has not answered yet is carried
@@ -492,7 +500,8 @@ updated, every open finding has its destination (the gate of the Follow-ups sect
 of `references/issues.md`): fixed, a new acceptance criterion of the source issue, a
 top-level issue, shown as not a defect with its evidence, or dropped by
 the user's explicit answer. "Cited in the PR" is never a destination, and an issue is not reported as reviewed or complete
-while one has none.
+while one has none. The merge into the local main waits for the same gate: an issue with a finding without a
+destination is not homologated.
 Finish with per-issue state, branch/PR, changes, measured commands/results,
 independent review against the exact diff, the findings left unfixed with the
 destination of each, risks and next action. Never present
@@ -501,7 +510,7 @@ fixture tests as live integration, human confirmation or independent review.
 ## 7. Closeout of finished issues (its own approval)
 
 Read `references/closeout.md`. It runs when the stage 1 closeout question is answered yes, when the wait of
-stage 6 finds a pull request merged into the approved base (or a family worked in stage 6 is reported merged),
+stage 6 finds the release's pull request merged into the approved base (and the local main brought up to it with `git pull --ff-only`),
 or when the user asks to close or move finished issues. It proposes closing every open issue and sub-issue
 whose acceptance criteria are all ticked (children before parents) and moving their board cards to Done, adds
 for a closed sub-issue the tick of the parent's item that cites it, shows the table and the exact commands in

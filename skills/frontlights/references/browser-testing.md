@@ -53,7 +53,7 @@ the independent review of any of them (a review of work the user then asks to ch
 (b) before an independent review of a slice that changes the screen is dispatched, once no other
 slice that changes the screen is still in its loop (otherwise that review waits for (a)); (c) before an
 issue that changes the screen (a visible file in its `by_root`, or a plan that says `sim`) is
-reported as reviewed or complete; (d) before a PR of such an issue is opened or updated; (e) when a session
+reported as reviewed or complete; (d) before such an issue is merged into the local main, and before a PR is opened or updated; (e) when a session
 resumes with `teste_assistido` pending (it exists only once the question is due). At any other moment a `pending` is expected and asks nothing:
 a commit in a slice, or a screen slice still in its loop, is no reason to ask. A screen slice
 that is parked or dropped leaves the batch, and the question names the slices it covers; one that
@@ -76,7 +76,7 @@ every `--root`; each `--root` is the worktree of an issue or of one of its slice
 named with `--stacked <its branch>=<the branch of its issue>` (or the branch of the slice it is
 stacked on), and each issue stacked on another branch (the base
 the stacking authorization records for it, in a family that already exists) is named with
-`--stacked <its branch>=<the branch its PR targets>`, so only its own changes count (an API-only
+`--stacked <its branch>=<the branch it is stacked on>`, so only its own changes count (an API-only
 slice or child stacked on a branch that changes the screen is then no visible root); without `--stacked`
 every root is measured from `--base`; `--toca` is `sim` when any issue's plan says `Toca o
 frontend: sim`, else what the plans say (`by_root` lists the visible files of each root, so compare
@@ -130,7 +130,7 @@ slice. "Rodar sem assistir" is
 `sem-assistir` once it ran; the user's explicit decision not to run it is `dispensado`; the closing
 question gives `aprovado`, `prosseguir` and `alteracao`. `answered` (any of `aprovado`, `prosseguir`,
 `sem-assistir` or `dispensado`) is what an independent review of a slice that changes the screen,
-"reviewed", "complete" and a PR require; there is no other way around it.
+"reviewed", "complete", the merge into the local main and a PR require; there is no other way around it.
 
 A Direct change with no issue has no plan and no lead issue. Ask with `AskUserQuestion`, options "Informar a
 issue" (the issue the work belongs to, which the user names: its number serves the record, `serve` and

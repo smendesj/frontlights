@@ -23,9 +23,19 @@ Operations (each prints one JSON object on stdout):
          storage, not redirection, and is allowed); it is never created. The file is
          `<root folder>-<YYYYmmdd>-<HHMMSS>.bundle` in local time, `-2`, `-3`... when the name is taken: nothing
          is ever overwritten or deleted. `git bundle verify` must accept the file before it is reported.
+  release-plan  what the release would carry: the issues whose branch (the `worktrees` entries without `slice` of
+         every `.frontlights/authorization*.json` under `--records`, default the root) is in the local base and
+         not yet in `<remote>/<base>`, how many commits the local base is ahead of and behind the remote one, and
+         the name of the release branch, `<prefix>release-<YYYY-MM-DD>` (the date in America/Sao_Paulo, the
+         machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch that already has
+         the name. `ready` is true (exit 0) when the local base is ahead, not behind, and at least one issue is in
+         the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
+         no issue branch mapped). It only reads Git and the records: it never fetches, never creates the branch
+         and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
-session (hook missing or foreign on --check; a conflict on sync). A refusal is JSON, never a traceback.
+session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
+never a traceback.
 """
 
 import argparse
@@ -34,6 +44,7 @@ import os
 import re
 import subprocess
 import sys
+import zoneinfo
 from datetime import datetime
 from pathlib import Path
 
@@ -41,6 +52,9 @@ GIT_TIMEOUT = 45
 FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
+RECORD_LIMIT = 200       # authorization records release-plan reads
+RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
+RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
 BACKUP_KEYS = {'backupDir'}                     # the only key of the `homolog` block of the config
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
@@ -96,8 +110,13 @@ def worktree(root):
     require(code == 0, f'{root} não é uma worktree Git')
 
 
+def is_plain(value):
+    """The NAME rule as a predicate: a plain branch or remote name, without `..` and not ending in `.lock`."""
+    return isinstance(value, str) and bool(NAME.fullmatch(value)) and '..' not in value and not value.endswith('.lock')
+
+
 def plain_name(value, what):
-    require(bool(NAME.fullmatch(value or '')) and '..' not in value and not value.endswith('.lock'),
+    require(is_plain(value or ''),
             f'{what} precisa ser um nome simples, como {"main" if what.startswith("a branch") else "origin"}')
     return value
 
@@ -300,9 +319,13 @@ def check_backup_folder(folder):
         cursor = parent
 
 
+def is_prefix(value):
+    """A branch prefix: a plain name that ends in `/`."""
+    return isinstance(value, str) and bool(NAME.fullmatch(value)) and '..' not in value and value.endswith('/')
+
+
 def branch_prefix(value):
-    require(bool(NAME.fullmatch(value or '')) and '..' not in value and value.endswith('/'),
-            'o prefixo das branches precisa ser um nome simples terminado em `/`, como claude/')
+    require(is_prefix(value or ''), 'o prefixo das branches precisa ser um nome simples terminado em `/`, como claude/')
     return value
 
 
@@ -368,9 +391,133 @@ def op_bundle(root, config_path, base, prefix):
     return result
 
 
+# ---------------------------------------------------------------- release-plan
+
+def read_record(path):
+    """The JSON object a record holds, or None when the file is too large, unreadable or not an object."""
+    try:
+        if path.stat().st_size > RECORD_BYTES:
+            return None
+        data = json.loads(path.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def issue_branches(folder):
+    """({issue number: branch}, skipped) from the `worktrees` entries without `slice` of every
+    `.frontlights/authorization*.json` under `folder`. An entry counts when its `issue` is a positive integer and its
+    `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later record wins for the same
+    issue. A slice entry is ignored in silence; a malformed entry, record or prefix, and every record past
+    RECORD_LIMIT, is skipped and counted."""
+    try:
+        files = sorted(Path(folder, '.frontlights').glob('authorization*.json'))
+    except OSError:
+        files = []
+    skipped = max(0, len(files) - RECORD_LIMIT)
+    mapping = {}
+    for file in files[:RECORD_LIMIT]:
+        data = read_record(file)
+        prefix = data.get('branch_prefix', 'claude/') if data is not None else None
+        entries = data.get('worktrees', []) if data is not None else None
+        if data is None or not is_prefix(prefix) or not isinstance(entries, list):
+            skipped += 1
+            continue
+        for entry in entries:
+            if isinstance(entry, dict) and isinstance(entry.get('slice'), str) and entry['slice'].strip():
+                continue   # a slice is delivered to the branch of its issue, never to the base by itself
+            number = entry.get('issue') if isinstance(entry, dict) else None
+            branch = entry.get('branch') if isinstance(entry, dict) else None
+            if type(number) is not int or number <= 0 or not is_plain(branch) or not branch.startswith(prefix):
+                skipped += 1
+                continue
+            mapping[number] = branch
+    return mapping, skipped
+
+
+def ancestry(root, commit, ref):
+    """True or False when Git can tell whether `commit` is in `ref`, None when it cannot or either is missing."""
+    if commit is None or ref is None:
+        return None
+    code, _, _ = git(root, 'merge-base', '--is-ancestor', commit, ref)
+    return True if code == 0 else False if code == 1 else None
+
+
+def counts(root, local_ref, remote_ref):
+    """(ahead, behind): commits only in the local base, commits only in the remote one; (None, None) when Git fails."""
+    code, out, _ = git(root, 'rev-list', '--left-right', '--count', f'{local_ref}...{remote_ref}')
+    parts = out.split()
+    if code != 0 or len(parts) != 2 or not all(part.isdigit() for part in parts):
+        return None, None
+    return int(parts[0]), int(parts[1])
+
+
+def release_date():
+    """Today in RELEASE_ZONE as YYYY-MM-DD; the machine's local date when the zone is unavailable (no tzdata)."""
+    try:
+        now = datetime.now(zoneinfo.ZoneInfo(RELEASE_ZONE))
+    except (KeyError, OSError, ValueError):   # ZoneInfoNotFoundError is a KeyError
+        now = datetime.now().astimezone()
+    return now.strftime('%Y-%m-%d')
+
+
+def release_name(root, prefix):
+    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch that already carries the name."""
+    stem = f'{prefix}release-{release_date()}'
+    name, counter = stem, 2
+    while rev(root, f'refs/heads/{name}') is not None:
+        name = f'{stem}-{counter}'
+        counter += 1
+    return name
+
+
+def op_release_plan(root, base, remote, prefix, records):
+    worktree(root)
+    base = plain_name(base, 'a branch base')
+    remote = plain_name(remote, 'o remoto')
+    prefix = branch_prefix(prefix)
+    local_ref, remote_ref = f'refs/heads/{base}', f'refs/remotes/{remote}/{base}'
+    local = rev(root, local_ref)
+    require(local, f'a branch base `{base}` não existe neste repositório')
+    remote_tip = rev(root, remote_ref)
+    mapping, skipped = issue_branches(root if records is None else records)
+    issues = []
+    for number in sorted(mapping):
+        tip = rev(root, f'refs/heads/{mapping[number]}')
+        issues.append({'issue': number, 'branch': mapping[number], 'tip': tip, 'present': tip is not None,
+                       'inLocalMain': ancestry(root, tip, local_ref),
+                       'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)})
+    release = [i['issue'] for i in issues if i['present'] and i['inLocalMain'] is True and i['inRemoteMain'] is False]
+    ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
+    name = release_name(root, prefix)
+    result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
+              'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'skipped': skipped,
+              'ready': False}
+    if remote_tip is None:
+        result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
+                                          'antes do release-plan.')
+    elif ahead is None:
+        result.update(exitCode=1, message=f'o git não contou os commits entre a {base} local e {remote}/{base}')
+    elif behind > 0:
+        result.update(exitCode=2, message=f'A {base} local está {behind} commit(s) atrás de {remote}/{base}; rode '
+                                          f'`homolog sync` antes da release.')
+    elif ahead == 0:
+        result.update(exitCode=2, message=f'A {base} local não tem commit além de {remote}/{base}: nada a liberar.')
+    elif not release:
+        result.update(exitCode=2, message=f'A {base} local tem {ahead} commit(s) além de {remote}/{base}, mas nenhuma '
+                                          'branch de issue das autorizações está neles; confira os registros em '
+                                          '.frontlights/ ou aponte --records para a pasta certa.')
+    else:
+        listed = ', '.join(f'#{number}' for number in release)
+        result.update(ready=True, exitCode=0,
+                      message=f'Release pronta: {len(release)} issue(s) ({listed}) em {ahead} commit(s) da {base} local '
+                              f'ainda fora de {remote}/{base}; a branch da release é {name}.')
+    return result
+
+
 # ---------------------------------------------------------------- command line
 
-def run(operation, root, base='main', remote='origin', install=False, config=None, prefix='claude/'):
+def run(operation, root, base='main', remote='origin', install=False, config=None, prefix='claude/', records=None):
     try:
         if operation == 'hook':
             result = op_hook(root, base, install)
@@ -378,6 +525,8 @@ def run(operation, root, base='main', remote='origin', install=False, config=Non
             result = op_sync(root, base, remote)
         elif operation == 'bundle':
             result = op_bundle(root, config, base, prefix)
+        elif operation == 'release-plan':
+            result = op_release_plan(root, base, remote, prefix, records)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -400,7 +549,7 @@ def build_parser():
     parser = JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('hook', 'sync', 'bundle'):
+    for name in ('hook', 'sync', 'bundle', 'release-plan'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', required=True, help="the project's main worktree")
         command.add_argument('--base', default='main', help='the base branch, the local homologation (default main)')
@@ -410,9 +559,13 @@ def build_parser():
             mode.add_argument('--install', action='store_true', help='write the hook when missing or already ours')
         elif name == 'sync':
             command.add_argument('--remote', default='origin', help='the remote the base is fetched from (default origin)')
-        else:
+        elif name == 'bundle':
             command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.backupDir names the folder')
             command.add_argument('--prefix', default='claude/', help='the work branches to include: every local branch under it (default claude/)')
+        else:
+            command.add_argument('--remote', default='origin', help='the remote whose base the release goes to (default origin)')
+            command.add_argument('--prefix', default='claude/', help='the prefix of the release branch name (default claude/)')
+            command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
     return parser
 
 
@@ -420,7 +573,8 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
         result = run(args.operation, args.root, args.base, getattr(args, 'remote', 'origin'),
-                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', 'claude/'))
+                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', 'claude/'),
+                     getattr(args, 'records', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

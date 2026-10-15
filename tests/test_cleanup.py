@@ -871,5 +871,52 @@ class CliTests(CleanupCase):
                 self.assertNotIn('Traceback', done.stdout)
 
 
+class DeliveredWithoutPullRequestTests(CleanupCase):
+    """Issue 32, S4: a branch da issue entra na main local por merge, sem PR própria. Sem nenhuma PR, ela pode ir
+    embora quando a base aprovada (`origin/<base>` quando a ref remota existe, senão a local) já contém a ponta;
+    fora da base, ou com uma PR fechada sem merge, continua `no_merged_pr`."""
+
+    def delivered(self):
+        """An issue worktree whose branch was merged into the base (main, checked out in the root)."""
+        path, branch, tip = self.worktree('issue-12')
+        self.git('merge', '-q', '--no-ff', '-m', 'issue 12', branch)
+        return path, branch, tip
+
+    def test_an_issue_branch_merged_into_the_base_goes_without_a_pull_request(self):
+        path, branch, tip = self.delivered()
+        result, _ = self.plan({branch: {'heads': []}})
+        entry = self.only(result)
+        self.assertEqual((entry['issue'], entry['branch'], entry['tip'], entry['pullRequests']), (12, branch, tip, []))
+        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']), (['contained_in_base_without_pull_request'], False))
+        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
+        self.assertFalse(any('push' in c['argv'] for c in entry['commands']))
+
+    def test_an_issue_branch_outside_the_base_still_needs_a_pull_request(self):
+        path, branch, tip = self.worktree('issue-12')
+        self.assertEqual(self.reasons(self.plan({branch: {'heads': []}})[0]), [['no_merged_pr']])
+
+    def test_the_remote_tracking_base_is_the_one_that_counts_when_it_exists(self):
+        before = self.git('rev-parse', 'main')
+        path, branch, tip = self.delivered()
+        self.git('update-ref', 'refs/remotes/origin/main', before)   # origin/main as of the last fetch: before the merge
+        self.assertEqual(self.reasons(self.plan({branch: {'heads': []}})[0]), [['no_merged_pr']])
+        self.git('update-ref', 'refs/remotes/origin/main', self.git('rev-parse', 'main'))
+        entry = self.only(self.plan({branch: {'heads': []}})[0])
+        self.assertEqual((entry['branch'], entry['cautions']), (branch, ['contained_in_base_without_pull_request']))
+
+    def test_a_closed_pull_request_or_an_open_dependent_still_keeps_it(self):
+        path, branch, tip = self.delivered()
+        for name, info, reason in (('closed', {'heads': [pull(7, 'CLOSED', oid=tip)]}, 'no_merged_pr'),
+                                   ('dependent', {'heads': [], 'dependents': 1}, 'open_dependents')):
+            with self.subTest(case=name):
+                self.assertEqual(self.reasons(self.plan({branch: info})[0]), [[reason]])
+
+    def test_an_ancestry_git_cannot_tell_keeps_it(self):
+        path, branch, tip = self.delivered()
+        with patch.object(cleanup, 'is_ancestor', lambda *args: None):
+            result, _ = self.plan({branch: {'heads': []}})
+        self.assertEqual(self.reasons(result), [['ancestry_unverifiable']])
+
+
 if __name__ == '__main__':
     unittest.main()
