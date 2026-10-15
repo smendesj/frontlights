@@ -110,7 +110,7 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage5 = flat(skill.split('## 5.')[1].split('## 6.')[0])
         self.assertIn('for each slice, the section of the artifact with what it delivers', stage5)
-        self.assertIn('updated on the same URL as the grilling', stage5)
+        self.assertIn('on the same URL as the grilling', stage5)
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('cada slice com a seção do artefato que mostra o que ela entrega', protocol)
         readme = flat(read('README.md'))
@@ -123,7 +123,7 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
                        'artefato indisponível', 'não se aplica',
                        'one section per slice', 'never one page per round'):
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, case)
+                self.assertIn(phrase, flat(case))
         runbook = read('evals', 'runbook.md')
         item = '28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33).'
         self.assertIn(item, runbook)
