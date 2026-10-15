@@ -337,6 +337,25 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 
+    def test_the_closeout_waits_for_the_release(self):
+        """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
+        segurança e no README."""
+        closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
+        for phrase in ('`awaiting_release` with the branch, its tip, the base and the remote',
+                       'keeps such an issue out as `awaiting_release` until `origin/<base>` holds its branch',
+                       'never excludes on a doubt', '`releaseCheck` says `checked`, `skipped` or `unavailable`',
+                       'An `awaiting_release` is said to the user in one line'):
+            with self.subTest(file='closeout.md', phrase=phrase):
+                self.assertIn(phrase, closeout)
+        self.assertIn('when an issue is excluded as `awaiting_release`', stage(1))
+        self.assertIn('fica fora como `awaiting_release` até a release que a leva ser mesclada',
+                      flat('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`',
+                      flat('skills', 'frontlights', 'docs', 'security.md'))
+        self.assertIn('fica fora como `awaiting_release`, e o Frontlights só avisa', flat('README.md'))
+        self.assertIn('S5: `closeout.py candidates` exclui como `awaiting_release`', flat('docs', 'acceptance.md'))
+        self.assertIn('the issue waits for the release (`awaiting_release`)', flat('evals', 'runbook.md'))
+
     def test_the_acceptance_record_and_the_runbook_track_it(self):
         self.assertIn('| 27. Homologação na main local: merge com portões e release por PR única (issue 32) | Pendente |',
                       flat('docs', 'acceptance.md'))

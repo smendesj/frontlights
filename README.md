@@ -611,7 +611,8 @@ fechá-las e mover os cartões para Done. A lista vem completa, com as sub-issue
 ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
 aprovação dessa lista ele fecha (`gh issue close --reason completed`) e move, e relê o GitHub para conferir.
 Uma issue sem a seção de critérios, com critério desmarcado ou com filha ainda aberta que não esteja na mesma lista
-nunca entra. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
+nunca entra; uma issue cuja branch ainda não está em `origin/main` (a release que a leva não foi mesclada) fica fora
+como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
 pendências, com uma seção "Pendências conhecidas" fora dos critérios e item aberto nela, entra na lista com o
 aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim é sua, e, se você pedir, mover
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.

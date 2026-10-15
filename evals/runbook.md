@@ -234,7 +234,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     opens one pull request with a block per issue and no closing keyword, the merge is asked with "Mesclar a PR #<n> em
     <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the
     closeout offers the issues of the release; and that `cleanup plan` offers an issue branch without a pull request
-    once `origin/main` contains its tip, and keeps it as `no_merged_pr` before.
+    once `origin/main` contains its tip, and keeps it as `no_merged_pr` before. Finally, with an issue whose boxes are
+    all ticked and whose branch is in the local main but not in `origin/main`, confirm the stage 1 closeout question is
+    not asked and the session says in one line that the issue waits for the release (`awaiting_release`), and that after
+    the release is merged the same issue is offered for closing.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

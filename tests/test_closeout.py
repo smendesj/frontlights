@@ -1691,5 +1691,241 @@ class CliTests(CloseoutCase):
                 self.assertNotIn('Traceback', done.stdout)
 
 
+class AwaitingReleaseTests(CloseoutCase):
+    """S5 of issue 32: an issue whose branch was merged into the local main but is not yet in `<remote>/<base>`
+    waits for the release (`awaiting_release`). The helper reads Git only through `homolog` (`rev-parse` and
+    `merge-base`), and never blocks on a doubt: no branch, no remote ref or no repository means no exclusion."""
+
+    ENTRY = {'issue': 12, 'path': 'WORKTREE', 'branch': 'claude/issue-12'}
+
+    def setUp(self):
+        super().setUp()
+        self.aside = tempfile.TemporaryDirectory()
+        self.addCleanup(self.aside.cleanup)
+        aside = Path(self.aside.name)
+        (aside / 'gitconfig').write_text('', encoding='utf-8')
+        self.env = {'GIT_CONFIG_GLOBAL': str(aside / 'gitconfig'), 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_TERMINAL_PROMPT': '0'}
+        self.origin = aside / 'origin.git'
+        self.plain = aside / 'plain'
+        self.git('init', '-q', '--bare', '-b', 'main', str(self.origin), cwd=None)
+        self.git('init', '-q', '-b', 'main')
+        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'), ('commit.gpgsign', 'false')):
+            self.git('config', key, value)
+        (self.root / 'app.txt').write_text('one\n', encoding='utf-8')
+        self.git('add', 'app.txt')
+        self.git('commit', '-q', '-m', 'first')
+        self.git('remote', 'add', 'origin', str(self.origin))
+        self.git('push', '-q', '-u', 'origin', 'main')
+        self.record()
+
+    def git(self, *args, cwd=DEFAULT):
+        folder = self.root if cwd is DEFAULT else cwd
+        done = subprocess.run(['git', *(['-C', str(folder)] if folder else []), *args], capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', env=dict(os.environ, **self.env),
+                              stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(done.returncode, 0, f'git {" ".join(args)}: {done.stderr}')
+        return done.stdout.strip()
+
+    def record(self, worktrees=DEFAULT, name='authorization.json', issue_ids=(12,), base='main', **extra):
+        entries = [dict(self.ENTRY)] if worktrees is DEFAULT else worktrees
+        data = {'issue_ids': list(issue_ids), 'base': {'branch': base}, 'branch_prefix': 'claude/', 'worktrees': entries,
+                **extra}
+        (self.root / '.frontlights' / name).write_text(json.dumps(data), encoding='utf-8')
+
+    def branch(self, name='claude/issue-12', merge=True):
+        """A branch with one commit of its own, merged (not fast-forwarded) into the local main and never pushed;
+        returns the commit of its tip."""
+        self.git('checkout', '-q', '-b', name)
+        file = name.replace('/', '-') + '.txt'
+        (self.root / file).write_text('work\n', encoding='utf-8')
+        self.git('add', file)
+        self.git('commit', '-q', '-m', name)
+        tip = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '-q', 'main')
+        if merge:
+            self.git('merge', '-q', '--no-ff', '--no-edit', name)
+        return tip
+
+    def candidates(self, nodes=None, issues='12', all_flag=False, gh=None, **fake):
+        with patch.dict(os.environ, self.env):
+            return super().candidates(nodes, issues, all_flag, gh, **fake)
+
+    def run_with(self, nodes, **options):
+        gh = FakeGh(nodes)
+        with patch.dict(os.environ, self.env):
+            result = closeout.run('candidates', self.config, self.root, '12', False, gh, **options)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def test_a_branch_merged_into_the_local_main_but_not_in_the_remote_base_waits_for_the_release(self):
+        tip = self.branch()
+        result, _ = self.candidates({12: node(12)})
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(result['candidates'], [])
+        self.assertFalse(result['ask'])
+        self.assertEqual(result['releaseCheck'], 'checked')
+        self.assertEqual(result['excluded'], [{'number': 12, 'title': 'Issue 12', 'reason': 'awaiting_release',
+                                               'branch': 'claude/issue-12', 'tip': tip, 'base': 'main', 'remote': 'origin'}])
+        self.assertIn('awaiting_release', result['message'])
+        self.assertIn('#12', result['message'])
+
+    def test_once_the_remote_base_holds_the_branch_the_issue_is_a_candidate_again(self):
+        self.branch()
+        self.assertEqual(self.candidates({12: node(12)})[0]['candidates'], [])
+        self.git('push', '-q', 'origin', 'main')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual([c['number'] for c in result['candidates']], [12])
+        self.assertEqual(result['excluded'], [])
+        self.assertEqual(result['releaseCheck'], 'checked')
+        self.assertTrue(result['ask'])
+
+    def test_the_cautions_of_a_candidate_are_untouched_by_the_check(self):
+        self.branch()
+        self.git('push', '-q', 'origin', 'main')
+        result, _ = self.candidates({12: node(12, prs=[])})
+        self.assertEqual(result['candidates'][0]['cautions'], ['no_pr'])
+
+    def test_a_branch_already_deleted_locally_is_not_checked(self):
+        self.branch()
+        self.git('branch', '-D', 'claude/issue-12')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual([c['number'] for c in result['candidates']], [12])
+        self.assertEqual(result['excluded'], [])
+        self.assertEqual(result['releaseCheck'], 'skipped')
+
+    def test_a_branch_that_was_never_merged_into_the_local_main_still_waits(self):
+        tip = self.branch(merge=False)
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual(result['excluded'][0]['reason'], 'awaiting_release')
+        self.assertEqual(result['excluded'][0]['tip'], tip)
+
+    def test_without_the_remote_ref_nothing_is_excluded_and_the_check_is_skipped(self):
+        self.branch()
+        self.git('remote', 'remove', 'origin')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual([c['number'] for c in result['candidates']], [12])
+        self.assertEqual(result['excluded'], [])
+        self.assertEqual(result['releaseCheck'], 'skipped')
+
+    def test_a_root_that_is_not_a_git_repository_keeps_the_old_behaviour(self):
+        (self.plain / '.frontlights').mkdir(parents=True)
+        config = self.plain / '.frontlights' / 'config.json'
+        config.write_text(json.dumps({'repository': REPO, 'project': BOARD}), encoding='utf-8')
+        (self.plain / '.frontlights' / 'authorization.json').write_text(
+            json.dumps({'issue_ids': [12], 'base': {'branch': 'main'}, 'worktrees': [dict(self.ENTRY)]}), encoding='utf-8')
+        gh = FakeGh({12: node(12), 13: node(13, text=DONE_PARTIAL)})
+        with patch.dict(os.environ, self.env):
+            result = closeout.run('candidates', config, self.plain, '12,13', False, gh)
+        self.assertEqual(gh.violations, [])
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(result['releaseCheck'], 'unavailable')
+        self.assertEqual([c['number'] for c in result['candidates']], [12])
+        self.assertEqual([(e['number'], e['reason']) for e in result['excluded']], [(13, 'unchecked_criteria')])
+
+    def test_a_branch_named_by_convention_is_checked_when_no_record_names_it(self):
+        self.record(worktrees=[])
+        tip = self.branch()
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual(result['excluded'][0]['reason'], 'awaiting_release')
+        self.assertEqual((result['excluded'][0]['branch'], result['excluded'][0]['tip']), ('claude/issue-12', tip))
+        self.record(worktrees=[], branch_prefix='team/')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual((result['excluded'], result['releaseCheck']), ([], 'skipped'))
+
+    def test_the_record_that_names_the_branch_wins_over_the_convention(self):
+        self.branch()
+        tip = self.branch('claude/issue-12-renamed')
+        self.record(worktrees=[{'issue': 12, 'path': 'WORKTREE', 'branch': 'claude/issue-12-renamed'}])
+        self.git('push', '-q', 'origin', 'claude/issue-12:main')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual((result['excluded'][0]['branch'], result['excluded'][0]['tip']), ('claude/issue-12-renamed', tip))
+
+    def test_the_base_comes_from_the_newest_record_that_names_the_issue(self):
+        # the newest record is the last one in name order, as homolog reads them ('_' sorts after '.')
+        self.branch()
+        self.record(name='authorization_2.json', base='develop')
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual((result['excluded'], result['releaseCheck']), ([], 'skipped'))
+        self.record(name='authorization_3.json', base='develop', issue_ids=[99])
+        result, _ = self.candidates({12: node(12)})
+        self.assertEqual((result['excluded'], result['releaseCheck']), ([], 'skipped'))
+        for name in ('authorization_2.json', 'authorization_3.json'):
+            (self.root / '.frontlights' / name).unlink()
+        self.assertEqual(self.candidates({12: node(12)})[0]['excluded'][0]['base'], 'main')
+
+    def test_a_parent_whose_child_waits_for_the_release_waits_too(self):
+        self.branch()
+        self.record(issue_ids=[12, 20])
+        nodes = {20: node(20, children=[(12, 'OPEN')]), 12: node(12, parent=20)}
+        result, _ = self.candidates(nodes, issues='12,20')
+        self.assertEqual(result['candidates'], [])
+        excluded = self.by_number(result, 'excluded')
+        self.assertEqual((excluded[20]['reason'], excluded[20]['openChildren']), ('open_children', [12]))
+        self.assertEqual(excluded[12]['reason'], 'awaiting_release')
+        self.git('push', '-q', 'origin', 'main')
+        result, _ = self.candidates(nodes, issues='12,20')
+        self.assertEqual([c['number'] for c in result['candidates']], [12, 20])
+
+    def test_base_and_remote_are_options_of_candidates(self):
+        tip = self.branch()
+        self.git('push', '-q', 'origin', 'main:release')
+        result = self.run_with({12: node(12)}, base='release', remote='origin')
+        self.assertEqual([c['number'] for c in result['candidates']], [12])
+        self.assertEqual(result['releaseCheck'], 'checked')
+        result = self.run_with({12: node(12)}, base='main', remote='origin')
+        self.assertEqual(result['excluded'][0]['tip'], tip)
+        result = self.run_with({12: node(12)}, remote='upstream')
+        self.assertEqual((result['excluded'], result['releaseCheck']), ([], 'skipped'))
+        for options in (dict(base='bad..name'), dict(base='x/'), dict(remote='a..b'), dict(remote='origin/x'), dict(base='')):
+            with self.subTest(options=options):
+                result = self.run_with({12: node(12)}, **options)
+                self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+                self.assertTrue(result['message'])
+
+    def test_the_cli_prints_the_exclusion_and_takes_base_and_remote(self):
+        tip = self.branch()
+        gh = FakeGh({12: node(12)})
+        out = io.StringIO()
+        with patch.object(rs, 'gh_default', gh), patch.dict(os.environ, self.env), contextlib.redirect_stdout(out):
+            code = closeout.main(['candidates', '--config', str(self.config), '--root', str(self.root), '--issues', '12',
+                                  '--base', 'main', '--remote', 'origin'])
+        self.assertEqual(gh.violations, [])
+        self.assertEqual(code, 0)
+        result = json.loads(out.getvalue())
+        self.assertTrue(result['ok'])
+        self.assertEqual(result['candidates'], [])
+        self.assertEqual(result['excluded'][0]['reason'], 'awaiting_release')
+        self.assertEqual(result['excluded'][0]['tip'], tip)
+        self.assertEqual(result['releaseCheck'], 'checked')
+        self.assertTrue(out.getvalue().isascii())
+
+    def test_only_rev_parse_and_merge_base_run_and_the_worktree_is_untouched(self):
+        import homolog
+        self.branch()
+        before = (self.git('status', '--porcelain', '--untracked-files=no'), self.git('rev-parse', 'HEAD'),
+                  self.git('branch', '--list'))
+        seen = []
+        real = homolog.git
+
+        def spy(root, *args, **kwargs):
+            seen.append(args[0])
+            return real(root, *args, **kwargs)
+
+        with patch.object(homolog, 'git', spy):
+            result, _ = self.candidates({12: node(12)})
+        self.assertEqual(result['excluded'][0]['reason'], 'awaiting_release')
+        self.assertTrue(seen)
+        self.assertLessEqual(set(seen), {'rev-parse', 'merge-base'}, seen)
+        after = (self.git('status', '--porcelain', '--untracked-files=no'), self.git('rev-parse', 'HEAD'),
+                 self.git('branch', '--list'))
+        self.assertEqual(after, before)
+
+    def test_the_helper_still_imports_no_process_module_of_its_own(self):
+        source = SCRIPT.read_text(encoding='utf-8')
+        self.assertNotIn('subprocess', source)
+        self.assertNotIn('\nimport homolog', source, 'homolog is imported lazily, inside the check, never at the top')
+        self.assertIn('import homolog', source)
+
+
 if __name__ == '__main__':
     unittest.main()
