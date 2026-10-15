@@ -583,6 +583,13 @@ def authorize(charter, operation):
                Path(w['path']).resolve(strict=True) == worktree]
     require(len(matches) == 1, 'unapproved or ambiguous worktree')
     selected = matches[0]
+    # A slice's worktree (issue 31, S2): the charter entry names the box (`slice`), and an operation
+    # on it names the same box, so a worker never edits another slice's worktree by mistake.
+    expected, given = selected.get('slice'), operation.get('slice')
+    if expected is not None or given is not None:
+        require(isinstance(expected, str) and SLICE_ID_RULE.fullmatch(expected),
+                'the worktree entry needs a slice label such as S2 when the operation names one')
+        require(given == expected, f'operation for slice {given!r} on the worktree of slice {expected!r}')
     branch = operation.get('branch')
     extra = charter.get('protected_branches', [])
     require(isinstance(extra, list) and all(nonempty(p) and p.strip('/') for p in extra),

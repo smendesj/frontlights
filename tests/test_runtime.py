@@ -384,6 +384,26 @@ class AuthorizationTests(unittest.TestCase):
     def test_positive_local_edit(self):
         frontlights.authorize(self.c, self.op)
 
+    def test_a_slice_worktree_accepts_only_operations_for_its_slice(self):
+        """Issue 31, S2: uma worktree por CA. A entrada do charter leva `slice`, e uma operação nela precisa
+        nomear a mesma caixa; a worktree da issue (sem `slice`) continua aceitando operações sem caixa."""
+        s2 = self.root / 's2'
+        (s2 / 'src').mkdir(parents=True)
+        c = dict(self.c, worktrees=self.c['worktrees'] + [
+            {'issue': 1, 'path': str(s2), 'branch': 'claude/issue-1-s2', 'slice': 'S2', 'ownership': ['src']}])
+        op = dict(self.op, worktree=str(s2), branch='claude/issue-1-s2', path=str(s2 / 'src' / 'app.py'))
+        frontlights.authorize(c, dict(op, slice='S2'))
+        frontlights.authorize(c, self.op)
+        with self.assertRaisesRegex(ValueError, 'slice'):
+            frontlights.authorize(c, op)
+        with self.assertRaisesRegex(ValueError, "slice 'S1' on the worktree of slice 'S2'"):
+            frontlights.authorize(c, dict(op, slice='S1'))
+        with self.assertRaisesRegex(ValueError, 'slice'):
+            frontlights.authorize(c, dict(self.op, slice='S1'))
+        bad = dict(c, worktrees=[dict(c['worktrees'][1], slice='S 2')])
+        with self.assertRaisesRegex(ValueError, 'slice'):
+            frontlights.authorize(bad, dict(op, slice='S 2'))
+
     def test_forbidden_operations_repositories_issues_branches(self):
         changes = [('kind', x) for x in ['merge', 'deploy', 'release', 'delete',
                    'shell', 'road_ack', 'push', 'issue_close']]

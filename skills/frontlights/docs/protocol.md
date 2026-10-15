@@ -17,7 +17,9 @@
 
 A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
 pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
-slices de cada issue em ordem, numa branch e um PR por issue, com slices em paralelo só entre issues (o
+slices de cada issue em ordem, numa branch e um PR por issue, com uma worktree por slice (branch
+`<prefixo>issue-<n>-s<k>` cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha,
+com o próprio `checkpoint-<id>.json`) e slices em paralelo só entre issues (o
 trabalho em volta da slice aberta sai em paralelo, regra do paralelismo abaixo);
 empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
 publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
@@ -138,6 +140,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     issue.json
     handoff.md
     checkpoint.json
+    checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
   roadmap-sync/
     approval.json    par (endereço, variável) aprovado pelo usuário

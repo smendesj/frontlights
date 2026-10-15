@@ -357,8 +357,10 @@ exposing secrets. Do not disable hooks or request bypass mode.
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
-implementation authorization question. Each issue gets one branch, one worktree and one PR, and
-its slices are worked in order, in dependency order, one at a time; slice parallelism only between
+implementation authorization question. Each issue gets one issue branch and one PR, and each of
+its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
+branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
+slices are worked in order, in dependency order, one at a time; slice parallelism only between
 issues, the highest safe number of independent issues whose files do not overlap, while the legwork
 around the open slice fans out (the Fan out rule above). Stacking and the
 family integration apply only to a family that already exists (an issue with sub-issues published
@@ -409,7 +411,8 @@ starts once its parent is verified there, without waiting for the merge. Park
 blocked work, continue independent work, and route worker questions to this
 session's tool. Do not merge pull requests, write the base branch, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, and of a family's or batch's verified branches into a local integration branch that is never pushed.
+branch, of a slice's branch into the branch of its own issue when its loop closes, and of a family's or
+batch's verified branches into a local integration branch that is never pushed.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 
 After a PR is opened, wait for the user's merge by default (`references/development.md`, "After the pull

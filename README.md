@@ -653,7 +653,8 @@ implementação, anunciada sem pergunta → desenvolvimento orientado a testes (
 oferta do merge e espera dele e, com ele confirmado, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, com slices em
+Frontlights trabalha as slices de cada issue em ordem, numa branch e um PR por issue, cada CA na própria
+worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com slices em
 paralelo só entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
 concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
 e começa. Cada slice

@@ -200,7 +200,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 26. Short issues (`evals/vertical-slices.md`, issue 31). Approve a body whose honest cut needs six slices: confirm
     the numbered list shows two top-level issues of at most five slices each, the second blocked by the first,
     never one issue with six boxes; `validate-plan` on a plan with a six-slice issue exits with the cap in the
-    message; and a leftover box added later from a review does not count toward the cap.
+    message; and a leftover box added later from a review does not count toward the cap. Then, on an issue with
+    two slices, confirm the announcement names one issue branch and one worktree and branch per slice
+    (`<prefix>issue-<n>-s1`, `-s2`, cut from the issue branch), the charter's `worktrees` carry `slice`, an
+    `authorize` operation that names S1 on the S2 worktree is refused, each slice worktree gets its own
+    `checkpoint-<id>.json`, and when S1's loop closes its branch is merged into the issue branch before its box
+    is ticked, with no question asked for that merge.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact
