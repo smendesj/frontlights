@@ -46,7 +46,9 @@ for the family, its sub-issues being roots too. A slice that only changes tests 
 does not hold the question back.
 
 **When the question comes out.** Only at these points, each one after `browser-gate`: (a) when the
-last slice that changes the screen has closed its TDD loop, the normal moment, which comes before
+last slice that changes the screen has closed its TDD loop and every slice already closed is merged
+into the branch of the issue (the issue's worktree is a root: a merge after the record changes its
+code and turns the gate `stale`, like any later code change), the normal moment, which comes before
 the independent review of any of them (a review of work the user then asks to change is wasted);
 (b) before an independent review of a slice that changes the screen is dispatched, once no other
 slice that changes the screen is still in its loop (otherwise that review waits for (a)); (c) before an
@@ -254,8 +256,8 @@ When the user will watch:
   branch is already checked out elsewhere; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
   --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
-  delivered state (the batch's single branch, or the local integration of the slices that
-  closed their loop), served from its worktree. Give both servers an `auto` port of their
+  delivered state (the branch of the issue, or the local integration of it with the slices that
+  closed their loop and are not merged yet), served from its worktree. Give both servers an `auto` port of their
   own. A process with a fixed port runs one pass at a time, in this order: stop the
   issue's own server (the standard order started it earlier), start ANTES, run it,
   `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts, then
@@ -397,7 +399,7 @@ never a reason to skip a case, shorten a pass, park the run or ask the user to s
   production, staging or a shared remote database. Never read, change or reuse a real person's or customer's
   user, profile or data: the run touches only what it created or the logins of `browserTest.users`.
 - **Record.** Before the first creation write `.frontlights/issues/<n>/browser/dados-de-teste.json` (the
-  lead issue's folder) and add each item as it is created: its kind and id, `removido: false`. Never the
+  issue's folder; the lead issue's for a family that already exists) and add each item as it is created: its kind and id, `removido: false`. Never the
   login, the password or a whole row. The password of a created login goes only into a git-ignored local
   file of the project and reaches the browser through an environment variable of the process; never into
   a record, a caption, the strip, a screenshot, the conversation or a brief.
@@ -453,8 +455,8 @@ the answer is recorded verbatim.
 ## Evidence
 
 Before each browser run, take `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" evidence --root <worktree>`.
-Write `.frontlights/issues/<n>/browser/result.json` (for a batch, `<n>` is its lead issue and
-the file is the batch's) with timestamp, branch,
+Write `.frontlights/issues/<n>/browser/result.json` (for a family that already exists, `<n>` is its lead
+issue and the file is the family's) with timestamp, branch,
 `head`, `diff_sha256`, the account used (`conta 1` or `conta 2`, never the login),
 each step and its result, console and network errors, screenshot file names, the
 failure kind and the user's answer. A watched run adds `assistido` (true or
@@ -490,7 +492,7 @@ delivery, so this costs at most one extra capture per delivery and nothing leave
   data and no local path: crop, or choose another view of the same result, or take no print for that case. Test
   data only. JPEG or PNG, at most 1 MB and about 1920 px wide. Look at every image yourself and retake the
   blurry, empty or error ones.
-- **Where.** `.frontlights/issues/<n>/browser/resumo/` (the lead issue's folder) of the project's **main
+- **Where.** `.frontlights/issues/<n>/browser/resumo/` (the issue's folder; the lead issue's for a family) of the project's **main
   worktree** (the first one `git worktree list` shows), never of a linked one:
   the cleanup of the delivered worktrees takes their `.frontlights` records with them, and the summary comes
   days later. A `candidates.json` lists each print:

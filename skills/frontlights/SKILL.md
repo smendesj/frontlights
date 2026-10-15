@@ -216,8 +216,9 @@ why in one sentence:
 - **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
 - **Conversion.** A request to tidy a set of issues into the short shape ("arrume as issues
-  do MVP"): no grilling, no plan of its own; the conversion of `references/issues.md`
-  ("Converting a family"), in batch, one family at a time, one approval per family.
+  do MVP"): stages 0 to 2 as always, then, instead of stages 3 to 6, the conversion of
+  `references/issues.md` ("Converting a family"), in batch, one family at a time, one approval
+  per family.
 
 Escalate to a heavier path whenever new uncertainty appears, and say so when you
 do. Do not silently downgrade a path the user asked for: if they asked for the issue body
@@ -318,8 +319,8 @@ and blocks the others; a wide refactor is the declared exception, cut as expand,
 batches and contract. Each slice becomes one acceptance-criteria box of the issue, in
 dependency order, blockers first, with the sub-items Entrega, Seams, Camadas and Depende de,
 and every criterion fails at the base commit. A short issue holds at most five slices: the
-sixth is cut out into top-level issues linked by `--blocked-by` (a sub-issue only in a rare
-case), and leftover boxes do not count toward the cap. The issue (with the sub-issues it already has)
+sixth is cut out into top-level issues linked by `--blocked-by` (never a new sub-issue), and
+leftover boxes do not count toward the cap. The issue (with the sub-issues it already has)
 covers every layer the requirement needs and records the layers analysed and, for each one
 not touched, why; the layers are known only after reading every layer (front end, back end,
 migrations and schema, tests, documentation) and tracing each screen field, button or action
@@ -369,7 +370,9 @@ implementation authorization question. Each issue gets one issue branch and one 
 its slices gets its own worktree and branch, cut from the branch of the issue and merged into the
 branch of the issue when its loop closes (`references/development.md`, "Slices in order"); its
 slices are worked in dependency order: independent slices (no `Depende de` between them and no file
-in common) run at once, each in its own worktree, and a slice that depends on one still open is
+in common) run at once, each in its own worktree, judged before their loops from the `Seams:` and
+`Camadas:` of their boxes (a collision found during a loop stacks the later slice on the earlier one),
+and a slice that depends on one still open is
 stacked on the branch of the slice it depends on; the concurrency is the highest safe number of
 independent issues and slices whose files do not overlap, while the legwork
 around each open slice fans out (the Fan out rule above). Stacking and the
@@ -421,7 +424,8 @@ starts once its parent is verified there, without waiting for the merge. Park
 blocked work, continue independent work, and route worker questions to this
 session's tool. Do not merge pull requests, write the base branch, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, and of a family's or
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
+issue (or of the slice it depends on) into a slice's branch to bring it up to date, and of a family's or
 batch's verified branches into a local integration branch that is never pushed.
 Anything else on that list waits for the user's "Sim" to its own question (above).
 

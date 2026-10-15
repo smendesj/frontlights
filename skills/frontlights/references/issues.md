@@ -53,8 +53,8 @@ roadmap counts them as the parts of the delivery.
 **A short issue holds at most five slices.** Each one is a complete but short vertical slice,
 one TDD loop of hours, not days, so the user can test it by hand soon after it lands. When the
 cut needs a sixth, the body is too big for one issue: cut the excess into top-level issues of
-up to five slices each, published blockers first and linked by `--blocked-by`; a sub-issue
-only in a rare case. Leftover boxes do not count toward the cap: they arrive later, from a
+up to five slices each, published blockers first and linked by `--blocked-by`; never a new
+sub-issue. Leftover boxes do not count toward the cap: they arrive later, from a
 review or a test, and `validate-plan` never sees them.
 
 Record the slices in `plan.json` under `slices` of each issue (`examples/plan.json`): `id`
@@ -204,8 +204,12 @@ in two situations, with the same procedure:
 and stay out). Write the new body of the parent from `templates/issue.md`: the spec sections carry what
 the old body and the children's bodies already say (never a decision the user did not make), and each
 open child becomes one box `S<k>` with its Entrega (the child's outcome), Seams, Camadas and Depende de
-(from its `blockedBy` or `Depends on`), in dependency order; a child already partly done keeps its ticked
-criteria as sub-items of its box, and the box is ticked only when every one of them is. When the family
+(from its `blockedBy` or `Depends on`), in dependency order; a child already partly done says what it
+already delivered as plain text in its Entrega (never as nested boxes: the closeout counts every box,
+indented or not), and its box stays open until the rest is done. A child with an open pull request is
+not converted while that pull request is open (say so, leave it out of that family's approval, and let the
+user merge or close it first); a child whose work is only on a branch keeps that branch as the branch of
+its slice, renamed to the slice's name. When the family
 has more than five open children, one body is too big: cut them into two or more top-level issues of
 up to five slices each, published blockers first and linked by `--blocked-by`; the parent becomes the
 first of them, or closes as "dividida em #a, #b" when nothing of it is left. Show the before and the
@@ -220,9 +224,10 @@ the old body to `.frontlights/issues/<n>/body-before-<ts>.md`, write the new one
 top-level issue of a cut family is created as stage 5 creates any issue (board, labels, `--blocked-by`),
 never with a parent. Then the converted children: close each one with `gh issue close <c> --repo <repo>
 --reason "not planned" --comment "Convertida em CA S<k> da #<n>"`, and take its card off the board with
-`gh project item-archive <number> --owner <owner> --id <item-id>`. Closing an issue and changing the
-board are denied operations: ask them with their own questions, one per family, each listing every
-exact command, and run them only after "Sim". A converted child is history for the closeout
+`gh project item-archive <number> --owner <owner> --id <item-id>`. Closing an issue (the converted
+children, and the parent closed as "dividida em #a, #b") and changing the board are denied operations:
+ask them with their own questions, one per family (one for the closes, one for the board), each listing
+every exact command, and run them only after "Sim". A converted child is history for the closeout
 (`closeout.md`): it is no candidate and needs no tick in the parent. Record the conversion in
 `.frontlights/issues/<n>/handoff.md` (the children, the boxes they became, the commands and the literal
 answers). Until the conversion lands, a session that acts on the family works it as a family.

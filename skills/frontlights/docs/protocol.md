@@ -167,7 +167,7 @@ com o que o plano liga e nesta ordem: `checks regression`, `serve start`,
 O `frontlights.py browser-gate --config <config> --base <base> --root <worktree> ... [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente>
 --record <result.json>` lê o diff, devolve `not_needed`, `answered`, `pending`, `stale`, `contradiction` ou
 `unconfigured` (saída 0 para os dois primeiros, 2 para os demais) e roda onde o `review-gate` roda. O
-`result.json` do lote fica na pasta da issue líder e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`,
+`result.json` é um por issue e fica na pasta dela (numa família que já existe, na pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`,
 `prosseguir`, `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`; as `roots` vêm do `browser-gate`) e
 `pergunta.resposta`; só código que não é teste nem documento, depois da decisão, a torna `stale`. A pendência
 `teste_assistido`, só quando a pergunta está devida (a última fatia de tela fechou o ciclo e não há resposta), atravessa janelas: `checkpoint --pending teste_assistido`, `resume` (o campo `pending` traz a lista, e a sessão a lê antes de tudo) e
@@ -333,7 +333,8 @@ Escreva o documento de passagem de contexto com `templates/handoff.md` e execute
 python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" checkpoint --root <worktree> --issue <issue.json> --handoff <handoff.md> --next-step "Executar o teste de regressão de persistência"
 ```
 
-Salve a saída padrão em `checkpoint.json`, com codificação UTF-8. O utilitário inclui
+Salve a saída padrão em `checkpoint.json` (na worktree de uma slice, em `checkpoint-<id>.json`, um por
+worktree de slice), com codificação UTF-8. O utilitário inclui
 HEAD, branch, hash das diferenças binárias, hashes dos arquivos versionados e não
 versionados, registro da issue, hash do documento de passagem de contexto, próximo
 passo e horário. Ele exclui `.frontlights/` para evitar hashes que dependam do próprio

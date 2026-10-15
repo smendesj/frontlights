@@ -326,7 +326,8 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
 - **Branches empilhadas:** a autorização que as permite nomeia as operações que elas exigem
   (criar branch a partir de outra branch que não a base, enviá-la, abrir PR rascunho com a
   branch da dependência como base, redirecionar esse PR, trazer uma base por `git merge` para a branch da própria issue, o merge
-  da branch de uma slice na branch da própria issue quando o ciclo dela fecha, e juntar as branches
+  da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
+  depende) na branch de uma slice para atualizá-la, e juntar as branches
 verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada). Esses são os únicos merges permitidos. O utilitário `authorize`
   continua só conferindo `edit`, `test` e `checkpoint` e rejeitando merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações

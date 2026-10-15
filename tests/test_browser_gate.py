@@ -89,7 +89,8 @@ class GateTestCase(unittest.TestCase):
 
 class SliceRootsTests(GateTestCase):
     """Issue 31, S3: as raízes podem ser as worktrees das CAs de uma issue, cada uma medida a partir da branch da
-    issue (`--stacked <branch da CA>=<branch da issue>`), e cada raiz entra uma vez."""
+    issue (`--stacked <branch da CA>=<branch da issue>`; caracterização: o `--stacked` já existia na base), e cada
+    raiz entra uma vez (a mensagem nova)."""
 
     def stacked_slice(self, name, on, **files):
         root = Path(self.tmp.name) / name

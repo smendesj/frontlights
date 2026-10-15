@@ -220,6 +220,7 @@ class FamilyRulesTextTests(unittest.TestCase):
     def test_the_merge_rule_names_the_only_merges_stacking_allows(self):
         allowed = ("the only merges allowed are the ones the stacking authorization names: of a base into an issue's own branch, "
                    "of a slice's branch into the branch of its own issue when its loop closes, "
+                   "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
                    "and of a family's or batch's verified branches into a local integration branch that is never pushed")
         for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
             with self.subTest(file=name[-1]):

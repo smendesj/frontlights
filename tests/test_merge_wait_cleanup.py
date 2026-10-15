@@ -180,7 +180,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                      'not_found', 'integration_has_pull_request', 'integration_pushed', 'integration_has_unique_commits',
                      'ignored_files', 'local_only_integration', 'origin_is_not_the_repository',
                      'slice_not_in_issue_branch', 'slice_has_pull_request', 'slice_pushed', 'slice_issue_branch_unknown',
-                     'slice_merged_into_issue_branch'):
+                     'slice_is_issue_branch', 'slice_merged_into_issue_branch'):
             with self.subTest(code=code):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')

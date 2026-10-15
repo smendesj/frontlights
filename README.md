@@ -539,7 +539,7 @@ print limpo (sem a faixa, sem a barra do navegador, sem identidade nem dado de p
 `.frontlights` delas), com um `candidates.json` que diz a parte, a entrega (`cover`), o repositório, o instante e os arquivos visíveis com o id Git que tinham. Nada sai do projeto nessa hora: o resumo só copia o
 que você escolher na etapa dos prints.
 
-Antes de abrir o navegador, o Frontlights pergunta (uma vez por lote de trabalho) se você está
+Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
 pronto para assistir. Com o sim, o teste roda em um Chrome de janela visível, nunca oculta e com
 perfil descartável, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
 na página "ANTES: main") e depois a branch entregue ("DEPOIS: branch X"). Cada caso roda duas
@@ -563,11 +563,12 @@ resposta. O registro traz `rodadas` e `aprovacao`. Se um caso da DEPOIS falhar, 
 vem antes e substitui esta.
 
 **Um teste por issue, antes da revisão.** O teste assistido é um por issue (a issue e as sub-issues
-que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes,
-antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
+que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes
+e toda fatia já fechada está mesclada na branch da issue (um merge depois do registro reabre a pergunta,
+como `stale`), antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
 pergunta, e um `pending` antes disso é esperado e não pergunta nada. O DEPOIS roda no estado entregue das
-fatias que já fecharam o ciclo: a própria branch, quando o lote tem uma só, ou uma worktree de integração
-local, nunca enviada, que junta todas; a integração da família reaproveita essa worktree e não repete o teste.
+fatias que já fecharam o ciclo: a branch da issue, quando toda fatia de tela já está mesclada nela, ou uma worktree de integração
+local, nunca enviada, que junta a branch da issue e as fatias ainda abertas; a integração da família reaproveita essa worktree e não repete o teste.
 
 O `python scripts/frontlights.py browser-gate --config <config> --base <base> --root <worktree> ...
 [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente> --record <result.json>` lê o diff, não o texto do plano, e devolve
@@ -575,8 +576,9 @@ O `python scripts/frontlights.py browser-gate --config <config> --base <base> --
 primeiros, 2 para os demais). Os caminhos visíveis vêm de `browserTest.frontPaths` (globs a partir da raiz do repositório: `*` não
 atravessa pasta, então `**/*.html` pega todas as páginas; testes e documentos nunca contam); sem ele, a
 estimativa sai do nome do arquivo e o `inspect` avisa. Cada fatia empilhada entra com `--stacked
-<sua branch>=<a branch que a PR dela mira>`, para só o trabalho dela contar. O `result.json` do lote fica na
-pasta da issue líder e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
+<sua branch>=<a branch que a PR dela mira>`, e cada CA com `--stacked <sua branch>=<a branch da issue>`, para só o
+trabalho dela contar. O `result.json` é um por issue e fica na pasta dela (numa família que já existe, na
+pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`, `prosseguir`,
 `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`) e `pergunta`; `dispensado` é a sua
 decisão explícita de não rodar o teste, gravada com a resposta literal. Depois de uma decisão, só
 código que não é teste nem documento volta a abrir a pergunta (`stale`). "Ainda não" mantém a pendência:

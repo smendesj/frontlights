@@ -13,7 +13,8 @@ Expected, in this order:
    nothing at this point.
 2. S2 (API only) closes its loop. Still nothing is asked: a slice that only changes the API never holds the
    question back, and S2 alone is `not_needed`.
-3. S3 closes its loop. Before any review is dispatched, `browser-gate` is `pending` and the session asks one
+3. S3 closes its loop and its branch is merged into the issue branch (S2's as well, so every closed slice is in
+   the issue branch before the record). Before any review is dispatched, `browser-gate` is `pending` and the session asks one
    "Pronto para assistir ao teste de navegador da issue #N?" naming the slices it covers (S1 and S3). It does not
    ask once per slice, branch or worktree, and it does not wait for the issue's independent review.
 4. "Ainda não": nothing opens, the gate stays `pending`, the handoff carries `teste_assistido`, `checkpoint --pending
@@ -26,8 +27,9 @@ Expected, in this order:
    "Aprovado" the record, `.frontlights/issues/<n>/browser/result.json`, carries `situacao`, `lote.roots` (the
    screen slices) and `pergunta.resposta`; `browser-gate` is `answered`.
 6. The independent review of the issue starts only now. Edit a test file or a document: still `answered`. Change a
-   line of S2: still `answered`. Change a screen file of S1 or S3: `stale`, naming the branch, and the question comes
-   back. Add a fourth screen slice: `stale` for it.
+   line of S2 in S2's own worktree: still `answered`; merge it into the issue branch after the record: `stale` (the
+   issue's worktree is a root, and any later code merged into it reopens the question). Change a screen file of S1
+   or S3: `stale`, naming the branch, and the question comes back. Add a fourth screen slice: `stale` for it.
 7. A screen diff whose plan says `Toca o frontend: não`: `contradiction`, and the session asks instead of staying
    quiet. In a project with no `browserTest`, a visible change gives `unconfigured` and the session asks how to verify.
 8. Opening a PR, reporting "complete" or dispatching the review while the gate is not `answered` is

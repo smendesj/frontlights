@@ -146,10 +146,13 @@ path, branch, tip, pull requests, whether the remote branch goes too, its `cauti
 `remote_branch_moved`, `origin_is_not_the_repository`, `frontlights_records`, `ignored_files`,
 `local_only_integration`, `slice_merged_into_issue_branch`, `branch_differs_from_authorization`) and the `commands` in the order to run them.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
-pull request: it is offered, with the caution `slice_merged_into_issue_branch` and no remote command, once that
-branch contains its tip, it was never pushed and no pull request was opened from it; otherwise it stays as
-`slice_not_in_issue_branch`, `slice_pushed`, `slice_has_pull_request` or, when the authorization names no worktree
-of the issue itself, `slice_issue_branch_unknown`.
+pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch` and
+no remote command, once that branch contains a commit of its own, it was never pushed and no pull request was
+opened from it; otherwise it stays as `slice_not_in_issue_branch` (also a slice freshly cut, with nothing of its own
+merged yet), `slice_pushed`, `slice_has_pull_request`, `slice_is_issue_branch` (an entry with `slice` that points at
+the issue's own branch) or `slice_issue_branch_unknown` (the authorization names no worktree of the issue itself, or
+the branch of the issue is already gone and the approved base does not hold the slice's tip; when the base holds it,
+the slice is offered).
 `ignored_files` comes with `ignoredCount` and `ignored`, the first names of what Git ignores in that worktree: those
 files go away with it. `excluded` lists what stays and why, in `reasons`: `main_worktree`, `current_directory`,
 `detached_head`, `locked_worktree`, `checked_out_elsewhere`, `not_a_worktree`, `not_found`, `path_missing`,

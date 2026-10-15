@@ -300,10 +300,11 @@ def integration_reasons(ctx, github, tip):
     return reasons
 
 
-def slice_reasons(ctx, github, tip, issue_branch):
+def slice_reasons(ctx, github, tip, issue_branch, branch):
     """Why a slice's worktree stays (issue 31, S3): its branch is delivered to the branch of its own issue, never by a
-    pull request of its own, so it goes once that branch contains its tip, it was never pushed and no pull request
-    was opened from it."""
+    pull request of its own, so it goes once that branch contains a commit of its own, it was never pushed and no
+    pull request was opened from it. When the branch of the issue is already gone (cleaned in an earlier round), the
+    slice counts as delivered only when the approved base holds its tip."""
     reasons = []
     if github['heads']:
         reasons.append('slice_has_pull_request')
@@ -311,15 +312,27 @@ def slice_reasons(ctx, github, tip, issue_branch):
         reasons.append('slice_pushed')
     if github['dependents']:
         reasons.append('open_dependents')
-    if not isinstance(issue_branch, str) or not closeout.valid_branch(issue_branch):
+    if isinstance(issue_branch, str) and branch == issue_branch:
+        reasons.append('slice_is_issue_branch')   # an entry with `slice` that points at the issue's own branch: never a slice to delete
+    elif not isinstance(issue_branch, str) or not closeout.valid_branch(issue_branch):
         reasons.append('slice_issue_branch_unknown')
     elif not reasons:
         issue_tip = local_tip(ctx['root'], issue_branch)
-        inside = None if issue_tip is None else is_ancestor(ctx['root'], tip, issue_tip)
-        if inside is None:
-            reasons.append('ancestry_unverifiable')
-        elif not inside:
-            reasons.append('slice_not_in_issue_branch')
+        if issue_tip is None:
+            base = base_ref(ctx['root'], ctx['base'])
+            inside = None if base is None else is_ancestor(ctx['root'], tip, base)
+            if inside is None:
+                reasons.append('ancestry_unverifiable')
+            elif not inside:
+                reasons.append('slice_issue_branch_unknown')
+        elif tip == issue_tip:
+            reasons.append('slice_not_in_issue_branch')   # freshly cut, nothing of its own merged yet
+        else:
+            inside = is_ancestor(ctx['root'], tip, issue_tip)
+            if inside is None:
+                reasons.append('ancestry_unverifiable')
+            elif not inside:
+                reasons.append('slice_not_in_issue_branch')
     return reasons
 
 
@@ -385,7 +398,7 @@ def assess(ctx, item, registered, github):
         reasons.append('pull_requests_unreadable')
     else:
         reasons += (integration_reasons(ctx, github, tip) if integration
-                    else slice_reasons(ctx, github, tip, item.get('issue_branch')) if sliced
+                    else slice_reasons(ctx, github, tip, item.get('issue_branch'), branch) if sliced
                     else pull_reasons(ctx, github, tip))
     if reasons:
         return reasons, None
@@ -408,7 +421,8 @@ def assess(ctx, item, registered, github):
     commands.append({'kind': 'delete_branch', 'argv': ['git', '-C', main, 'branch', '-D', branch]})
     if remove_remote:
         commands.append({'kind': 'delete_remote_branch', 'argv': ['git', '-C', main, 'push', REMOTE, '--delete', branch]})
-    record = {'issue': item.get('issue'), 'path': path if registered is not None else None, 'branch': branch, 'tip': tip,
+    record = {'issue': item.get('issue'), 'slice': item.get('slice'), 'path': path if registered is not None else None,
+              'branch': branch, 'tip': tip,
               'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
               'removeWorktree': registered is not None, 'deleteRemoteBranch': remove_remote,
               'cautions': cautions, 'commands': commands}
@@ -481,7 +495,8 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             result['excluded'].append({'issue': item.get('issue'), 'path': rs.clean(item['path'], 300),
                                        'branch': rs.clean(branch, 200) if branch else None,
                                        'reasons': ['not_found'] if reasons == ['nothing_left'] else reasons})
-    result['candidates'].sort(key=lambda c: (c['issue'] is None, c['issue'] or 0, c['branch']))
+    # the slices of an issue come before the issue's own worktree: its branch is what they are judged against
+    result['candidates'].sort(key=lambda c: (c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
     result['ask'] = bool(result['candidates'])
     parts = [f'{len(result["candidates"])} worktree(s) or branch(es) can be removed.' if result['candidates']
              else 'Nothing can be removed now.']

@@ -377,7 +377,7 @@ def slices_of(issue):
     # Leftover boxes (P1, P2) are added later, outside the plan, so they never count here.
     require(len(slices) <= SLICES_MAX,
             f'{label}: {len(slices)} slices: uma issue tem no máximo {SLICES_MAX}; o excedente vira issues de topo '
-            f'ligadas por --blocked-by (sub-issue só em caso raro)')
+            f'ligadas por --blocked-by (nunca uma sub-issue nova)')
     seen = []
     for item in slices:
         require(isinstance(item, dict),

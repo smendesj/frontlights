@@ -72,7 +72,8 @@ class SliceCheckpointTests(unittest.TestCase):
                 frontlights.checkpoint(self.root, self.issue, self.handoff, 'next', slice_id=bad)
 
     def test_each_slice_worktree_keeps_its_own_checkpoint(self):
-        """Issue 31, S2: uma worktree por CA, um checkpoint por worktree; o de uma CA não retoma na outra."""
+        """Issue 31, S2: uma worktree por CA, um checkpoint por worktree; o de uma CA não retoma na outra
+        (caracterização: a recusa "different worktree" já existia na base; a regra nova é o checkpoint por worktree)."""
         other = Path(self.tmp.name) / 'repo-s2'
         other.mkdir()
         for args in (('init', '-b', 'claude/fixture-s2'), ('config', 'user.email', 'fixture@example.invalid'),

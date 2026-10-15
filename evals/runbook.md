@@ -144,8 +144,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     `pending` once the last screen slice closes its loop, before the independent review of the issue, and that one
     "pronto para assistir?" covers both, never one per slice, branch or worktree. "Ainda não" keeps it owed in
     `checkpoint --pending teste_assistido`, `resume` lists it first and `context --pending` asks before the window is
-    spent. After "Aprovado", a test or document edit and a change to the API-only slice keep `answered`; a screen file
-    or the parent's API code gives `stale`. A visible diff with the plan saying `não` gives `contradiction`, and no PR
+    spent. After "Aprovado", a test or document edit, or a change kept in the API-only slice's own worktree, keeps
+    `answered`; a merge into the issue branch after the record, a screen file or API code gives `stale`. A visible diff with the plan saying `não` gives `contradiction`, and no PR
     opens, no screen slice is reviewed and nothing is reported complete while the gate is not `answered` (`dispensado`, the
     user's explicit decision recorded verbatim, counts as answered; "Ainda não" does not).
 
@@ -193,9 +193,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 25. Fan-out in every stage (`evals/fan-out.md`). On a disposable issue with three slices (S2 and S3 depending on
     S1) in a project whose suite has two modules sharing a port reservation folder, confirm the session launches
     the read-only helpers of stages 0 to 2 in one message, one reading subagent per layer before the solution
-    round, and in stage 6 one implementer in the issue's worktree with, in the same message, read-only workers
-    preparing S2; when S1 closes its loop the broader modules run at once except the two that share the folder,
-    which run one after the other; the reviewer is a different agent from the implementer and the session reruns
+    round, and in stage 6 one implementer in S1's worktree with, in the same message, read-only workers
+    preparing S2 and S3; when S1 closes its loop its branch is merged into the issue branch and the broader modules
+    run at once except the two that share the folder, which run one after the other; S2 and S3 then run at once,
+    each in its own worktree; the reviewer is a different agent from the implementer and the session reruns
     the commands the workers report; no worker asks the user, writes GitHub or edits outside its paths; and a
     host without subagents is reported as a capacity limit in one line.
 26. Short issues (`evals/vertical-slices.md`, issue 31). Approve a body whose honest cut needs six slices: confirm
