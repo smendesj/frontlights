@@ -172,8 +172,9 @@ files go away with it. `excluded` lists what stays and why, in `reasons`: `main_
 already. A branch is offered only when its tip is the head of a merged pull request that reached the approved base
 (a stacked child through its parent) or, with no pull request at all, when the approved base (`origin/<base>` when
 the remote-tracking ref exists, the local base otherwise) already contains its tip, the caution
-`contained_in_base_without_pull_request`: the branch of an issue that reached GitHub through a release, never pushed
-itself, so it has no remote command; in both cases nothing is uncommitted, no pull request is open from or on top of
+`contained_in_base_without_pull_request`: the branch of an issue that reached GitHub through a release, normally never
+pushed itself and so with no remote command (a branch pushed under the old flow still gets `git push origin --delete`
+when its remote branch points at the same commit); in both cases nothing is uncommitted, no pull request is open from or on top of
 it, and it is not protected; the remote branch goes only when `origin` is this repository and the branch still points
 at that commit.
 

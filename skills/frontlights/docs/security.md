@@ -241,7 +241,8 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
   `protected_branches`, com a mesma regra do `authorize`), cujo tip é a cabeça de uma PR mesclada que chegou à base
   aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
   contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
-  `contained_in_base_without_pull_request`, sem comando remoto), sem PR aberta a partir da branch nem
+  `contained_in_base_without_pull_request`; a avaliação não roda comando remoto, e o `git push origin --delete` só
+  entra para uma branch enviada no fluxo antigo cuja branch remota ainda aponta para o mesmo commit), sem PR aberta a partir da branch nem
   em cima dela; a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo
   commit; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso `ignored_files` lista os nomes; a worktree
   de integração local (`--integration`) só entra sem PR, nunca enviada e sem commit próprio fora das PRs entregues (um merge conta como próprio quando

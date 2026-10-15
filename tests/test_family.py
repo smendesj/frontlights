@@ -220,6 +220,7 @@ class FamilyRulesTextTests(unittest.TestCase):
         allowed = ("the only merges allowed are the ones the stacking authorization names: of a base into an issue's own branch, "
                    "of a slice's branch into the branch of its own issue when its loop closes, "
                    "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
+                   "of a verified child's branch into its parent's branch, "
                    "of a family's or batch's verified branches into a local integration branch that is never pushed, "
                    "of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone "
                    "and becomes a question), "

@@ -112,6 +112,10 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
             frontlights.authorize(c, dict(self.op, target='origin/release/main'))
         with self.assertRaisesRegex(ValueError, 'not the base branch'):
             frontlights.authorize(c, dict(self.op, target='main'))
+        for remote in ('origin/main', 'refs/remotes/origin/main', 'remotes/origin/main'):
+            bad = dict(self.c, base={'branch': remote, 'commit': 'abc1234'})
+            with self.subTest(base=remote), self.assertRaisesRegex(ValueError, 'remote-tracking'):
+                frontlights.authorize(bad, dict(self.op, target=remote))
 
     def test_a_slice_branch_does_not_enter_the_local_main(self):
         op = dict(self.op, worktree=str(self.slice), branch='claude/issue-1-s2', slice='S2')
@@ -507,6 +511,14 @@ class HomologHookAndSyncTests(unittest.TestCase):
         self.assertIn('core.hooksPath', check['message'])
         self.assertEqual(list(elsewhere.iterdir()), [])
         self.assertFalse((self.work / '.git' / 'hooks' / 'pre-push').exists())
+        # the user installed our hook there by hand: the check reads it as installed and current, and still writes nothing
+        (elsewhere / 'pre-push').write_bytes(check['script'].encode('utf-8'))
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['ok'], check['installed'], check['current'], check['outsideRepository']),
+                         (0, True, True, True, True))
+        code, install = self.hook('--install')
+        self.assertEqual((code, install['written']), (1, False))
+        self.assertEqual((elsewhere / 'pre-push').read_bytes(), check['script'].encode('utf-8'))
 
     def test_the_hook_refuses_pushing_the_local_main_and_lets_other_branches_through(self):
         self.hook('--install')

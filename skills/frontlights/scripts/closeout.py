@@ -922,8 +922,8 @@ def read_pull_requests(gh, repository, numbers):
 
 def pull_request_entry(number, node, expected):
     """What the session needs from one pull request: `status` is `open`, `merged_into_base` (the only one that
-    lets an issue be proposed for closing), `merged_elsewhere` (merged into another branch, such as a stacked
-    parent), `closed_unmerged`, `not_found` or `unknown`."""
+    lets an issue be proposed for closing), `merged_elsewhere` (merged into a branch that is not the approved
+    base), `closed_unmerged`, `not_found` or `unknown`."""
     if node is None:
         return {'number': number, 'status': 'not_found'}
     state = node.get('state') if isinstance(node.get('state'), str) else None

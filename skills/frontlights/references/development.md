@@ -449,7 +449,7 @@ their own approval (`references/closeout.md`). The release's pull request is cov
 the host's native approval; the branches of issues and slices are never pushed. Never
 merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,

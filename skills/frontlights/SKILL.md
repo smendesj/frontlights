@@ -453,7 +453,7 @@ blocked work, continue independent work, and route worker questions to this
 session's tool. Do not merge pull requests, write the remote main, deploy, release,
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
-issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or
+issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or
 batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the
 issue into the local main once its three gates are green (`references/development.md`, "Into the local
 main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and

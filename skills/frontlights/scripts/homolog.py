@@ -192,7 +192,12 @@ def op_hook(root, base, install):
     installed, ours, foreign, current = hook_state(path, script)
     result = {'installed': installed, 'ours': ours, 'foreign': foreign, 'current': current, 'path': str(path),
               'base': base, 'script': script, 'outsideRepository': outside}
-    if outside:
+    if outside and current and not install:
+        # The user installed our hook by hand in a hooks folder outside the repository: it is there and current,
+        # which is all the check asks; the skill still never writes there.
+        result.update(exitCode=0, message=f'O hook pre-push do Frontlights está instalado em {path} (pasta de '
+                                          'core.hooksPath fora do diretório Git; a skill não escreve ali).')
+    elif outside:
         # core.hooksPath (often a global one) sends the hooks to a folder outside the repository: the skill never
         # writes there, in either mode.
         result['exitCode'] = 1 if install else 2

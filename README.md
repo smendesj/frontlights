@@ -730,12 +730,12 @@ para as que não serão tocadas, o motivo com a evidência do rastreio de cada c
 consumidor no back e a coluna no banco (um rastreio inconclusivo bloqueia a aprovação do plano até ser provado). Uma filha com `needs-decision`, ou sem abordagem
 definida, entra na entrevista da mesma sessão. Numa família que já existe (issue com sub-issues
 publicadas antes da regra das slices), quando uma filha depende do pai, a
-autorização permanente usa **branches empilhadas** (você pode pedir para esperar o merge do pai): a filha sai da branch do
-pai assim que ele está verificado nela, o PR dela tem como base a branch do pai e, depois que
-uma pessoa faz o merge do pai, o PR é redirecionado para a base em que o pai entrou, trazendo-a
-por merge (nunca rebase nem push forçado; com squash no pai, conflitos nos trechos que a filha
-divide com ele são esperados e resolvidos nesse merge). A concorrência usada é o número de filhas independentes
-cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na base aprovada.
+autorização permanente usa **branches empilhadas** (você pode pedir para esperar o pai chegar à main local): a filha sai
+da branch do pai assim que ele está verificado nela; a filha verificada é mesclada na branch do pai, e a família
+entra na main local pela branch do pai, com as filhas dentro, pelos três portões, sem PR por filha e sem push
+(nunca rebase nem push forçado; conflitos nos trechos que uma filha divide com outra são resolvidos no merge
+e mostrados ao revisor). A concorrência usada é o número de filhas independentes
+cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na main local.
 Na entrevista, depois de confirmar o problema (numa só pergunta quando a issue já
 o define), a skill levanta as convenções do código afetado e propõe ao menos três
 abordagens de implementação realmente diferentes. Cada uma informa se segue ou
