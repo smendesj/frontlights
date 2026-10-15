@@ -48,8 +48,9 @@ resolves (`core.hooksPath` included) and answers `installed`, `ours`, `foreign`,
 exact text `--install` would write, plus `current` (ours and equal to that text) and `outsideRepository`. Exit
 code 0: installed, Frontlights' (a marker line names it) and current. Exit code 2 with `current: false` (ours,
 but another base baked in or an edited body): say so and offer `--install`, which rewrites it. Exit code 2 with
-`outsideRepository: true` (`core.hooksPath` sends the hooks outside the repository's Git dir): nothing is
-written in either mode, say so in one line and go on. Exit
+`outsideRepository: true` and `current: false` (`core.hooksPath` sends the hooks outside the repository's Git dir
+and no current hook of ours is there): nothing is written in either mode, say so in one line and go on; a hook of
+ours that is current in that folder (installed by hand) answers exit code 0. Exit
 code 2 with `installed: false`: show `script` in a code block and ask "Instalar o hook `pre-push` que recusa
 enviar a main local?" ("Sim, instalar" / "Não, seguir sem o hook"); on "Sim", `homolog hook --install --root
 <main worktree> --base <base>` writes it (idempotent when it is already ours), the check is rerun and the
