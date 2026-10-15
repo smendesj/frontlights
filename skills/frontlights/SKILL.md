@@ -366,6 +366,25 @@ missing login is never a reason to skip a case and no brief to a subagent forbid
 permission settings, confirmation requirements and integration access without
 exposing secrets. Do not disable hooks or request bypass mode.
 
+**Hook and sync, at the start of every stage 6.** Before the first branch of the run is cut, in a project
+with a remote, run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog hook --root <main worktree>
+--base <base>` (a check; exit code 0 when the `pre-push` hook of Frontlights is installed). Exit code 2 with
+`installed: false` is a question: show the `script` of the output in a code block and ask with
+`AskUserQuestion` "Instalar o hook `pre-push` que recusa enviar a main local?", options "Sim, instalar" and
+"Não, seguir sem o hook"; on "Sim" run `homolog hook --install --root <main worktree> --base <base>`, rerun
+the check and record the answer verbatim in the handoff; on "Não" go on and record that the hook is absent
+(the rule stays a rule of the skill). Exit code 2 with `foreign: true` means a `pre-push` hook of another
+origin: say so in one line, never overwrite it, show the script for the user to merge by hand, and go on.
+It is the only hook the skill installs and its only write in `.git/hooks/` (`docs/security.md` lists the
+three writes the skill makes inside `.git/`). Then `homolog sync --root <main worktree> --base <base>` brings
+`origin/<base>` into the local main (a covered merge: a fetch and a merge, never a push, a reset or a
+rebase): exit code 0 says in one line whether the local main advanced; exit code 2 names the files in
+conflict, the merge is already undone, and the question goes to the user with `AskUserQuestion` ("Resolver o
+conflito agora na worktree principal" or "Seguir sem sincronizar"); exit code 1 (a dirty main worktree,
+another branch checked out there, no remote branch) is said in one line and the sync stays pending in the
+handoff. A project without a remote (`repository: null`, no `origin`) gets neither the hook nor the sync,
+said in one line (`references/development.md`, "The start of stage 6").
+
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
 implementation authorization question. Each issue gets one issue branch, cut from the local main (the
@@ -434,7 +453,7 @@ session's tool. Do not merge pull requests, write the remote main, deploy, relea
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
 issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a family's or
-batch's verified branches into a local integration branch that is never pushed, and of the branch of the
+batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the
 issue into the local main once its three gates are green (`references/development.md`, "Into the local
 main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
 `browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as

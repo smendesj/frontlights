@@ -3,9 +3,11 @@ por merge com três portões verdes; nada vai ao GitHub até a release.
 
 Seams: `frontlights.py authorize` (S1); o texto de `SKILL.md`, `references/development.md`, `docs/protocol.md`,
 `docs/security.md`, `templates/handoff.md`, `examples/authorization.json`, `README.md`, `docs/acceptance.md` e
-`evals/runbook.md` (S1).
+`evals/runbook.md` (S1); `scripts/homolog.py` (`hook` e `sync`) e a entrada `frontlights.py homolog` (S2).
 """
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -215,10 +217,227 @@ class LocalMainTextTests(unittest.TestCase):
                            worktrees=[dict(charter['worktrees'][0], path=temp)])
             self.assertEqual(frontlights.authorize(charter, dict(op, worktree=temp))['scope_check'], 'pass')
 
+    def test_the_hook_and_the_sync_open_stage_six(self):
+        """S2: a skill, a referência, o protocolo, a segurança e o README dizem quando o hook e o sync rodam, o que
+        perguntam, e declaram as três escritas da skill dentro de `.git/`."""
+        skill = stage(6)
+        for phrase in ('**Hook and sync, at the start of every stage 6.**',
+                       '"Instalar o hook `pre-push` que recusa enviar a main local?"', '"Sim, instalar"',
+                       'never overwrite it', 'the only hook the skill installs',
+                       '`homolog sync --root <main worktree> --base <base>`', 'never a push, a reset or a rebase',
+                       '"Resolver o conflito agora na worktree principal"', 'gets neither the hook nor the sync'):
+            with self.subTest(file='SKILL.md', phrase=phrase):
+                self.assertIn(phrase, skill)
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        heading = '## The start of stage 6: the pre-push hook and the sync of the local main'
+        self.assertLess(text.index(heading), text.index('## Slices in order'))
+        body = ' '.join(text.split(heading)[1].split('## Slices in order')[0].split())
+        for phrase in ('`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
+                       '**The hook.**', '`installed`, `ours`, `foreign`, `path` and `script`', '`foreign: true`',
+                       'refuses with exit code 1', 'a guard and not a barrier', '`--no-verify`',
+                       '**The sync.**', 'no tracked change pending and no merge in progress',
+                       '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
+                       'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, body)
+        security = flat('skills', 'frontlights', 'docs', 'security.md')
+        for phrase in ('instala um único hook', 'não instala hooks', 'nunca sobrescreve um hook de outra origem',
+                       'É uma guarda, não uma barreira', 'As escritas da skill dentro de `.git/` são três',
+                       '`.git/info/exclude`', '`frontlights-serve/ports/`',
+                       '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
+                       'o merge de `origin/main` na main local pelo `homolog sync`'):
+            with self.subTest(file='security.md', phrase=phrase):
+                self.assertIn(phrase, security)
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        for phrase in ('`origin/main` na main local pelo `homolog sync`', 'o hook `pre-push` de `homolog hook`',
+                       'nunca por cima de um hook de outra origem'):
+            with self.subTest(file='protocol.md', phrase=phrase):
+                self.assertIn(phrase, protocol)
+        readme = flat('README.md')
+        for phrase in ('instala só o hook `pre-push` da homologação', 'O único hook que a skill instala',
+                       'traz `origin/main` para a main local (`homolog sync`'):
+            with self.subTest(file='README.md', phrase=phrase):
+                self.assertIn(phrase, readme)
+        self.assertNotIn('skill não instala hooks, então', readme)
+        self.assertIn('S2: `homolog hook` confere', flat('docs', 'acceptance.md'))
+        self.assertIn('confirm `homolog hook` exits 2', flat('evals', 'runbook.md'))
+
     def test_the_acceptance_record_and_the_runbook_track_it(self):
         self.assertIn('| 27. Homologação na main local: merge com portões e release por PR única (issue 32) | Pendente |',
                       flat('docs', 'acceptance.md'))
         self.assertIn('27. Local main as homologation (issue 32).', flat('evals', 'runbook.md'))
+
+
+HOMOLOG = SKILL / 'scripts' / 'homolog.py'
+FRONTLIGHTS = SKILL / 'scripts' / 'frontlights.py'
+MARKER = '# frontlights pre-push hook v1 (homolog hook)'
+
+
+class HomologHookAndSyncTests(unittest.TestCase):
+    """S2: `homolog hook` instala e confere o pre-push que recusa enviar a main local; `homolog sync` traz
+    `origin/main` para a main local e relata conflito deixando a worktree limpa. Só repositórios temporários: o
+    remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica fora da fixture."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
+                        GIT_TERMINAL_PROMPT='0')
+        (base / 'gitconfig').write_text('', encoding='utf-8')
+        self.origin = base / 'origin.git'
+        self.work = base / 'work'
+        self.other = base / 'other'
+        self.git(None, 'init', '-q', '--bare', '-b', 'main', str(self.origin))
+        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
+        self.configure(self.work)
+        self.commit(self.work, 'README.md', 'first\n', 'first')
+        self.git(self.work, 'remote', 'add', 'origin', str(self.origin))
+        self.git(self.work, 'push', '-q', '-u', 'origin', 'main')
+        self.git(None, 'clone', '-q', str(self.origin), str(self.other))
+        self.configure(self.other)
+
+    def git(self, cwd, *args, check=True):
+        prefix = ['git', '-C', str(cwd)] if cwd else ['git']
+        done = subprocess.run([*prefix, *args], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              env=self.env, stdin=subprocess.DEVNULL, timeout=60)
+        if check:
+            self.assertEqual(done.returncode, 0, f'git {" ".join(args)}: {done.stderr}')
+        return done
+
+    def configure(self, repo):
+        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'),
+                           ('commit.gpgsign', 'false')):
+            self.git(repo, 'config', key, value)
+
+    def commit(self, repo, name, content, message):
+        (repo / name).write_text(content, encoding='utf-8')
+        self.git(repo, 'add', name)
+        self.git(repo, 'commit', '-q', '-m', message)
+        return self.sha(repo)
+
+    def sha(self, repo, ref='HEAD'):
+        return self.git(repo, 'rev-parse', ref).stdout.strip()
+
+    def cli(self, *args, script=HOMOLOG):
+        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=180)
+        try:
+            result = json.loads(done.stdout)
+        except json.JSONDecodeError:
+            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
+        self.assertEqual(result['exitCode'], done.returncode)
+        return done.returncode, result
+
+    def hook(self, *flags):
+        return self.cli('hook', '--root', str(self.work), *flags)
+
+    def sync(self):
+        return self.cli('sync', '--root', str(self.work))
+
+    def test_check_on_a_fresh_repository_asks_for_the_install(self):
+        code, result = self.hook('--check')
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['installed'], result['ours'], result['foreign'], result['base']),
+                         (False, False, False, 'main'))
+        self.assertIn(MARKER, result['script'])
+        self.assertIn('refs/heads/main', result['script'])
+        self.assertTrue(result['script'].startswith('#!/bin/sh\n'))
+        self.assertNotIn('\r', result['script'])
+        self.assertFalse(Path(result['path']).exists())
+
+    def test_install_is_idempotent_and_check_then_passes(self):
+        code, first = self.hook('--install')
+        self.assertEqual((code, first['written'], first['installed'], first['ours']), (0, True, True, True))
+        path = Path(first['path'])
+        self.assertEqual(path.read_bytes(), first['script'].encode('utf-8'))
+        code, again = self.hook('--install')
+        self.assertEqual((code, again['written']), (0, True))
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['installed'], check['ours'], check['foreign']), (0, True, True, False))
+        self.assertEqual(path.read_bytes(), first['script'].encode('utf-8'))
+
+    def test_the_hook_refuses_pushing_the_local_main_and_lets_other_branches_through(self):
+        self.hook('--install')
+        remote_main = self.sha(self.origin, 'main')
+        self.commit(self.work, 'local.txt', 'local\n', 'local work on main')
+        refused = self.git(self.work, 'push', 'origin', 'main', check=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn('frontlights', refused.stderr)
+        self.assertEqual(self.sha(self.origin, 'main'), remote_main)
+        self.git(self.work, 'switch', '-q', '-c', 'claude/x')
+        self.commit(self.work, 'x.txt', 'x\n', 'branch work')
+        allowed = self.git(self.work, 'push', 'origin', 'claude/x', check=False)
+        self.assertEqual(allowed.returncode, 0, allowed.stderr)
+        self.assertEqual(self.sha(self.origin, 'claude/x'), self.sha(self.work))
+        disguised = self.git(self.work, 'push', 'origin', 'claude/x:main', check=False)
+        self.assertNotEqual(disguised.returncode, 0)
+        self.assertIn('frontlights', disguised.stderr)
+        self.assertEqual(self.sha(self.origin, 'main'), remote_main)
+
+    def test_a_foreign_hook_is_reported_and_never_overwritten(self):
+        _, fresh = self.hook('--check')
+        path = Path(fresh['path'])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        foreign = b'#!/bin/sh\nexit 0\n'
+        path.write_bytes(foreign)
+        code, check = self.hook('--check')
+        self.assertEqual((code, check['installed'], check['ours'], check['foreign']), (2, True, False, True))
+        code, install = self.hook('--install')
+        self.assertEqual((code, install['written'], install['ok']), (1, False, False))
+        self.assertIn('frontlights', install['message'].lower())
+        self.assertEqual(path.read_bytes(), foreign)
+
+    def test_sync_advances_the_local_main_when_the_remote_moved(self):
+        before = self.sha(self.work)
+        tip = self.commit(self.other, 'remote.txt', 'remote\n', 'remote work')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        code, result = self.sync()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['before'], result['after'], result['advanced'], result['fastForward'],
+                          result['remoteTip']), (before, tip, True, True, tip))
+        self.assertEqual(self.sha(self.work), tip)
+        self.assertIn('remote work', self.git(self.work, 'log', '-1', '--format=%s').stdout)
+        self.assertEqual(self.git(self.work, 'status', '--porcelain').stdout, '')
+
+    def test_sync_with_nothing_new_changes_nothing(self):
+        before = self.sha(self.work)
+        code, result = self.sync()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['before'], result['after'], result['advanced']), (before, before, False))
+        self.assertEqual(self.sha(self.work), before)
+
+    def test_sync_reports_a_conflict_and_leaves_the_worktree_clean(self):
+        before = self.commit(self.work, 'README.md', 'local line\n', 'local change')
+        self.commit(self.other, 'README.md', 'remote line\n', 'remote change')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        code, result = self.sync()
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['conflict'], result['files'], result['before']), (True, ['README.md'], before))
+        self.assertEqual(result['remoteTip'], self.sha(self.other))
+        self.assertIn('README.md', result['message'])
+        self.assertEqual(self.git(self.work, 'status', '--porcelain').stdout, '')
+        merging = self.git(self.work, 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD', check=False)
+        self.assertNotEqual(merging.returncode, 0)
+        self.assertEqual(self.sha(self.work), before)
+
+    def test_sync_needs_a_clean_worktree_on_the_base_branch(self):
+        (self.work / 'README.md').write_text('dirty\n', encoding='utf-8')
+        code, result = self.sync()
+        self.assertEqual(code, 1, result)
+        self.assertIn('não commitadas', result['message'])
+        self.git(self.work, 'checkout', '-q', '--', 'README.md')
+        self.git(self.work, 'switch', '-q', '-c', 'feature')
+        code, result = self.sync()
+        self.assertEqual(code, 1, result)
+        self.assertIn('feature', result['message'])
+        self.assertIn('main', result['message'])
+
+    def test_the_frontlights_entry_gives_the_same_report_as_the_module(self):
+        code, direct = self.hook('--check')
+        routed_code, routed = self.cli('homolog', 'hook', '--check', '--root', str(self.work), script=FRONTLIGHTS)
+        self.assertEqual(routed_code, code)
+        self.assertEqual(routed, direct)
 
 
 if __name__ == '__main__':
