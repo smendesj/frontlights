@@ -95,6 +95,9 @@ class PreviewTestCase(unittest.TestCase):
         self.script = Path(self.tmp.name) / 'preview_server.py'
         self.script.write_text(PREVIEW_SERVER, encoding='utf-8')
         self.config = Path(self.tmp.name) / 'config.json'
+        # the preview runs on fixed ports (its tab is only reloaded): one free port reserved per test, also used by
+        # preview.baseUrl
+        self.preview_port = free_port()
         self.addCleanup(self.kill_leftovers)  # safety net, so a refused stop never leaves a fake server behind
         self.addCleanup(self.serve, 'preview', 'stop')
         self.addCleanup(self.serve, 'stop', issue=9)
@@ -108,9 +111,10 @@ class PreviewTestCase(unittest.TestCase):
                             serve.kill_tree(entry[key])
         time.sleep(0.2)
 
-    def preview_process(self, name='web', secret=PASSWORD, **extra):
-        entry = {'name': name, 'argv': [sys.executable, str(self.script), '{port}', MARKER] + ([secret] if secret else []),
-                 'port': 'auto', 'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+    def preview_process(self, name='web', secret=PASSWORD, port=None, **extra):
+        port = port or self.preview_port
+        entry = {'name': name, 'argv': [sys.executable, str(self.script), str(port), MARKER] + ([secret] if secret else []),
+                 'port': port, 'health': f'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
         entry.update(extra)
         return entry
 
@@ -124,7 +128,7 @@ class PreviewTestCase(unittest.TestCase):
                   'browserTest': {'baseUrl': 'http://127.0.0.1:1', 'users': [{'login': LOGIN, 'password': PASSWORD}],
                                   'processes': issue_processes or [self.issue_process()]}}
         if preview == 'default':
-            preview = {'worktree': worktree, 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
+            preview = {'worktree': worktree, 'branch': 'previa', 'baseUrl': f'http://127.0.0.1:{self.preview_port}/',
                        'processes': [self.preview_process()]}
         if preview is not None:
             config['preview'] = preview
@@ -163,7 +167,8 @@ class PreviewStartTest(PreviewTestCase):
         self.assertTrue(result['ok'])
         self.assertEqual(result['worktree'], '.claude/worktrees/previa')
         self.assertEqual(result['branch'], 'previa')
-        self.assertEqual(result['baseUrl'], 'http://127.0.0.1:1/')
+        self.assertEqual(result['baseUrl'], f'http://127.0.0.1:{self.preview_port}/')
+        self.assertEqual(result['processes'][0]['port'], self.preview_port)
         process = result['processes'][0]
         self.assertEqual(process['name'], 'web')
         self.assertIsInstance(process['pid'], int)
@@ -195,7 +200,7 @@ class PreviewStatusTest(PreviewTestCase):
         self.assertTrue(result['ok'])
         self.assertTrue(result['running'])
         self.assertEqual((result['worktree'], result['branch'], result['baseUrl']),
-                         ('.claude/worktrees/previa', 'previa', 'http://127.0.0.1:1/'))
+                         ('.claude/worktrees/previa', 'previa', f'http://127.0.0.1:{self.preview_port}/'))
         process = result['processes'][0]
         self.assertEqual(process['pid'], started['processes'][0]['pid'])
         self.assertTrue(process['alive'])
@@ -206,21 +211,21 @@ class PreviewStatusTest(PreviewTestCase):
 
 
 class PreviewStopTest(PreviewTestCase):
-    def test_stop_kills_the_processes_and_their_relays_removes_the_registry_and_releases_the_ports(self):
+    def test_stop_kills_the_processes_and_their_relays_and_removes_the_registry(self):
         self.write_config()
         started = self.start_preview()
         record = json.loads(self.registry().read_text(encoding='utf-8'))
-        pid, relay_pid, port = record['processes'][0]['pid'], record['processes'][0]['relayPid'], started['processes'][0]['port']
-        reservation = serve.ports_dir(self.root) / f'{port}.json'
-        self.assertTrue(reservation.is_file())
+        pid, relay_pid = record['processes'][0]['pid'], record['processes'][0]['relayPid']
+        # fixed ports (3rd review of issue 34): the preview reserves no port, so its stop releases none
+        self.assertEqual(started['processes'][0]['port'], self.preview_port)
+        self.assertFalse((serve.ports_dir(self.root) / f'{self.preview_port}.json').exists())
         done = self.serve('preview', 'stop')
         self.assertEqual(done.returncode, 0, done_text(done))
         result = self.payload(done)
         self.assertTrue(result['ok'])
         self.assertTrue(all(item['stopped'] for item in result['processes']), result)
-        self.assertEqual(result['reservas_liberadas'], [port])
+        self.assertNotIn('reservas_liberadas', result)
         self.assertFalse(self.registry().exists())
-        self.assertFalse(reservation.exists())
         self.assertTrue(wait_until(lambda: not serve.pid_alive(pid)), 'o processo da prévia continuou vivo')
         self.assertTrue(wait_until(lambda: not serve.pid_alive(relay_pid)), 'o relé do log continuou vivo')
         self.assertTrue(wait_until(lambda: not reachable(started['processes'][0]['url'])))
@@ -252,12 +257,9 @@ class DuplicatePreviewStartTest(PreviewTestCase):
 
 
 class IssueStopKeepsThePreviewTest(PreviewTestCase):
-    def test_stop_of_an_issue_does_not_kill_the_preview_nor_its_registry_nor_its_reservation(self):
+    def test_stop_of_an_issue_does_not_kill_the_preview_nor_its_registry(self):
         self.write_config()
         preview = self.start_preview()
-        port = preview['processes'][0]['port']
-        reservation = serve.ports_dir(self.root) / f'{port}.json'
-        self.assertEqual(json.loads(reservation.read_text(encoding='utf-8'))['issue'], 'preview')
         issue = self.serve('start', issue=9)
         self.assertEqual(issue.returncode, 0, done_text(issue))
         issue_url = self.payload(issue)['processes'][0]['url']
@@ -266,21 +268,19 @@ class IssueStopKeepsThePreviewTest(PreviewTestCase):
         self.assertTrue(wait_until(lambda: not reachable(issue_url)), 'o stop da issue não derrubou a issue')
         self.assertFalse(self.issue_registry().exists())
         self.assertTrue(self.registry().is_file(), 'o stop da issue apagou o registro da prévia')
-        self.assertTrue(reservation.is_file(), 'o stop da issue liberou a porta da prévia')
         self.assertTrue(reachable(preview['processes'][0]['url']), 'o stop da issue derrubou a prévia')
         status = self.payload(self.serve('preview', 'status'))
         self.assertTrue(status['running'])
         self.assertEqual(status['processes'][0]['pid'], preview['processes'][0]['pid'])
 
-    def test_stop_of_an_issue_without_its_registry_leaves_the_preview_reservation_alone(self):
+    def test_stop_of_an_issue_without_its_registry_leaves_the_preview_alone(self):
         self.write_config()
         preview = self.start_preview()
-        reservation = serve.ports_dir(self.root) / f'{preview["processes"][0]["port"]}.json'
         done = self.serve('stop', issue=9)
         self.assertEqual(done.returncode, 1, done_text(done))
         self.assertEqual(self.payload(done)['reservas_liberadas'], [])
-        self.assertTrue(reservation.is_file())
         self.assertTrue(self.registry().is_file())
+        self.assertTrue(reachable(preview['processes'][0]['url']), 'o stop da issue derrubou a prévia')
 
 
 class PreviewUsageTest(PreviewTestCase):
@@ -383,10 +383,11 @@ class RefreshTestCase(PreviewTestCase):
         self.git('checkout', '-q', 'main')
 
     def refresh_block(self, **extra):
-        process = {'name': 'web', 'argv': [sys.executable, 'preview_server.py', '{port}', MARKER, PASSWORD],
-                   'port': 'auto', 'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+        port = self.preview_port
+        process = {'name': 'web', 'argv': [sys.executable, 'preview_server.py', str(port), MARKER, PASSWORD],
+                   'port': port, 'health': f'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
         process.update(extra)
-        return {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
+        return {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': f'http://127.0.0.1:{port}/',
                 'processes': [process]}
 
     def refresh(self, *branches):
@@ -627,8 +628,8 @@ class PreviewConfigRefusalTest(PreviewTestCase):
     """Refusals of the `preview` block (category `uso`), read in process: nothing is created and nothing comes up."""
 
     def block(self, **changes):
-        block = {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
-                 'processes': [self.preview_process()]}
+        block = {'worktree': '.claude/worktrees/previa', 'branch': 'previa',
+                 'baseUrl': f'http://127.0.0.1:{self.preview_port}/', 'processes': [self.preview_process()]}
         block.update(changes)
         return block
 
@@ -718,21 +719,66 @@ class PreviewConfigRefusalTest(PreviewTestCase):
         self.assertTrue(self.payload(self.serve('preview', 'stop'))['ok'])
 
     def test_a_process_health_outside_the_local_host_is_refused_naming_the_process(self):
-        for health in ('http://example.test:{port}/', 'http://10.0.0.5:{port}/', 'http://0.0.0.0:{port}/'):
-            with self.subTest(health=health):
-                error = self.refused(self.block(processes=[self.preview_process(),
-                                                           self.preview_process('api', health=health)]), 'api')
+        port, other = self.preview_port, free_port()
+        for host in ('example.test', '10.0.0.5', '0.0.0.0'):
+            with self.subTest(host=host):
+                error = self.refused(self.block(processes=[self.preview_process(), self.preview_process(
+                    'api', port=other, health=f'http://{host}:{other}/')]), 'api')
                 self.assertEqual(error.process, 'api')
-        for health in ('http://localhost:{port}/', 'http://[::1]:{port}/'):
+        for health in (f'http://localhost:{port}/', f'http://[::1]:{port}/'):
             with self.subTest(health=health):
                 self.accepted(self.block(processes=[self.preview_process(health=health)]))
+
+    def fixed(self, name, port, with_port=True):
+        """A preview process on a fixed port: the integer `port`, or (with_port=False) only the port of the health."""
+        item = {'name': name, 'argv': [sys.executable, str(self.script), str(port), MARKER],
+                'health': f'http://127.0.0.1:{port}/'}
+        if with_port:
+            item['port'] = port
+        return item
+
+    def test_a_port_placeholder_in_the_base_url_is_refused(self):
+        """3rd review of issue 34 (M): the preview opens once in a tab and is only reloaded, so its port is fixed."""
+        port = free_port()
+        for value in ('http://127.0.0.1:{port}/', 'http://localhost:{port}/app'):
+            with self.subTest(baseUrl=value):
+                error = self.refused(self.block(baseUrl=value, processes=[self.fixed('web', port)]), 'preview.baseUrl')
+                self.assertIn('{port}', str(error))
+
+    def test_a_process_with_an_automatic_port_is_refused_naming_it(self):
+        port = free_port()
+        auto = {'name': 'api', 'argv': [sys.executable, str(self.script), '{port}', MARKER], 'port': 'auto',
+                'health': 'http://127.0.0.1:{port}/'}
+        error = self.refused(self.block(baseUrl=f'http://127.0.0.1:{port}/', processes=[self.fixed('web', port), auto]),
+                             'preview.processes')
+        self.assertEqual(error.process, 'api')
+        self.assertIn('"auto"', str(error))
+
+    def test_a_base_url_on_a_port_that_no_process_uses_is_refused(self):
+        port = free_port()
+        other = port + 1 if port < 65535 else port - 1
+        cases = {f'http://127.0.0.1:{other}/': other, 'http://127.0.0.1/': 80, 'https://localhost/app': 443}
+        for value, expected in cases.items():
+            with self.subTest(baseUrl=value):
+                error = self.refused(self.block(baseUrl=value, processes=[self.fixed('web', port)]), 'preview.baseUrl')
+                self.assertIn(str(expected), str(error))
+                self.assertIn('preview.processes', str(error))
+
+    def test_a_base_url_on_the_fixed_port_of_a_process_is_accepted(self):
+        port, other = free_port(), free_port()
+        cases = {'port inteiro': ([self.fixed('web', port)], f'http://127.0.0.1:{port}/'),
+                 'porta do health': ([self.fixed('api', other), self.fixed('web', port, with_port=False)],
+                                     f'http://localhost:{port}/app'),
+                 'porta do esquema': ([self.fixed('web', 80)], 'http://127.0.0.1/')}
+        for case, (processes, base_url) in cases.items():
+            with self.subTest(case=case):
+                self.assertEqual(self.accepted(self.block(baseUrl=base_url, processes=processes))['baseUrl'], base_url)
 
     def test_two_processes_whose_names_give_the_same_log_file_are_refused(self):
         for first, second in (('web api', 'web_api'), ('Web', 'web')):
             with self.subTest(names=(first, second)):
                 port = free_port()
-                processes = [self.preview_process(name, port=port + index, health=f'http://127.0.0.1:{port + index}/')
-                             for index, name in enumerate((first, second))]
+                processes = [self.preview_process(name, port=port + index) for index, name in enumerate((first, second))]
                 error = self.refused(self.block(processes=processes), 'mesmo arquivo de log')
                 self.assertEqual(error.process, second)
 
@@ -820,13 +866,15 @@ class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
 
     def config_with(self, second):
         self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
-                                   'baseUrl': 'http://127.0.0.1:1/', 'processes': [self.preview_process(), second]})
+                                   'baseUrl': f'http://127.0.0.1:{self.preview_port}/',
+                                   'processes': [self.preview_process(), second]})
 
     def exiting(self):
         script = Path(self.tmp.name) / 'exiting_server.py'
         script.write_text(EXITING_SERVER, encoding='utf-8')
-        return {'name': 'quebra', 'argv': [sys.executable, str(script)], 'port': 'auto',
-                'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+        port = free_port()
+        return {'name': 'quebra', 'argv': [sys.executable, str(script)], 'port': port,
+                'health': f'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
 
     def pids(self, seen):
         return {pid for entries in seen for entry in entries for pid in (entry['pid'], entry.get('relayPid')) if pid}
@@ -877,15 +925,17 @@ class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
         self.assertTrue(serve.pid_alive(first))
         for pid in self.pids(seen) - {first}:
             self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
-        self.assertEqual(len(self.preview_reservations()), 1, 'a porta do que sobrou foi liberada')
+        self.assertEqual(record['processes'][0]['port'], self.preview_port)
+        self.assertEqual(self.preview_reservations(), [], 'a prévia, de portas fixas, reservou uma porta')
 
     def test_a_relay_that_dies_before_the_health_is_infrastructure_not_a_broken_build(self):
         script = Path(self.tmp.name) / 'quiet_server.py'
         script.write_text(QUIET_SERVER, encoding='utf-8')
+        port = self.preview_port
         self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
-                                   'baseUrl': 'http://127.0.0.1:1/',
-                                   'processes': [{'name': 'web', 'argv': [sys.executable, str(script)], 'port': 'auto',
-                                                  'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}]})
+                                   'baseUrl': f'http://127.0.0.1:{port}/',
+                                   'processes': [{'name': 'web', 'argv': [sys.executable, str(script)], 'port': port,
+                                                  'health': f'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}]})
         seen, spy = self.recording()
         dying = mock.patch.object(serve, 'relay_argv',
                                   lambda config, log: [sys.executable, '-c', 'raise SystemExit(3)'])

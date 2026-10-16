@@ -60,15 +60,18 @@ The start output says whether the reservations are shared (`reservas_compartilha
 
 Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the
 top-level `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host,
-`processes` with the same rules as `browserTest.processes`, each `health` on a local host too). `preview.branch` is a
+`processes` with the same rules as `browserTest.processes`, each `health` on a local host too). The preview runs on
+fixed ports only: it is opened once in a tab and only reloaded after each refresh, so its port can never change. No
+process takes `"port": "auto"`, `baseUrl` takes no `{port}`, and the port of `baseUrl` (explicit, or 80/443 by the
+scheme) is the fixed port (integer `port`, or else the port of the health) of one of its processes; the preview
+reserves no port. `preview.branch` is a
 plain branch name that is neither main, master nor a match (fnmatch without case, a pattern also covering
 `pattern/*`) of the `protected_branches` of any readable `<root>/.frontlights/authorization*.json`. Its processes run
 in the preview worktree, with their stdout and stderr relayed line by line by `relay --config <config> --log <file>`
 (a second process spawned by `preview start`, which loads the secrets of `browserTest.users` from the config itself
 and masks them) into `<root>/.frontlights/preview/log/<name>.log`. The record lives in
 `<root>/.frontlights/preview/registry.json` under its own lock (`<root>/.frontlights/preview/.lock`), so
-`stop --issue <n>` never touches it, and a new session finds the processes through it. Port reservations of the
-preview carry `"issue": "preview"`, so the release of an issue's reservations never frees them. `preview start` is
+`stop --issue <n>` never touches it, and a new session finds the processes through it. `preview start` is
 refused while the preview is alive (any process or log relay of the record) and when the preview worktree does not
 exist. `preview status` and `preview stop` work from the record alone, with or without the `preview` block in the
 config (the mask still comes from its `browserTest.users`). `preview status` adds `alive` and `relayAlive` per process
@@ -135,7 +138,6 @@ PERSISTENT_ERRORS = 25
 MAX_PID = 2 ** 31 - 1
 REMOVE_ATTEMPTS = 40
 CONNECT_SECONDS = 0.05
-PREVIEW_ISSUE = 'preview'  # the `issue` of the preview's port reservations: never an issue number
 TAIL_LINES = 20
 TAIL_BYTES = 64 * 1024  # `tail_lines` reads at most this much from the end of a log
 RELAY_DRAIN_SECONDS = 3  # a torn-down preview process's relay gets this long to write the last lines
@@ -390,11 +392,22 @@ def load_preview_block(config_file, root, need_processes=True):
     require(url and url.scheme in ('http', 'https') and url.hostname in LOCAL_HOSTS and '@' not in url.netloc,
             'preview.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, localhost ou ::1), sem usuário '
             'e senha.', category=USAGE)
+    # the preview opens once in a tab and is only reloaded after each refresh: its port can never change
+    require('{port}' not in base_url, 'preview.baseUrl não aceita {port}: a prévia abre uma vez numa aba e só é '
+            'recarregada a cada refresh, então a porta dela é fixa. Use a porta fixa de um processo de '
+            'preview.processes.', category=USAGE)
+    base_port = url_port(url)
+    require(base_port is not None, 'preview.baseUrl tem uma porta inválida: use uma porta de 1 a 65535.',
+            category=USAGE)
     require('processes' in block, 'O config não declara preview.processes: a prévia não tem o que subir.',
             category=USAGE)
     processes = validate_processes(block['processes'], 'preview.processes')
     logs = {}
     for item in processes:
+        require(not is_auto(item), f'O processo {item["name"]} de preview.processes usa port "{PORT_AUTO}", mas a '
+                'prévia usa portas fixas: ela abre uma vez numa aba e só é recarregada a cada refresh, então a porta '
+                'não pode mudar. Use port inteiro (ou a porta do health) e a mesma porta na preview.baseUrl.',
+                item['name'], USAGE)
         host = urllib.parse.urlsplit(item['health']).hostname  # parsed by validate_processes
         require(host in LOCAL_HOSTS, f'O health do processo {item["name"]} precisa ficar em host local (127.0.0.1, '
                 'localhost ou ::1), como a preview.baseUrl.', item['name'], USAGE)
@@ -404,6 +417,10 @@ def load_preview_block(config_file, root, need_processes=True):
                 f'gerariam o mesmo arquivo de log ({log_name}) depois de normalizar o nome. Renomeie um deles.',
                 item['name'], USAGE)
         logs[log_name.casefold()] = item['name']
+    require(base_port in {process_port(item) for item in processes},
+            f'preview.baseUrl usa a porta {base_port}, mas nenhum processo de preview.processes usa essa porta (port '
+            'inteiro ou porta do health): a aba da prévia abriria numa porta onde ninguém responde. Use na baseUrl a '
+            'porta fixa de um dos processos da prévia.', category=USAGE)
     return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
 
 
@@ -881,28 +898,18 @@ def launch_preview(block, config_file, root, contents=None):
     try:
         with io_guard('criar a pasta de log da prévia'):
             log_dir.mkdir(parents=True, exist_ok=True)
-        ports = reserve_ports(root, PREVIEW_ISSUE, [item['name'] for item in processes if is_auto(item)])
-        for item, cwd in zip(processes, cwds):
-            env = None
-            if is_auto(item):
-                port = ports[item['name']]
-                env = {'PORT': str(port), env_name(item['name']): str(port)}
-                item = with_port(item, port)
+        for item, cwd in zip(processes, cwds):  # fixed ports only (load_preview_block): nothing is reserved
             guard_batch(item['argv'], item['name'])
-            if env:
-                mark_spawning(root, port)
             log_file = log_dir / log_file_name(item['name'])
             offset = log_size(log_file)  # the tail of a broken build shows only what this run wrote
             try:
-                child = spawn(item['argv'], cwd, env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                child = spawn(item['argv'], cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             except (OSError, ValueError):  # ValueError: e.g. a NUL character in argv
                 raise Refusal(f'Não foi possível iniciar o processo {item["name"]}.', item['name'])
             started.append({'name': item['name'], 'pid': child.pid, 'port': process_port(item),
                             'url': item['health'], 'startedAt': now_iso(),
                             'identity': process_identity(child.pid) or UNKNOWN_IDENTITY,
                             'log': relative(Path(root), log_file)})
-            if env:
-                attach_child(root, port, started[-1])
             write_preview_registry(root, block, started, started_at, contents)  # from here on stop has something
             try:
                 relay_child = spawn(relay_argv(config_file, log_file), Path(root).resolve(), stdin=child.stdout)
@@ -932,7 +939,6 @@ def launch_preview(block, config_file, root, contents=None):
                 preview_registry_path(root).unlink(missing_ok=True)
         except (OSError, Refusal):  # best effort: the original failure is what the user must see
             pass
-        release_ports(root, PREVIEW_ISSUE, keep=[entry['port'] for entry in kept])
         if broken and isinstance(failure, Refusal):  # read after the teardown, so the relay wrote the last lines
             failure.extra = dict(failure.extra, build='quebrado', log=relative(Path(root), broken[0]),
                                  tail=tail_lines(broken[0], offset=broken[1]))
@@ -943,8 +949,7 @@ def launch_preview(block, config_file, root, contents=None):
                           dict(failure.extra, left=[{'name': entry['name'], 'pid': entry['pid']} for entry in left]))
         raise
     return {'ok': True, 'worktree': block['worktree'], 'branch': block['branch'], 'baseUrl': block['baseUrl'],
-            'processes': started, 'log': relative(Path(root), log_dir),
-            'reservas_compartilhadas': ports_location(root)[1]}
+            'processes': started, 'log': relative(Path(root), log_dir)}
 
 
 def log_size(path):
@@ -1486,7 +1491,8 @@ def stop_entries(root, entries, registry_file, release, retry):
     """Kill the recorded processes ({name, pid, identity} each), remove the record and release the ports.
 
     Every identity is checked first, so a refusal kills nothing. `release` frees the port reservations and returns
-    them; `retry` names the command to run again. Returns {'processes': [...], 'reservas_liberadas': [...]}.
+    them (None for the preview, which reserves no port: the output then has no `reservas_liberadas`); `retry` names
+    the command to run again. Returns {'processes': [...], 'reservas_liberadas': [...]}.
     """
     name = relative(Path(root), registry_file)
     stopped, left = [], []
@@ -1524,8 +1530,12 @@ def stop_entries(root, entries, registry_file, release, retry):
         detail = error.strerror or type(error).__name__
         raise Refusal(f'Os processos foram encerrados, mas não foi possível apagar o registro {name} ({detail}). '
                       f'Apague-o à mão ou rode {retry} de novo.',
-                      extra={'processes': stopped, 'reservas_liberadas': release()}) from error
-    return {'processes': stopped, 'reservas_liberadas': release()}
+                      extra=released(stopped, release)) from error
+    return released(stopped, release)
+
+
+def released(stopped, release):
+    return {'processes': stopped, **({'reservas_liberadas': release()} if release else {})}
 
 
 def preview_stop(config_file, root):
@@ -1534,14 +1544,9 @@ def preview_stop(config_file, root):
     load_preview_block(config_file, root, need_processes=False)
     lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
     try:
-        try:
-            record = read_preview_registry(root)
-        except Refusal as refusal:
-            if not preview_registry_path(root).is_file():
-                refusal.extra = dict(refusal.extra, reservas_liberadas=release_ports(root, PREVIEW_ISSUE))
-            raise
-        result = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root),
-                              lambda: release_ports(root, PREVIEW_ISSUE), 'preview stop')
+        record = read_preview_registry(root)
+        result = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root), None,
+                              'preview stop')
         return {'ok': True, 'worktree': record.get('worktree'), 'branch': record.get('branch'), **result}
     finally:
         release_lock(lock)
@@ -1765,8 +1770,8 @@ def preview_refresh_locked(block, config_file, root, branches, base):
     stopped = []
     if preview_registry_path(root).is_file():
         record = read_preview_registry(root)
-        stopped = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root),
-                               lambda: release_ports(root, PREVIEW_ISSUE), 'preview refresh')['processes']
+        stopped = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root), None,
+                               'preview refresh')['processes']
     recreate_preview_worktree(block, root, worktree, exists, base_commit)
     merged = merge_branches(block, worktree, branches, commits)
     contents = {'base': base, 'baseCommit': base_commit, 'merged': merged}

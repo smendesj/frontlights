@@ -337,7 +337,11 @@ class PreviewBlockTests(unittest.TestCase):
                  'branch main': preview_block(branch='main'), 'branch com espaço': preview_block(branch='a b'),
                  'baseUrl não local': preview_block(baseUrl='https://app.example.com/'),
                  'sem processes': missing, 'processes vazios': preview_block(processes=[]),
-                 'processo sem health': preview_block(processes=[process(health=None)])}
+                 'processo sem health': preview_block(processes=[process(health=None)]),
+                 # 3rd review of issue 34 (M): fixed ports, the tab is only reloaded
+                 'baseUrl com {port}': preview_block(baseUrl='http://127.0.0.1:{port}/'),
+                 'processo auto': preview_block(processes=preview_block()['processes'] + [process(name='api')]),
+                 'baseUrl sem processo na porta': preview_block(baseUrl='http://127.0.0.1:8071/')}
         for case, block in cases.items():
             with self.subTest(case=case):
                 self.refuse(dict(with_browser(), preview=block), 'preview')
