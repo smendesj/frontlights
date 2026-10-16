@@ -60,7 +60,9 @@ The start output says whether the reservations are shared (`reservas_compartilha
 
 Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the top-level
 `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host, `processes` with
-the same rules as `browserTest.processes`). Its processes run in the preview worktree, with their stdout and stderr
+the same rules as `browserTest.processes`, each `health` on a local host too). `preview.branch` is a plain branch name
+that is neither main, master nor a match (fnmatch without case, a pattern also covering `pattern/*`) of the
+`protected_branches` of any readable `<root>/.frontlights/authorization*.json`. Its processes run in the preview worktree, with their stdout and stderr
 relayed line by line by `relay --config <config> --log <file>` (a second process spawned by `preview start`, which
 loads the secrets of `browserTest.users` from the config itself and masks them) into
 `<root>/.frontlights/preview/log/<name>.log`. The record lives in `<root>/.frontlights/preview/registry.json` under
@@ -91,6 +93,7 @@ config are never read into the record and are redacted from every string this he
 import argparse
 import contextlib
 import datetime as dt
+import fnmatch
 import http.client
 import json
 import os
@@ -132,6 +135,7 @@ GIT_SECONDS = 300  # deadline of each Git command of `preview refresh`
 DEFAULT_BASE = 'main'
 BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
+PROTECTED_BRANCHES = ('main', 'master')
 
 _SECRETS = []
 
@@ -356,11 +360,13 @@ def load_preview_block(config_file, root, need_processes=True):
     require(base in target.parents, 'preview.worktree precisa ficar dentro do --root (e não ser o próprio --root).',
             category=USAGE)
     branch = block.get('branch')
-    require(isinstance(branch, str) and BRANCH_NAME.fullmatch(branch),
-            'preview.branch precisa ser um nome simples de branch (letras, dígitos, "/", "-", "_" e ".").',
-            category=USAGE)
-    require(branch not in ('main', 'master'), 'preview.branch não pode ser main nem master: a prévia tem uma branch '
-            'própria, refeita a partir da base.', category=USAGE)
+    require(plain_branch(branch),
+            'preview.branch precisa ser um nome simples de branch (letras, dígitos, "/", "-", "_" e ".", começando '
+            'por letra ou dígito, sem "..", "//", "/." nem ".lock", e sem terminar em "/" ou ".").', category=USAGE)
+    pattern = protected_pattern(branch, protected_patterns(root))
+    require(pattern is None, f'preview.branch ({branch}) é uma branch protegida (casa com {pattern}: main, master ou '
+            'um padrão de protected_branches em .frontlights/authorization*.json). A prévia tem uma branch própria, '
+            'refeita a partir da base a cada refresh: escolha outro nome.', category=USAGE)
     base_url = block.get('baseUrl')
     try:
         url = urllib.parse.urlsplit(base_url) if isinstance(base_url, str) else None
@@ -374,11 +380,46 @@ def load_preview_block(config_file, root, need_processes=True):
     processes = validate_processes(block['processes'], 'preview.processes')
     logs = {}
     for item in processes:
+        host = urllib.parse.urlsplit(item['health']).hostname  # parsed by validate_processes
+        require(host in LOCAL_HOSTS, f'O health do processo {item["name"]} precisa ficar em host local (127.0.0.1, '
+                'localhost ou ::1), como a preview.baseUrl.', item['name'], USAGE)
+        # case-folded: on Windows (and macOS) Web.log and web.log are the same file
         log_name = log_file_name(item['name'])
-        require(log_name not in logs, f'Os processos {logs.get(log_name)} e {item["name"]} gerariam o mesmo arquivo '
-                f'de log ({log_name}) depois de normalizar o nome. Renomeie um deles.', item['name'], USAGE)
-        logs[log_name] = item['name']
+        require(log_name.casefold() not in logs, f'Os processos {logs.get(log_name.casefold())} e {item["name"]} '
+                f'gerariam o mesmo arquivo de log ({log_name}) depois de normalizar o nome. Renomeie um deles.',
+                item['name'], USAGE)
+        logs[log_name.casefold()] = item['name']
     return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
+
+
+def protected_patterns(root):
+    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`; a file
+    that is missing, unreadable or not an object, and an entry that is not a non-empty text, are skipped."""
+    patterns = list(PROTECTED_BRANCHES)
+    try:
+        files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
+    except OSError:
+        files = []
+    for path in files:
+        try:
+            data = json.loads(path.read_text(encoding='utf-8-sig'))
+        except (OSError, ValueError):
+            continue
+        listed = data.get('protected_branches') if isinstance(data, dict) else None
+        if isinstance(listed, list):
+            patterns += [item for item in listed if isinstance(item, str) and item.strip('/')]
+    return patterns
+
+
+def protected_pattern(branch, patterns):
+    """The first pattern that protects `branch`, or None. The rule of `frontlights.authorize`: fnmatch without case,
+    and a pattern also protects everything below it (`pattern/*`)."""
+    folded = branch.casefold()
+    for pattern in patterns:
+        stem = pattern.casefold().rstrip('/')
+        if fnmatch.fnmatchcase(folded, stem) or fnmatch.fnmatchcase(folded, stem + '/*'):
+            return pattern
+    return None
 
 
 def log_file_name(name):
@@ -1466,8 +1507,11 @@ def git_text(text):
 
 
 def plain_branch(value):
-    return isinstance(value, str) and bool(BRANCH_NAME.fullmatch(value)) and '..' not in value \
-        and not value.endswith('.lock')
+    """A local branch name Git accepts and no argv can mistake for an option: BRANCH_NAME (starts with a letter or
+    digit), no "..", "//" or component starting with "." or ending in ".lock", and no trailing "/" or "."."""
+    return (isinstance(value, str) and bool(BRANCH_NAME.fullmatch(value)) and '..' not in value and '//' not in value
+            and not value.endswith(('/', '.')) and not any(part.startswith('.') or part.endswith('.lock')
+                                                            for part in value.split('/')))
 
 
 def git_commit(cwd, ref):

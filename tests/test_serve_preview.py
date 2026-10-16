@@ -14,6 +14,7 @@ import time
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import serve  # noqa: E402
@@ -533,6 +534,141 @@ class PreviewRefreshRefusalTest(RefreshTestCase):
                 self.assertEqual(self.payload(done)['category'], 'uso')
                 self.assertIn('preview refresh', self.payload(done)['error'])
         self.assertFalse(self.worktree.exists())
+
+
+class FakeRecordMixin:
+    """Fake records of the preview pointing at Python processes that only sleep (no server comes up), and a spy of
+    the records `launch_preview` writes, to learn every pid a launch started."""
+
+    def sleeper(self):
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])
+        self.addCleanup(child.wait)
+        self.addCleanup(child.kill)
+        identity = serve.process_identity(child.pid)
+        self.assertIsNotNone(identity)
+        return {'pid': child.pid, 'identity': identity, 'child': child}
+
+    def dead(self):
+        """A pid that is no longer alive, with the identity it had (a reused pid then is not the same process)."""
+        item = self.sleeper()
+        item['child'].kill()
+        item['child'].wait()
+        return item
+
+    def fake_registry(self, process, relay, branch='previa'):
+        entry = {'name': 'web', 'pid': process['pid'], 'identity': process['identity'], 'port': 1,
+                 'url': 'http://127.0.0.1:1/', 'startedAt': serve.now_iso(), 'log': '.frontlights/preview/log/web.log',
+                 'relayPid': relay['pid'], 'relayIdentity': relay['identity']}
+        path = self.registry()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'root': str(self.root.resolve()), 'worktree': '.claude/worktrees/previa',
+                                    'branch': branch, 'baseUrl': 'http://127.0.0.1:1/', 'startedAt': serve.now_iso(),
+                                    'processes': [entry]}), encoding='utf-8')
+        # runs before kill_leftovers: a fake record must never make the safety net kill a reused pid
+        self.addCleanup(path.unlink, missing_ok=True)
+        return path.read_text(encoding='utf-8')
+
+    def recording(self):
+        """(list of the entries of every record written, patch that records them)."""
+        seen, real = [], serve.write_preview_registry
+
+        def record(root, block, entries, started_at, contents=None):
+            seen.append(json.loads(json.dumps(entries)))
+            return real(root, block, entries, started_at, contents)
+        return seen, mock.patch.object(serve, 'write_preview_registry', record)
+
+    def preview_reservations(self):
+        folder = serve.ports_dir(self.root)
+        return [path for path in folder.glob('*.json')
+                if json.loads(path.read_text(encoding='utf-8')).get('issue') == 'preview'] if folder.is_dir() else []
+
+
+class PreviewConfigRefusalTest(PreviewTestCase):
+    """Refusals of the `preview` block (category `uso`), read in process: nothing is created and nothing comes up."""
+
+    def block(self, **changes):
+        block = {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
+                 'processes': [self.preview_process()]}
+        block.update(changes)
+        return block
+
+    def refused(self, block, needle):
+        self.write_config(preview=block)
+        with self.assertRaises(serve.Refusal) as caught:
+            serve.load_preview_block(self.config, self.root)
+        self.assertEqual(caught.exception.category, 'uso', str(caught.exception))
+        self.assertIn(needle, str(caught.exception))
+        self.assertFalse((self.root / '.frontlights' / 'preview').exists(), 'uma recusa de config criou algo')
+        return caught.exception
+
+    def accepted(self, block):
+        self.write_config(preview=block)
+        return serve.load_preview_block(self.config, self.root)
+
+    def test_a_preview_worktree_with_dots_absolute_with_a_drive_outside_or_equal_to_the_root_is_refused(self):
+        outside = Path(self.tmp.name) / 'fora'
+        (outside / 'previa').mkdir(parents=True)
+        link = self.root / 'atalho'  # a junction (or symlink) inside the root that leads out of it
+        if os.name == 'nt':
+            import _winapi
+            _winapi.CreateJunction(str(outside), str(link))
+        else:
+            link.symlink_to(outside, target_is_directory=True)
+        relative_only, inside = 'sem ".." e sem unidade ou raiz', 'dentro do --root'
+        values = [('', 'texto não vazio'), ('../fora', relative_only), ('.claude/../../fora', relative_only),
+                  (str(outside), relative_only), ('/fora', relative_only), ('\\fora', relative_only),
+                  ('atalho/previa', inside), ('.', inside), ('./', inside)]
+        if os.name == 'nt':
+            values += [('C:fora', relative_only), ('C:\\fora', relative_only)]
+        for value, needle in values:
+            with self.subTest(worktree=value):
+                self.assertIn('preview.worktree', str(self.refused(self.block(worktree=value), needle)))
+        self.assertEqual([path.name for path in outside.iterdir()], ['previa'])
+
+    def test_a_preview_branch_named_main_or_master_in_any_case_is_refused(self):
+        for value in ('main', 'master', 'Main', 'MASTER'):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'protegida')
+
+    def test_a_preview_branch_with_an_invalid_name_is_refused(self):
+        for value in ('', '-x', 'a b', 'a..b', 'nome.lock', 'a/b.lock', 'a/', 'a//b', 'a/.b', 'a.', 7):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'preview.branch')
+
+    def test_a_preview_branch_that_matches_protected_branches_of_an_authorization_is_refused(self):
+        folder = self.root / '.frontlights'
+        folder.mkdir()
+        (folder / 'authorization.json').write_text(json.dumps({'protected_branches': ['release', 'hotfix/*', 'Prod*']}),
+                                                   encoding='utf-8')
+        (folder / 'authorization-ilegivel.json').write_text('{ ilegivel', encoding='utf-8')
+        (folder / 'authorization-lista.json').write_text(json.dumps({'protected_branches': 'release-x'}),
+                                                         encoding='utf-8')
+        (folder / 'authorization-pasta.json').mkdir()
+        for value in ('release', 'RELEASE', 'release/x', 'hotfix/a', 'hotfix/a/b', 'producao'):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'protegida')
+        for value in ('previa', 'releases', 'hotfix', 'release-x'):  # unreadable files are skipped, never fatal
+            with self.subTest(branch=value):
+                self.assertEqual(self.accepted(self.block(branch=value))['branch'], value)
+
+    def test_a_process_health_outside_the_local_host_is_refused_naming_the_process(self):
+        for health in ('http://example.test:{port}/', 'http://10.0.0.5:{port}/', 'http://0.0.0.0:{port}/'):
+            with self.subTest(health=health):
+                error = self.refused(self.block(processes=[self.preview_process(),
+                                                           self.preview_process('api', health=health)]), 'api')
+                self.assertEqual(error.process, 'api')
+        for health in ('http://localhost:{port}/', 'http://[::1]:{port}/'):
+            with self.subTest(health=health):
+                self.accepted(self.block(processes=[self.preview_process(health=health)]))
+
+    def test_two_processes_whose_names_give_the_same_log_file_are_refused(self):
+        for first, second in (('web api', 'web_api'), ('Web', 'web')):
+            with self.subTest(names=(first, second)):
+                port = free_port()
+                processes = [self.preview_process(name, port=port + index, health=f'http://127.0.0.1:{port + index}/')
+                             for index, name in enumerate((first, second))]
+                error = self.refused(self.block(processes=processes), 'mesmo arquivo de log')
+                self.assertEqual(error.process, second)
 
 
 def done_text(done):
