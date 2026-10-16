@@ -356,7 +356,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" resume --root <worktree> --i
 ```
 
 O resultado `reconcile` indica divergências no Git, na issue ou no documento de
-passagem de contexto; relate cada divergência e pergunte antes de substituir um registro. Mesmo com
+passagem de contexto; relate cada divergência e, ao substituir um registro, diga qual substituiu. Mesmo com
 `unchanged`, é necessário ler a issue, o documento e as alterações atuais. A CLI
 retorna os dados na saída padrão; salvá-los é uma ação local explícita do coordenador.
 Nenhum utilitário grava registros externos ou inicia outra sessão do modelo.

@@ -1,6 +1,6 @@
 # Autorização e limites de aplicação das permissões
 
-Cada referência da skill abre dizendo quais seções deste arquivo a etapa dela lê. O que a etapa 6 faz sozinha e o
+Cada referência de etapa que precisa deste arquivo abre dizendo quais seções dele a etapa lê. O que a etapa 6 faz sozinha e o
 que ela pergunta antes está em `references/development.md`, "Standing authorization and the denied operations";
 aqui ficam os limites de aplicação dessas regras.
 

@@ -38,7 +38,8 @@ GuardianS e os dados do usuário. Cada regra da skill vive num lugar só, e os o
 para ela: as da etapa 6 (autorização permanente, merges cobertos, negadas, três portões, release) em
 `skills/frontlights/references/development.md`; os formatos dos registros e a retomada em
 `skills/frontlights/docs/protocol.md`; os limites de aplicação das permissões em
-`skills/frontlights/docs/security.md`. Cada referência abre com as seções desses dois docs que a etapa lê.
+`skills/frontlights/docs/security.md`. Cada referência de etapa que
+precisa deles abre com as seções desses dois docs que a etapa lê.
 Execute `python -m unittest discover -s tests -v` e
 `python -m compileall -q skills/frontlights/scripts tests`.
 Antes de cada commit, rode `python tests/pre_commit.py` (segundos: `compileall` e os módulos de
