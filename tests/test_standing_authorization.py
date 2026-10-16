@@ -29,11 +29,12 @@ def stage(number):
 class StandingAuthorizationTests(unittest.TestCase):
     def test_stage_six_opens_without_the_authorization_question(self):
         text = stage(6)
-        for phrase in ('**Standing authorization.**', 'permanently and for every project',
-                       'there is no concurrency question, no stacking question and no implementation authorization question',
-                       'announce in one short block', '"autorização permanente (docs/security.md)"',
-                       'an `expires_at` at most 24 hours ahead',
-                       'It never covers the questions of the work itself'):
+        for phrase in ('Stage 6 opens without a question, under the **standing authorization** the user gave '
+                       'permanently and for every project',
+                       '(development.md, "Standing authorization and the denied operations")',
+                       'announces the run in one short block, records the charter',
+                       'the questions of the work itself (the watched run, failures, the findings batch, a new product '
+                       'decision) are still asked'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertNotIn('ask the concurrency question and one bounded implementation authorization', text)
@@ -61,12 +62,7 @@ class StandingAuthorizationTests(unittest.TestCase):
                        'the branch of the issue into the local main once its three gates are green'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
-        for phrase in ('running migrations on the local development database',
-                       "creating and removing test data through the product's own endpoints",
-                       'ticking acceptance criteria with evidence',
-                       'the merge of the branch of the issue into the local main with its three gates green'):
-            with self.subTest(file='SKILL.md', phrase=phrase):
-                self.assertIn(phrase, skill)
+        self.assertIn('The merges the run makes on its own are the covered merges of that section', skill)
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name)
             for phrase in ('rodar a migration' if name == ('README.md',) else 'migrations no banco de desenvolvimento local',
@@ -83,10 +79,11 @@ class StandingAuthorizationTests(unittest.TestCase):
                       'escrever na main remota (`origin/main`', 'chave ou flag em produção')
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
+        self.assertIn('An operation on the denied list (development.md, "Standing authorization and the denied '
+                      'operations")', skill)
         for phrase in english:
-            for name, text in (('SKILL.md', skill), ('development.md', development)):
-                with self.subTest(file=name, phrase=phrase):
-                    self.assertIn(phrase.casefold(), text.casefold())
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase.casefold(), development.casefold())
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name).casefold()
             for phrase in portuguese:
@@ -95,20 +92,22 @@ class StandingAuthorizationTests(unittest.TestCase):
 
     def test_a_denied_operation_runs_only_after_its_own_yes(self):
         skill = stage(6)
-        for phrase in ('**Denied operations are asked one at a time.**', 'with "Sim" first and "Não" second',
-                       'naming the exact operation and the exact command', 'run it only after "Sim"',
-                       'never extend a "Sim" to another operation, another PR or a later moment',
-                       '"Não", silence or any other answer leaves it undone'):
+        for phrase in ('**Denied operations are asked one at a time.**',
+                       'which names the exact operation and the exact command', 'each "Sim" covers that one operation'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, skill)
         development = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ('"Sim" first and "Não" second', 'naming the exact operation and the exact command',
+                       'Run it only after "Sim"', '"Não", silence or any other answer leaves it undone'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
         self.assertIn('## Standing authorization and the denied operations', read('skills', 'frontlights', 'references', 'development.md'))
         self.assertIn('A "Sim" covers that one operation; another operation, another PR or a later moment gets its own '
                       'question', development)
 
     def test_the_approvals_with_their_own_stage_keep_them(self):
         self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them",
-                      stage(6))
+                      flat('skills', 'frontlights', 'references', 'development.md'))
         self.assertIn('fechamento, limpeza, roadmap e resumo', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('da limpeza, do roadmap e do resumo', flat('README.md'))
 
@@ -119,7 +118,6 @@ class StandingAuthorizationTests(unittest.TestCase):
                        "never `--admin`, `--auto` or `--delete-branch`", 'On "Não", the wait goes on unchanged'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
-        self.assertIn('never merge without the user\'s "Sim"', stage(6))
         self.assertIn('"Mesclar a PR #<n> em <base>?"', flat('README.md'))
         options = re.search(r'with "([^"]+)" first and "([^"]+)" second; one question per PR', development)
         self.assertIsNotNone(options)
@@ -134,7 +132,7 @@ class StandingAuthorizationTests(unittest.TestCase):
                        'os pedidos de permissão nativos do Claude Code continuam valendo'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, security)
-        self.assertIn("the host's own permission prompts still apply", stage(6))
+        self.assertIn("the host's own permission prompts still apply", flat('skills', 'frontlights', 'SKILL.md'))
         self.assertNotIn('standing', read('skills', 'frontlights', 'examples', 'config.json').casefold())
 
     def test_acceptance_and_runbook_track_it_as_pending(self):

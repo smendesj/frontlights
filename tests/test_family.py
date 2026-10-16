@@ -110,8 +110,8 @@ class FamilyRulesTextTests(unittest.TestCase):
     def test_the_skill_moves_an_issue_with_all_its_open_sub_issues(self):
         text = flat(read('skills', 'frontlights', 'SKILL.md'))
         for phrase in ('An issue and its sub-issues move together', 'all its open sub-issues',
-                       'subIssuesSummary', 'Never narrow the work to the parent alone',
-                       '"the parent now, the children after its merge"',
+                       'subIssuesSummary', 'Work the parent and every open child together',
+                       'only an explicit choice of the user narrows the work',
                        'does not serialize the work behind a merge', 'the issue has open sub-issues'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -126,9 +126,10 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertIn('every layer', stage5)
         self.assertIn('layers analysed', stage5)
         self.assertIn('The scope is the whole family', stage6)
-        self.assertIn('stacking question', stage6)
-        self.assertIn('independent children', stage6)
-        self.assertIn('without waiting for the merge', stage6)
+        development = flat(read('skills', 'frontlights', 'references', 'development.md'))
+        for phrase in ('no stacking question', 'independent children', 'without waiting for the merge'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
 
     def test_issues_reference_defines_the_slice_and_its_layers(self):
         issues = read('skills', 'frontlights', 'references', 'issues.md')

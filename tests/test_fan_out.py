@@ -51,8 +51,7 @@ class FanOutRuleTests(unittest.TestCase):
     def test_slices_stay_in_order_while_the_work_around_them_fans_out(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage6 = flat(section(skill, '6. Bounded development'))
-        self.assertIn('independent slices (no `Depende de` between them and no file in common) run at once', stage6)
-        self.assertIn('the legwork around each open slice fans out', stage6)
+        self.assertIn('independent slices at once, and the legwork around each open slice fanned out', stage6)
         self.assertNotIn('slice parallelism only between issues', stage6)
         development = read('skills', 'frontlights', 'references', 'development.md')
         slices = flat(section(development, 'Slices in order'))

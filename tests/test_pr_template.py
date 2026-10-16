@@ -204,10 +204,12 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
 
     def test_stage_six_of_the_skill_says_the_same(self):
         stage6 = flat(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0])
-        for phrase in ('the body from `templates/pr.md`', 'Resumo and Evidência per issue, Risco do merge consolidated',
-                       'never a closing keyword'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, stage6)
+        self.assertIn('(development.md, "The release")', stage6)
+        release = flat(read('skills', 'frontlights', 'references', 'development.md').split('## The release')[1])
+        for phrase in ('The body follows `templates/pr.md`', '**Resumo** and **Evidência** once per issue',
+                       '**Risco do merge**', '**No closing keyword.**'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, release)
         self.assertNotIn('`templates/pr.md` when it exists', stage6)
 
     def test_the_protocol_and_the_readme_say_the_same_in_portuguese(self):
