@@ -174,7 +174,7 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, body)
         whole = ' '.join(text.split())
         for phrase in ('one merge into the local main per issue', 'delivered by one merge into the local main',
-                       'the branches of the issue and of its slices are never pushed',
+                       'the branches of the issue and of its slices stay local',
                        'writing the remote main (`origin/main`, the base branch on GitHub)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, whole)

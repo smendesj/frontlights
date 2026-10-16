@@ -1,41 +1,66 @@
 # Bounded implementation
 
-Read the recorded authorization, current GitHub issues and `docs/security.md`.
-Stage 6 runs under the standing authorization (`SKILL.md`, stage 6): the session
-fills the issue IDs, the branch and the order of the slices of each issue, concurrency,
-stacking (a family that already exists), worktree base, verification commands, monitoring
-arrangement and stop conditions itself, announces them in one block and
-records the charter without asking. A decision the standing authorization does not
-cover (a new product decision, an operation on its denied list, a scope change)
-goes back to the coordinator's `AskUserQuestion`. Never infer permission for any
-other external write from local shell access. Run structured authorization checks
-where applicable; they are advisory preflight, not sandbox enforcement.
+Read the recorded authorization and the current GitHub issues, and from `docs/security.md` the sections
+"Hooks e escritas em `.git/`", "Autorização permanente", "Subagentes", "`authorize` e a main local",
+"`homolog sync` e `homolog bundle`", "Registro de autorização e `branch_prefix`", "Permissões do host e
+AFK", "Revisão e sobras" and "`serve`, `checks` e o teste no navegador"; from `docs/protocol.md`,
+"Registros" (`plan.json`), "Ponto de retomada e continuação" and "Contexto e conclusão". Stage 6 runs under
+the standing authorization (below): the session fills the run itself, announces it in one block and records
+the charter without asking. A decision the standing authorization does not cover (a new product decision, an
+operation on its denied list, a scope change) goes back to the coordinator's `AskUserQuestion`. Each external
+write needs its own authority; local shell access grants none. Run structured authorization checks where
+applicable; they are advisory preflight, not sandbox enforcement.
 
 ## Standing authorization and the denied operations
 
-The user decided, permanently and for every project, that the opening question of
-stage 6 (concurrency, stacking and the bounded implementation authorization) is not
-asked. Covered, for the issues of the family or batch at hand: editing, testing,
-committing, the merges the stacking authorization names (the merge of the branch of the issue
-into the local main with its three gates green and the merge of the local main and the branches of the issues in
-progress into the preview branch by `serve preview refresh` among them, "Into the local main" below), running migrations on the
-local development database, creating and removing test data through the product's own
-endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of
-an issue goes to GitHub before the release: the branches of the issue and of its slices are never
-pushed, the preview branch is never pushed either, and the only pull request is the release's, offered at the end
-of each homologated issue.
+This section is the single source of what stage 6 may do on its own and what it asks first; `SKILL.md`,
+`docs/security.md`, `docs/protocol.md` and the README point here.
 
-Never covered, and asked one operation at a time with `AskUserQuestion` ("Sim" first,
-"Não" second, the exact operation and command in the question): merging a pull
-request, closing an issue, changing the board, deploying or publishing to production,
-editing a migration already registered (on the base branch or applied anywhere but the
-local development database), writing the remote main (`origin/main`, the base branch on GitHub) or a
-protected branch (the local main is written only by the covered merge, with its three gates green), turning on
-a setting, key or flag in production, and deleting anything but the test data the run
-created. Run it only after "Sim" and record the answer verbatim in the handoff. A
-"Sim" covers that one operation, never another one, another PR or a later moment; "Não",
-silence or another answer leaves it undone and the work goes on without it. The host's
-own permission prompts are not Frontlights' to remove and still apply.
+The user decided, permanently and for every project, that stage 6 opens without a question: there is no
+concurrency question, no stacking question and no implementation authorization question. The session fills the
+run itself and announces it in one short block, in the user's language: the issue IDs, repository, concurrency,
+the branch and the order of the slices of each issue, stacking when a family exists, worktree base and branch
+prefix, the verification argv and the stop conditions. The user may change any of it at any time, and a change
+goes back through `AskUserQuestion`.
+
+**The charter.** Record it in `.frontlights/authorization.json` with the user in `approved_by` and
+`confirmed_by`, `"autorização permanente (docs/security.md)"` in `approval_reference` and an `expires_at` at
+most 24 hours ahead. Its `monitoring` block is `mode: "local"`; `phone_connected: true` only when the user
+states, unprompted in this session, that the phone received and answered. Local files record consent but cannot
+enforce it.
+
+**Covered**, for the issues of the family or batch at hand: editing, testing, committing, the covered merges
+below, running migrations on the local development database, creating and removing test data through the
+product's own endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of an
+issue goes to GitHub before the release: the branches of the issue and of its slices stay local, the preview
+branch stays local too, and the only pull request is the release's, offered at the end of each homologated
+issue. The questions of the work itself (the watched run, failures, the findings batch, a new product decision)
+are still asked.
+
+**Covered merges.** The run makes these merges on its own, and only these:
+
+- a base into an issue's own branch;
+- a slice's branch into the branch of its own issue when its loop closes;
+- the branch of the issue (or of the slice it depends on) into a slice's branch, to bring it up to date;
+- a verified child's branch into its parent's branch;
+- a family's or batch's verified branches into a local integration branch that stays local;
+- `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and
+  becomes a question);
+- the local main and the branches of the issues in progress into the preview branch by `serve preview
+  refresh` (a conflict is undone and becomes a question);
+- the branch of the issue into the local main once its three gates are green ("Into the local main").
+
+**Denied operations, asked one at a time** with `AskUserQuestion`, "Sim" first and "Não" second, naming the
+exact operation and the exact command: merging a pull request, closing an issue, changing the board (adding an
+item, moving a card, editing a field), deploying or publishing to production, editing a migration already
+registered (on the base branch or applied anywhere but the local development database), writing the remote main
+(`origin/main`, the base branch on GitHub) or a protected branch (the local main is written only by the covered
+merge, with its three gates green), turning on a setting, key or flag in production, and deleting anything but
+the test data the run created. Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
+covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
+silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
+own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them. The
+host's own permission prompts are not Frontlights' to remove and still apply.
 
 ## The start of stage 6: the pre-push hook and the sync of the local main
 
@@ -229,11 +254,10 @@ parent's branch and, once verified, is merged into it) and "Esperar o merge do p
 pushed and no pull request is opened for the parent or a child: the family enters the local main as one,
 through the parent's branch, once its three gates are green ("Into the local main", below), and reaches
 GitHub with the release. Record the stacking in the
-authorization, with the repository operations it needs: branch from a branch that is
-not the base, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), `git merge` of a verified child's branch into its parent's branch, `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), `git merge` of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
-the remote main, deploying or releasing. When the user chose to wait, a dependent
-stays parked until its dependency is in the local main.
+authorization with the repository operations it needs: a branch cut from a branch that is not the base, and
+the covered merges of "Standing authorization and the denied operations" (above), which are the only merges it
+allows; merging a PR, writing the remote main, deploying and releasing stay on the denied list. When the user
+chose to wait, a dependent stays parked until its dependency is in the local main.
 
 **Concurrency.** Recommend as ceiling the number of independent children whose
 `ownership` does not overlap, and never less than the first wave. Read the stacked
@@ -464,11 +488,9 @@ evidence; tick an acceptance criterion in the issue body only with evidence for 
 the ticks; a criterion born from a finding is ticked the same way, once the work it
 names is done and its evidence exists. Closing an issue and moving its card are never part of this: they have
 their own approval (`references/closeout.md`). The release's pull request is covered by the standing authorization and still goes through
-the host's native approval; the branches of issues and slices are never pushed. Never
-merge a pull request, write the remote main, deploy, release, delete data or close
-issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
-else on the denied list runs only after the user's "Sim" to its own question (above). Park
+the host's native approval; the branches of issues and slices stay local. The run merges only by the covered
+merges, and anything on the denied list runs only after the user's "Sim" to its own question ("Standing
+authorization and the denied operations", above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,
 the findings left unfixed with the destination of each, remaining risk and next

@@ -164,7 +164,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
                        '`checkpoint-<id>.json`', 'merged into the branch of the issue'):
             with self.subTest(where='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
-        self.assertIn("of a slice's branch into the branch of its own issue", flat(development))
+        self.assertIn("a slice's branch into the branch of its own issue when its loop closes", flat(development))
         self.assertIn('da branch de uma slice na branch da própria issue',
                       flat(read('skills', 'frontlights', 'docs', 'security.md')))
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
