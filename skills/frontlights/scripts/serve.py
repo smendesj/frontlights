@@ -58,19 +58,22 @@ The variable name is the process name upper-cased with non-alphanumerics as `_`,
 Processes with a fixed port or without `port` do not receive the variable, so their names may collide.
 The start output says whether the reservations are shared (`reservas_compartilhadas`).
 
-Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the top-level
-`preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host, `processes` with
-the same rules as `browserTest.processes`, each `health` on a local host too). `preview.branch` is a plain branch name
-that is neither main, master nor a match (fnmatch without case, a pattern also covering `pattern/*`) of the
-`protected_branches` of any readable `<root>/.frontlights/authorization*.json`. Its processes run in the preview worktree, with their stdout and stderr
-relayed line by line by `relay --config <config> --log <file>` (a second process spawned by `preview start`, which
-loads the secrets of `browserTest.users` from the config itself and masks them) into
-`<root>/.frontlights/preview/log/<name>.log`. The record lives in `<root>/.frontlights/preview/registry.json` under
-its own lock (`<root>/.frontlights/preview/.lock`), so `stop --issue <n>` never touches it, and a new session finds
-the processes through it. Port reservations of the preview carry `"issue": "preview"`, so the release of an issue's
-reservations never frees them. `preview start` is refused while the preview is alive (any process or log relay of the record) and when the preview worktree
-does not exist. `preview status` adds `alive`, `log` and the last `TAIL_LINES` lines of each log (`tail`), masked
-again on output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
+Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the
+top-level `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host,
+`processes` with the same rules as `browserTest.processes`, each `health` on a local host too). `preview.branch` is a
+plain branch name that is neither main, master nor a match (fnmatch without case, a pattern also covering
+`pattern/*`) of the `protected_branches` of any readable `<root>/.frontlights/authorization*.json`. Its processes run
+in the preview worktree, with their stdout and stderr relayed line by line by `relay --config <config> --log <file>`
+(a second process spawned by `preview start`, which loads the secrets of `browserTest.users` from the config itself
+and masks them) into `<root>/.frontlights/preview/log/<name>.log`. The record lives in
+`<root>/.frontlights/preview/registry.json` under its own lock (`<root>/.frontlights/preview/.lock`), so
+`stop --issue <n>` never touches it, and a new session finds the processes through it. Port reservations of the
+preview carry `"issue": "preview"`, so the release of an issue's reservations never frees them. `preview start` is
+refused while the preview is alive (any process or log relay of the record) and when the preview worktree does not
+exist. `preview status` and `preview stop` work from the record alone, with or without the `preview` block in the
+config (the mask still comes from its `browserTest.users`). `preview status` adds `alive` and `relayAlive` per process
+(`running` needs both for every process), `log` and the last `TAIL_LINES` lines of each log (`tail`), masked again on
+output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
 `preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
 change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
 repository on `preview.branch`, or that has tracked changes or a merge in progress), then stops the preview, redoes
@@ -79,9 +82,10 @@ when it is missing), merges each `--branch` in order (`git merge --no-ff --no-ed
 `preview start` does. A conflict is aborted (`git merge --abort`), nothing comes up and the refusal names the branch
 and the files (`conflict: true`). A process that exits before its health, or whose health never answers, is a broken
 build: everything is torn down and the refusal carries `build: "quebrado"`, the log and its last lines written by
-this run (`tail`). Git runs from an argv list without a shell and without prompts, with a deadline; the refresh never
-pushes, rebases or forces a merge, and writes no branch but `preview.branch` (the local main and the issue branches
-never move). The preview branch is never pushed.
+this run (`tail`). A log relay that dies (or cannot start) before the health is an infrastructure failure, torn down
+the same way but without `build`: the process itself did not fail. Git runs from an argv list without a shell and
+without prompts, with a deadline; the refresh never pushes, rebases or forces a merge, and writes no branch but
+`preview.branch` (the local main and the issue branches never move). The preview branch is never pushed.
 
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and
 names the failing process, classified as an infrastructure failure).
@@ -148,6 +152,11 @@ class Refusal(Exception):
         self.process = process
         self.category = category or INFRASTRUCTURE
         self.extra = extra or {}
+
+
+class RelayFailure(Refusal):
+    """The log relay of a preview process died or could not start: an infrastructure failure, never a broken
+    build (the process itself did not fail)."""
 
 
 def require(condition, message, process=None, category=None):
@@ -339,15 +348,16 @@ def validate_processes(processes, where):
 
 def load_preview_block(config_file, root, need_processes=True):
     """Read the top-level `preview` block (worktree, branch, baseUrl, processes) and load the mask from
-    browserTest.users. `need_processes=False` (status, stop) only requires the block and loads the mask."""
+    browserTest.users. `need_processes=False` (status, stop) only loads the mask and returns the block or None: those
+    two work from the record alone, so a config without the block still reaches them."""
     config = read_config(config_file)
     browser = config.get('browserTest') if isinstance(config, dict) else None
     load_secrets(browser if isinstance(browser, dict) else None)
     block = config.get('preview') if isinstance(config, dict) else None
+    if not need_processes:
+        return block if isinstance(block, dict) else None
     require(isinstance(block, dict), 'O config não tem o bloco preview: declare worktree, branch, baseUrl e processes '
             'nele para usar a prévia.', category=USAGE)
-    if not need_processes:
-        return block
     worktree = block.get('worktree')
     require(isinstance(worktree, str) and worktree and '\0' not in worktree,
             'preview.worktree precisa ser um caminho relativo ao --root (texto não vazio).', category=USAGE)
@@ -515,8 +525,8 @@ def wait_healthy(child, item, relay=None):
             raise Refusal(f'O processo {item["name"]} terminou antes de ficar saudável{reserved} '
                           f'(código {child.returncode}).', item['name'])
         if relay is not None and relay.poll() is not None:
-            raise Refusal(f'O relé do log do processo {item["name"]} terminou (código {relay.returncode}) antes de o '
-                          'processo ficar saudável: o log da prévia não seria gravado.', item['name'])
+            raise RelayFailure(f'O relé do log do processo {item["name"]} terminou (código {relay.returncode}) antes '
+                               'de o processo ficar saudável: o log da prévia não seria gravado.', item['name'])
         if healthy(item['health']):
             return
         time.sleep(POLL_SECONDS)
@@ -868,7 +878,8 @@ def launch_preview(block, config_file, root, contents=None):
             try:
                 relay_child = spawn(relay_argv(config_file, log_file), Path(root).resolve(), stdin=child.stdout)
             except (OSError, ValueError):
-                raise Refusal(f'Não foi possível iniciar o relé do log do processo {item["name"]}.', item['name'])
+                raise RelayFailure(f'Não foi possível iniciar o relé do log do processo {item["name"]}.',
+                                   item['name'])
             finally:
                 child.stdout.close()  # only the relay keeps the read end: it sees EOF when the process dies
             started[-1].update(relayPid=relay_child.pid,
@@ -876,6 +887,8 @@ def launch_preview(block, config_file, root, contents=None):
             write_preview_registry(root, block, started, started_at, contents)
             try:
                 wait_healthy(child, item, relay_child)
+            except RelayFailure:
+                raise  # the relay died, not the process: infrastructure, never a broken build
             except Refusal:
                 broken = (log_file, offset)
                 raise
@@ -938,14 +951,22 @@ def kill_preview(started):
     return left
 
 
+def relay_alive(entry):
+    return valid_pid(entry.get('relayPid')) and same_process({'pid': entry['relayPid'],
+                                                             'identity': entry.get('relayIdentity')})
+
+
 def preview_status(config_file, root):
-    load_preview_block(config_file, root, need_processes=False)  # the block must exist; the mask comes from it
+    """Works from the record alone (the `preview` block may be gone from the config); the mask comes from the
+    config's browserTest.users. `running` needs every process and its log relay alive."""
+    load_preview_block(config_file, root, need_processes=False)
     record = read_preview_registry(root)
     # main masks the output, so the tail (already masked by the relay) is masked again on the way out
-    processes = [dict(entry, alive=same_process(entry),
+    processes = [dict(entry, alive=same_process(entry), relayAlive=relay_alive(entry),
                       tail=tail_lines(Path(root) / entry['log']) if isinstance(entry.get('log'), str) else [])
                  for entry in record['processes']]
-    return {'ok': True, 'running': all(entry['alive'] for entry in processes), 'worktree': record.get('worktree'),
+    return {'ok': True, 'running': all(entry['alive'] and entry['relayAlive'] for entry in processes),
+            'worktree': record.get('worktree'),
             'branch': record.get('branch'), 'baseUrl': record.get('baseUrl'),
             **{key: record[key] for key in ('base', 'baseCommit', 'merged') if key in record},
             'processes': processes}
@@ -1469,7 +1490,8 @@ def stop_entries(root, entries, registry_file, release, retry):
 
 
 def preview_stop(config_file, root):
-    """Stop the preview's processes and relays under the preview lock; an issue's stop never reaches them."""
+    """Stop the preview's processes and relays under the preview lock; an issue's stop never reaches them. Like
+    status, it works from the record alone, with or without the `preview` block in the config."""
     load_preview_block(config_file, root, need_processes=False)
     lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
     try:

@@ -284,15 +284,24 @@ class IssueStopKeepsThePreviewTest(PreviewTestCase):
 
 
 class PreviewUsageTest(PreviewTestCase):
-    def test_without_the_preview_block_every_preview_action_is_refused_as_usage(self):
+    def test_without_the_preview_block_start_and_refresh_are_refused_as_usage(self):
         self.write_config(preview=None)
-        for action in ('start', 'status', 'stop'):
+        for action in ('start', 'refresh'):
             with self.subTest(action=action):
                 done = self.serve('preview', action)
                 self.assertEqual(done.returncode, 1, done_text(done))
                 result = self.payload(done)
                 self.assertEqual(result['category'], 'uso')
                 self.assertIn('bloco preview', result['error'])
+        self.assertFalse(self.registry().exists())
+
+    def test_without_the_preview_block_nor_a_registry_status_and_stop_say_there_is_no_registry(self):
+        self.write_config(preview=None)
+        for action in ('status', 'stop'):
+            with self.subTest(action=action):
+                done = self.serve('preview', action)
+                self.assertEqual(done.returncode, 1, done_text(done))
+                self.assertIn('Não há registro da prévia', self.payload(done)['error'])
         self.assertFalse(self.registry().exists())
 
     def test_start_without_the_preview_worktree_is_refused_as_usage_and_points_to_refresh(self):
@@ -707,6 +716,131 @@ class PreviewStartRecordTest(FakeRecordMixin, PreviewTestCase):
         self.assertIsNone(refusal)
         self.assertEqual(result, {'ok': True})
         launch.assert_called_once()
+
+
+class PreviewStatusRecordTest(FakeRecordMixin, PreviewTestCase):
+    def test_status_reports_the_relay_and_running_needs_the_process_and_its_relay(self):
+        self.write_config()
+        process, relay = self.sleeper(), self.sleeper()
+        self.fake_registry(process, relay)
+        result = serve.preview_status(self.config, self.root)
+        self.assertTrue(result['running'])
+        self.assertEqual((result['processes'][0]['alive'], result['processes'][0]['relayAlive']), (True, True))
+        relay['child'].kill()
+        relay['child'].wait()
+        result = serve.preview_status(self.config, self.root)
+        self.assertEqual((result['processes'][0]['alive'], result['processes'][0]['relayAlive']), (True, False))
+        self.assertFalse(result['running'], 'a prévia sem relé (sem log) foi dada como no ar')
+
+    def test_status_and_stop_work_without_the_preview_block_when_there_is_a_registry(self):
+        self.write_config(preview=None)
+        process, relay = self.sleeper(), self.sleeper()
+        self.fake_registry(process, relay)
+        self.log().parent.mkdir(parents=True, exist_ok=True)
+        self.log().write_text(f'linha com {PASSWORD} e {LOGIN}\n', encoding='utf-8')
+        done = self.serve('preview', 'status')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        result = self.payload(done)
+        self.assertTrue(result['running'])
+        self.assertEqual(result['processes'][0]['tail'], [f'linha com {MASK} e {MASK}'])
+        self.assertNotIn(PASSWORD, done_text(done))
+        done = self.serve('preview', 'stop')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        self.assertTrue(all(item['stopped'] for item in self.payload(done)['processes']), done_text(done))
+        self.assertFalse(self.registry().exists())
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(process['pid'])))
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(relay['pid'])))
+
+
+# A process that never prints and never listens: alive until killed, its health never answers.
+QUIET_SERVER = r"""import time
+time.sleep(600)
+"""
+
+
+class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
+    """A failed launch with two processes, and a relay that dies, both in process (the pids come from the spy)."""
+
+    def config_with(self, second):
+        self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
+                                   'baseUrl': 'http://127.0.0.1:1/', 'processes': [self.preview_process(), second]})
+
+    def exiting(self):
+        script = Path(self.tmp.name) / 'exiting_server.py'
+        script.write_text(EXITING_SERVER, encoding='utf-8')
+        return {'name': 'quebra', 'argv': [sys.executable, str(script)], 'port': 'auto',
+                'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+
+    def pids(self, seen):
+        return {pid for entries in seen for entry in entries for pid in (entry['pid'], entry.get('relayPid')) if pid}
+
+    def test_when_the_second_process_fails_the_first_and_its_relay_are_torn_down(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        with spy, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        failure = caught.exception
+        self.assertEqual((failure.process, failure.category, failure.extra.get('build')),
+                         ('quebra', 'infraestrutura', 'quebrado'))
+        self.assertNotIn('left', failure.extra)
+        pids = self.pids(seen)
+        self.assertEqual(len(pids), 4, seen)
+        for pid in pids:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertFalse(self.registry().exists(), 'o registro ficou depois de derrubar tudo')
+        self.assertEqual(self.preview_reservations(), [])
+
+    def test_relays_that_do_not_stop_at_the_end_of_their_process_are_torn_down_too(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        stubborn = mock.patch.object(serve, 'relay_argv',  # a relay that never reads stdin, so never sees EOF
+                                     lambda config, log: [sys.executable, '-c', 'import time; time.sleep(60)'])
+        with spy, stubborn, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        self.assertEqual(caught.exception.process, 'quebra')
+        relays = {entry['relayPid'] for entries in seen for entry in entries if entry.get('relayPid')}
+        self.assertEqual(len(relays), 2, seen)
+        for pid in relays:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o relé {pid} ficou vivo')
+        self.assertFalse(self.registry().exists())
+
+    def test_what_cannot_be_torn_down_is_all_the_registry_keeps(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        real_kill = serve.kill_tree
+
+        def stubborn(pid):  # the first process "survives" the teardown
+            return False if pid == seen[0][0]['pid'] else real_kill(pid)
+        with spy, mock.patch.object(serve, 'kill_tree', stubborn), self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        first = seen[0][0]['pid']
+        self.assertEqual(caught.exception.extra['left'], [{'name': 'web', 'pid': first}])
+        record = json.loads(self.registry().read_text(encoding='utf-8'))
+        self.assertEqual([(entry['name'], entry['pid']) for entry in record['processes']], [('web', first)])
+        self.assertTrue(serve.pid_alive(first))
+        for pid in self.pids(seen) - {first}:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertEqual(len(self.preview_reservations()), 1, 'a porta do que sobrou foi liberada')
+
+    def test_a_relay_that_dies_before_the_health_is_infrastructure_not_a_broken_build(self):
+        script = Path(self.tmp.name) / 'quiet_server.py'
+        script.write_text(QUIET_SERVER, encoding='utf-8')
+        self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
+                                   'baseUrl': 'http://127.0.0.1:1/',
+                                   'processes': [{'name': 'web', 'argv': [sys.executable, str(script)], 'port': 'auto',
+                                                  'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}]})
+        seen, spy = self.recording()
+        dying = mock.patch.object(serve, 'relay_argv', lambda config, log: [sys.executable, '-c', 'raise SystemExit(3)'])
+        with spy, dying, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        failure = caught.exception
+        self.assertEqual((failure.process, failure.category), ('web', 'infraestrutura'))
+        self.assertIn('relé', str(failure))
+        self.assertNotIn('build', failure.extra, 'a morte do relé foi dada como build quebrado')
+        for pid in self.pids(seen):
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertFalse(self.registry().exists())
+        self.assertEqual(self.preview_reservations(), [])
 
 
 def done_text(done):
