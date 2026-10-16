@@ -41,7 +41,7 @@ Operations (each prints one JSON object on stdout):
          machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
          remote-tracking branch of `--remote`, that already has the name, or that a merged pull request named
          (`Merge pull request #<n> from <owner>/<name>` among the last MERGE_LIMIT merges of `<remote>/<base>`: a
-         squash merge leaves no such subject). A change without issue (Direct or Short path) is a `worktrees` entry
+         squash merge, or a repository whose merge message is the pull request title, leaves no such subject). A change without issue (Direct or Short path) is a `worktrees` entry
          with no `issue` and no `slice` whose `branch` is under the record's prefix: it is listed in `direct`, and
          `releaseDirect` names those in the local base and not yet in `<remote>/<base>`. `ready` is true (exit 0)
          when the local base is ahead, not behind, and at least one issue or change without issue is in
@@ -514,8 +514,9 @@ def issue_branches(folder):
 def record_branches(folder):
     """({issue number: branch}, [branch of a change without issue], skipped): `issue_branches`, plus the entries with
     no `issue` (absent or null) and no `slice` whose `branch` is a plain name under the record's prefix, in the order
-    the records list them, each branch once. An entry without issue and without a valid branch is skipped and
-    counted; any other key of a record (`direct_worktree`, say) is ignored."""
+    the records list them, each branch once and never one that a record also names for an issue (a change that
+    started without issue and got one later is that issue). An entry without issue and without a valid branch is
+    skipped and counted; any other key of a record (`direct_worktree`, say) is ignored."""
     files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
     mapping, direct = {}, []
@@ -540,7 +541,8 @@ def record_branches(folder):
                 skipped += 1
                 continue
             mapping[number] = branch
-    return mapping, direct, skipped
+    issued = set(mapping.values())
+    return mapping, [branch for branch in direct if branch not in issued], skipped
 
 
 def ancestry(root, commit, ref):

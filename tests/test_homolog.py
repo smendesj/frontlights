@@ -1217,6 +1217,14 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.assertEqual(result['skipped'], 3)
         self.assertEqual((code, result['releaseDirect']), (2, []))
 
+    def test_a_change_that_later_got_an_issue_is_released_once_as_the_issue(self):
+        self.record({'branch': 'claude/melhoria-a'}, name='authorization-1.json')
+        self.record({'issue': 7, 'branch': 'claude/melhoria-a'}, name='authorization-2.json')
+        self.deliver_front('claude/melhoria-a')
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['release'], result['releaseDirect'], result['direct']), ([7], [], []))
+
     def test_a_name_used_by_a_merged_pull_request_is_never_suggested_again(self):
         """O nome da release pula também os nomes citados em 'Merge pull request #N from dono/<nome>' no histórico
         de `origin/main`, mesmo com a branch já apagada nos dois lados; outro formato de assunto não pesa."""
