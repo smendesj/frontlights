@@ -336,9 +336,9 @@ e o revisor nunca é o autor.
 **Rodadas de teste.** Por slice, rodam os módulos que a slice toca e a verificação de tipos; a suíte
 rápida é a forma de conferir o todo entre slices, quando o projeto tem uma. No repositório do Frontlights
 ela roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (só Windows): a variável faz pular os
-módulos de portas do `serve` e de integração do `checks`, cada um relatado como pulado com o motivo que
+módulos de portas e da prévia do `serve` e de integração do `checks`, cada um relatado como pulado com o motivo que
 cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
-módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os cinco
+módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
 Fica para o fim, antes da revisão independente e do merge na main local, a suíte inteira sem a variável, uma vez, pelo
 `python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
