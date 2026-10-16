@@ -739,7 +739,10 @@ numa branch local de prévia (nunca enviada) com a main local e as branches das 
 `serve preview refresh` a cada CA pronta, para você testar à mão minutos depois de a CA ficar verde, só
 recarregando a aba. O log dos processos fica salvo e mascarado; um build quebrado vem numa linha com o arquivo e o
 erro. A prévia só para quando você pede, e a aba é sua: o teste assistido roda em outra janela e nunca nas portas
-dela.
+dela. A prévia usa portas fixas, com a `baseUrl` na porta de um dos processos dela, para a aba continuar válida a
+cada refresh: o `serve preview` e o `inspect` recusam `"port": "auto"` nos processos da prévia, `{port}` na
+`baseUrl` dela e uma `baseUrl` numa porta que nenhum processo dela usa; com o bloco `preview`, o `inspect` também
+recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia.
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na

@@ -382,7 +382,9 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   start --root <checkout-da-base>`, o `serve stop` encerra só os pids que o registro da issue
   guardou, e um processo que o teste não subiu nunca é encerrado. A janela é de um perfil
   descartável do navegador, nunca o pessoal do usuário. A aba da prévia é do usuário (aberta uma vez no Claude in
-  Chrome dele) e fica fora dessa regra: a sessão não a dirige, e o teste assistido nunca usa a prévia nem as portas dela. A aprovação do que foi assistido é só a
+  Chrome dele) e fica fora dessa regra: a sessão não a dirige, e o teste assistido nunca usa a prévia nem as portas dela
+  (com o bloco `preview`, o `inspect` recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl`
+  igual a uma porta da prévia; a prévia usa só portas fixas, com a `baseUrl` na porta de um processo dela). A aprovação do que foi assistido é só a
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
@@ -406,7 +408,8 @@ verificadas de uma família ou de um lote numa branch de integração local, que
   blocos, shell embutido nos argv de `checks`, hosts locais, `{port}` com porta `auto`, segredos
   mascaráveis), inclusive em `browserTest.isolated` (portas fora das da prévia e do serve, `baseUrl` na
   porta de um processo isolado, `cwd` relativo desses processos, passos do banco sem shell) e no bloco
-  `preview` (worktree dentro do `--root`, branch, `baseUrl` local e processos); o `cwd` de `checks` e de
+  `preview` (worktree dentro do `--root`, branch, `baseUrl` local na porta fixa de um processo dela, processos sem
+  porta `auto`, e portas de `browserTest.processes` e da `browserTest.baseUrl` fora das da prévia); o `cwd` de `checks` e de
   `browserTest.processes`, o de `preview.processes` (`process_cwd`, quando a prévia sobe), `.cmd`/`.bat` com
   metacaractere e os nomes `checks.backend`/`checks.smoke.target`
   contra `browserTest.processes` são conferidos na execução, antes de qualquer processo subir. Isso

@@ -1017,12 +1017,41 @@ def validate_preview_block(config, path, root):
         raise ValueError(checks.redact(serve.protect(message))) from None
 
 
+def validate_preview_ports(config):
+    """With the `preview` block present (already validated), refuse a fixed port of `browserTest.processes` (integer
+    `port`, or else the port of the health) or of `browserTest.baseUrl` that is a fixed port of the preview (one of
+    `preview.processes`, or the port of `preview.baseUrl`), with or without `browserTest.isolated`: the assisted test
+    never runs on the ports of the preview. `auto` and `{port}` never collide here."""
+    browser, preview = config.get('browserTest'), config.get('preview')
+    if not isinstance(browser, dict) or not isinstance(preview, dict):
+        return
+    import checks
+    import serve
+    base_url = preview.get('baseUrl')
+    taken = fixed_ports(preview.get('processes'))
+
+    def sides(port):
+        found = [f'da preview.baseUrl ({base_url})'] if fixed_url_port(base_url) == port else []
+        return found + ([f'do processo {taken[port]} de preview.processes'] if port in taken else [])
+    clashes = [(f'browserTest.processes: o processo {name} usa a porta fixa {port}', sides(port))
+               for port, name in fixed_ports(browser.get('processes')).items()]
+    own = fixed_url_port(browser.get('baseUrl'))
+    if own is not None:
+        clashes.append((f'browserTest.baseUrl ({browser["baseUrl"]}) usa a porta {own}', sides(own)))
+    for what, found in clashes:
+        if found:
+            message = (f'{what}, a mesma {" e ".join(found)}: o teste assistido nunca roda nas portas da '
+                       'prévia. Use port "auto" (com {port} no health e na browserTest.baseUrl) ou outra porta.')
+            raise ValueError(checks.redact(serve.protect(message)))
+
+
 def inspect(config, root, config_path=None):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
     warnings = validate_test_blocks(config, config_path)
     validate_preview_block(config, config_path, root)
+    validate_preview_ports(config)
     validate_homolog_block(config)
     repo = config['repository']
     result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
