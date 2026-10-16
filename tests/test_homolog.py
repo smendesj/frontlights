@@ -307,6 +307,20 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('S3: `homolog bundle` grava', flat('docs', 'acceptance.md'))
         self.assertIn('one `.bundle` file there which `git bundle verify` accepts', flat('evals', 'runbook.md'))
 
+    def test_the_bundle_follows_the_prefixes_of_the_records(self):
+        """Issue 44, S1: o backup leva as branches de todo `branch_prefix` dos registros, sem `--prefix` na chamada."""
+        step = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ('the local main and the work branches of every `branch_prefix` in the authorization records '
+                       '(`.frontlights/authorization*.json`; `claude/` when there is none',
+                       '`--prefix` names one prefix alone', '`prefixes` and `prefixSource`'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, step)
+        self.assertNotIn('the local main and every branch under the `branch_prefix`', step)
+        self.assertIn('the work branches of every `branch_prefix` in the authorization records', stage(6))
+        self.assertIn('das branches de trabalho de todo `branch_prefix` dos registros de autorização',
+                      flat('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('das branches de trabalho de todo prefixo dos registros de autorização', flat('README.md'))
+
     def test_the_release_replaces_the_pull_request_per_issue(self):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
@@ -753,6 +767,75 @@ class HomologBundleTests(unittest.TestCase):
         code, result = self.bundle(config, '--prefix', 'other/')
         self.assertEqual(code, 0, result)
         self.assertEqual(result['refs'], ['main'])
+
+    def record(self, name, **data):
+        """An authorization record in the `.frontlights` of the repository (issue 44)."""
+        folder = self.work / '.frontlights'
+        folder.mkdir(exist_ok=True)
+        (folder / name).write_text(json.dumps({'repository': 'OWNER/REPOSITORY', 'worktrees': [], **data}),
+                                   encoding='utf-8')
+
+    def team_branches(self):
+        """Two work branches under a prefix other than `claude/`, cut from the base (issue 44)."""
+        self.git(self.work, 'switch', '-q', '-c', 'equipe/issue-2')
+        self.commit('three.txt', 'three\n', 'issue 2')
+        self.git(self.work, 'switch', '-q', '-c', 'equipe/issue-2-s1')
+        self.commit('four.txt', 'four\n', 'issue 2, slice 1')
+        self.git(self.work, 'switch', '-q', 'main')
+
+    def test_without_prefix_the_records_name_the_branches(self):
+        """Issue 44, S1: sem `--prefix`, o bundle leva as branches do `branch_prefix` dos registros."""
+        self.team_branches()
+        self.record('authorization-2.json', branch_prefix='equipe/', issued_at='2026-01-02T10:00:00+00:00')
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}))
+        self.assertEqual(code, 0, result)
+        self.assertEqual(set(result['refs']), {'main', 'equipe/issue-2', 'equipe/issue-2-s1'})
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['equipe/'], 'records'))
+
+    def test_two_records_bring_both_prefixes(self):
+        """Issue 44, S1: a união dos prefixos; um registro sem `branch_prefix` vale `claude/`."""
+        self.team_branches()
+        self.record('authorization-1.json', issued_at='2026-01-01T10:00:00+00:00')
+        self.record('authorization-2.json', branch_prefix='equipe/', issued_at='2026-01-02T10:00:00+00:00')
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}))
+        self.assertEqual(code, 0, result)
+        self.assertEqual(set(result['refs']),
+                         {'main', 'claude/issue-1', 'claude/issue-1-s2', 'equipe/issue-2', 'equipe/issue-2-s1'})
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['claude/', 'equipe/'], 'records'))
+
+    def test_without_a_valid_record_it_keeps_the_default(self):
+        """Issue 44, S1: sem registro válido, `claude/`, como antes; um registro malformado é ignorado."""
+        self.team_branches()
+        config = self.config(homolog={'backupDir': str(self.backup)})
+        code, result = self.bundle(config)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(set(result['refs']), {'main', 'claude/issue-1', 'claude/issue-1-s2'})
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['claude/'], 'default'))
+        self.record('authorization-bad.json', branch_prefix='x$/')
+        (self.work / '.frontlights' / 'authorization-broken.json').write_text('[1, 2]', encoding='utf-8')
+        code, result = self.bundle(config)
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['claude/'], 'default'))
+
+    def test_an_explicit_prefix_still_wins(self):
+        """Issue 44, S1: `--prefix` explícito vale sozinho, com registros de outro prefixo."""
+        self.team_branches()
+        self.record('authorization-1.json', branch_prefix='claude/')
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}), '--prefix', 'equipe/')
+        self.assertEqual(code, 0, result)
+        self.assertEqual(set(result['refs']), {'main', 'equipe/issue-2', 'equipe/issue-2-s1'})
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['equipe/'], 'argument'))
+
+    def test_records_elsewhere_are_read_with_records(self):
+        """Issue 44, S1: `--records` aponta a pasta dos registros, como no release-plan."""
+        self.team_branches()
+        elsewhere = self.base / 'elsewhere'
+        (elsewhere / '.frontlights').mkdir(parents=True)
+        (elsewhere / '.frontlights' / 'authorization.json').write_text(
+            json.dumps({'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'equipe/', 'worktrees': []}), encoding='utf-8')
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}), '--records', str(elsewhere))
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['prefixes'], result['prefixSource']), (['equipe/'], 'records'))
 
     def test_an_unreadable_config_is_a_refusal_in_json(self):
         code, result = self.bundle(self.base / 'absent.json')

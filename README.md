@@ -138,7 +138,7 @@ As branches de trabalho usam o `branch_prefix` da autorização, com padrão `cl
 projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
-trabalho (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
+trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
 
 ```json
