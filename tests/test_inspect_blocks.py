@@ -390,6 +390,61 @@ class PreviewBlockTests(unittest.TestCase):
         self.assertFalse(ports & set(others))
 
 
+class BrowserTestOffThePreviewPortsTests(unittest.TestCase):
+    """3ª revisão da issue 34 (B): com o bloco preview presente, o inspect recusa porta fixa de browserTest.processes
+    ou da browserTest.baseUrl igual a uma porta fixa da prévia, mesmo sem browserTest.isolated."""
+
+    def refuse(self, config, pattern):
+        return InspectRefusesInvalidBlocksTests.refuse(self, config, pattern)
+
+    def preview(self):
+        """Prévia com dois processos: `previa` em port 8070 (a da baseUrl) e `api` só com a porta do health, 8072."""
+        api = {'name': 'api', 'argv': ['python', 'API_SCRIPT'], 'health': 'http://127.0.0.1:8072/health'}
+        return preview_block(processes=preview_block()['processes'] + [api])
+
+    def test_a_fixed_port_of_the_browser_test_processes_on_a_preview_port_is_refused(self):
+        cases = {'port inteiro na porta da baseUrl da prévia': (
+                     process(port=8070, health='http://127.0.0.1:8070/health'), 8070, 'preview.baseUrl'),
+                 'porta do health num processo da prévia': (
+                     {'name': 'web', 'argv': ['python', 'APP_SCRIPT'], 'health': 'http://localhost:8072/'}, 8072,
+                     'o processo api de preview.processes')}
+        for case, (item, port, side) in cases.items():
+            with self.subTest(case=case):
+                message = self.refuse(dict(with_browser(process(name='outro'), item), preview=self.preview()),
+                                      rf'browserTest\.processes.*web.*{port}')
+                self.assertIn(side, message)
+                self.assertIn('o teste assistido nunca roda nas portas da prévia', message)
+
+    def test_a_fixed_browser_test_base_url_on_a_preview_port_is_refused(self):
+        for base_url, port, side in (('http://127.0.0.1:8070/', 8070, 'o processo previa de preview.processes'),
+                                     ('http://localhost:8072/app', 8072, 'o processo api de preview.processes')):
+            with self.subTest(baseUrl=base_url):
+                message = self.refuse(dict(with_browser(base_url=base_url), preview=self.preview()),
+                                      rf'browserTest\.baseUrl.*{port}')
+                self.assertIn(side, message)
+                self.assertIn('o teste assistido nunca roda nas portas da prévia', message)
+
+    def test_the_refusal_never_shows_the_test_login_or_password(self):
+        login = 'usuario@exemplo.test'
+        named = process(name=f'{login}-{PASSWORD}', port=8070, health='http://127.0.0.1:8070/health')
+        message = self.refuse(dict(with_browser(named), preview=self.preview()), r'browserTest\.processes.*8070')
+        self.assertNotIn(login, message)
+        self.assertNotIn(PASSWORD, message)
+
+    def test_distinct_or_automatic_ports_are_accepted(self):
+        configs = {'browserTest em auto': with_browser(process(), base_url='http://127.0.0.1:{port}/'),
+                   'portas fixas diferentes': with_browser(
+                       process(port=8080, health='http://127.0.0.1:8080/health'),
+                       {'name': 'api', 'argv': ['python', 'API_SCRIPT'], 'health': 'http://127.0.0.1:8081/'},
+                       base_url='http://127.0.0.1:8080/')}
+        for case, config in configs.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
+                inspect_file(dict(config, preview=self.preview()), root)
+        with self.subTest(case='sem bloco preview'), tempfile.TemporaryDirectory() as root:
+            inspect_file(with_browser(process(port=8070, health='http://127.0.0.1:8070/health'),
+                                      base_url='http://127.0.0.1:8070/'), root)
+
+
 def isolated(**overrides):
     """Bloco browserTest.isolated válido: instância própria, porta automática, banco copiado e descartado."""
     block = {'baseUrl': 'http://127.0.0.1:{port}/',
@@ -591,9 +646,11 @@ class IsolatedBlockTests(unittest.TestCase):
     def test_automatic_or_distinct_ports_never_collide(self):
         fixed = process(port=8080, health='http://127.0.0.1:8080/health')
         preview = preview_block(baseUrl='http://127.0.0.1:8080/', processes=[fixed])
-        configs = {'isolada automática': with_isolated(None, fixed, preview=preview),
+        # the serve process of the assisted test never shares the preview port either (3rd review of issue 34, B)
+        serve_fixed = process(port=8081, health='http://127.0.0.1:8081/health')
+        configs = {'isolada automática': with_isolated(None, serve_fixed, preview=preview),
                    'portas fixas diferentes': with_isolated(
-                       None, fixed, preview=preview,
+                       None, serve_fixed, preview=preview,
                        processes=[process(port=8090, health='http://127.0.0.1:8090/health')],
                        baseUrl='http://127.0.0.1:8090/')}
         for case, config in configs.items():
