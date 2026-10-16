@@ -922,6 +922,36 @@ class WeekByDateTests(RoadmapSyncTestCase):
         self.assertIn('na forma `sprint-DD-MM-AAAA`', protocol)
         self.assertNotIn('o `laneId` vale a lane do estado lido', protocol)
 
+    def test_an_item_that_comes_back_to_the_week_reuses_its_entry(self):
+        root = Path(__file__).resolve().parents[1]
+        reference = ' '.join((root / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
+        readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
+        protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
+        for phrase in ('a `move_lane` back into a week finds the entry of its item in that sprint file the same way',
+                       '`add` creates an entry; an `add` whose `#N` (in the same repository) already has an entry in the roadmap or '
+                       'in a sprint file of `change.sprintTargets` is not written on its own',
+                       'and moving it to the lane of `item.lane` and to its place by `position`) or opening another, as the user chooses',
+                       'records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`',
+                       'for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint',
+                       'for a `move_lane` out of a sprint, or a `remove`, whose sprint file has no entry for the item (its exit or removal goes '
+                       'into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file '
+                       'otherwise, out of the order of `position`, and it stays before that line also when the line is written later; '
+                       'such an entry never counts for keeping that line)',
+                       'the line goes after every entry already in the file that is not of an `outOfLimit` item',
+                       'for a `remove` (recorded in the roadmap even for an item never written, in the lane of `payload.lane_id`, or at '
+                       'the end of the roadmap when the lane is missing)',
+                       'recording the return when its latest record is an exit or removal',
+                       'an `add` only by its `#N`: an `add` without one creates its entry',
+                       'for an `add`, the entries of its `#N` wherever they are, the one in `item.lane` first',
+                       'or the lane and place the user chose for an `add` that reuses an entry'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, reference)
+        for label, text in (('README', readme), ('protocol', protocol)):
+            with self.subTest(label=label):
+                self.assertIn('quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar dela pelo `position`', text)
+                self.assertIn('um `add` cujo `#N` já tem entrada vira pergunta', text)
+        self.assertNotIn('recreates a removed item', reference)
+
     def test_lanes_of_weeks_and_groups_raise_no_note_in_both_shapes(self):
         for shape, convert, origin in (('positional', lambda s: s, 'atual'), ('dated', dated, 'sprint-28-09-2026')):
             with self.subTest(shape=shape):
@@ -1006,7 +1036,7 @@ class OverLimitTests(RoadmapSyncTestCase):
         reference = ' '.join((root / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
         readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
         protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
-        for phrase in ('"Acima do limite de N:"', 'once and never repeated when the file already has it, then the entries of the `outOfLimit` items', 'in the order of `position`',
+        for phrase in ('"Acima do limite de N:"', 'is not of an `outOfLimit` item), then the entries of the `outOfLimit` items', 'in the order of `position`',
                        'when one of its items (past the limit too) lists the change'):
             self.assertIn(phrase, reference)
         self.assertNotIn('stay out of that sprint file', reference)

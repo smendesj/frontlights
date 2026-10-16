@@ -347,7 +347,9 @@ escreve no arquivo da semana as mudanças dos itens acima do limite como as dos 
 quando algum item acima do limite tem entrada no arquivo, a linha "Acima do limite de N:" uma única vez
 (atualizada quando o N muda e tirada quando não sobra entrada depois dela) e depois os demais; a entrada de
 um item que saiu da semana (por `move_lane` ou `remove`) fica onde está, com a saída registrada, e mantém a linha
-enquanto estiver depois dela; e avisa, sem
+enquanto estiver depois dela, e quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar
+dela pelo `position` (um `add` cujo `#N` já tem entrada vira pergunta: reaproveitar a entrada ou abrir outra); e
+avisa, sem
 perguntar, quais passaram do limite. Cada sprint é
 uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
 
@@ -356,7 +358,8 @@ título novo. O Frontlights acha a entrada pelo número da issue que a mudança 
 citam), e não pelo título, que nos arquivos pode ser o antigo: troca o título antigo pelo novo no `ROADMAP.md` e em
 cada `SPRINT_*.md` do plano, sem tocar no resto, e diz quantos `modify` de título o plano tem. Sem número (um item
 ainda sem issue, por exemplo), acha pelo título e pela lane. Se um `modify` ou `move_lane` não achar entrada no roadmap,
-ou se achar mais de uma, ele pergunta em vez de abrir uma segunda.
+se um `add` achar entrada do mesmo `#N`, ou se qualquer mudança achar mais de uma, ele pergunta; uma segunda entrada
+só é aberta num `add`, quando você escolhe.
 
 Quem escreve os arquivos é sempre esta máquina: o RoadS não alcança a pasta onde eles ficam.
 
