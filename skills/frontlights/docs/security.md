@@ -387,7 +387,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
   depende) na branch de uma slice para atualizá-la, juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta), o merge da main local e das branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos, e a branch da prévia nunca é enviada. O utilitário `authorize`
   confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na

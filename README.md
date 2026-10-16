@@ -690,7 +690,9 @@ um conflito é desfeito e vira pergunta). Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,
-commitar, mesclar a branch da issue na main local com os três portões verdes, rodar a migration no banco de
+commitar, mesclar a branch da issue na main local com os três portões verdes, mesclar a main local e as
+branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira
+pergunta; a branch da prévia nunca é enviada), rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
 marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
 fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
