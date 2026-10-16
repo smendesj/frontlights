@@ -144,6 +144,7 @@ DEFAULT_BASE = 'main'
 BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
 PROTECTED_BRANCHES = ('main', 'master')
+MAX_AUTHORIZATION_BYTES = 2 * 1024 * 1024  # an authorization record past this is skipped, never read
 
 _SECRETS = []
 
@@ -406,20 +407,35 @@ def load_preview_block(config_file, root, need_processes=True):
     return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
 
 
-def protected_patterns(root):
-    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`; a file
-    that is missing, unreadable or not an object, and an entry that is not a non-empty text, are skipped."""
-    patterns = list(PROTECTED_BRANCHES)
+def authorization_records(root):
+    """(file name, object) of every readable `<root>/.frontlights/authorization*.json`, in name order. A file that is
+    missing, unreadable, larger than `MAX_AUTHORIZATION_BYTES`, nested too deep for json or not an object is
+    skipped: these records are read only to refuse more, never to allow."""
     try:
         files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
     except OSError:
         files = []
+    records = []
     for path in files:
         try:
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
+            with open(path, 'rb') as handle:
+                raw = handle.read(MAX_AUTHORIZATION_BYTES + 1)
+            if len(raw) > MAX_AUTHORIZATION_BYTES:
+                continue
+            data = json.loads(raw.decode('utf-8-sig'))
+        except (OSError, ValueError, RecursionError, MemoryError):
             continue
-        listed = data.get('protected_branches') if isinstance(data, dict) else None
+        if isinstance(data, dict):
+            records.append((relative(Path(root), path), data))
+    return records
+
+
+def protected_patterns(root):
+    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`
+    (`authorization_records`); an entry that is not a non-empty text is skipped."""
+    patterns = list(PROTECTED_BRANCHES)
+    for _, data in authorization_records(root):
+        listed = data.get('protected_branches')
         if isinstance(listed, list):
             patterns += [item for item in listed if isinstance(item, str) and item.strip('/')]
     return patterns
@@ -755,6 +771,12 @@ def preview_registry_path(root):
     return preview_dir(root) / 'registry.json'
 
 
+def preview_branch_marker_path(root):
+    """`{"branch": <name>}`: the branch the last refresh created or redid. `preview stop` keeps it (it deletes only
+    the record), so a refresh after a stop still knows the branch is the preview's own."""
+    return preview_dir(root) / 'branch.json'
+
+
 def preview_lock_path(root):
     return preview_dir(root) / '.lock'
 
@@ -828,16 +850,19 @@ def preview_start(config_file, root):
 
 
 def preview_start_locked(block, config_file, root):
+    contents = None
     if preview_registry_path(root).is_file():
         previous = read_preview_registry(root)
         # the process or its relay: a live relay alone still holds the log of a process nobody tracks any more
         require(not any(same_process(item) for item in preview_kill_list(previous['processes'])),
                 'A prévia já está no ar (um processo ou o relé do log dele está vivo); rode `preview refresh` para '
                 'refazê-la ou `preview stop` para derrubá-la.', category=USAGE)
+        if previous.get('worktree') == block['worktree']:  # the same worktree still holds the merges of the refresh
+            contents = {key: previous[key] for key in ('base', 'baseCommit', 'merged') if key in previous} or None
     worktree = (Path(root).resolve() / block['worktree'])
     require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; rode `preview refresh` para '
             'criá-la.', category=USAGE)
-    return launch_preview(block, config_file, root)
+    return launch_preview(block, config_file, root, contents)
 
 
 def launch_preview(block, config_file, root, contents=None):
@@ -1594,6 +1619,16 @@ def check_refresh(block, root, branches, base):
         require(name not in (preview_branch, base), f'--branch {name} não pode ser a branch da prévia nem a base: '
                 'passe só as branches das issues em andamento.', category=USAGE)
     require(len(set(branches)) == len(branches), 'Cada --branch pode aparecer uma vez só.', category=USAGE)
+    worktree = Path(root).resolve() / block['worktree']
+    here = path_key(worktree)
+    for name, key, branch in issue_worktrees(root):
+        # with or without a preview record: the refresh redoes its branch and worktree from the base
+        require(branch is None or branch.casefold() != preview_branch.casefold(), f'preview.branch '
+                f'({preview_branch}) é a branch de uma worktree de issue registrada em {name}: o refresh a refaria a '
+                'partir da base. Escolha em preview.branch uma branch só da prévia.', category=USAGE)
+        require(key != here, f'preview.worktree ({block["worktree"]}) é uma worktree de issue registrada em {name}: '
+                'o refresh a refaria a partir da base. Escolha em preview.worktree uma pasta só da prévia.',
+                category=USAGE)
     code, _, _ = git(root, 'rev-parse', '--show-toplevel')
     require(code == 0, 'O --root não é uma worktree Git; o preview refresh precisa do repositório.', category=USAGE)
     base_commit = git_commit(root, f'refs/heads/{base}')
@@ -1603,18 +1638,19 @@ def check_refresh(block, root, branches, base):
         commits[name] = git_commit(root, f'refs/heads/{name}')
         require(commits[name], f'A branch {name} não existe localmente; passe em --branch só branches de issue que '
                 'existem neste repositório.', category=USAGE)
-    worktree = Path(root).resolve() / block['worktree']
     known = registered_worktrees(root)
-    here = path_key(worktree)
     elsewhere = [path for path, branch in known.items() if branch == preview_branch and path != here]
     require(not elsewhere, f'A branch da prévia ({preview_branch}) está em uso em outra worktree; o refresh só a '
             'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
     exists = worktree.exists()
     if not exists and git_commit(root, f'refs/heads/{preview_branch}'):
-        # `worktree add --force -B` would move it: only a branch the preview's own record names may be redone
-        require(recorded_preview_branch(root) == preview_branch, f'A branch {preview_branch} já existe e não é da '
-                'prévia (o registro da prévia não a nomeia), e a worktree da prévia não existe: o refresh a moveria '
-                'para a base. Escolha outro nome em preview.branch ou, se ela não guarda nada, apague a branch à mão.',
+        # `worktree add --force -B` would move it: only a branch the preview's own record or marker names may be
+        # redone
+        require(preview_branch in (recorded_preview_branch(root), marked_preview_branch(root)), f'A branch '
+                f'{preview_branch} já existe e não é da prévia (nem o registro nem o marcador da prévia a nomeiam), e '
+                'a worktree da prévia não existe: o refresh a moveria para a base. Escolha outro nome em '
+                'preview.branch ou, se ela não guarda nada, apague a branch à mão; se a pasta da worktree da prévia '
+                'foi apagada sem `git worktree remove`, rode `git worktree prune` antes de apagar a branch.',
                 category=USAGE)
     if exists:
         require(worktree.is_dir() and here in known, f'{block["worktree"]} existe, mas não é uma worktree deste '
@@ -1627,6 +1663,25 @@ def check_refresh(block, root, branches, base):
     return worktree, exists, base_commit, commits
 
 
+def issue_worktrees(root):
+    """(record name, path key or None, branch or None) of each item of `worktrees` in the readable
+    `.frontlights/authorization*.json` (`authorization_records`); a relative `path` is taken from the `--root`."""
+    found = []
+    for name, data in authorization_records(root):
+        entries = data.get('worktrees')
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            path, branch, key = entry.get('path'), entry.get('branch'), None
+            if isinstance(path, str) and path.strip() and '\0' not in path:
+                try:
+                    key = path_key(Path(root).resolve() / path)
+                except (OSError, ValueError):
+                    key = None
+            found.append((name, key, branch if isinstance(branch, str) and branch else None))
+    return found
+
+
 def recorded_preview_branch(root):
     """The `branch` the preview record names, or None (no record, unreadable, or without it)."""
     try:
@@ -1636,9 +1691,19 @@ def recorded_preview_branch(root):
     return record.get('branch') if isinstance(record, dict) else None
 
 
+def marked_preview_branch(root):
+    """The `branch` of the marker of the preview branch, or None (no marker, unreadable, or without it)."""
+    try:
+        record = json.loads(preview_branch_marker_path(root).read_text(encoding='utf-8'))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return record.get('branch') if isinstance(record, dict) else None
+
+
 def recreate_preview_worktree(block, root, worktree, exists, base_commit):
     """The preview branch is reset to the base commit inside the preview worktree (`checkout -B`), or the worktree is
-    added on it; the local main and the issue branches are never written."""
+    added on it; the local main and the issue branches are never written. The marker of the preview branch is written
+    after Git did it."""
     if exists:
         code, _, err = git(worktree, 'checkout', '-q', '-B', block['branch'], base_commit)
     else:
@@ -1646,6 +1711,7 @@ def recreate_preview_worktree(block, root, worktree, exists, base_commit):
             worktree.parent.mkdir(parents=True, exist_ok=True)
         code, _, err = git(root, 'worktree', 'add', '-q', '--force', '-B', block['branch'], str(worktree), base_commit)
     require(code == 0, f'O git não refez a worktree da prévia na base: {git_text(err)}')
+    write_json_atomic({'branch': block['branch']}, preview_branch_marker_path(root))
 
 
 def merge_branches(block, worktree, branches, commits):
