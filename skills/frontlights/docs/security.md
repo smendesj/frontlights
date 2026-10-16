@@ -27,7 +27,8 @@ com permissões limitadas a uma issue.
 etapa 6 abre sem pergunta: a sessão anuncia o que fará e grava a autorização com
 `approval_reference` `"autorização permanente (docs/security.md)"`, sem pedir concorrência,
 empilhamento nem autorização delimitada. Ela cobre só as issues da família ou do lote em
-andamento e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, os merges da
+andamento (ou o trabalho sem issue, caminho Direto ou Curto sem publicar issue, nomeado pelo slug `direct`
+listado em `direct_ids`) e só as operações listadas em `docs/protocol.md`: editar, testar, commitar, os merges da
 autorização de empilhamento (entre eles o da branch da issue na main local, só com os três portões
 verdes: suíte inteira, `review-gate` atual e `browser-gate` respondido), a PR única da release,
 migrations no banco de desenvolvimento local, dados de teste pelos endpoints do
@@ -60,7 +61,8 @@ O comando `authorize` verifica uma operação estruturada em relação à autori
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
-qualquer merge que não seja o da branch da issue na main local com os três portões verdes
+qualquer merge que não seja o da branch da issue (ou do trabalho sem issue, pelo seu `direct`) na main local com
+os três portões verdes
 (`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
 suportados. Sempre retorna `permission_granted: false`. Mesmo a PR da release e as
 atualizações de issues autorizadas continuam sujeitas à aprovação nativa do ambiente, pois o Frontlights
@@ -72,7 +74,8 @@ permissões humanas e nativas vigentes.
 homologação: acumula as issues que passaram nos três portões, e a issue fecha só com a release que a leva
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
-remota), só da worktree da issue (nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
+remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
+nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
 current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
@@ -415,7 +418,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
   depende) na branch de uma slice para atualizá-la, juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta), o merge da main local e das branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos, e a branch da prévia nunca é enviada. O utilitário `authorize`
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta), o merge da main local e das branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos, e a branch da prévia nunca é enviada; o trabalho sem issue (`direct`) segue a mesma lista, com a branch dele no lugar da branch da issue. O utilitário `authorize`
   confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na

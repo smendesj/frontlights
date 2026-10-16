@@ -574,7 +574,8 @@ offers the release again with everything accumulated.
 - **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
   `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
   hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
-  #a, #b" --body-file <file>`. The body follows `templates/pr.md` (the model of the pull request), in the user's
+  #a, #b" --body-file <file>` (the title names the slugs of the work without an issue too: "Release <date>: issues
+  #a; melhoria-x", or only the slugs when the release has no issue). The body follows `templates/pr.md` (the model of the pull request), in the user's
   language, with the project's domain vocabulary: **Resumo** and **Evidência** once per issue (what it delivers with the smallest visual that makes its
   point clear; before and after, from the prints of each issue's watched run, the tests of its checkpoints, the
   independent review and its three gates, records that already exist, never invented; a print is cited by its file

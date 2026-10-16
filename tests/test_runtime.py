@@ -1198,6 +1198,10 @@ class AuthorizeDirectTests(unittest.TestCase):
         self.assertEqual(frontlights.authorize(charter, dict(op, worktree=str(self.root / 'direct')))['scope_check'],
                          'pass')
 
+    def test_the_slug_rule_is_the_same_in_authorize_and_in_the_release_plan(self):
+        import homolog
+        self.assertEqual(frontlights.DIRECT_RULE.pattern, homolog.DIRECT.pattern)
+
     def test_the_merge_of_direct_work_through_the_command_line(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'charter.json'
