@@ -177,6 +177,7 @@ which processes are still up when the user chose to keep them.
 
 ```powershell
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview start --config <config> --root <main worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview refresh --config <config> --root <main worktree> [--base main] --branch <issue branch> [--branch <issue branch> ...]
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview status --config <config> --root <main worktree>
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview stop --config <config> --root <main worktree>
 ```
@@ -188,8 +189,20 @@ runs its processes in the preview worktree; each one's output goes through
 masked in `.frontlights/preview/log/`, and its record in
 `.frontlights/preview/registry.json` survives the `serve stop` of an issue and a
 change of session (`preview status` finds the processes through it and returns the
-tail of each log). `preview start` is refused while the preview is alive: ask for
-`preview refresh` (the next slice). Run `preview stop` only when the user asks.
+tail of each log). `preview start` is refused while the preview is alive: run
+`preview refresh` instead. Run `preview stop` only when the user asks.
+
+`preview refresh` redoes the preview branch from the local main (`git checkout -B`
+inside the preview worktree, or `git worktree add` when it is missing; never the
+local main nor the branches of the issues, which do not move), merges the branches
+of the issues in progress given in `--branch`, in order, brings the processes up
+again and checks health and log. The preview branch is never pushed and nothing is
+edited in the preview worktree: one with tracked changes is refused as `uso`, like
+a branch that does not exist locally. A conflict is undone (`conflict: true`, the
+branch and the files) and nothing comes up: ask the user. A broken build (a
+process that exits before its health, or a health that never answers) is torn down
+and refused with `build: "quebrado"`, the process, the `log` and its last lines
+(`tail`); say it in one line with the log file and the error, then ask.
 
 ## Checks: `checks`
 
