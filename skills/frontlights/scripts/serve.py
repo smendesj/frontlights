@@ -144,6 +144,7 @@ DEFAULT_BASE = 'main'
 BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
 PROTECTED_BRANCHES = ('main', 'master')
+MAX_AUTHORIZATION_BYTES = 2 * 1024 * 1024  # an authorization record past this is skipped, never read
 
 _SECRETS = []
 
@@ -406,20 +407,35 @@ def load_preview_block(config_file, root, need_processes=True):
     return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
 
 
-def protected_patterns(root):
-    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`; a file
-    that is missing, unreadable or not an object, and an entry that is not a non-empty text, are skipped."""
-    patterns = list(PROTECTED_BRANCHES)
+def authorization_records(root):
+    """(file name, object) of every readable `<root>/.frontlights/authorization*.json`, in name order. A file that is
+    missing, unreadable, larger than `MAX_AUTHORIZATION_BYTES`, nested too deep for json or not an object is
+    skipped: these records are read only to refuse more, never to allow."""
     try:
         files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
     except OSError:
         files = []
+    records = []
     for path in files:
         try:
-            data = json.loads(path.read_text(encoding='utf-8-sig'))
-        except (OSError, ValueError):
+            with open(path, 'rb') as handle:
+                raw = handle.read(MAX_AUTHORIZATION_BYTES + 1)
+            if len(raw) > MAX_AUTHORIZATION_BYTES:
+                continue
+            data = json.loads(raw.decode('utf-8-sig'))
+        except (OSError, ValueError, RecursionError, MemoryError):
             continue
-        listed = data.get('protected_branches') if isinstance(data, dict) else None
+        if isinstance(data, dict):
+            records.append((relative(Path(root), path), data))
+    return records
+
+
+def protected_patterns(root):
+    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`
+    (`authorization_records`); an entry that is not a non-empty text is skipped."""
+    patterns = list(PROTECTED_BRANCHES)
+    for _, data in authorization_records(root):
+        listed = data.get('protected_branches')
         if isinstance(listed, list):
             patterns += [item for item in listed if isinstance(item, str) and item.strip('/')]
     return patterns

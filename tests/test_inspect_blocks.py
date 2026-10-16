@@ -355,6 +355,25 @@ class PreviewBlockTests(unittest.TestCase):
         self.assertNotIn(login, message)
         self.assertNotIn(PASSWORD, message)
 
+    def test_hostile_authorization_records_are_skipped_and_the_cli_answers_json(self):
+        """2nd review of issue 34 (B3): a record nested too deep for json and one past 2 MiB are skipped by the
+        reading of protected_branches that validates preview.branch; the inspect never ends in a traceback."""
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / '.frontlights'
+            folder.mkdir()
+            (folder / 'authorization-fundo.json').write_text('[' * 100000, encoding='utf-8')
+            (folder / 'authorization-grande.json').write_text(
+                json.dumps({'protected_branches': ['grande*'], 'padding': 'x' * (2 * 1024 * 1024 + 1)}),
+                encoding='utf-8')
+            config = Path(root) / 'config.json'
+            config.write_text(json.dumps({'repository': None, 'preview': preview_block(branch='grande-previa')}),
+                              encoding='utf-8')
+            run = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--config', str(config), '--root', root],
+                                 capture_output=True, text=True, encoding='utf-8')
+        self.assertNotIn('Traceback', run.stderr)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIsNone(json.loads(run.stdout)['repository'])
+
     def test_the_example_declares_the_block_with_generic_markers(self):
         block = EXAMPLE['preview']
         self.assertEqual((block['worktree'], block['branch']), ('.claude/worktrees/previa', 'previa'))

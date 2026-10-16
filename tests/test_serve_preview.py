@@ -660,6 +660,32 @@ class PreviewConfigRefusalTest(PreviewTestCase):
             with self.subTest(branch=value):
                 self.assertEqual(self.accepted(self.block(branch=value))['branch'], value)
 
+    def write_hostile_authorizations(self):
+        """2nd review of issue 34 (B3): one record nested too deep for json, one past the size limit; both name
+        protected branches that would refuse the block if they were read."""
+        folder = self.root / '.frontlights'
+        folder.mkdir(exist_ok=True)
+        (folder / 'authorization-fundo.json').write_text('[' * 100000, encoding='utf-8')
+        padding = 'x' * (2 * 1024 * 1024 + 1)  # the limit: 2 MiB per record
+        (folder / 'authorization-grande.json').write_text(
+            json.dumps({'protected_branches': ['grande*'], 'padding': padding}), encoding='utf-8')
+
+    def test_an_authorization_nested_too_deep_or_too_large_is_skipped(self):
+        self.write_hostile_authorizations()
+        self.assertEqual(self.accepted(self.block(branch='grande-previa'))['branch'], 'grande-previa')
+        self.assertEqual(serve.protected_patterns(self.root), list(serve.PROTECTED_BRANCHES))
+
+    def test_the_cli_answers_json_with_hostile_authorizations(self):
+        self.write_hostile_authorizations()
+        self.write_config(preview=self.block(branch='grande-previa'))
+        for args in (('preview', 'start'), ('preview', 'refresh')):
+            with self.subTest(args=args):
+                done = self.serve(*args)
+                self.assertNotIn('Traceback', done.stderr)
+                result = self.payload(done)  # JSON, never a traceback
+                self.assertIn('ok', result)
+        self.assertTrue(self.payload(self.serve('preview', 'stop'))['ok'])
+
     def test_a_process_health_outside_the_local_host_is_refused_naming_the_process(self):
         for health in ('http://example.test:{port}/', 'http://10.0.0.5:{port}/', 'http://0.0.0.0:{port}/'):
             with self.subTest(health=health):
