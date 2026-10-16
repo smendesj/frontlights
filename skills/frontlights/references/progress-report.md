@@ -132,7 +132,9 @@ operation runs in, because the collectors, the draft guide and the approval all 
      the files). Read those two files, never write them here. They are the source of "Próximos passos"
      and of what is in development versus still in the backlog, so the next steps reflect the sprint of
      the week. The items after the line "Acima do limite de N:" of the sprint file are past the sprint
-     limit: they are not commitments of the week, and the next steps say so when they cite them. When no
+     limit: they are not commitments of the week, and the next steps say so when they cite them. An
+     entry that records the exit or the removal of its item (a `move_lane` out of the week, a `remove`)
+     is not an item of the week at all, wherever it sits. When no
      sprint file for the current week exists, say so plainly to the user and write the next steps only
      from the facts.
    - **Statuses.** The status of each person's delivery comes from the collected facts, never from
