@@ -77,9 +77,10 @@ the last `TAIL_BYTES` of the file), masked again on output, and what the worktre
 `merged`) when a refresh brought it up.
 `preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
 change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
-repository on `preview.branch`, or that has tracked changes or a merge in progress), then stops the preview, redoes
-`preview.branch` at the local base (`git checkout -B` inside the preview worktree, or `git worktree add --force -B`
-when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit` of the commit the check read, the
+repository on `preview.branch`, or that has tracked changes or a merge in progress, and, when the preview worktree is
+missing, a `preview.branch` that already exists and is not the one the preview record names: `worktree add -B` would
+move it), then stops the preview, redoes `preview.branch` at the local base (`git checkout -B` inside the preview
+worktree, or `git worktree add --force -B` when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit` of the commit the check read, the
 one recorded in `merged`, with the message `Merge branch '<b>' into <preview.branch>`) and brings the processes up as
 `preview start` does. A conflict is aborted (`git merge --abort`), nothing comes up and the refusal names the branch
 and the files (`conflict: true`). A process that exits before its health, or whose health never answers, is a broken
@@ -1609,6 +1610,12 @@ def check_refresh(block, root, branches, base):
     require(not elsewhere, f'A branch da prévia ({preview_branch}) está em uso em outra worktree; o refresh só a '
             'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
     exists = worktree.exists()
+    if not exists and git_commit(root, f'refs/heads/{preview_branch}'):
+        # `worktree add --force -B` would move it: only a branch the preview's own record names may be redone
+        require(recorded_preview_branch(root) == preview_branch, f'A branch {preview_branch} já existe e não é da '
+                'prévia (o registro da prévia não a nomeia), e a worktree da prévia não existe: o refresh a moveria '
+                'para a base. Escolha outro nome em preview.branch ou, se ela não guarda nada, apague a branch à mão.',
+                category=USAGE)
     if exists:
         require(worktree.is_dir() and here in known, f'{block["worktree"]} existe, mas não é uma worktree deste '
                 'repositório; o refresh não toca nela. Confira preview.worktree no config.', category=USAGE)
@@ -1618,6 +1625,15 @@ def check_refresh(block, root, branches, base):
                 'A worktree da prévia tem alterações; ela é refeita a cada refresh, então nada se edita nela. '
                 f'Confira {block["worktree"]} e desfaça as alterações antes de um novo refresh.', category=USAGE)
     return worktree, exists, base_commit, commits
+
+
+def recorded_preview_branch(root):
+    """The `branch` the preview record names, or None (no record, unreadable, or without it)."""
+    try:
+        record = json.loads(preview_registry_path(root).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return record.get('branch') if isinstance(record, dict) else None
 
 
 def recreate_preview_worktree(block, root, worktree, exists, base_commit):

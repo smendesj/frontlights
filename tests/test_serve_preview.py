@@ -912,6 +912,89 @@ class PreviewMergeCommitTest(RefreshTestCase):
         self.assertEqual(self.git('log', '-1', '--format=%s', 'previa'), "Merge branch 'issue-1' into previa")
 
 
+class PreviewRefreshGuardTest(FakeRecordMixin, RefreshTestCase):
+    """Refusals of `preview refresh` before anything is stopped: a fake live preview (sleeping processes) proves
+    nothing was torn down, and neither the preview worktree nor any branch moves."""
+
+    def live(self, branch='previa'):
+        self.process, self.relay = self.sleeper(), self.sleeper()
+        self.before = self.fake_registry(self.process, self.relay, branch)
+        self.refs = self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads')
+
+    def assert_refused(self, done, needle):
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso', result)
+        self.assertIn(needle, result['error'])
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), self.before)
+        self.assertTrue(serve.pid_alive(self.process['pid']) and serve.pid_alive(self.relay['pid']),
+                        'uma recusa de uso derrubou a prévia')
+        self.assertEqual(self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads'), self.refs)
+        self.assertFalse(serve.preview_log_dir(self.root).exists())
+        return result
+
+    def test_a_dangerous_branch_name_is_refused(self):
+        self.live()
+        for value in ('-x', 'a..b', 'nome.lock', 'com espaço', 'a/', 'a//b'):
+            with self.subTest(branch=value):
+                self.assert_refused(self.serve('preview', 'refresh', f'--branch={value}'),
+                                    'não é um nome simples')
+        self.assertFalse(self.worktree.exists())
+
+    def test_a_base_that_is_the_preview_branch_or_a_dangerous_name_is_refused(self):
+        self.live()
+        for value, needle in (('previa', 'própria branch da prévia'), ('-x', '--base precisa'),
+                              ('a..b', '--base precisa')):
+            with self.subTest(base=value):
+                self.assert_refused(self.serve('preview', 'refresh', f'--base={value}'), needle)
+        self.assertFalse(self.worktree.exists())
+
+    def test_a_preview_worktree_that_is_not_a_worktree_of_this_repository_is_refused(self):
+        self.live()
+        self.worktree.mkdir(parents=True)
+        (self.worktree / 'meu.txt').write_text('nao e da previa\n', encoding='utf-8')
+        self.assert_refused(self.refresh('issue-1'), 'não é uma worktree deste repositório')
+        self.git('init', '-q', '-b', 'outro', cwd=self.worktree)  # another repository in its place
+        self.assert_refused(self.refresh('issue-1'), 'não é uma worktree deste repositório')
+        self.assertEqual((self.worktree / 'meu.txt').read_text(encoding='utf-8'), 'nao e da previa\n')
+
+    def test_a_preview_worktree_on_another_branch_is_refused(self):
+        self.git('worktree', 'add', '-q', '-b', 'outra', str(self.worktree), 'main')
+        self.live()
+        self.assert_refused(self.refresh('issue-1'), 'não está na branch previa')
+        self.assertEqual(self.git('symbolic-ref', '--short', 'HEAD', cwd=self.worktree), 'outra')
+
+    def test_a_preview_branch_in_use_in_another_worktree_is_refused(self):
+        self.git('worktree', 'add', '-q', '-b', 'previa', str(Path(self.tmp.name) / 'outra'), 'main')
+        self.live()
+        self.assert_refused(self.refresh('issue-1'), 'em uso em outra worktree')
+        self.assertFalse(self.worktree.exists())
+
+    def test_an_existing_branch_that_is_not_the_previews_is_never_moved_by_the_first_refresh(self):
+        self.branch('previa', {'proprio.txt': 'commit proprio\n'})
+        own = self.rev('previa')
+        done = self.refresh('issue-1')  # no record at all
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso')
+        self.assertIn('já existe', result['error'])
+        self.assertEqual(self.rev('previa'), own, 'o refresh moveu uma branch que não era da prévia')
+        self.assertFalse(self.worktree.exists())
+        self.live(branch='antiga')  # a record that names another branch does not vouch for this one
+        self.assert_refused(self.refresh('issue-1'), 'já existe')
+        self.assertEqual(self.rev('previa'), own)
+        self.assertFalse(self.worktree.exists())
+
+    def test_the_first_refresh_redoes_the_branch_the_registry_names(self):
+        self.branch('previa', {'proprio.txt': 'commit proprio\n'})
+        self.fake_registry(self.dead(), self.dead(), 'previa')
+        with mock.patch.object(serve, 'launch_preview', return_value={'ok': True}) as launch:
+            result = serve.preview_refresh(self.config, self.root, ['issue-1'], 'main')
+        launch.assert_called_once()
+        self.assertEqual(result['merged'], [{'branch': 'issue-1', 'commit': self.rev('issue-1')}])
+        self.assertEqual((self.rev('previa^1'), self.rev('previa^2')), (self.rev('main'), self.rev('issue-1')))
+
+
 def done_text(done):
     return done.stdout + done.stderr
 
