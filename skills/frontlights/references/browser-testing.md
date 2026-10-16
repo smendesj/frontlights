@@ -32,7 +32,7 @@ contradiction from the diff); never turn tests on or off alone. Run only what is
 `checks integration`, browser and cross-account steps (the browser step opens with
 the watched-run question below and, when the user watched, ends with the question of
 what to do next), `checks smoke` (it reuses the running serve),
-`serve stop`. The commands below read `browserTest` and `checks` from the project's
+`serve stop` of the issue (never `preview stop`: the preview stays up). The commands below read `browserTest` and `checks` from the project's
 `.frontlights/config.json` (main worktree included, as stage 2 says).
 
 ## One watched run per issue
@@ -268,7 +268,8 @@ When the user will watch:
   false` in Playwright, or the session's browser on screen), in a disposable browser
   context or profile, never the user's personal one. If the session cannot open
   one, the watched run did not happen: report the reason and ask; never fall back to
-  a hidden window silently.
+  a hidden window silently. The tab of the preview is the user's and stays outside
+  this rule: the watched run never drives it and runs never on the ports of the preview.
 - **The whole screen, always.** The user must see the whole page and the strip without
   scrolling or resizing anything. Size the window to the screen's available area (start
   maximized, or read the screen size and open the window at it) and let the page

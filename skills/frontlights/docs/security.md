@@ -373,7 +373,8 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   Nada disso vale para conta real, homologação ou produção. O `ANTES` roda a base com `serve
   start --root <checkout-da-base>`, o `serve stop` encerra só os pids que o registro da issue
   guardou, e um processo que o teste não subiu nunca é encerrado. A janela é de um perfil
-  descartável do navegador, nunca o pessoal do usuário. A aprovação do que foi assistido é só a
+  descartável do navegador, nunca o pessoal do usuário. A aba da prévia é do usuário (aberta uma vez no Claude in
+  Chrome dele) e fica fora dessa regra: a sessão não a dirige, e o teste assistido nunca usa a prévia nem as portas dela. A aprovação do que foi assistido é só a
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
