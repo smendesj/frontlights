@@ -68,7 +68,7 @@ loads the secrets of `browserTest.users` from the config itself and masks them) 
 `<root>/.frontlights/preview/log/<name>.log`. The record lives in `<root>/.frontlights/preview/registry.json` under
 its own lock (`<root>/.frontlights/preview/.lock`), so `stop --issue <n>` never touches it, and a new session finds
 the processes through it. Port reservations of the preview carry `"issue": "preview"`, so the release of an issue's
-reservations never frees them. `preview start` is refused while the preview is alive and when the preview worktree
+reservations never frees them. `preview start` is refused while the preview is alive (any process or log relay of the record) and when the preview worktree
 does not exist. `preview status` adds `alive`, `log` and the last `TAIL_LINES` lines of each log (`tail`), masked
 again on output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
 `preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
@@ -816,9 +816,10 @@ def preview_start(config_file, root):
 def preview_start_locked(block, config_file, root):
     if preview_registry_path(root).is_file():
         previous = read_preview_registry(root)
-        require(not any(same_process(entry) for entry in previous['processes']),
-                'A prévia já está no ar; rode `preview refresh` para refazê-la ou `preview stop` para derrubá-la.',
-                category=USAGE)
+        # the process or its relay: a live relay alone still holds the log of a process nobody tracks any more
+        require(not any(same_process(item) for item in preview_kill_list(previous['processes'])),
+                'A prévia já está no ar (um processo ou o relé do log dele está vivo); rode `preview refresh` para '
+                'refazê-la ou `preview stop` para derrubá-la.', category=USAGE)
     worktree = (Path(root).resolve() / block['worktree'])
     require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; rode `preview refresh` para '
             'criá-la.', category=USAGE)

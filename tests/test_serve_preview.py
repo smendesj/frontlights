@@ -671,6 +671,44 @@ class PreviewConfigRefusalTest(PreviewTestCase):
                 self.assertEqual(error.process, second)
 
 
+class PreviewStartRecordTest(FakeRecordMixin, PreviewTestCase):
+    """`preview start` with an old record: any live pid of it (process or relay) refuses; nothing alive goes on."""
+
+    def start(self):
+        with mock.patch.object(serve, 'launch_preview', return_value={'ok': True}) as launch:
+            try:
+                return launch, serve.preview_start(self.config, self.root), None
+            except serve.Refusal as refusal:
+                return launch, None, refusal
+
+    def test_a_live_relay_of_the_old_record_refuses_the_start(self):
+        self.write_config()
+        before = self.fake_registry(self.dead(), self.sleeper())
+        launch, _, refusal = self.start()
+        self.assertIsNotNone(refusal, 'o start seguiu com o relé antigo vivo')
+        self.assertEqual(refusal.category, 'uso')
+        self.assertIn('refresh', str(refusal))
+        launch.assert_not_called()
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), before)
+
+    def test_a_live_process_of_the_old_record_refuses_the_start(self):
+        self.write_config()
+        before = self.fake_registry(self.sleeper(), self.dead())
+        launch, _, refusal = self.start()
+        self.assertIsNotNone(refusal)
+        self.assertEqual(refusal.category, 'uso')
+        launch.assert_not_called()
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), before)
+
+    def test_an_old_record_with_nothing_alive_lets_the_start_go_on(self):
+        self.write_config()
+        self.fake_registry(self.dead(), self.dead())
+        launch, result, refusal = self.start()
+        self.assertIsNone(refusal)
+        self.assertEqual(result, {'ok': True})
+        launch.assert_called_once()
+
+
 def done_text(done):
     return done.stdout + done.stderr
 
