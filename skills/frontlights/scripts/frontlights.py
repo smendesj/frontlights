@@ -924,7 +924,8 @@ def validate_isolated_command(command, where):
     reason = checks.embedded_shell(argv)
     if reason:
         raise checks.Refused(f'{where}.argv não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, '
-                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus argumentos.')
+                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus '
+                             'argumentos.')
     timeout = command.get('timeoutSeconds')
     if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
         raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
