@@ -31,7 +31,7 @@ com permissões limitadas a uma issue.
 
 ## Autorização permanente
 
-**Autorização permanente.** O usuário decidiu, de forma permanente e para todo projeto, que a
+O usuário decidiu, de forma permanente e para todo projeto, que a
 etapa 6 abre sem pergunta: a sessão anuncia o que fará e grava a autorização com
 `approval_reference` `"autorização permanente (docs/security.md)"`. O que ela cobre, os merges cobertos e as
 operações negadas (cada uma com a própria pergunta e o "Sim") estão numa lista só, em
@@ -41,7 +41,7 @@ pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights 
 
 ## Artefato do grilling
 
-**Artefato do grilling.** A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
+A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
 host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso leva só dados fictícios.
 O antes é montado do template real do componente (HTML e CSS lidos do repositório), mas nenhum dado real,
 segredo, endpoint, nome de pessoa, cliente ou organização entra na página; os prints do produto em execução
@@ -50,7 +50,7 @@ são do teste assistido, nunca do artefato. Sem ferramenta de artefatos, a sess�
 
 ## Subagentes
 
-**Subagentes.** No paralelismo (`docs/protocol.md`), um subagente trabalha sob as mesmas permissões nativas da
+No paralelismo (`docs/protocol.md`), um subagente trabalha sob as mesmas permissões nativas da
 sessão que o lançou, e o "Sim" de uma operação negada vale para a sessão coordenadora que
 o perguntou, nunca para um agente que a execute por ela. O brief diz o que o agente nunca faz (perguntar ao
 usuário, escrever no GitHub, mesclar, rodar operação negada, editar fora dos caminhos dele), e isso é regra
@@ -85,7 +85,7 @@ o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova sã
 ## `homolog sync` e `homolog bundle`
 
 **Sincronização da main local (`homolog sync`).** Trazer `origin/<base>` para a main local é merge coberto
-(`references/development.md`, "Covered merges"), feito pelo `scripts/homolog.py` sem shell (lista de argumentos, `GIT_TERMINAL_PROMPT=0`,
+(`references/development.md`, "Standing authorization and the denied operations"), feito pelo `scripts/homolog.py` sem shell (lista de argumentos, `GIT_TERMINAL_PROMPT=0`,
 prazo): exige a worktree principal com `<base>` em uso, sem alteração rastreada pendente e sem merge em
 andamento, roda `git fetch` e `git merge --no-edit`, e um conflito é desfeito na hora (`git merge --abort`,
 `HEAD` de volta ao commit anterior) e volta como pergunta com os arquivos nomeados. Nunca envia, nunca usa
@@ -251,7 +251,7 @@ O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita
 linhas. O corpo anterior fica guardado, o `closeout.py tick-check` (só lê dois arquivos locais) confere, antes e
 depois de escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado. A
 espera do merge é regra da skill: a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente
-(inscrição na PR ou monitor) só a acorda; o `merge-status` que só lê o GitHub com `gh api graphql`; um merge em outra branch, uma PR fechada
+(inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada
 sem merge ou uma PR desconhecida nunca propõe fechar nada.
 
 A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
@@ -414,7 +414,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a
   tela, nenhum relato de "completa" e nenhuma PR seguem enquanto o teste estiver devido.
 - **Branches empilhadas:** a autorização que as permite nomeia as operações que elas exigem: criar branch a
-  partir de outra branch que não a base e os merges cobertos de `references/development.md` ("Covered merges"),
+  partir de outra branch que não a base e os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"),
   os únicos permitidos. O utilitário `authorize`
   confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações

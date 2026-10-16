@@ -200,7 +200,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`full_suite: green`, `review_gate: current` e `browser_gate: answered` ou `not_needed`',
                        'conferência prévia, não barreira', 'não lê o Git',
                        'confere `edit`, `test`, `checkpoint` e `merge_into_local_main`',
-                       'os merges cobertos de `references/development.md` ("Covered merges"), os únicos permitidos'):
+                       'os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"), os únicos permitidos'):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
         for name, text in (('protocol', protocol), ('security', security)):
@@ -264,7 +264,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'É uma guarda, não uma barreira', 'As escritas da skill dentro de `.git/` são três',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
-                       'é merge coberto (`references/development.md`, "Covered merges")'):
+                       'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):
             with self.subTest(file='security.md', phrase=phrase):
                 self.assertIn(phrase, security)
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')

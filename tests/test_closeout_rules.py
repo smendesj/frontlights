@@ -38,8 +38,8 @@ class SkillTests(unittest.TestCase):
     def test_stage_seven_is_its_own_approval_and_never_merges_or_reopens(self):
         stage7 = ' '.join(self.text.split('## 7.')[1].split())
         for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md',
-                       'Closing, the tick in a parent and the cleanup each wait for their own approval of the list '
-                       'shown in full', 'no implementation authorization, merged PR or green test covers them'):
+                       'Closing (with the tick in a parent, in the same approval) and the cleanup each wait for '
+                       'their own approval of the list shown in full', 'no implementation authorization, merged PR or green test covers them'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')

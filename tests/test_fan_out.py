@@ -84,7 +84,7 @@ class FanOutRuleTests(unittest.TestCase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('slices em paralelo só entre issues', protocol)
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
-        for phrase in ('**Subagentes.**', 'um subagente trabalha sob as mesmas permissões nativas da sessão que o lançou',
+        for phrase in ('## Subagentes', 'um subagente trabalha sob as mesmas permissões nativas da sessão que o lançou',
                        'nunca para um agente que a execute por ela',
                        'continuam valendo para cada agente', 'antes de virar evidência'):
             with self.subTest(file='security', phrase=phrase):

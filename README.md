@@ -645,7 +645,7 @@ substitui essa aprovação. Os utilitários são
 #### Homologar na main local, lançar a release, fechar e limpar
 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
-`review-gate` em dia e `browser-gate` respondido; o passo a passo está em
+revisão em dia e teste assistido respondido; o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main`, e ele pergunta se lança a release com elas agora
@@ -657,9 +657,8 @@ de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da rele
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
 independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
-nenhum achado sem destino), ele pergunta "Mesclar a PR #<n> em <base>?", com "Sim, mesclar" e "Não, aguardar o
-merge"; só com o "Sim" roda `gh pr ready` e `gh pr merge --merge` (merge com commit, nunca `--admin`, `--auto` nem
-`--delete-branch`), e com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
+nenhum achado sem destino), ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge (com commit de merge), e
+com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
 fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
 issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
@@ -712,9 +711,9 @@ de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma ses
 aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
 commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
 produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com os
-três portões verdes; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. As operações
-negadas, as que mexem no GitHub, em produção ou em dado que não é de teste, viram, cada uma, uma pergunta própria
-com "Sim" e "Não" e o comando exato; só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
+três portões verdes; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
+negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
+só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em
 [`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
 As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
