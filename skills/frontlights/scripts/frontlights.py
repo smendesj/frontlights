@@ -873,6 +873,8 @@ def validate_isolated_block(config):
     except serve.Refusal as refusal:  # the serve text names the process, not the block: say which list it is
         message = str(refusal)
         raise checks.Refused(message if where in message else f'{where}: {message}') from None
+    import checks as _checks
+    base_url = block['baseUrl']
     for item in processes:
         if not isolated_local_url(item['health']):
             raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
@@ -880,12 +882,29 @@ def validate_isolated_block(config):
     preview = config.get('preview')
     taken = {'preview.processes': fixed_ports(preview.get('processes') if isinstance(preview, dict) else None),
              'browserTest.processes': fixed_ports(config['browserTest'].get('processes'))}
+    if _checks.PORT_PLACEHOLDER not in base_url:
+        base_port = serve.url_port(urllib.parse.urlsplit(base_url))
+        preview_url = preview.get('baseUrl') if isinstance(preview, dict) else None
+        try:
+            preview_port = serve.url_port(urllib.parse.urlsplit(preview_url)) if isinstance(preview_url, str) and                 _checks.PORT_PLACEHOLDER not in preview_url else None
+        except ValueError:
+            preview_port = None
+        clash = [f'preview.baseUrl ({preview_url})'] if base_port is not None and base_port == preview_port else []
+        if base_port in taken['preview.processes']:
+            clash.append(f'o processo {taken["preview.processes"][base_port]} de preview.processes')
+        if clash:
+            raise checks.Refused(f'browserTest.isolated.baseUrl usa a porta {base_port}, a mesma de '
+                                 f'{" e ".join(clash)}: o teste assistido nunca roda nas portas da prévia.')
     for port, name in fixed_ports(processes).items():
         for other, ports in taken.items():
             if port in ports:
                 raise checks.Refused(f'{where}: o processo {name} usa a porta fixa {port}, a mesma do processo '
                                      f'{ports[port]} em {other}. A instância isolada nunca roda nas portas da prévia '
                                      'nem do serve: use port "auto" (com {port} no health) ou outra porta.')
+    if _checks.PORT_PLACEHOLDER in base_url and not any(serve.is_auto(item) for item in processes):
+        raise checks.Refused('browserTest.isolated.baseUrl usa {port}, mas nenhum processo de '
+                             'browserTest.isolated.processes tem port "auto": a que porta ele se referiria? Use a '
+                             'porta fixa do processo na baseUrl ou port "auto" no processo.')
     for field in ('copyDatabase', 'dropDatabase'):
         validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
 
@@ -929,6 +948,9 @@ def validate_isolated_command(command, where):
     timeout = command.get('timeoutSeconds')
     if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
         raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
+    if 'cwd' in command:
+        raise checks.Refused(f'{where}.cwd não é aceito: o passo do banco roda na worktree principal do projeto; '
+                             'declare o caminho do script no argv.')
 
 
 def isolated_local_url(value):

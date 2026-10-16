@@ -356,6 +356,32 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(baseUrl=value), tempfile.TemporaryDirectory() as root:
                 inspect_file(with_isolated(baseUrl=value), root)
 
+    def test_a_port_placeholder_in_the_base_url_needs_an_automatic_process(self):
+        """Issue 34, S4 (revisão da sessão): {port} na baseUrl só tem a que porta se referir com um processo auto."""
+        fixed = [process(port=8090, health='http://127.0.0.1:8090/health')]
+        self.refuse(with_isolated(processes=fixed), r'browserTest\.isolated\.baseUrl.*\{port\}')
+        with tempfile.TemporaryDirectory() as root:
+            inspect_file(with_isolated(processes=fixed, baseUrl='http://127.0.0.1:8090/'), root)
+
+    def test_a_fixed_base_url_port_never_is_the_preview_port(self):
+        """Issue 34, S4: a baseUrl fixa da instância isolada nunca é a da prévia nem a de um processo fixo dela."""
+        fixed = [process(port=8090, health='http://127.0.0.1:8090/health')]
+        preview = {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:8090/',
+                   'processes': [process(name='previa', port=8091, health='http://127.0.0.1:8091/health')]}
+        self.refuse(with_isolated(processes=fixed, baseUrl='http://127.0.0.1:8090/', preview=preview),
+                    r'browserTest\.isolated\.baseUrl.*8090.*prévia')
+        preview['baseUrl'] = 'http://127.0.0.1:8095/'
+        self.refuse(with_isolated(processes=[process(port=8091, health='http://127.0.0.1:8091/health')],
+                                  baseUrl='http://127.0.0.1:8091/', preview=preview),
+                    r'8091')
+
+    def test_database_steps_refuse_a_working_folder(self):
+        """Issue 34, S4: cwd nos passos do banco é recusado, nunca ignorado em silêncio."""
+        for field in ('copyDatabase', 'dropDatabase'):
+            with self.subTest(field=field):
+                step = {'argv': ['python', 'STEP_SCRIPT'], 'cwd': 'tools'}
+                self.refuse(with_isolated(**{field: step}), rf'browserTest\.isolated\.{field}\.cwd')
+
     def test_processes_follow_the_serve_rules(self):
         cases = {'ausentes': None, 'vazios': [], 'texto': 'web',
                  'argv como texto (shell)': [process(argv='python APP_SCRIPT {port}')],
@@ -432,9 +458,11 @@ class IsolatedBlockTests(unittest.TestCase):
         configs = {'isolada automática': with_isolated(None, fixed, preview={'processes': [fixed]}),
                    'portas fixas diferentes': with_isolated(
                        None, fixed, preview={'processes': [fixed]},
-                       processes=[process(port=8090, health='http://127.0.0.1:8090/health')]),
+                       processes=[process(port=8090, health='http://127.0.0.1:8090/health')],
+                       baseUrl='http://127.0.0.1:8090/'),
                    'prévia sem processes legíveis': with_isolated(
-                       preview={'processes': 'web'}, processes=[process(port=8080, health='http://127.0.0.1:8080/')]),
+                       preview={'processes': 'web'}, processes=[process(port=8080, health='http://127.0.0.1:8080/')],
+                       baseUrl='http://127.0.0.1:8080/'),
                    'prévia que não é objeto': with_isolated(preview=['web'])}
         for case, config in configs.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as root:

@@ -85,5 +85,32 @@ class PreviewInTheFlowTests(unittest.TestCase):
         self.assertRegex(readme, r'prévia ao vivo[^→]*→ desenvolvimento orientado a testes')
 
 
+
+class IsolatedWatchedRunTests(unittest.TestCase):
+    """Issue 34, S4: o teste assistido numa instância isolada, com banco copiado e descartado."""
+
+    def test_the_reference_runs_both_passes_in_the_isolated_instance(self):
+        reference = read('skills', 'frontlights', 'references', 'browser-testing.md')
+        watched = flat(reference.split('## Watched run: before and after')[1].split('## Test data the run creates')[0])
+        rule = watched.split('**The isolated instance.**')[1].split('**The whole screen, always.**')[0]
+        for phrase in ('`browserTest.isolated`', '`copyDatabase`', 'a fresh copy of the development database',
+                       'ANTES and DEPOIS run one after the other in that instance',
+                       'never on the ports of the preview', 'never on the development database itself',
+                       '`dropDatabase`', 'test data the run created', '`dados-de-teste.json`',
+                       'without a shell', 'stops only what it started', 'Without the block'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+        self.assertLess(watched.index('**Two passes, same scenario and same account.**'),
+                        watched.index('**The isolated instance.**'))
+
+    def test_security_says_what_the_copy_and_the_drop_may_touch(self):
+        security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
+        rule = security.split('**Instância isolada do teste assistido (`browserTest.isolated`):**')[1].split('- **')[0]
+        for phrase in ('cópia do banco de desenvolvimento local', 'dado de teste criado pelo próprio teste',
+                       'descartada no fim pelo `dropDatabase`', 'nunca produção', 'sem shell',
+                       'nunca nas portas da prévia', 'o `inspect` recusa'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+
 if __name__ == '__main__':
     unittest.main()
