@@ -244,7 +244,8 @@ criados dentro do
 `scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. As mudanças dos itens com
 `overLimit` entram no arquivo da semana como as dos demais, depois da linha "Acima do limite de N:" (que só aparece
 quando algum item do excedente tem entrada no arquivo; a entrada de um item que saiu da semana fica onde está e a
-mantém enquanto estiver depois dela), na ordem do `position`, e esses itens são avisados; `snapshotStale` indica cópia do quadro com mais de
+mantém enquanto estiver depois dela, e quando o item volta à semana, a mesma entrada registra a volta e vai para o
+lugar dela pelo `position`), na ordem do `position`, e esses itens são avisados; `snapshotStale` indica cópia do quadro com mais de
 24 h ou ausente. Marcas, backups, recusa de encolhimento e confirmação continuam como antes. Um item de sprint
 com `done` verdadeiro (inclusive acima do limite), ainda sem marca no `ROADMAP.md` nem no arquivo da sprint dele, entra no
 plano como uma mudança sintética `completed` (id `done-<itemId>`, com `completedOn` na data da sincronização em São
