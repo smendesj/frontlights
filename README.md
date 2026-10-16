@@ -345,7 +345,9 @@ Quem decide o limite de itens por sprint é o RoadS, e o limite é só informaç
 escreve no arquivo da semana as mudanças dos itens acima do limite como as dos demais, na ordem do
 `position` (a ordem que o Scrum Master arrastou no RoadS): os itens dentro do limite primeiro e, só
 quando algum item acima do limite tem entrada no arquivo, a linha "Acima do limite de N:" uma única vez
-(atualizada quando o N muda e tirada quando o excedente fica sem entrada) e depois os demais; e avisa, sem
+(atualizada quando o N muda e tirada quando não sobra entrada depois dela) e depois os demais; a entrada de
+um item que saiu da semana (por `move_lane` ou `remove`) fica onde está, com a saída registrada, e mantém a linha
+enquanto estiver depois dela; e avisa, sem
 perguntar, quais passaram do limite. Cada sprint é
 uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
 
