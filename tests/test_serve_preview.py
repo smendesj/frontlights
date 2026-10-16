@@ -474,6 +474,22 @@ class PreviewRefreshTest(RefreshTestCase):
         self.assertEqual(json.loads(marker.read_text(encoding='utf-8')), {'branch': 'previa'})
 
 
+    def test_a_start_over_a_record_with_everything_dead_keeps_the_merges_the_worktree_holds(self):
+        """2nd review of issue 34 (B5): the processes die without `preview stop`; `preview start` brings the same
+        worktree up again, so the record keeps base, baseCommit and merged."""
+        first = self.payload(self.refresh('issue-1'))
+        self.assertTrue(first['ok'], first)
+        for entry in json.loads(self.registry().read_text(encoding='utf-8'))['processes']:
+            for pid in (entry['pid'], entry['relayPid']):
+                serve.kill_tree(pid)
+                self.assertTrue(wait_until(lambda: not serve.pid_alive(pid)), f'o pid {pid} continuou vivo')
+        self.assertEqual(self.serve('preview', 'start').returncode, 0, done_text(self.last))
+        status = self.payload(self.serve('preview', 'status'))
+        self.assertTrue(status['running'], status)
+        self.assertEqual((status.get('base'), status.get('baseCommit'), status.get('merged')),
+                         (first['base'], first['baseCommit'], first['merged']))
+
+
 class PreviewRefreshBrokenBuildTest(RefreshTestCase):
     def assert_broken_build(self, done):
         self.assertEqual(done.returncode, 1, done_text(done))

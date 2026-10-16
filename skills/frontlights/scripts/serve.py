@@ -850,16 +850,19 @@ def preview_start(config_file, root):
 
 
 def preview_start_locked(block, config_file, root):
+    contents = None
     if preview_registry_path(root).is_file():
         previous = read_preview_registry(root)
         # the process or its relay: a live relay alone still holds the log of a process nobody tracks any more
         require(not any(same_process(item) for item in preview_kill_list(previous['processes'])),
                 'A prévia já está no ar (um processo ou o relé do log dele está vivo); rode `preview refresh` para '
                 'refazê-la ou `preview stop` para derrubá-la.', category=USAGE)
+        if previous.get('worktree') == block['worktree']:  # the same worktree still holds the merges of the refresh
+            contents = {key: previous[key] for key in ('base', 'baseCommit', 'merged') if key in previous} or None
     worktree = (Path(root).resolve() / block['worktree'])
     require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; rode `preview refresh` para '
             'criá-la.', category=USAGE)
-    return launch_preview(block, config_file, root)
+    return launch_preview(block, config_file, root, contents)
 
 
 def launch_preview(block, config_file, root, contents=None):
