@@ -1027,6 +1027,7 @@ class OverLimitTests(RoadmapSyncTestCase):
         self.assertNotIn('the only things you may move or rewrite', reference)
         self.assertIn('The entry of an item that left the week', reference)
         self.assertIn('counts as an entry past the limit that keeps the line', reference)
+        self.assertIn('that same entry records the return and moves to its place by `position`', reference)
         self.assertIn('só quando algum item acima do limite tem entrada no arquivo', readme)
         self.assertIn('As mudanças dos itens com `overLimit` entram no arquivo da semana como as dos demais', protocol)
         self.assertIn('a skill pergunta antes do `apply`', protocol)
