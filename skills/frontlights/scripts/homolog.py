@@ -26,8 +26,8 @@ Operations (each prints one JSON object on stdout):
          `branch_prefix` of the valid `.frontlights/authorization*.json` records under `--records` (default the root;
          a record without the key counts as `claude/`), and `claude/` when there is no valid record (issue 44);
          `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which, and `skipped` counts the
-         records left out. `backup_dir` validates the key, and `inspect` reuses it. Without the key it says there is no folder and writes nothing. The folder must exist and
-         must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
+         records left out. `backup_dir` validates the key, and `inspect` reuses it. Without the key it says there
+         is no folder and writes nothing. The folder must exist and must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
          storage, not redirection, and is allowed); it is never created. The file is
          `<root folder>-<YYYYmmdd>-<HHMMSS>.bundle` in local time, `-2`, `-3`... when the name is taken: nothing
          is ever overwritten or deleted. `git bundle verify` must accept the file before it is reported.
