@@ -21,7 +21,10 @@ Operations (each prints one JSON object on stdout):
          --no-edit <remote>/<base>`, a fast-forward when possible. A conflict is aborted at once, the worktree is
          checked clean again at the commit it stood on, and the conflicting files are reported for the session to
          ask the user. It never pushes, never touches another branch, never uses --force, reset or rebase.
-  bundle write one Git bundle of the local base and of every local branch under `--prefix` (default `claude/`)
+  bundle write one Git bundle of the local base and of every local branch under the work prefixes: `--prefix` alone
+         when given; otherwise every `branch_prefix` of the valid `.frontlights/authorization*.json` records under
+         `--records` (default the root; a record without the key counts as `claude/`), and `claude/` when there is
+         no valid record (issue 44); `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which;
          into the folder that `homolog.backupDir` in the config names (`backup_dir` validates the key, and
          `inspect` reuses it). Without the key it says there is no folder and writes nothing. The folder must exist and
          must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
@@ -58,7 +61,8 @@ GIT_TIMEOUT = 45
 FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
-RECORD_LIMIT = 200       # authorization records release-plan reads
+RECORD_LIMIT = 200       # authorization records release-plan and bundle read
+DEFAULT_PREFIX = 'claude/'   # the branch prefix when neither --prefix nor a record names one
 RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
 RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
 BACKUP_KEYS = {'backupDir'}                     # the only key of the `homolog` block of the config
@@ -371,12 +375,13 @@ def branch_prefix(value):
     return value
 
 
-def bundle_refs(root, base, prefix):
-    """`refs/heads/<base>` and every local branch under `prefix`, as full ref names (never ambiguous with a tag)."""
+def bundle_refs(root, base, prefixes):
+    """`refs/heads/<base>` and every local branch under one of `prefixes`, as full ref names (never ambiguous with a
+    tag), each once."""
     require(rev(root, f'refs/heads/{base}'), f'a branch base `{base}` não existe neste repositório')
-    code, out, err = git(root, 'for-each-ref', '--format=%(refname)', f'refs/heads/{prefix}')
+    code, out, err = git(root, 'for-each-ref', '--format=%(refname)', *(f'refs/heads/{prefix}' for prefix in prefixes))
     require(code == 0, f'`git for-each-ref` falhou: {trimmed(err)}')
-    branches = [line.strip() for line in out.splitlines() if line.strip()]
+    branches = sorted({line.strip() for line in out.splitlines() if line.strip()})
     return [f'refs/heads/{base}'] + [ref for ref in branches if ref != f'refs/heads/{base}']
 
 
@@ -413,18 +418,29 @@ def write_bundle(root, folder, refs):
     return path, heads
 
 
-def op_bundle(root, config_path, base, prefix):
+def bundle_prefixes(prefix, records):
+    """(prefixes, source): `[prefix]` and `argument` when one is given; otherwise the sorted union of the
+    `branch_prefix` of the valid records and `records`, or `[DEFAULT_PREFIX]` and `default` without one (issue 44)."""
+    if prefix is not None:
+        return [branch_prefix(prefix)], 'argument'
+    found, _ = record_prefixes(records)
+    if found:
+        return sorted({entry['prefix'] for entry in found}), 'records'
+    return [DEFAULT_PREFIX], 'default'
+
+
+def op_bundle(root, config_path, base, prefix, records=None):
     worktree(root)
     base = plain_name(base, 'a branch base')
-    prefix = branch_prefix(prefix)
+    prefixes, source = bundle_prefixes(prefix, root if records is None else records)
     folder = backup_dir(load_config(config_path))
     if folder is None:
-        return {'configured': False, 'written': False, 'exitCode': 1,
+        return {'configured': False, 'written': False, 'prefixes': prefixes, 'prefixSource': source, 'exitCode': 1,
                 'message': 'não há pasta de backup configurada (homolog.backupDir); nada foi gravado'}
-    result = {'configured': True, 'written': False}
+    result = {'configured': True, 'written': False, 'prefixes': prefixes, 'prefixSource': source}
     try:
         check_backup_folder(folder)
-        path, heads = write_bundle(root, folder, bundle_refs(root, base, prefix))
+        path, heads = write_bundle(root, folder, bundle_refs(root, base, prefixes))
     except Refusal as error:
         result.update(exitCode=1, message=str(error))
         return result
@@ -446,21 +462,43 @@ def read_record(path):
     return data if isinstance(data, dict) else None
 
 
+def record_files(folder):
+    """The `.frontlights/authorization*.json` files under `folder`, sorted by name; [] when the folder is unreadable."""
+    try:
+        return sorted(Path(folder, '.frontlights').glob('authorization*.json'))
+    except OSError:
+        return []
+
+
+def record_prefixes(folder):
+    """([{'file', 'prefix', 'issuedAt'}], skipped) for every record under `folder` whose `branch_prefix` (absent:
+    DEFAULT_PREFIX) is a valid prefix; an unreadable record, a bad prefix, and every record past RECORD_LIMIT, is
+    skipped and counted (issue 44)."""
+    files = record_files(folder)
+    skipped = max(0, len(files) - RECORD_LIMIT)
+    found = []
+    for file in files[:RECORD_LIMIT]:
+        data = read_record(file)
+        prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
+        if data is None or not is_prefix(prefix):
+            skipped += 1
+            continue
+        found.append({'file': file.name, 'prefix': prefix, 'issuedAt': data.get('issued_at')})
+    return found, skipped
+
+
 def issue_branches(folder):
     """({issue number: branch}, skipped) from the `worktrees` entries without `slice` of every
     `.frontlights/authorization*.json` under `folder`. An entry counts when its `issue` is a positive integer and its
     `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later record wins for the same
     issue. A slice entry is ignored in silence; a malformed entry, record or prefix, and every record past
     RECORD_LIMIT, is skipped and counted."""
-    try:
-        files = sorted(Path(folder, '.frontlights').glob('authorization*.json'))
-    except OSError:
-        files = []
+    files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
     mapping = {}
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
-        prefix = data.get('branch_prefix', 'claude/') if data is not None else None
+        prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
         entries = data.get('worktrees', []) if data is not None else None
         if data is None or not is_prefix(prefix) or not isinstance(entries, list):
             skipped += 1
@@ -560,16 +598,16 @@ def op_release_plan(root, base, remote, prefix, records):
 
 # ---------------------------------------------------------------- command line
 
-def run(operation, root, base='main', remote='origin', install=False, config=None, prefix='claude/', records=None):
+def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None):
     try:
         if operation == 'hook':
             result = op_hook(root, base, install)
         elif operation == 'sync':
             result = op_sync(root, base, remote)
         elif operation == 'bundle':
-            result = op_bundle(root, config, base, prefix)
+            result = op_bundle(root, config, base, prefix, records)
         elif operation == 'release-plan':
-            result = op_release_plan(root, base, remote, prefix, records)
+            result = op_release_plan(root, base, remote, DEFAULT_PREFIX if prefix is None else prefix, records)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -604,7 +642,10 @@ def build_parser():
             command.add_argument('--remote', default='origin', help='the remote the base is fetched from (default origin)')
         elif name == 'bundle':
             command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.backupDir names the folder')
-            command.add_argument('--prefix', default='claude/', help='the work branches to include: every local branch under it (default claude/)')
+            command.add_argument('--prefix', help='the work branches to include: every local branch under it alone '
+                                                  '(default: every branch_prefix of the authorization records, claude/ '
+                                                  'without one)')
+            command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
         else:
             command.add_argument('--remote', default='origin', help='the remote whose base the release goes to (default origin)')
             command.add_argument('--prefix', default='claude/', help='the prefix of the release branch name (default claude/)')
@@ -616,7 +657,7 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
         result = run(args.operation, args.root, args.base, getattr(args, 'remote', 'origin'),
-                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', 'claude/'),
+                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}

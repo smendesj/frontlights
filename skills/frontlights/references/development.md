@@ -508,11 +508,12 @@ When the last slice of the issue is merged into the branch of the issue, in this
    gates to make them pass.
 6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
    `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
-   .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and every
-   branch under the `branch_prefix`, into the folder named by `homolog.backupDir` in `.frontlights/config.json`
+   .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and the work
+   branches of every `branch_prefix` in the authorization records (`.frontlights/authorization*.json`; `claude/`
+   when there is none; `--prefix` names one prefix alone), into the folder named by `homolog.backupDir` in `.frontlights/config.json`
    (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,
    and the real path never enters a repository), verifies it with `git bundle verify` and reports `path`,
-   `refs` and `bytes`. The folder must already exist; nothing else is written there and old bundles are never
+   `refs`, `bytes`, `prefixes` and `prefixSource`. The folder must already exist; nothing else is written there and old bundles are never
    deleted. Exit code 1 with `configured: false` means no folder is configured: say so in one line, name the
    key, ask nothing and go on; any other refusal (a missing folder, a junction in its path, a Git failure) is
    said in one line and recorded in the handoff as a backup not taken.

@@ -490,7 +490,8 @@ main"): the full suite green at the tip of the branch of the issue, `review-gate
 `merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
 missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
 user, never a merge. Right after each merge into the local main, `homolog bundle --root <main worktree>
---config <config>` writes a Git bundle of the local main and of the work branches into the folder of the
+--config <config>` writes a Git bundle of the local main and of the work branches of every `branch_prefix` in the authorization
+records into the folder of the
 `homolog.backupDir` key of `.frontlights/config.json` (covered; the only write the run makes outside the
 project, and only into that folder); without the key it writes nothing and the session says so in one line,
 naming the key, and asks nothing.
