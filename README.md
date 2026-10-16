@@ -505,6 +505,12 @@ Quando algo que a sessão entrega muda o que a pessoa vê (o plano liga o teste 
 - `python scripts/serve.py start|status|stop --config <config> --root <worktree> --issue <n>`
   sobe, consulta ou derruba os processos de `browserTest.processes` (lista de argumentos, sem
   shell), espera o `health` de cada um e grava os pids em `.frontlights/serve/<n>.json`;
+- `python scripts/serve.py preview start|status|stop|refresh --config <config> --root <worktree principal>`
+  cuida da prévia ao vivo do bloco `preview` (worktree, branch, `baseUrl` e processos próprios): sobe, consulta,
+  derruba ou refaz a branch da prévia a partir da main local com as branches de issue dadas em `--branch`
+  (opcional, repetível; `--base` troca a main local), com registro em `.frontlights/preview/registry.json`;
+  `serve.py relay` é interno, aberto pelo `preview start` para gravar o log mascarado de cada processo em
+  `.frontlights/preview/log/`, e nunca se roda à mão;
 - `"port": "auto"` reserva uma porta livre por processo na pasta comum do Git, vista por todas
   as worktrees (fora do Git, em `.frontlights/serve/ports/`, e repositórios diferentes não veem
   as reservas uns dos outros), e a entrega em `PORT`, `FRONTLIGHTS_PORT_<NOME>` e `{port}` no argv; o `health`
@@ -595,9 +601,12 @@ não uma barreira técnica: nada impede um modelo de deixar de chamá-lo.
 
 Limites: só o Windows foi exercitado (POSIX não). O `inspect` confere nesses blocos as regras do
 `serve` e do `checks` que dependem só do config: formato dos blocos, shell embutido nos argv de
-`checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Ele recusa o
-config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd`
-(`checks.run_directory`, `serve.process_cwd`), o `.cmd`/`.bat` com metacaractere e os nomes
+`checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Confere também
+`browserTest.isolated` (portas que nunca são as da prévia nem do serve, `baseUrl` na porta de um processo
+isolado, `cwd` relativo desses processos, passos do banco sem shell) e o bloco `preview` (worktree dentro do
+`--root`, branch, `baseUrl` local e processos, com as regras do `serve preview`). Ele recusa o
+config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd` de
+`checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o `.cmd`/`.bat` com metacaractere e os nomes
 `checks.backend`/`checks.smoke.target` contra `browserTest.processes` só são conferidos na
 execução, antes de qualquer processo subir. Um `browserTest` que declara só as contas (e a
 `baseUrl`), porque o projeto sobe o próprio ambiente, é válido: o `inspect` mostra um aviso em

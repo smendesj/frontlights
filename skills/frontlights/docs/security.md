@@ -363,7 +363,8 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   `copyDatabase` faz uma cópia do banco de desenvolvimento local, que é dado de teste criado pelo próprio teste,
   registrado em `dados-de-teste.json` e descartada no fim pelo `dropDatabase`. Os dois comandos e os processos da
   instância rodam sem shell, nunca produção nem homologação, e o `inspect` recusa o bloco com shell embutido, host
-  que não é local, porta fixa igual à da prévia ou do `serve`, ou `cwd` nos passos do banco. É regra da skill, não
+  que não é local, porta fixa igual à da prévia ou do `serve`, `baseUrl` fixa que não é a porta de um processo
+  isolado, `cwd` de processo que sai da worktree, ou `cwd` nos passos do banco. É regra da skill, não
   barreira: o comando de cópia é do projeto, e o Frontlights não lê o que ele faz por dentro.
 - **Teste assistido e perfil de teste:** o teste com o usuário assistindo só roda depois da
   resposta dele à pergunta "pronto para assistir?", no ambiente local e com contas de
@@ -403,7 +404,10 @@ verificadas de uma família ou de um lote numa branch de integração local, que
 - **Sem aprovação do bloco:** ao contrário do resumo para a diretoria, esses blocos não têm
   aprovação assinada. O `inspect` confere só as regras que dependem do config (formato dos
   blocos, shell embutido nos argv de `checks`, hosts locais, `{port}` com porta `auto`, segredos
-  mascaráveis); `cwd`, `.cmd`/`.bat` com metacaractere e os nomes `checks.backend`/`checks.smoke.target`
+  mascaráveis), inclusive em `browserTest.isolated` (portas fora das da prévia e do serve, `baseUrl` na
+  porta de um processo isolado, `cwd` relativo desses processos, passos do banco sem shell) e no bloco
+  `preview` (worktree dentro do `--root`, branch, `baseUrl` local e processos); o `cwd` de `checks` e de
+  `browserTest.processes`, `.cmd`/`.bat` com metacaractere e os nomes `checks.backend`/`checks.smoke.target`
   contra `browserTest.processes` são conferidos na execução, antes de qualquer processo subir. Isso
   barra erro de configuração, não comando mal-intencionado. Revise-os antes de rodar num projeto
   clonado.
