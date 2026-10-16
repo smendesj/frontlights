@@ -88,6 +88,20 @@ class PreviewInTheFlowTests(unittest.TestCase):
         self.assertLess(runbook.index('29. Pull request template'), runbook.index('30. Live preview (issue 34).'))
         self.assertIn('| 30. Prévia ao vivo (issue 34) |', read('docs', 'acceptance.md'))
 
+    def test_the_branches_given_to_the_refresh_come_from_the_records_and_the_preview(self):
+        """Revisão da issue 34 (M3): a lista de --branch vem dos registros de autorização e do que a prévia já tem."""
+        skill = between(read('skills', 'frontlights', 'SKILL.md'), '## 6.', '## 7.')
+        development = between(read('skills', 'frontlights', 'references', 'development.md'),
+                              '## The start of stage 6', '## Slices in order')
+        for name, text in (('SKILL.md', skill), ('development.md', development)):
+            for phrase in ('`.frontlights/authorization*.json`', 'whose issue is not closed', 'slice branches',
+                           'the `merged` of `serve preview status`', '`git merge-base --is-ancestor <branch> main`',
+                           "never takes another issue's work in progress out of the preview"):
+                with self.subTest(file=name, phrase=phrase):
+                    self.assertIn(phrase, text)
+            for stale in ('none yet', 'none at the very start'):
+                with self.subTest(file=name, stale=stale):
+                    self.assertNotIn(stale, text)
 
 
 class IsolatedWatchedRunTests(unittest.TestCase):
@@ -96,7 +110,7 @@ class IsolatedWatchedRunTests(unittest.TestCase):
     def test_the_reference_runs_both_passes_in_the_isolated_instance(self):
         reference = read('skills', 'frontlights', 'references', 'browser-testing.md')
         watched = flat(reference.split('## Watched run: before and after')[1].split('## Test data the run creates')[0])
-        rule = watched.split('**The isolated instance.**')[1].split('**The whole screen, always.**')[0]
+        rule = watched.split('**The isolated instance.**')[1].split('- **A strip on every page.**')[0]
         for phrase in ('`browserTest.isolated`', '`copyDatabase`', 'a fresh copy of the development database',
                        'ANTES and DEPOIS run one after the other in that instance',
                        'never on the ports of the preview', 'never on the development database itself',
@@ -115,6 +129,7 @@ class IsolatedWatchedRunTests(unittest.TestCase):
                        'nunca nas portas da prévia', 'o `inspect` recusa'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, rule)
+
 
 if __name__ == '__main__':
     unittest.main()

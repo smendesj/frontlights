@@ -397,18 +397,21 @@ another branch checked out there, no remote branch) is said in one line and the 
 handoff. A project without a remote (`repository: null`, no `origin`) gets neither the hook nor the sync,
 said in one line (`references/development.md`, "The start of stage 6").
 
-**The preview, right after the hook and the sync.** In a project whose config has a `preview` block, the
-session brings the live preview up before the first slice: `serve preview refresh` with the branches of the
-issues in progress (none yet, so the local main alone), then it opens the `baseUrl` once in a tab of Claude in
-Chrome, the user's own browser, and says in one line where the preview is. It runs again after each slice is
-merged into the branch of its issue, with the branches of the issues in progress, so every finished slice shows
-up there on reload; a conflict comes back as a question, and a broken build is said in one line with the log
-file and the error, and the slice that owns the file fixes it before the next slice starts. The preview stops
-only when the user asks (`serve preview stop`): reporting an issue, the release or a new session never stop it,
-and a new session finds it through its record. The tab is the user's: the session opens it and never drives it,
-it stays outside the rule of the disposable window of the watched run, and the watched run never uses the
-preview nor its ports (`references/browser-testing.md`). Without the block, nothing of this runs, said in one
-line (`references/development.md`, "The start of stage 6").
+**The preview, right after the hook and the sync.** In a project whose config has a `preview` block, the session
+brings the live preview up before the first slice: `serve preview refresh` with the branches of the issues in
+progress, then it opens the `baseUrl` once in a tab of Claude in Chrome, the user's own browser, and says in one
+line where the preview is. It runs again after each slice is merged into the branch of its issue, with the branches
+of the issues in progress, so every finished slice shows up there on reload. Those branches are the issue branches
+named in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
+branches never), plus the ones in the `merged` of `serve preview status`, minus those the local main already holds
+(`git merge-base --is-ancestor <branch> main`): the session never takes another issue's work in progress out of the
+preview. A conflict comes back as a question, and a broken build is said in one line with the log file and the
+error, and the slice that owns the file fixes it before the next slice starts. The preview stops only when the user
+asks (`serve preview stop`): reporting an issue, the release or a new session never stop it, and a new session
+finds it through its record. The tab is the user's: the session opens it and never drives it, it stays outside the
+rule of the disposable window of the watched run, and the watched run never uses the preview nor its ports
+(`references/browser-testing.md`). Without the block, nothing of this runs, said in one line
+(`references/development.md`, "The start of stage 6").
 
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
