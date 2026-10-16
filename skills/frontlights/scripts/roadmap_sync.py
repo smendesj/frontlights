@@ -1281,12 +1281,14 @@ def unrecorded_completions(ctx, state, completions, roadmap_path):
 
 def unmatched_lanes(state, changes):
     """The lanes of the queue (the origin and destination of a move_lane) and of removedPending that match no
-    week and no group of the state read by this fetch, in the order first seen. After the week turns, the week
-    that ended is no longer in the state, so its lane is the expected case; a change that reaches a sprint only
-    through such a lane goes to the roadmap only."""
+    week and no group of the state read by this fetch, in the order first seen. RoadS keeps in the state every
+    week a change not yet acknowledged cites (with `items: []` when it has none left, the week that ended
+    included), so such a lane is a sign that something is off; a change that reaches a sprint only through it
+    goes to the roadmap only. Only the removals of this plan count."""
     known = {sprint['laneId'] for sprint in state['sprints']} | {group['laneId'] for group in state['groups']}
-    lanes = [lane for change in changes if not change['synthetic'] for lane in change['_move']]
-    lanes += [removed['laneId'] for removed in state['removedPending']]
+    queued = {change['id'] for change in changes if not change['synthetic']}
+    lanes = [lane for change in changes if change['id'] in queued for lane in change['_move']]
+    lanes += [removed['laneId'] for removed in state['removedPending'] if removed['changeId'] in queued]
     return list(dict.fromkeys(lane for lane in lanes if lane and lane not in known))
 
 
@@ -1400,10 +1402,14 @@ def _fetch(root, today, transport, since, discard_staged, result):
     sprints, files = sprint_targets(ctx, state, changes)
     unmatched = unmatched_lanes(state, changes)
     if unmatched:
-        named = ', '.join(unmatched[:10]) + (f' and {len(unmatched) - 10} more' if len(unmatched) > 10 else '')
-        notes.append(f' {len(unmatched)} lane(s) of the queue match no week or group ({named}): their changes reach '
-                     'no sprint file through that lane and go to the roadmap. A week that already ended (the week turned) is '
-                     'expected; tell the user about any other lane before apply.')
+        # A lane is RoadS text: only one shaped like an id is named in the message, so no line break or prose
+        # from the service reaches the instructions; the others are only counted.
+        shown = [lane for lane in unmatched if re.fullmatch(ID_PATTERN, lane)][:10]
+        hidden = len(unmatched) - len(shown)
+        named = ', '.join(shown + ([f'{hidden} more'] if hidden else []))
+        notes.append(f' {len(unmatched)} lane(s) of the queue match no week or group ({named}): RoadS keeps every week a '
+                     'pending change cites, so this is not expected. Their changes reach no sprint file through that lane, '
+                     'only the roadmap and the sprint files of their other lanes; ask the user before apply.')
     resolved = {'roadmap': roadmap_path}
     for name, info in files.items():
         resolved[name] = safe_target(ctx.scrum_root, info['relative'])

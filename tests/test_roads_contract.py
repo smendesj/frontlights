@@ -95,10 +95,12 @@ class DocumentShapeTests(unittest.TestCase):
         flat = ' '.join(DOC.split())
         for phrase in ('`laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA`', 'na ordem de `startDate`, nunca pelo texto do id',
                        'aceita as duas formas', 'nunca as duas na mesma resposta', 'pode vir semana com `items: []`',
-                       'semana sem mudança não ganha arquivo', 'só a semana que termina mexe',
+                       'Semana sem mudança não ganha arquivo', 'só a semana que termina mexe',
                        'itens de semanas futuras não recebem `move_lane` de virada', 'issue closed before its sprint',
                        'a ordem que o scrum master arrastou', '"Acima do limite de N:"',
-                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1'):
+                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1',
+                       'toda semana citada por uma mudança ainda sem ack', 'só quando há excedente',
+                       'o `from_lane_id` (de `move_lane`)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
         for gone in ('`laneId` é posicional', 'Item acima do limite fica fora da sprint', 'passam para a nova sprint atual',

@@ -230,8 +230,9 @@ anos 2000 a 2100), o `fetch` é recusado sem alternativa automática. Cada sprin
 seu `SPRINT_*.md`, montado com as datas do RoadS; um `move_lane` alcança a sprint de origem e a
 de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), nunca do texto do id, e a lane
 casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posicional antiga (`atual`, `proxima`,
-`terceira`) ou na forma `sprint-DD-MM-AAAA`; uma lane sem semana nem grupo no estado lido, como a da semana que a
-virada encerrou, não alcança arquivo de sprint, e o `fetch` a avisa. Pasta e arquivo novos só são
+`terceira`) ou na forma `sprint-DD-MM-AAAA`. O RoadS mantém no estado toda semana citada por mudança ainda sem ack
+(com `items: []` quando ficou vazia, inclusive a encerrada pela virada); uma lane sem semana nem grupo no estado lido
+não alcança arquivo de sprint por essa lane, e o `fetch` a avisa como inesperada. Pasta e arquivo novos só são
 criados dentro do
 `scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. Itens com
 `overLimit` entram no arquivo da semana depois da linha "Acima do limite de N:", na ordem do `position`, e são

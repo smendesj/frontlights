@@ -58,12 +58,13 @@ their language; quote the helper's English messages only when useful.
   sprint's dates (`startDate`, `endDate`) and title. When `template` is null, say so and follow the
   roadmap's style. Its folder is created on `apply` when `createsFolder` is true.
 - The sprint limit is RoadS's decision (`plan.maxSprintItems`, the items' `overLimit`), and it is
-  information only: every item of the week goes into its file. Whenever you write a sprint file,
-  put its entries in the order of `position` (the order the scrum master dragged on RoadS), without
-  changing their prose: first the `items` of that entry of `plan.sprints` (within the limit), then
-  the line "Acima do limite de N:" (N is `plan.maxSprintItems`) written once, then the `outOfLimit`
-  items, each list in the order of `position`. A change of an item past the limit is written in the sprint file
-  like any other. Do not ask about the limit; tell the user which items are past it. A change in
+  information only: an item past the limit enters the sprint file the same way one within it does,
+  through its changes (an item with no change is not added to the file). Whenever you write a sprint
+  file, put its entries in the order of `position` (the order the scrum master dragged on RoadS),
+  without changing their prose: first the `items` of that entry of `plan.sprints` (within the
+  limit), then, only when `outOfLimit` is not empty, the line "Acima do limite de N:" (N is
+  `plan.maxSprintItems`) written once, then the `outOfLimit` items, each list in the order of
+  `position`. A change of an item past the limit is written in the sprint file like any other. Do not ask about the limit; tell the user which items are past it. A change in
   the order alone, with no queued change for that week, writes nothing: the order follows at the
   next change of that week.
 - New work is a GitHub issue, cited as `#N` (or its URL), never a retired GuardianS task
@@ -119,10 +120,11 @@ their language; quote the helper's English messages only when useful.
   `laneId` of the roadmap-state read by this fetch, and RoadS sends each answer in one shape only:
   before its migration, `laneId` is positional (`atual`, `proxima`, `terceira`) and `sprintId` is
   `sprint-YYYY-MM-DD`; after it, `laneId` and `sprintId` are both `sprint-DD-MM-YYYY`. A week with
-  no change gets no file. When the message says that some lanes match no week or group, the changes
-  that reach a sprint only through them go in the roadmap only: the week that already ended (the week
-  turned, so it is no longer in the state) is the expected case; tell the user about any other such
-  lane and ask before `apply`.
+  no change gets no file. RoadS keeps in the state every week that a change not yet acknowledged
+  cites, with `items: []` when it has none left (the week that ended at the week turn included), so
+  the exit and the removal reach that week's file. When the message says that some lanes match no
+  week or group, that is not expected: the changes that reach a sprint only through them go in the
+  roadmap only; tell the user which lanes and ask before `apply`.
 
 ## Steps
 

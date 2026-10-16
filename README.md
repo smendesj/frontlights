@@ -342,9 +342,10 @@ de acordo com o RoadS. Com a resposta "sim", o Frontlights:
    informado.
 
 Quem decide o limite de itens por sprint é o RoadS, e o limite é só informação: o Frontlights
-escreve no arquivo da semana todos os itens, na ordem do `position` (a ordem que o Scrum Master
-arrastou no RoadS), com os itens dentro do limite primeiro, depois a linha "Acima do limite de N:"
-uma única vez e depois os demais, e avisa, sem perguntar, quais passaram do limite. Cada sprint é
+escreve no arquivo da semana as mudanças dos itens acima do limite como as dos demais, na ordem do
+`position` (a ordem que o Scrum Master arrastou no RoadS): os itens dentro do limite primeiro e, só
+quando há excedente, a linha "Acima do limite de N:" uma única vez e depois os demais; e avisa, sem
+perguntar, quais passaram do limite. Cada sprint é
 uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
 
 Quando uma issue é renomeada no GitHub, o RoadS faz o item acompanhar o título e enfileira um `modify` só com o
