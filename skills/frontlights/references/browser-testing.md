@@ -175,6 +175,22 @@ infrastructure, naming the process.
 Stop what this session started before reporting the issue, and say in one line
 which processes are still up when the user chose to keep them.
 
+```powershell
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview start --config <config> --root <main worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview status --config <config> --root <main worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview stop --config <config> --root <main worktree>
+```
+
+The preview is the long-running mode, one per project, declared in the `preview`
+block of the config (`worktree`, `branch`, `baseUrl`, `processes`). `serve preview`
+runs its processes in the preview worktree; each one's output goes through
+`serve relay` (spawned by `preview start`, never by hand) into a log saved and
+masked in `.frontlights/preview/log/`, and its record in
+`.frontlights/preview/registry.json` survives the `serve stop` of an issue and a
+change of session (`preview status` finds the processes through it and returns the
+tail of each log). `preview start` is refused while the preview is alive: ask for
+`preview refresh` (the next slice). Run `preview stop` only when the user asks.
+
 ## Checks: `checks`
 
 ```powershell
