@@ -57,6 +57,28 @@ class InspectSummaryTests(unittest.TestCase):
         issues = inspect({'repository': 'example/project'}, False)['sources']['github']['issues']
         self.assertEqual(issues, [i for page in PAGES for i in page if 'pull_request' not in i])
 
+    def test_a_configured_board_changes_nothing_without_the_flag(self):
+        """Com `project` configurado, a saída padrão segue inteira e o quadro sai igual nos dois modos."""
+        project = {'owner': 'example-org', 'number': 3, 'assignee': '@me', 'issue_type': 'Task',
+                   'fields': {'Status': 'Open', 'Area': None}}
+
+        def gh(argv):
+            if argv[:2] == ['gh', 'project']:
+                return json.dumps({'title': 'Quadro fictício',
+                                   'url': 'https://github.com/orgs/example-org/projects/3'}).encode()
+            return json.dumps(PAGES).encode()
+        results = {}
+        for summary in (False, True):
+            with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=gh):
+                results[summary] = frontlights.inspect({'repository': 'example/project', 'project': project}, root,
+                                                       summary=summary)
+        self.assertNotIn('summary', results[False])
+        self.assertEqual(results[False]['sources']['github']['issues'],
+                         [i for page in PAGES for i in page if 'pull_request' not in i])
+        self.assertIs(results[True]['summary'], True)
+        self.assertEqual(results[True]['sources']['project'], results[False]['sources']['project'])
+        self.assertEqual(results[True]['sources']['project']['title'], 'Quadro fictício')
+
     def test_an_unavailable_or_unconfigured_source_keeps_its_status_and_reason(self):
         with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=ValueError('x')):
             sources = frontlights.inspect({'repository': 'example/project', 'roads': None}, root,

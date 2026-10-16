@@ -585,7 +585,7 @@ def authorize(charter, operation):
     require(nonempty(operation.get('worktree')), 'worktree required')
     try:
         worktree = Path(operation['worktree']).resolve(strict=True)
-    except OSError:
+    except FileNotFoundError:
         raise ValueError(f'the worktree of the operation does not exist: {operation["worktree"]}') from None
     # Only the operation's worktree must exist: another entry of the charter (a slice stacked on another one,
     # declared before it is cut) is validated by shape and compared without resolving it strictly.
@@ -1084,7 +1084,7 @@ def inspect(config, root, config_path=None, summary=False):
     if project is None:
         result['sources']['project'] = {'status': 'unconfigured'}
     else:
-        summary = {'owner': project['owner'], 'number': project['number'],
+        board_summary = {'owner': project['owner'], 'number': project['number'],
                    'defaults': {k: v for k, v in project['fields'].items() if v is not None},
                    'choose_per_issue': sorted(k for k, v in project['fields'].items() if v is None),
                    'assignee': project['assignee'], 'issue_type': project['issue_type'],
@@ -1095,9 +1095,9 @@ def inspect(config, root, config_path=None, summary=False):
                                    '--owner', project['owner'], '--format', 'json']))
             require(isinstance(view, dict) and nonempty(view.get('title')), 'malformed project response')
             result['sources']['project'] = {'status': 'available', 'title': view['title'],
-                                            'url': view.get('url'), **summary}
+                                            'url': view.get('url'), **board_summary}
         except (ValueError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
-            result['sources']['project'] = {'status': 'unavailable', **summary,
+            result['sources']['project'] = {'status': 'unavailable', **board_summary,
                                             'reason': 'project board read failed; check gh "project" scope and board access'}
     roads = config.get('roads')
     if not roads:
@@ -1129,7 +1129,8 @@ def inspect(config, root, config_path=None, summary=False):
 def summarize(result):
     """The `inspect --summary` output: the same keys plus `summary: true`, with the GitHub issues cut to number,
     title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section) and counted, and
-    the RoadS payload counted instead of dumped. A source that is not `available` keeps what it says."""
+    the RoadS payload counted instead of dumped. The board (`sources.project`) and a source that is not
+    `available` keep what they say."""
     import closeout
     result = dict(result, summary=True, sources=dict(result['sources']))
     github = result['sources'].get('github', {})
