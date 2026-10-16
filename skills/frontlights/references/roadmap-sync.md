@@ -76,7 +76,10 @@ their language; quote the helper's English messages only when useful.
   where it is, out of the order of `position`, with its exit or removal recorded in it, and while it
   sits after the line it counts as an entry past the limit that keeps the line. When the item comes
   back to the week, that same entry records the return and moves to its place by `position`; never
-  open a second entry for it. Moving entries and
+  open a second entry for it: a `move_lane` back into a week finds the entry of its item in that sprint
+  file the same way the rule of finding an entry, below, finds it, and an `add` whose `#N` (in the same
+  repository) already has an entry in that sprint file that records its exit or removal records the
+  return in that entry. Moving entries and
   rewriting or removing that line join the in-place `modify` as the exceptions to adding only. A
   change of an item past the limit is written in the sprint file like any other. Do not ask about the limit; tell the user which items are past it. A change in
   the order alone, with no queued change for that week, writes nothing: the order follows at the
@@ -98,8 +101,8 @@ their language; quote the helper's English messages only when useful.
   item with no issue yet) or the `modify` that only adds the link (the files cannot cite it yet) is found by title and
   by the lane the item was in (`payload.from_lane_id` for a `move_lane`, `payload.lane_id` for a `remove`, `item.lane`
   otherwise; when the lane is missing, by title alone, asking if more than one entry matches). Look in the roadmap and,
-  for a `modify` and a `completed`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
-  and handled by the rules above, for a `move_lane` into a sprint (its entry is written in the sprint it joined), for a
+  for a `modify`, a `move_lane` and a `completed`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
+  and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined), for a
   sprint file that does not exist yet, for a `remove` (recorded in the roadmap even for an item never written) and for a
   `completed` (its line goes into a new entry); a `modify` with no entry in a sprint file that exists leaves that file as
   it is and says so. Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap. Ask also

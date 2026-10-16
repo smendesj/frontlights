@@ -105,14 +105,25 @@ class RuleTextTests(unittest.TestCase):
                 self.assertIn(phrase, self.reference)
 
     def test_the_lookup_says_where_to_look_and_which_misses_are_expected(self):
-        for phrase in ('Look in the roadmap and, for a `modify` and a `completed`, in the file of each sprint in `change.sprintTargets`',
+        for phrase in ('Look in the roadmap and, for a `modify`, a `move_lane` and a `completed`, in the file of each sprint in `change.sprintTargets`',
                        'a `modify` with no entry in a sprint file that exists leaves that file as it is and says so',
-                       'A missing entry is expected, and handled by the rules above, for a `move_lane` into a sprint (its entry is written in the sprint it joined)',
+                       'A missing entry is expected, and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined)',
                        'for a sprint file that does not exist yet',
                        'for a `remove` (recorded in the roadmap even for an item never written) and for a `completed` (its line goes into a new entry)',
                        'A row of a table and the section of the same item are one entry; a mention inside another entry is not'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.reference)
+
+    def test_an_item_that_comes_back_to_the_week_reuses_its_entry(self):
+        root = Path(__file__).resolve().parents[1]
+        readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
+        protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
+        self.assertIn('an `add` whose `#N` (in the same repository) already has an entry in that sprint file that records '
+                      'its exit or removal records the return in that entry', self.reference)
+        self.assertIn('a `move_lane` back into a week finds the entry of its item in that sprint file the same way', self.reference)
+        for text in (readme, protocol):
+            with self.subTest(text=text[:20]):
+                self.assertIn('quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar dela pelo `position`', text)
 
     def test_the_renamed_count_is_the_plans_and_may_differ_from_the_board_syncs(self):
         for phrase in ('Tell the user how many title-only `modify` changes the plan holds',
