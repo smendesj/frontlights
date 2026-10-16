@@ -565,7 +565,7 @@ offers the release again with everything accumulated.
   must be synced first: say so in one line. It only reads.
 - **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
   com as issues #a, #b agora?" (a change without issue is named by its branch: "Lançar a release com as issues #a e as
-  mudanças sergio/melhoria-x agora?"), with "Sim, lançar" first and "Agora não" second; one question per release.
+  mudanças claude/melhoria-x agora?"), with "Sim, lançar" first and "Agora não" second; one question per release.
 - **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
   `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
   hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
@@ -577,7 +577,7 @@ offers the release again with everything accumulated.
   attached or committed image, a login or a person's data) and the **Risco do merge**
   once, consolidated for the whole release (a one-way door when a migration or deleted data is in it, a two-way
   door otherwise, and the blast radius); it cites the issues by number (a change without issue, from `releaseDirect`,
-  counts like an issue here: the title names it by its branch, as in "Release <date>: issues #a e sergio/melhoria-x",
+  counts like an issue here: the title names it by its branch, as in "Release <date>: issues #a e claude/melhoria-x",
   and it gets its own Resumo, Evidência and three gates, from the records of its charter), and the body of the pull request is never
   the destination of a finding (the gate on the findings, above). **No closing keyword.** A pull request opened by Frontlights never
   carries `Closes`, `Fixes`, `Resolves` or a variant of them, in its body or in its commits: closing an issue has
