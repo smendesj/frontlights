@@ -858,6 +858,15 @@ implementador trabalha pela issue. A revisão termina na primeira rodada com 0 s
 três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
 critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
 
+`python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
+etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`
+sem a seção), com a contagem das issues (`count`) e das abertas (`open`); a carga do RoadS vira contagem
+e o quadro sai igual. O corpo de uma issue, e o de cada candidata a duplicata antes da deduplicação, é
+lido por `gh issue view <n>`. Sem `--summary` a saída continua a mesma, com o JSON inteiro das issues.
+`authorize --operation -` lê a operação da entrada padrão, além de um arquivo, e só a worktree da
+operação precisa existir: as outras entradas do charter (uma CA empilhada declarada antes de ser cortada)
+são conferidas pela forma, sem exigir a pasta.
+
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
 (`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
 `slices` (a segunda slice depende da
