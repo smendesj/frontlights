@@ -807,6 +807,111 @@ class SprintTargetTests(RoadmapSyncTestCase):
         self.assertIn('same', result['message'])
 
 
+def dated(state):
+    """The same state in the shape RoadS sends after its migration: every sprint is a week whose
+    laneId and sprintId are both `sprint-DD-MM-YYYY`."""
+    for sprint in state['sprints']:
+        year, month, day = sprint['startDate'].split('-')
+        sprint['sprintId'] = sprint['laneId'] = f'sprint-{day}-{month}-{year}'
+    return state
+
+
+WEEK = 'sprint:sprint-28-09-2026'
+NEXT_WEEK = 'sprint:sprint-05-10-2026'
+
+
+class WeekByDateTests(RoadmapSyncTestCase):
+    """RoadS identifies each sprint by the date of its week. The order is the start date, never the
+    text of the id, and the lanes of the queue are matched against the state read by the same fetch,
+    in either shape."""
+
+    def test_weeks_sent_out_of_order_come_out_in_date_order_in_both_shapes(self):
+        for shape, convert, ids in (('positional', lambda s: s, ['sprint-2026-09-28', 'sprint-2026-10-05']),
+                                    ('dated', dated, ['sprint-28-09-2026', 'sprint-05-10-2026'])):
+            with self.subTest(shape=shape):
+                rs._SECRETS.clear()
+                state = convert(state_fixture())
+                state['sprints'].reverse()
+                result, _ = self.approve_and_fetch(state=state, discard_staged=True)
+                self.assertTrue(result['ok'], result['message'])
+                self.assertEqual([s['sprintId'] for s in result['plan']['sprints']], ids)
+
+    def test_a_later_week_whose_id_sorts_first_still_comes_second(self):
+        state = dated(state_fixture())
+        later = state['sprints'][1]
+        later.update(sprintId='sprint-02-11-2026', laneId='sprint-02-11-2026', startDate='2026-11-02', endDate='2026-11-06')
+        result, _ = self.approve_and_fetch(state=state)
+        self.assertEqual([s['sprintId'] for s in result['plan']['sprints']], ['sprint-28-09-2026', 'sprint-02-11-2026'])
+
+    def test_a_move_between_two_weeks_reaches_both_files(self):
+        state, payload = state_fixture(), fixture()
+        moved = state['sprints'][0]['items'].pop(1)
+        state['sprints'][1]['items'].append(dict(moved, position=2))
+        dated(state)
+        payload['changes'][3]['payload'] = {'from_lane_id': 'sprint-28-09-2026', 'lane_id': 'sprint-05-10-2026',
+                                            'reason': 'replanning', 'title': 'Item d'}
+        result, _ = self.approve_and_fetch(payload, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(next(c for c in result['plan']['changes'] if c['id'] == MOVE_ID)['sprintTargets'], [WEEK, NEXT_WEEK])
+
+    def test_a_removal_from_a_week_targets_that_week(self):
+        state = dated(state_fixture())
+        state['removedPending'][0]['laneId'] = 'sprint-28-09-2026'
+        result, _ = self.approve_and_fetch(state=state)
+        self.assertIn(REMOVE_ID, result['plan']['targets'][WEEK]['changeIds'])
+
+    def test_a_week_without_items_and_without_change_gets_no_file(self):
+        state = dated(state_fixture())
+        state['sprints'].append({'sprintId': 'sprint-12-10-2026', 'laneId': 'sprint-12-10-2026', 'title': 'Semana vazia',
+                                 'startDate': '2026-10-12', 'endDate': '2026-10-16', 'items': []})
+        result, _ = self.approve_and_fetch(state=state)
+        self.assertTrue(result['ok'], result['message'])
+        empty = next(s for s in result['plan']['sprints'] if s['sprintId'] == 'sprint-12-10-2026')
+        self.assertIsNone(empty['target'])
+        self.assertNotIn('sprint:sprint-12-10-2026', result['plan']['targets'])
+        self.assertFalse((self.scrum / '2026' / '12_10').exists())
+
+    def test_a_move_out_of_a_week_that_already_ended_goes_to_the_roadmap_with_a_note(self):
+        state, payload = dated(state_fixture()), fixture()
+        payload['changes'][3]['payload'] = {'from_lane_id': 'sprint-21-09-2026', 'lane_id': 'sprint-28-09-2026',
+                                            'reason': 'week turned', 'title': 'Item d'}
+        result, _ = self.approve_and_fetch(payload, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(next(c for c in result['plan']['changes'] if c['id'] == MOVE_ID)['sprintTargets'], [WEEK])
+        self.assertIn('match no week or group', result['message'])
+        self.assertIn('sprint-21-09-2026', result['message'])
+        self.assertNotIn('sprint-28-09-2026', result['message'].split('match no week or group')[1].split(')')[0])
+
+    def test_a_removal_from_a_week_that_already_ended_goes_to_the_roadmap_with_a_note(self):
+        state = dated(state_fixture())
+        state['removedPending'][0]['laneId'] = 'sprint-21-09-2026'
+        payload = fixture()
+        payload['changes'][3]['payload'] = {'from_lane_id': 'sprint-28-09-2026', 'lane_id': 'g1'}
+        result, _ = self.approve_and_fetch(payload, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(next(c for c in result['plan']['changes'] if c['id'] == REMOVE_ID)['sprintTargets'], [])
+        self.assertIn('match no week or group (sprint-21-09-2026)', result['message'])
+
+    def test_the_reference_and_the_protocol_describe_weeks_by_date(self):
+        root = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights'
+        reference = ' '.join((root / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
+        protocol = ' '.join((root / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
+        self.assertNotIn('Known limit', reference)
+        self.assertNotIn('is positional and means the lane', reference)
+        for phrase in ('lists the weeks in the order of their dates (`startDate`)', '`sprint-DD-MM-YYYY`',
+                       'the week that already ended (the week turned', 'A week with no change gets no file'):
+            self.assertIn(phrase, reference)
+        self.assertIn('na forma `sprint-DD-MM-AAAA`', protocol)
+        self.assertNotIn('o `laneId` vale a lane do estado lido', protocol)
+
+    def test_lanes_of_weeks_and_groups_raise_no_note(self):
+        state, payload = dated(state_fixture()), fixture()
+        payload['changes'][3]['payload'] = {'from_lane_id': 'sprint-28-09-2026', 'lane_id': 'g1'}
+        result, _ = self.approve_and_fetch(payload, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertNotIn('match no week or group', result['message'])
+
+
 class OverLimitTests(RoadmapSyncTestCase):
     def over_limit_state(self):
         state = state_fixture()

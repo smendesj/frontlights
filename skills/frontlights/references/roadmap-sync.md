@@ -110,9 +110,15 @@ their language; quote the helper's English messages only when useful.
   from a queued change to a sprint (a completion goes to each sprint that holds its item). A move
   between two sprints therefore reaches both files. A change with an empty `sprintTargets` goes in
   the roadmap only.
-- Known limit: `laneId` (`atual`, `proxima`, `terceira`) is positional and means the lane in the
-  roadmap-state read by this fetch. A move queued before the week turned names the lane as it was
-  then; when its `from`/`to` no longer match the sprint the user remembers, say so and ask.
+- Each sprint is a week, and `plan.sprints` lists the weeks in the order of their dates (`startDate`),
+  never in the order of the text of their ids. A lane is matched by its exact text against the
+  `laneId` of the roadmap-state read by this fetch, and RoadS sends each answer in one shape only:
+  before its migration, `laneId` is positional (`atual`, `proxima`, `terceira`) and `sprintId` is
+  `sprint-YYYY-MM-DD`; after it, `laneId` and `sprintId` are both `sprint-DD-MM-YYYY`. A week with
+  no change gets no file. When the message says that some lanes match no week or group, the changes
+  that reach a sprint only through them go in the roadmap only: the week that already ended (the week
+  turned, so it is no longer in the state) is the expected case; tell the user about any other such
+  lane and ask before `apply`.
 
 ## Steps
 
