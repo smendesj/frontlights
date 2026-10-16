@@ -358,6 +358,13 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   com a instrução exata aprovada. É uma regra da skill, não uma barreira técnica; e as máscaras do Frontlights cobrem só os valores de
   `browserTest.users`, então a senha de um login criado pelo teste não é mascarada pelos auxiliares: ela nunca é
   impressa, gravada em registro nem repetida na conversa.
+- **Instância isolada do teste assistido (`browserTest.isolated`):** o teste assistido roda numa instância
+  própria, com portas próprias, nunca nas portas da prévia nem no banco de desenvolvimento: antes de cada teste, o
+  `copyDatabase` faz uma cópia do banco de desenvolvimento local, que é dado de teste criado pelo próprio teste,
+  registrado em `dados-de-teste.json` e descartada no fim pelo `dropDatabase`. Os dois comandos e os processos da
+  instância rodam sem shell, nunca produção nem homologação, e o `inspect` recusa o bloco com shell embutido, host
+  que não é local, porta fixa igual à da prévia ou do `serve`, ou `cwd` nos passos do banco. É regra da skill, não
+  barreira: o comando de cópia é do projeto, e o Frontlights não lê o que ele faz por dentro.
 - **Teste assistido e perfil de teste:** o teste com o usuário assistindo só roda depois da
   resposta dele à pergunta "pronto para assistir?", no ambiente local e com contas de
   `browserTest.users`. Quando o ponto é permissão, ele pode mover um usuário de teste de perfil

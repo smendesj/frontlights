@@ -830,6 +830,7 @@ def validate_test_blocks(config, path):
                 warnings.append('browserTest.processes não está declarado: o serve não tem o que subir, então o ambiente precisa '
                                 'estar no ar antes do teste (só as contas e a baseUrl foram conferidas).')
             checks.require_local_declarations(path)
+            validate_isolated_block(config)
             if browser.get('frontPaths') is not None:
                 import browser_gate
                 browser_gate.validate_front_paths(browser['frontPaths'])
@@ -849,6 +850,121 @@ def validate_test_blocks(config, path):
     except (serve.Refusal, checks.Refused, checks.Infra) as refusal:
         raise ValueError(checks.redact(str(refusal))) from None
     return warnings
+
+
+def validate_isolated_block(config):
+    """Refuse an invalid `browserTest.isolated` (the assisted test in its own instance, with the development
+    database copied before each test and dropped at the end). Absent or null: nothing is checked. Works on the
+    config already read: the caller masks the refusal text."""
+    import checks
+    block = config['browserTest'].get('isolated')
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl, processes, copyDatabase e '
+                             'dropDatabase.')
+    if not isolated_local_url(block.get('baseUrl')):
+        raise checks.Refused('browserTest.isolated.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, '
+                             'localhost ou ::1), sem usuário e senha; {port} pode ocupar o lugar da porta.')
+    import serve
+    where = 'browserTest.isolated.processes'
+    try:
+        processes = serve.validate_processes(block.get('processes'), where)
+    except serve.Refusal as refusal:  # the serve text names the process, not the block: say which list it is
+        message = str(refusal)
+        raise checks.Refused(message if where in message else f'{where}: {message}') from None
+    import checks as _checks
+    base_url = block['baseUrl']
+    for item in processes:
+        if not isolated_local_url(item['health']):
+            raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
+                                 'instância isolada só roda na própria máquina (127.0.0.1, localhost ou ::1).')
+    preview = config.get('preview')
+    taken = {'preview.processes': fixed_ports(preview.get('processes') if isinstance(preview, dict) else None),
+             'browserTest.processes': fixed_ports(config['browserTest'].get('processes'))}
+    if _checks.PORT_PLACEHOLDER not in base_url:
+        base_port = serve.url_port(urllib.parse.urlsplit(base_url))
+        preview_url = preview.get('baseUrl') if isinstance(preview, dict) else None
+        try:
+            preview_port = serve.url_port(urllib.parse.urlsplit(preview_url)) if isinstance(preview_url, str) and                 _checks.PORT_PLACEHOLDER not in preview_url else None
+        except ValueError:
+            preview_port = None
+        clash = [f'preview.baseUrl ({preview_url})'] if base_port is not None and base_port == preview_port else []
+        if base_port in taken['preview.processes']:
+            clash.append(f'o processo {taken["preview.processes"][base_port]} de preview.processes')
+        if clash:
+            raise checks.Refused(f'browserTest.isolated.baseUrl usa a porta {base_port}, a mesma de '
+                                 f'{" e ".join(clash)}: o teste assistido nunca roda nas portas da prévia.')
+    for port, name in fixed_ports(processes).items():
+        for other, ports in taken.items():
+            if port in ports:
+                raise checks.Refused(f'{where}: o processo {name} usa a porta fixa {port}, a mesma do processo '
+                                     f'{ports[port]} em {other}. A instância isolada nunca roda nas portas da prévia '
+                                     'nem do serve: use port "auto" (com {port} no health) ou outra porta.')
+    if _checks.PORT_PLACEHOLDER in base_url and not any(serve.is_auto(item) for item in processes):
+        raise checks.Refused('browserTest.isolated.baseUrl usa {port}, mas nenhum processo de '
+                             'browserTest.isolated.processes tem port "auto": a que porta ele se referiria? Use a '
+                             'porta fixa do processo na baseUrl ou port "auto" no processo.')
+    for field in ('copyDatabase', 'dropDatabase'):
+        validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
+
+
+def fixed_ports(processes):
+    """{port: process name} of the processes that do not use port "auto" (the integer `port`, or else the port of
+    the health URL). Read-only and lenient: items this block's own validator would refuse are skipped here."""
+    import serve
+    ports = {}
+    for item in processes if isinstance(processes, list) else []:
+        if not isinstance(item, dict) or serve.is_auto(item):
+            continue
+        port = item.get('port')
+        if not isinstance(port, int) or isinstance(port, bool):
+            health = item.get('health')
+            try:
+                port = serve.url_port(urllib.parse.urlsplit(health)) if isinstance(health, str) else None
+            except ValueError:
+                port = None
+        if port is not None:
+            ports.setdefault(port, item.get('name'))
+    return ports
+
+
+def validate_isolated_command(command, where):
+    """`{argv, timeoutSeconds?}` of a database step of the isolated instance, with the shell filter of checks."""
+    import checks
+    if not isinstance(command, dict):
+        raise checks.Refused(f'{where} precisa ser um objeto com argv (lista de argumentos) e, opcionalmente, '
+                             'timeoutSeconds.')
+    argv = command.get('argv')
+    if not isinstance(argv, list) or not argv or not all(isinstance(part, str) and part for part in argv):
+        raise checks.Refused(f'{where}.argv precisa ser uma lista não vazia de textos não vazios, não uma string.')
+    if any('\0' in part for part in argv):
+        raise checks.Refused(f'{where}.argv não aceita byte NUL em nenhum argumento.')
+    reason = checks.embedded_shell(argv)
+    if reason:
+        raise checks.Refused(f'{where}.argv não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, '
+                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus '
+                             'argumentos.')
+    timeout = command.get('timeoutSeconds')
+    if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
+        raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
+    if 'cwd' in command:
+        raise checks.Refused(f'{where}.cwd não é aceito: o passo do banco roda na worktree principal do projeto; '
+                             'declare o caminho do script no argv.')
+
+
+def isolated_local_url(value):
+    """True for an http(s) URL on this machine, without credentials; `{port}` stands for an automatic port."""
+    import checks
+    if not isinstance(value, str) or not value or '\0' in value:
+        return False
+    try:
+        parts = urllib.parse.urlsplit(value.replace(checks.PORT_PLACEHOLDER, checks.STAND_IN_PORT))
+        parts.port  # an out-of-range or non-numeric port raises here
+    except ValueError:
+        return False
+    return parts.scheme in ('http', 'https') and (parts.hostname or '').lower() in checks.LOCAL_HOSTS \
+        and '@' not in parts.netloc
 
 
 def validate_homolog_block(config):

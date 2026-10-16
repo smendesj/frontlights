@@ -296,6 +296,20 @@ When the user will watch:
   of it (`serve status` and the owning pid of `Get-NetTCPConnection -LocalPort
   <port>`), or DEPOIS could be answered by the base. Stop the ANTES record in every
   case before reporting.
+- **The isolated instance.** When the project declares `browserTest.isolated` (which
+  `inspect` validates), the watched run never touches the preview nor the development
+  data. Before ANTES, run its `copyDatabase` argv, without a shell, from the main
+  worktree and within its timeout: a fresh copy of the development database for this
+  run, never on the development database itself. ANTES and DEPOIS run one after the other in that instance:
+  bring up the processes of `browserTest.isolated.processes` from the checkout of the
+  base, check each health, run ANTES, stop them, then bring them up from the delivered
+  state for DEPOIS, and open `browserTest.isolated.baseUrl` in the disposable window
+  each time; never on the ports of the preview. The session (or the driver of the run)
+  starts those processes itself, from their argv, and stops only what it started. The
+  copy is test data the run created: record it in `dados-de-teste.json` before the
+  copy, and run `dropDatabase` at the cleanup of section "Test data the run creates",
+  marking it removed. Without the block, the passes run on the issue's own serve as
+  above.
 - **A strip on every page.** The test injects a fixed strip into the page, pinned to the
   top edge across the full width, thin, above every other element and never
   covered by a popup, toast or dialog (an init script or a DOM node, visible in the screenshots): "ANTES: <base>" ("ANTES: main"
