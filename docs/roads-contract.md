@@ -57,6 +57,13 @@ um campo opcional, e valor novo em um conjunto fechado que o Frontlights recusa:
 repositório e só publica a quebra **depois** que o Frontlights que a entende estiver publicado. O RoadS não serve
 duas versões ao mesmo tempo: um consumidor, um dono.
 
+**Decisão de 15/10/2026 (exceção à regra de quebra):** as sprints passaram a ser semanas identificadas pela data, e o
+`laneId` deixou de ser posicional, o que é mudar o significado de um campo. Por decisão do mantenedor, o
+`schemaVersion` continua 1 em `roadmap-state`, `pending-changes` e `POST ack`: o Frontlights publica primeiro a versão
+que aceita as duas formas, e só depois o RoadS faz a migração, numa transação única que também reescreve as linhas
+da fila ainda sem ack. Cada resposta vem inteira numa forma só, nunca as duas na mesma resposta; o que pode mudar de
+forma é uma resposta para a seguinte (o último estado lido antes da migração e o primeiro depois).
+
 ## Rotas
 
 ### `POST sync-board`
@@ -84,7 +91,7 @@ Somente leitura; não consome nada. Sem ele não há plano: não existe alternat
 ```json
 { "schemaVersion": 1, "asOf": "2026-01-01T12:00:00Z", "snapshotSyncedAt": "2026-01-01T11:55:00Z",
   "maxSprintItems": 4, "timezone": "America/Sao_Paulo",
-  "sprints": [ { "sprintId": "sprint-2026-01-05", "laneId": "proxima", "title": "Sprint exemplo",
+  "sprints": [ { "sprintId": "sprint-05-01-2026", "laneId": "sprint-05-01-2026", "title": "Sprint exemplo",
                  "startDate": "2026-01-05", "endDate": "2026-01-09", "items": [ "item (abaixo)" ] } ],
   "groups": [ { "laneId": "g1", "title": "Grupo exemplo", "items": [ "item, sem overLimit" ] } ],
   "removedPending": [ { "changeId": "id", "itemId": null, "title": "Item removido", "laneId": "g1" } ] }
@@ -92,9 +99,23 @@ Somente leitura; não consome nada. Sem ele não há plano: não existe alternat
 
 Item: `id`, `position` (1 é o primeiro), `title`, `description`, `produto`, `prioridade`, `effort`,
 `githubIssueUrl` e `issueNumber` (nulos sem issue), `status`, `done`, `overLimit` (só nas sprints, do
-5º item em diante), `updatedAt` e `pendingChangeIds`. `sprintId` é `sprint-` mais a data de início e muda a
-cada semana por desenho; `laneId` é posicional. `snapshotSyncedAt` com mais de 24 h, ou nulo, é avisado ao
-usuário. Item acima do limite fica fora da sprint, listado à parte.
+5º item em diante), `updatedAt` e `pendingChangeIds`. `snapshotSyncedAt` com mais de 24 h, ou nulo, é avisado ao
+usuário.
+
+- **Semanas por data.** Cada sprint é uma semana: `laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA` (a data de
+  início). Antes da migração do RoadS (decisão de 15/10/2026, acima) o `sprintId` era `sprint-AAAA-MM-DD` e o `laneId` era posicional
+  (`atual`, `proxima`, `terceira`); o Frontlights aceita as duas formas e casa cada lane pelo texto exato com o
+  `laneId` do estado lido no mesmo `fetch`. As semanas são tratadas na ordem de `startDate`, nunca pelo texto do id.
+- **N semanas.** `sprints[]` traz a semana atual (sempre, mesmo vazia), todas as futuras que têm item e toda semana
+  citada por uma mudança ainda sem ack (`lane_id` ou `from_lane_id`, inclusive a semana que a virada encerrou e a que
+  perdeu o último item), estas com `items: []` quando não têm mais item e com `startDate` e `endDate` da semana
+  (segunda a sexta); depois do ack, a semana vazia some na resposta seguinte. Por isso pode vir semana com
+  `items: []`. As semanas vazias que a tela do RoadS mostra (a do fim, para receber o próximo arraste, e os buracos)
+  nunca entram no `roadmap-state`. Semana sem mudança não ganha arquivo.
+- **Ordem e limite.** `position` segue a ordem que o scrum master arrastou no RoadS (`sort_order` normalizado), e o
+  arquivo da semana segue o `position`. `overLimit` continua só informativo: o Frontlights escreve no arquivo da
+  semana as mudanças dos itens acima do limite como as dos demais, com os itens 1 a N primeiro e, só quando algum
+  item acima do limite tem entrada no arquivo, a linha "Acima do limite de N:" uma única vez e depois os demais.
 
 ### `GET pending-changes[?since=<instante>]`
 
@@ -113,7 +134,11 @@ parte é contrato); `move_lane` traz `lane_id` (a lane de destino) e `from_lane_
 05/10/2026, mais `title` e `reason` informativos (e pode vir `github_issue_url`). Um `move_lane` feito por uma
 pessoa e enfileirado antes dessa data pode não ter `from_lane_id`. Um `remove` chega com `item` e `itemId` nulos. O prefixo `done-` nos ids de mudança da fila é reservado ao Frontlights (as
 conclusões que ele registra); uma mudança da fila com esse prefixo faz o Frontlights recusar a busca, então o RoadS não
-deve usá-lo. O Frontlights lê de um `move_lane` o
+deve usá-lo. Nas lanes de sprint, o `lane_id` (de `add`, `remove` e `move_lane`) e o `from_lane_id` (de
+`move_lane`) citam `sprint-DD-MM-AAAA`; nas lanes de grupo continuam `tipo-*` e `g1..g6`, e o `groups[]` não muda.
+Como o RoadS mantém no estado toda semana citada por mudança sem ack, uma lane que não casa com nenhuma semana nem
+grupo do estado lido é inesperada: a mudança não alcança arquivo de sprint por essa lane, vai para o roadmap (e
+para os arquivos das outras lanes dela), e o Frontlights avisa e pergunta antes do `apply`. O Frontlights lê de um `move_lane` o
 `from_lane_id` e o `lane_id` para saber que sprints ele atinge (`from` e `to` são a grafia antiga, só usada quando a
 chave nova falta); sem eles (uma fila antiga, ou um desvio futuro), o Frontlights vê só o destino, pelo que `pendingChangeIds` de
 `roadmap-state` já diz. O `asOf` vem do servidor,
@@ -178,9 +203,12 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
 - **Item de sprint concluído fica.** Ele permanece no bloco da sprint com `done: true`, sem nenhuma mudança `remove`,
   durante toda a semana e até a primeira sincronização depois do último dia da sprint. Só a **rotação** das sprints
   o remove: quando o último dia da sprint atual já passou e a issue do item está em Done, sai uma mudança `remove`
-  (`payload` com `item_id`, `lane_id`, `title`, `github_issue_url` e `reason` "sprint ended, issue done"); os que não
-  estão em Done passam para a nova sprint atual (`move_lane` com `lane_id` e `from_lane_id`). A rotação roda dentro
-  de toda sincronização (botão, rotina diária ou `sync-board`), uma vez por passagem de semana.
+  (`payload` com `item_id`, `lane_id`, `title`, `github_issue_url` e `reason` "sprint ended, issue done"). Na virada,
+  só a semana que termina mexe: o que está em Done sai com `remove`, e o resto vai com `move_lane` (`lane_id` e
+  `from_lane_id`) para o topo da semana seguinte; itens de semanas futuras não recebem `move_lane` de virada. A
+  rotação roda dentro de toda sincronização (botão, rotina diária ou `sync-board`), uma vez por passagem de semana.
+  Desde as semanas por data, um `remove` pode trazer também o `reason` "issue closed before its sprint"; o `reason`
+  é texto livre e informativo, e o Frontlights trata esse `remove` como qualquer outro.
 - **Grupos são diferentes.** A limpeza de issue fechada ou fora do Project atua só em itens de lane de **grupo**
   (backlog), onde o item sai com uma mudança `remove`.
 - **Painel e Roadmap usam o mesmo snapshot.** Os contadores do Dashboard são calculados no servidor a partir do
@@ -191,12 +219,12 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
   continua na aba Resumo), renomeou "Concluídas na sprint" e "Esta sprint" e acrescentou o bloco "Slices" (as
   sub-issues das issues da sprint atual, lidas do GitHub na mesma sincronização). Nada disso é rota do contrato.
 - **A sprint segue o Status do Project.** Em 06/10/2026 o RoadS passou a seguir o Project nos dois sentidos: "está na
-  sprint atual" é "Status Development" (a próxima e a terceira sprint existem só no RoadS), o RoadS só age quando os
+  sprint atual" é "Status Development" (as semanas futuras existem só no RoadS), o RoadS só age quando os
   dois lados discordam (vale quem mexeu por último; empate vale o RoadS) e a escrita dele no Project nasce desligada.
   A fila de mudanças (`fetch`, `apply` e `ack`) não escreve no Project, e o Frontlights só escreve nele em passos próprios
   que o usuário aprova, como o `gaps` e o fechamento: um `move_lane` com `payload.origin` `project` (o conjunto de valores,
   `app`, `rotation`, `label` e `project`, é aberto e informativo) vai para os arquivos como qualquer outro e nunca volta
-  ao Project. Um `add` pode trazer `lane_id` `atual`, e um `modify` pode só trocar o título: os arquivos ainda têm o
+  ao Project. Um `add` pode trazer `lane_id` de uma semana (`sprint-DD-MM-AAAA`, ou `atual` antes da migração), e um `modify` pode só trocar o título: os arquivos ainda têm o
   título antigo, então a entrada se acha pelo número da issue e não pelo título.
 - **Quando aparece.** Ao apertar Sincronizar, na hora. Uma sincronização feita até 30 s depois de outra (de qualquer
   origem: botão, rotina diária, `sync-board` do Frontlights) não consulta o GitHub e devolve o snapshot anterior. Sem
@@ -269,8 +297,11 @@ resumos da mesma semana (quarta e sexta) nunca dividem arquivo. Prints salvos an
 ## O que ainda não está provado
 
 - Os caminhos de erro (tempo esgotado do `sync-board`, 401 com segredo trocado, `schemaVersion` desconhecido,
-  `overLimit`, marcas recusadas) só têm cobertura simulada nos testes; a produção real exercitou o caminho
+  marcas recusadas) só têm cobertura simulada nos testes; a produção real exercitou o caminho
   feliz.
+- As semanas por data (15/10/2026: ids `sprint-DD-MM-AAAA`, N semanas, excedente escrito, lane sem par avisada) só
+  têm cobertura simulada até a primeira sincronização real depois da migração do RoadS, e a semana encerrada vir
+  vazia no estado até o ack é promessa do RoadS ainda não vista numa resposta real.
 - A contagem de partes por caixas (14/10/2026) ainda não apareceu num resumo real: no período de 09/10 a 13/10
   nenhuma entrega usava caixas, e a coleta real não mudou.
 - O RoadS registra, das chamadas feitas com segredo válido, o método, a rota, o status, o User-Agent declarado
