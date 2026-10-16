@@ -88,7 +88,7 @@ andamento, roda `git fetch` e `git merge --no-edit`, e um conflito é desfeito n
 rede do utilitário, para o remoto já configurado no repositório, com as credenciais do próprio Git do usuário.
 
 **Backup da main local (`homolog bundle`).** A cada merge na main local, a sessão grava um bundle Git da main
-local e das branches do `branch_prefix` na pasta da chave `homolog.backupDir` do `.frontlights/config.json` do
+local e das branches de trabalho de todo `branch_prefix` dos registros de autorização na pasta da chave `homolog.backupDir` do `.frontlights/config.json` do
 projeto, a única gravação da execução fora do projeto. A chave é um caminho absoluto do usuário (o `inspect`
 recusa caminho relativo, `..`, `~`, marcador `{}` e qualquer outra chave dentro de `homolog`), a pasta precisa
 existir (o utilitário nunca a cria), nenhuma junção, link simbólico ou outro ponto de reparse pode estar no

@@ -138,7 +138,7 @@ As branches de trabalho usam o `branch_prefix` da autorização, com padrão `cl
 projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
-trabalho (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
+trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
 
 ```json
@@ -648,7 +648,7 @@ Cada issue entra na **main local** do projeto, a homologação, por um merge com
 `review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
-agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` da main local,
+agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
