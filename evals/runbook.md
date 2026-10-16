@@ -250,6 +250,21 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     and that a host without the artifact tool gets one line and "artefato indisponível" in the log, never a
     silent skip; and that a request touching no screen, flow or layer gets no page, "não se aplica" in the log
     and a stage 5 list that says once it carries no section.
+29. Pull request template (issue 35). On a disposable release with two homologated issues, one of them with a
+    watched run, confirm the body of the release's pull request follows `templates/pr.md`: Resumo and Evidência once
+    per issue (the smallest visual; before and after from the prints of the watched run and the red-to-green test of
+    the checkpoint, with the three gates; prints cited by file name and relative folder, never attached), one Risco do
+    merge consolidated for the release (a one-way door when a migration or deleted data is in it, a two-way door
+    otherwise, and the blast radius), no `Closes`, `Fixes` or `Resolves` in the body or the commits,
+    and no finding left only in the body.
+30. Live preview (issue 34). In a disposable project with a `preview` block and `browserTest.isolated`, confirm that
+    right after the plan is approved, before the first slice, the session runs `serve preview refresh` and opens the
+    preview once in a tab of Claude in Chrome; that each slice merged into its issue branch is followed by a refresh that
+    shows it on reload, a conflict comes back as a question and a broken build as one line with the log file and the
+    error; that `serve stop` of an issue, the report and a new session leave the preview up and only `preview stop`, at
+    the user's request, takes it down; and that the watched run copies the development database with `copyDatabase`,
+    runs ANTES and DEPOIS in sequence in the isolated instance, never on the preview's ports nor in its tab, and drops
+    the copy with `dropDatabase` at the end.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

@@ -83,6 +83,10 @@ class PreviewInTheFlowTests(unittest.TestCase):
         self.assertIn('**Prévia ao vivo.**', readme)
         self.assertIn('numa aba do Claude in Chrome', readme)
         self.assertRegex(readme, r'prévia ao vivo[^→]*→ desenvolvimento orientado a testes')
+        runbook = read('evals', 'runbook.md')
+        self.assertIn('30. Live preview (issue 34).', runbook)
+        self.assertLess(runbook.index('29. Pull request template'), runbook.index('30. Live preview (issue 34).'))
+        self.assertIn('| 30. Prévia ao vivo (issue 34) |', read('docs', 'acceptance.md'))
 
 
 
