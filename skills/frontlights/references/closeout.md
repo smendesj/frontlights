@@ -119,7 +119,8 @@ same lines: `ok` is the verification. `python "${CLAUDE_SKILL_DIR}/scripts/close
 --root <project> --issue <parent> --line <L>` runs this capture, check, write and reread for one line at a time when
 that line lies in the parent's acceptance-criteria section (a line outside it follows the recipe above by hand), while
 the check that the line still cites only the sub-issue and is the line the user was shown stays the session's, made
-on the `body-before` file it keeps (a difference there is shown and asked about). A sub-issue whose close failed leaves its parent alone; a failed tick is
+on the `body-before` file it keeps, after the write (it detects a wrong line but cannot prevent it: a difference is
+shown and asked about, and undoing it is a write of its own, with its own approval). A sub-issue whose close failed leaves its parent alone; a failed tick is
 recorded and only the tick is retried. After the writes run `candidates` again for the parents: one whose criteria
 and children are now complete goes through the same question.
 

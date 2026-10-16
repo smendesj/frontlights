@@ -61,7 +61,8 @@ body, so no body text is ever echoed here.
 
 Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read) or, for verify, an issue that is not
 finished yet (`ok` is false and `issues` says which), or, for tick, a write whose reread does not check
-(`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own).
+(`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own) or
+whose outcome is unknown (`written` null: gh failed and the reread is neither body, or the reread itself failed).
 A refusal is JSON, never a traceback.
 """
 
@@ -105,7 +106,7 @@ PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
 BOX = re.compile(r'[Ss]([1-9][0-9]{0,2})')                     # --box S2
 BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
 LIST_ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]')
-BLOCKED = re.compile(r'bloqueada\W*:')                            # `Bloqueada:`, `**Bloqueada**:`, `Bloqueada :`
+BLOCKED = re.compile(r'bloqueada[\W_]*:')               # `Bloqueada:`, `**Bloqueada**:`, `__Bloqueada__:`, `Bloqueada :`
 
 VIEW = '''number state stateReason title url body
   parent { number repository { nameWithOwner } }
@@ -1127,23 +1128,27 @@ def find_box(body, box, line):
             or '-->' in raw[:same.start(1)] or '<!--' in raw[:same.start(1)]):
         raise TickRefusal('not_an_open_item', f'The {name} (line {number}) is not a plain checklist line; nothing was written.')
     if item.group(1) == ' ':
-        own = indentation(text_of(visible, number))
-        for later, text, _, heading in visible:
-            if later <= number or not text.strip():
+        own = indentation(raw)
+        shown = {n: (text, heading) for n, text, _, heading in visible}
+        lines = re.split(r'\r\n|\r|\n', body)
+        gap = False
+        for later in range(number + 1, len(lines) + 1):
+            whole = lines[later - 1]
+            if not whole.strip():
+                gap = True
                 continue
-            # the box's sub-items run to the next heading or the next list item that is not deeper than the box;
-            # a line without a list marker is a continuation of the item (lazy or not) and does not end it
-            if heading or (LIST_ITEM.match(text) and indentation(text) <= own):
+            text, heading = shown.get(later, (None, False))
+            # the box's sub-items run to the next heading, the next list item that is not deeper than the box, or
+            # anything not deeper than the box after an empty line (a paragraph, a table, a rule, a fence); a line
+            # glued to the one before it is a continuation of the item (lazy or not) and does not end it
+            if heading or (indentation(whole) <= own and (gap or LIST_ITEM.match(whole))):
                 break
-            if LIST_ITEM.match(text) and BLOCKED.match(plain(text)):
+            gap = False
+            if text and LIST_ITEM.match(text) and BLOCKED.match(plain(text)):
                 raise TickRefusal('blocked_line', f'The {name} (line {number}) still has its "- Bloqueada:" line (line '
                                   f'{later}): remove that line first (the write rule of the leftover), then tick; '
                                   'nothing was written.', blockedLine=later)
     return number, item.group(1) != ' '
-
-
-def text_of(visible, number):
-    return next(text for n, text, _, _ in visible if n == number)
 
 
 def save_body(folder, kind, stamp, text):

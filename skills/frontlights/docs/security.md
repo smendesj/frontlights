@@ -247,7 +247,9 @@ aprovação própria. Do corpo, imprime só números de linha. O GitHub não tem
 caia entre a captura e a gravação (o intervalo de um comando) é sobrescrita, um limite conhecido. No item do pai, a
 sessão confere a linha numa captura própria antes do `tick`, que captura de novo: uma edição entre as duas que
 desloque as linhas faria o `tick` marcar outro item. Por isso a sessão confere, no `body-before` que o `tick`
-guarda, que a linha marcada é a que a pessoa viu, e uma divergência é mostrada e perguntada.
+guarda, que a linha marcada é a que a pessoa viu. Essa conferência vem depois da gravação: ela detecta a linha errada,
+mas não impede a marcação; a divergência é mostrada e perguntada, e desfazer é uma escrita à parte, com aprovação
+própria.
 
 A espera do merge é regra da skill: o gatilho do ambiente (inscrição na PR ou monitor) não é prova, e a sessão só age
 sobre a resposta do `merge-status`, que só lê o GitHub com `gh api graphql`; um merge em outra branch, uma PR fechada

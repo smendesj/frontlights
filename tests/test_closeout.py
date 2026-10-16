@@ -1805,7 +1805,8 @@ class TickTests(CloseoutCase):
         self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'not_an_open_item', []))
 
     def test_other_spellings_of_the_blocked_line_are_refused_too(self):
-        for blocked in ('  - **Bloqueada**: falta x\n', '  - Bloqueada : falta x\n', '  * bloqueada: falta x\n'):
+        for blocked in ('  - **Bloqueada**: falta x\n', '  - Bloqueada : falta x\n', '  * bloqueada: falta x\n',
+                        '  - __Bloqueada__: falta x\n'):
             with self.subTest(blocked=blocked):
                 body = TICK_BODY.replace('  - Seams: run()\n', '  - Seams: run()\n' + blocked)
                 result, gh = self.tick(FakeIssueGh(body=body))
@@ -1815,6 +1816,18 @@ class TickTests(CloseoutCase):
         body = TICK_BODY.replace('  - Seams: run()\n', 'continua sem recuo\n  - Bloqueada: falta x\n')
         result, gh = self.tick(FakeIssueGh(body=body))
         self.assertEqual((result['ok'], result['reason'], result['blockedLine'], gh.edits), (False, 'blocked_line', 9, []))
+
+    def test_a_blocked_line_past_the_end_of_the_box_does_not_hold_it(self):
+        for between in ('Parágrafo solto.\n', '| a | b |\n| - | - |\n', '---\n', '```\ncódigo\n```\n'):
+            with self.subTest(between=between):
+                body = TICK_BODY.replace('  - Seams: run()\n', '  - Seams: run()\n\n' + between + '\n  - Bloqueada: x\n')
+                result, _ = self.tick(FakeIssueGh(body=body))
+                self.assertTrue(result['ok'], result['message'])
+
+    def test_a_blocked_line_after_an_empty_line_inside_the_box_still_holds_it(self):
+        body = TICK_BODY.replace('  - Seams: run()\n', '  - Seams: run()\n\n  outro parágrafo do item\n  - Bloqueada: x\n')
+        result, _ = self.tick(FakeIssueGh(body=body))
+        self.assertEqual((result['ok'], result['reason']), (False, 'blocked_line'))
 
     def test_a_failed_edit_and_a_body_changed_by_someone_else_is_not_called_written(self):
         gh = FakeIssueGh(fail_edit=True)
