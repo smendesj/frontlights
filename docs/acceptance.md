@@ -70,6 +70,9 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   marcas recusadas) só têm cobertura simulada.
 - O contrato agora está escrito em [`docs/roads-contract.md`](roads-contract.md), com versão, regra de
   mudança aditiva e regra de quebra.
+- As semanas identificadas pela data (issue 39) só têm cobertura simulada: o `fetch` e o `apply` foram testados
+  com estados nas duas formas (posicional e `sprint-DD-MM-AAAA`), excedente no arquivo da semana e lane sem par
+  avisada, sem o RoadS real; falta a primeira sincronização real depois da migração do RoadS.
 
 ## Defeitos achados no uso real e corrigidos nesta versão
 
