@@ -877,6 +877,28 @@ def validate_isolated_block(config):
         if not isolated_local_url(item['health']):
             raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
                                  'instância isolada só roda na própria máquina (127.0.0.1, localhost ou ::1).')
+    for field in ('copyDatabase', 'dropDatabase'):
+        validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
+
+
+def validate_isolated_command(command, where):
+    """`{argv, timeoutSeconds?}` of a database step of the isolated instance, with the shell filter of checks."""
+    import checks
+    if not isinstance(command, dict):
+        raise checks.Refused(f'{where} precisa ser um objeto com argv (lista de argumentos) e, opcionalmente, '
+                             'timeoutSeconds.')
+    argv = command.get('argv')
+    if not isinstance(argv, list) or not argv or not all(isinstance(part, str) and part for part in argv):
+        raise checks.Refused(f'{where}.argv precisa ser uma lista não vazia de textos não vazios, não uma string.')
+    if any('\0' in part for part in argv):
+        raise checks.Refused(f'{where}.argv não aceita byte NUL em nenhum argumento.')
+    reason = checks.embedded_shell(argv)
+    if reason:
+        raise checks.Refused(f'{where}.argv não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, '
+                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus argumentos.')
+    timeout = command.get('timeoutSeconds')
+    if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
+        raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
 
 
 def isolated_local_url(value):

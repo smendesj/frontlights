@@ -372,6 +372,40 @@ class IsolatedBlockTests(unittest.TestCase):
                                       r'browserTest\.isolated\.processes')
                 self.assertIn('local', message)
 
+    def test_copy_and_drop_database_are_required_objects(self):
+        for field in ('copyDatabase', 'dropDatabase'):
+            for value in (None, 'python COPY_DB_SCRIPT', ['python', 'COPY_DB_SCRIPT']):
+                with self.subTest(field=field, value=value):
+                    self.refuse(with_isolated(**{field: value}), rf'browserTest\.isolated\.{field}')
+            with self.subTest(field=field, value='ausente'):
+                block = isolated()
+                block.pop(field)
+                self.refuse(with_isolated(block), rf'browserTest\.isolated\.{field}')
+
+    def test_database_argv_must_be_a_non_empty_list_of_texts(self):
+        for field in ('copyDatabase', 'dropDatabase'):
+            for argv in (None, 'python DROP_DB_SCRIPT', [], ['python', ''], ['python', 7], ['python', 'a\0b']):
+                with self.subTest(field=field, argv=argv):
+                    self.refuse(with_isolated(**{field: {'argv': argv}}), rf'browserTest\.isolated\.{field}\.argv')
+
+    def test_database_argv_never_embeds_a_shell(self):
+        for field in ('copyDatabase', 'dropDatabase'):
+            for argv in (['sh', '-c', 'x'], ['cmd', '/c', 'x'], ['powershell', '-Command', 'x'], ['DROP_DB.bat'],
+                         ['python', '-c', 'x'], ['env', 'python', 'x'], ['python', 'DROP_DB_SCRIPT', '&&', 'x'],
+                         ['python', 'DROP_DB_SCRIPT', '|', 'x']):
+                with self.subTest(field=field, argv=argv):
+                    self.refuse(with_isolated(**{field: {'argv': argv}}),
+                                rf'browserTest\.isolated\.{field}\.argv não aceita shell embutido')
+
+    def test_database_timeout_is_an_optional_positive_integer(self):
+        for field in ('copyDatabase', 'dropDatabase'):
+            for timeout in (0, -5, 1.5, '60', True):
+                with self.subTest(field=field, timeout=timeout):
+                    self.refuse(with_isolated(**{field: {'argv': ['python', 'DB_SCRIPT'], 'timeoutSeconds': timeout}}),
+                                rf'browserTest\.isolated\.{field}\.timeoutSeconds')
+            with self.subTest(field=field, timeout='ausente'), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(**{field: {'argv': ['python', 'DB_SCRIPT']}}), root)
+
 
 if __name__ == '__main__':
     unittest.main()
