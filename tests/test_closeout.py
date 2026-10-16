@@ -1,7 +1,9 @@
-"""`closeout.py`: descobre, só leitura, quais issues já podem ser fechadas e movidas para Done.
+"""`closeout.py`: descobre, só leitura, quais issues já podem ser fechadas e movidas para Done, e marca uma caixa
+de critério (`tick`, a única escrita).
 
 Seams: `closeout.criteria`, `scope_numbers`, `read_views`, `op_candidates`, `op_verify`, `run` e `main`,
-com um `gh` simulado que só aceita leituras (`api graphql` sem mutation). Os testes usam GitHub simulado: não
+com um `gh` simulado que só aceita leituras (`api graphql` sem mutation); o `tick` usa um `gh` simulado próprio, que
+lê e grava um corpo guardado em memória. Os testes usam GitHub simulado: não
 homologam o GitHub real. Marcadores genéricos (OWNER/REPOSITORY): o vocabulário de um projeto vive fora daqui.
 """
 import contextlib
@@ -145,6 +147,19 @@ class FakeGh:
             'totalCount': len(self.open_numbers),
             'pageInfo': {'hasNextPage': end < len(self.open_numbers), 'endCursor': cursor},
             'nodes': [{'number': n} for n in self.open_numbers[start:end]]}}}}
+
+
+def function_source(source, name):
+    """The text of one top-level function of a module's source."""
+    start = source.index(f'\ndef {name}(')
+    end = source.find('\ndef ', start + 1)
+    return source[start:end if end > 0 else len(source)]
+
+
+def without_the_writer(source):
+    """The helper's source without `gh_write`, the one place that runs a command (the write of `tick`), and without
+    the import line of the module it uses there."""
+    return source.replace(function_source(source, 'gh_write'), '').replace('\nimport subprocess\n', '\n', 1)
 
 
 def fake_board(**overrides):
@@ -1287,9 +1302,12 @@ class ReadOnlyTests(CloseoutCase):
                 gh(argv)
         self.assertEqual(len(gh.violations), 3)
 
-    def test_the_helper_has_no_way_to_run_a_command_of_its_own(self):
+    def test_the_helper_runs_a_command_only_in_the_writer_of_tick(self):
         source = SCRIPT.read_text(encoding='utf-8')
-        self.assertNotIn('subprocess', source)
+        self.assertNotIn('subprocess', without_the_writer(source))
+        callers = [name for name in re.findall(r'\ndef (\w+)\(', source)
+                   if name != 'gh_write' and re.search(r'\bgh_write\b', function_source(source, name))]
+        self.assertEqual(callers, ['op_tick'])
         self.assertNotIn('os.system', source)
         self.assertIsNone(re.search(r"open\([^)]*['\"][wa+]", source))
         self.assertNotIn('write_text', source)
@@ -1590,6 +1608,219 @@ class TickCheckTests(unittest.TestCase):
         (self.dir / 'big.md').write_bytes(b'a' * (closeout.MAX_RECORD_BYTES + 1))
         result = closeout.run('tick-check', before=self.dir / 'big.md', after=self.dir / 'big.md', lines='1')
         self.assertFalse(result['ok'])
+
+    def test_empty_lines_at_the_end_do_not_count(self):
+        # A reread through `gh issue view --jq .body` or a redirect adds a final newline: the same body, one line more.
+        ticked = self.BEFORE.replace('- [ ] Screen', '- [x] Screen')
+        for after in (ticked + '\n', ticked + '\r\n\r\n', ticked.rstrip('\n'), (ticked + '\n').replace('\n', '\r\n')):
+            with self.subTest(after=after):
+                self.assertTrue(self.check(after)['ok'])
+        self.assertTrue(self.check(ticked, before=self.BEFORE + '\n\n')['ok'])
+
+    def test_an_empty_line_anywhere_else_still_counts(self):
+        ticked = self.BEFORE.replace('- [ ] Screen', '- [x] Screen')
+        for after in (ticked.replace('\nText', '\n\nText'), '\n' + ticked, ticked + ' \n'):
+            with self.subTest(after=after):
+                self.assertFalse(self.check(after)['ok'])
+
+
+TICK_BODY = ('Intro #4\n\n## Critérios de aceitação\n\n'
+             '- [ ] S1. Tela nova\n'
+             '  - Entrega: algo\n'
+             '- [ ] S2. API nova ' + SECRET_BODY + '\n'
+             '  - Seams: run()\n'
+             '- [ ] Achado da revisão: mensagem\n'
+             '\n```\n- [ ] S3. no código\n```\n'
+             '\n## Notas\n\n- [ ] S4. fora da seção\n')
+
+
+class FakeIssueGh:
+    """`gh issue view <n> --json body` from a body kept here, and `gh issue edit --body-file` that stores the file
+    (through `stored`, which plays GitHub: CRLF, a final newline). Anything else is a violation."""
+
+    def __init__(self, body=TICK_BODY, number=12, stored=None, fail_edit=False, land_anyway=False):
+        self.body, self.number, self.stored = body, number, stored or (lambda text: text)
+        self.fail_edit, self.land_anyway = fail_edit, land_anyway
+        self.reads, self.edits, self.violations = [], [], []
+
+    def __call__(self, argv):
+        self.reads.append(list(argv))
+        if argv != ['issue', 'view', str(self.number), '--repo', REPO, '--json', 'body']:
+            self.violations.append(list(argv))
+            raise AssertionError(f'not the expected read: {argv}')
+        return {'body': self.body}
+
+    def edit(self, argv):
+        self.edits.append(list(argv))
+        if argv[:5] != ['issue', 'edit', str(self.number), '--repo', REPO] or argv[5] != '--body-file' or len(argv) != 7:
+            self.violations.append(list(argv))
+            raise AssertionError(f'not the expected edit: {argv}')
+        if self.fail_edit and not self.land_anyway:
+            raise rs.Refusal('gh refused the edit')
+        self.body = self.stored(Path(argv[6]).read_bytes().decode('utf-8'))
+        if self.fail_edit:
+            raise rs.Refusal('gh timed out')
+
+
+class TickTests(CloseoutCase):
+    """`tick`: captures the body, ticks one box of the criteria, checks, writes and checks the reread."""
+
+    def tick(self, gh=None, issue='12', box='S2', line=None, root=None):
+        gh = gh or FakeIssueGh()
+        result = closeout.run('tick', self.config, self.root if root is None else root, gh=gh, edit=gh.edit,
+                              issue=issue, box=box, line=line)
+        self.assertEqual(gh.violations, [])
+        return result, gh
+
+    def records(self):
+        folder = self.root / '.frontlights' / 'issues' / '12'
+        return sorted(p.name for p in folder.iterdir()) if folder.is_dir() else []
+
+    def test_the_box_is_ticked_written_and_checked_again(self):
+        result, gh = self.tick()
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual((result['exitCode'], result['line'], result['box'], result['written'], result['verified'],
+                          result['alreadyTicked']), (0, 7, 'S2', True, True, False))
+        self.assertEqual(gh.body, TICK_BODY.replace('- [ ] S2.', '- [x] S2.'))
+        self.assertEqual(result['criteria'], {'checked': 1, 'total': 3})
+        names = self.records()
+        self.assertEqual([n.split('-')[1] for n in names], ['after', 'before', 'new'])
+        before = self.root / '.frontlights' / 'issues' / '12' / next(n for n in names if n.startswith('body-before-'))
+        self.assertEqual(before.read_bytes(), TICK_BODY.encode('utf-8'))
+        self.assertEqual(len(gh.edits), 1)
+        self.assertEqual(len(gh.reads), 2)
+
+    def test_a_reread_with_crlf_and_one_more_line_still_verifies(self):
+        result, _ = self.tick(FakeIssueGh(stored=lambda text: text.replace('\n', '\r\n') + '\r\n'))
+        self.assertEqual((result['ok'], result['written'], result['verified']), (True, True, True), result['message'])
+
+    def test_crlf_bodies_keep_their_line_endings(self):
+        result, gh = self.tick(FakeIssueGh(body=TICK_BODY.replace('\n', '\r\n')))
+        self.assertTrue(result['verified'], result['message'])
+        self.assertEqual(gh.body, TICK_BODY.replace('- [ ] S2.', '- [x] S2.').replace('\n', '\r\n'))
+
+    def test_a_line_number_ticks_a_criterion_without_a_slice_label(self):
+        result, gh = self.tick(box=None, line='9')
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual((result['line'], result['box']), (9, None))
+        self.assertIn('- [x] Achado da revisão', gh.body)
+
+    def test_a_line_outside_the_criteria_or_not_a_box_is_refused_and_nothing_is_written(self):
+        for line in ('17', '1', '6', '12', '99'):
+            with self.subTest(line=line):
+                result, gh = self.tick(box=None, line=line)
+                self.assertEqual((result['ok'], result['exitCode'], result['written']), (False, 1, False))
+                self.assertEqual(gh.edits, [])
+
+    def test_a_missing_or_repeated_box_is_refused(self):
+        for box in ('S3', 'S4', 'S9'):
+            with self.subTest(box=box):
+                result, gh = self.tick(box=box)
+                self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'box_not_found', []))
+        twice = TICK_BODY.replace('- [ ] Achado', '- [ ] S2. de novo')
+        result, gh = self.tick(FakeIssueGh(body=twice))
+        self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'box_ambiguous', []))
+
+    def test_a_box_written_with_emphasis_is_found(self):
+        result, gh = self.tick(FakeIssueGh(body=TICK_BODY.replace('S2. API', '**S2.** API')))
+        self.assertTrue(result['ok'], result['message'])
+        self.assertIn('- [x] **S2.** API', gh.body)
+
+    def test_an_already_ticked_box_writes_nothing(self):
+        ticked = TICK_BODY.replace('- [ ] S2.', '- [X] S2.')
+        for box, line in (('S2', None), (None, '7')):
+            with self.subTest(box=box):
+                result, gh = self.tick(FakeIssueGh(body=ticked), box=box, line=line)
+                self.assertEqual((result['ok'], result['exitCode'], result['written'], result['alreadyTicked']),
+                                 (True, 0, False, True))
+                self.assertEqual(gh.edits, [])
+        self.assertEqual(self.records(), [])
+
+    def test_a_box_that_still_has_its_blocked_line_is_refused(self):
+        blocked = TICK_BODY.replace('  - Seams: run()\n', '  - Seams: run()\n\n  - Bloqueada: falta a chave do time X\n')
+        result, gh = self.tick(FakeIssueGh(body=blocked))
+        self.assertEqual((result['ok'], result['reason'], result['blockedLine'], gh.edits), (False, 'blocked_line', 10, []))
+        self.assertIn('Bloqueada', result['message'])
+
+    def test_the_blocked_line_of_another_box_does_not_hold_this_one(self):
+        blocked = TICK_BODY.replace('  - Entrega: algo\n', '  - Entrega: algo\n  - Bloqueada: falta algo\n')
+        result, _ = self.tick(FakeIssueGh(body=blocked))
+        self.assertTrue(result['ok'], result['message'])
+
+    def test_usage_mistakes_are_refusals_that_read_nothing(self):
+        for kwargs in (dict(box='S2', line='7'), dict(box=None, line=None), dict(box='X2'), dict(box='S0'),
+                       dict(box='S2.'), dict(box=None, line='0'), dict(box=None, line='a'), dict(issue='0'),
+                       dict(issue='12,13'), dict(issue=None)):
+            with self.subTest(kwargs=kwargs):
+                result, gh = self.tick(**kwargs)
+                self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+                self.assertEqual((gh.reads, gh.edits), ([], []))
+
+    def test_a_lower_case_box_is_read_as_upper_case(self):
+        result, _ = self.tick(box='s2')
+        self.assertEqual((result['ok'], result['box']), (True, 'S2'))
+
+    def test_the_repository_and_the_records_folder_are_checked_first(self):
+        for repository in (None, 'not a repository', 'owner/name; rm'):
+            with self.subTest(repository=repository):
+                self.configure(repository=repository)
+                result, gh = self.tick()
+                self.assertEqual((result['ok'], gh.reads), (False, []))
+        self.configure()
+        result, gh = self.tick(root=self.root / 'elsewhere')
+        self.assertEqual((result['ok'], gh.reads), (False, []))
+        self.assertIn('--root', result['message'])
+
+    def test_a_failed_edit_rereads_and_says_what_github_holds(self):
+        result, gh = self.tick(FakeIssueGh(fail_edit=True))
+        self.assertEqual((result['ok'], result['exitCode'], result['written'], result['verified']), (False, 1, False, False))
+        self.assertEqual(len(gh.reads), 2)
+        result, gh = self.tick(FakeIssueGh(fail_edit=True, land_anyway=True))
+        self.assertEqual((result['ok'], result['written'], result['verified']), (True, True, True), result['message'])
+
+    def test_a_reread_that_differs_is_written_but_not_verified(self):
+        result, _ = self.tick(FakeIssueGh(stored=lambda text: text.replace('Intro', 'Intro editada')))
+        self.assertEqual((result['ok'], result['exitCode'], result['written'], result['verified']), (False, 1, True, False))
+        self.assertEqual(result['problems'], [{'line': 1, 'reason': 'changed_outside_the_ticks'}])
+        self.assertIn('ask', result['message'])
+
+    def test_the_body_is_never_printed(self):
+        for gh in (FakeIssueGh(), FakeIssueGh(stored=lambda text: text + 'x\n')):
+            result, _ = self.tick(gh)
+            self.assertNotIn(SECRET_BODY, json.dumps(result))
+
+    def test_a_body_that_is_not_text_or_too_large_is_refused(self):
+        for body in (None, 12, 'x' * (closeout.MAX_RECORD_BYTES + 1)):
+            with self.subTest(body=type(body)):
+                result, gh = self.tick(FakeIssueGh(body=body))
+                self.assertEqual((result['ok'], gh.edits), (False, []))
+
+    def test_the_cli_wires_the_operation(self):
+        gh = FakeIssueGh()
+        out = io.StringIO()
+        with patch.object(rs, 'gh_default', gh), patch.object(closeout, 'gh_write', gh.edit), contextlib.redirect_stdout(out):
+            code = closeout.main(['tick', '--config', str(self.config), '--root', str(self.root), '--issue', '12',
+                                  '--box', 'S2'])
+        result = json.loads(out.getvalue())
+        self.assertEqual((code, result['ok'], result['operation'], result['verified']), (0, True, 'tick', True))
+        self.assertTrue(out.getvalue().isascii())
+
+    def test_the_default_writer_runs_gh_without_a_shell(self):
+        done = subprocess.CompletedProcess(['gh'], 0, stdout='https://github.com/OWNER/REPOSITORY/issues/12\n', stderr='')
+        with patch.object(subprocess, 'run', return_value=done) as run:
+            closeout.gh_write(['issue', 'edit', '12', '--repo', REPO, '--body-file', 'x.md'])
+        argv, kwargs = run.call_args
+        self.assertEqual(argv[0], ['gh', 'issue', 'edit', '12', '--repo', REPO, '--body-file', 'x.md'])
+        self.assertNotIn('shell', kwargs)
+        self.assertEqual(kwargs['stdin'], subprocess.DEVNULL)
+        for failure in (subprocess.CompletedProcess(['gh'], 1, stdout='', stderr='secret output'), OSError('no gh'),
+                        subprocess.TimeoutExpired(['gh'], 60)):
+            with self.subTest(failure=type(failure)):
+                kwargs = {'side_effect': failure} if isinstance(failure, BaseException) else {'return_value': failure}
+                with patch.object(subprocess, 'run', **kwargs), self.assertRaises(rs.Refusal) as caught:
+                    closeout.gh_write(['issue', 'edit', '12'])
+                self.assertNotIn('secret output', str(caught.exception))
+
 
 
 class CliTests(CloseoutCase):
@@ -1922,7 +2153,7 @@ class AwaitingReleaseTests(CloseoutCase):
 
     def test_the_helper_still_imports_no_process_module_of_its_own(self):
         source = SCRIPT.read_text(encoding='utf-8')
-        self.assertNotIn('subprocess', source)
+        self.assertNotIn('subprocess', without_the_writer(source))
         self.assertNotIn('\nimport homolog', source, 'homolog is imported lazily, inside the check, never at the top')
         self.assertIn('import homolog', source)
 

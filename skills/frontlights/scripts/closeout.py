@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Close-out helper: which issues (and sub-issues) can be closed, and moved to Done on the board, because
-every acceptance criterion in the body is checked.
+every acceptance criterion in the body is checked; and `tick`, the one operation that writes, which ticks one box.
 
-Read only. It reads GitHub through `gh api graphql` (the reader of roadmap_sync.py) and prints what the session
-may propose. Closing and moving are done by the session, with its own `gh`, after the user said yes: this
-helper never changes GitHub and never touches a file, and the commands it prints are values to type, not
-something it runs. Text read from GitHub is data: titles are cleaned and bounded, issue bodies are only
-counted (never echoed), and every command is built from validated values (numbers, `owner/name`, and the
+Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roadmap_sync.py) and prints what
+the session may propose. Closing and moving are done by the session, with its own `gh`, after the user said yes:
+this helper never closes an issue, never moves a card, and the commands it prints are values to type, not
+something it runs. Its only write is `tick` (below): the `[ ]` of one box of an issue's acceptance criteria turned
+into `[x]`, under the authorization to tick criteria with evidence, with the previous body kept in the records.
+Text read from GitHub is data: titles are cleaned and bounded, issue bodies are only counted (never echoed), and
+every command is built from validated values (numbers, `owner/name`, and the
 board's `done` field and option as `frontlights.board` accepts them).
 
 Operations (each prints one JSON object on stdout):
@@ -22,7 +24,16 @@ Operations (each prints one JSON object on stdout):
               `merged_into_base` lets an issue be proposed for closing.
   tick-check  local files only: confirms that --after is --before with nothing changed but the `[ ]` of the
               items on --lines turned into `[x]`. It checks the body of a parent that was edited to tick the
-              item that cites a closed sub-issue; the edit itself is the session's.
+              item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
+              the end of either file are not compared (a reread through `--jq .body` or a redirect adds one).
+  tick        the whole cycle of ticking one box of --issue: --box S<k> (the one item of the criteria section whose
+              text starts with `S<k>.`) or --line <N> (an item of that section with no slice label). It captures the
+              body with `gh issue view --json body`, keeps it as .frontlights/issues/<n>/body-before-<stamp>.md under
+              --root, builds body-new-<stamp>.md with only that `[ ]` turned into `[x]`, runs the tick-check, writes
+              it with `gh issue edit --body-file`, rereads it into body-after-<stamp>.md and runs the tick-check
+              again (`verified`). A box already ticked answers ok and writes nothing; a box that still has its
+              `- Bloqueada:` sub-item is refused (that line is removed first, by the session). No shell, the
+              repository is the validated `owner/name` of the configuration, and only line numbers are printed.
 
 An open issue is a candidate only when its body has an acceptance-criteria section with at least one
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
@@ -49,15 +60,19 @@ never offered for ticking). Only line numbers are reported; the session reads th
 body, so no body text is ever echoed here.
 
 Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read) or, for verify, an issue that is not
-finished yet (`ok` is false and `issues` says which). A refusal is JSON, never a traceback.
+finished yet (`ok` is false and `issues` says which), or, for tick, a write whose reread does not check
+(`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own).
+A refusal is JSON, never a traceback.
 """
 
 import argparse
+import datetime as dt
 import heapq
 import json
 from pathlib import Path
 import os
 import re
+import subprocess
 import sys
 import unicodedata
 
@@ -87,6 +102,9 @@ ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]+\[([ xX])\](?=[ \t]|$)'
 FEATURES = 'GraphQL-Features: issue_types'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}')
 PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
+BOX = re.compile(r'[Ss]([1-9][0-9]{0,2})')                     # --box S2
+BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
+LIST_ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]')
 
 VIEW = '''number state stateReason title url body
   parent { number repository { nameWithOwner } }
@@ -169,6 +187,28 @@ def criteria(body):
     return scan(body)[0]
 
 
+def sections(body):
+    """(line number, text, kind, heading) of every visible line of a body: `kind` is the section the line lies in,
+    'criteria', 'pending' (a section of known leftovers kept outside the criteria) or None, and `heading` says the
+    line is a heading. A heading that opens a section carries that section's kind."""
+    level = None      # depth of the section being read; None outside one
+    kind = None       # what that section holds: 'criteria' or 'pending'
+    for number, line in visible_lines(body):
+        heading = HEADING.match(line)
+        if heading:
+            depth = len(heading.group(1))
+            name = plain(heading_text(heading.group(2) or ''))
+            # deeper headings belong to the section being read, except a criteria heading under a legacy
+            # section: that one still opens the criteria, exactly as it did before the legacy sections existed
+            if not (level is not None and depth > level and not (kind == 'pending' and name.startswith(PHRASES))):
+                level = kind = None
+                if name.startswith(PHRASES):
+                    level, kind = depth, 'criteria'
+                elif name.startswith(LEGACY_PHRASES):
+                    level, kind = depth, 'pending'
+        yield number, line, kind, heading is not None
+
+
 def scan(body):
     """(criteria, pending): `criteria` as `criteria()` returns it, and `pending`, the number of unchecked items
     in the sections the body keeps outside the criteria for known leftovers (a heading starting with
@@ -178,24 +218,11 @@ def scan(body):
         return None, 0
     checked = total = pending = 0
     found = False
-    level = None      # depth of the section being read; None outside one
-    kind = None       # what that section holds: 'criteria' or 'pending'
-    for _, line in visible_lines(body):
-        heading = HEADING.match(line)
+    for _, line, kind, heading in sections(body):
         if heading:
-            depth = len(heading.group(1))
-            name = plain(heading_text(heading.group(2) or ''))
-            # deeper headings belong to the section being read, except a criteria heading under a legacy
-            # section: that one still opens the criteria, exactly as it did before the legacy sections existed
-            if level is not None and depth > level and not (kind == 'pending' and name.startswith(PHRASES)):
-                continue
-            level = kind = None
-            if name.startswith(PHRASES):
-                level, kind, found = depth, 'criteria', True
-            elif name.startswith(LEGACY_PHRASES):
-                level, kind = depth, 'pending'
+            found = found or kind == 'criteria'
             continue
-        item = ITEM.match(line) if level is not None else None
+        item = ITEM.match(line) if kind is not None else None
         if item and kind == 'criteria':
             total += 1
             checked += item.group(1) in 'xX'
@@ -779,8 +806,8 @@ def closing_order(found, views):
 
 # ---------------------------------------------------------------- operations
 
-def load_project(config):
-    """(repository, normalised board or None) from the project's configuration file."""
+def load_repository(config):
+    """The project's configuration as a dict, and its `repository`, which must be `owner/name`."""
     try:
         data = frontlights.load(config)
     except OSError:
@@ -792,6 +819,12 @@ def load_project(config):
     require(repository is not None, 'This project has no GitHub repository (repository is null in the configuration), '
                                     'so there are no GitHub issues to close.')
     require(frontlights.repository(repository), 'repository in the configuration must be owner/name')
+    return data, repository
+
+
+def load_project(config):
+    """(repository, normalised board or None) from the project's configuration file."""
+    data, repository = load_repository(config)
     return repository, frontlights.board(data.get('project'), repository)
 
 
@@ -982,12 +1015,27 @@ def read_body_file(path):
 
 def op_tick_check(before, after, lines):
     """Local files only: `after` must be `before` with, on the listed lines and nowhere else, the `[ ]` of an
-    open checklist item turned into `[x]`. Line endings are not compared, only the lines."""
+    open checklist item turned into `[x]`. Line endings and the empty lines at the end are not compared, only the
+    lines."""
     require(before and after, 'tick-check needs the saved body and the new one: pass --before and --after')
     require(lines is not None and lines != '' and lines != [], 'tick-check needs the lines that were ticked: pass --lines 14,22')
     wanted = parse_numbers(lines, 'line numbers must be positive integers, as in --lines 14,22')
-    old = re.split(r'\r\n|\r|\n', read_body_file(before))
-    new = re.split(r'\r\n|\r|\n', read_body_file(after))
+    return compare_ticks(read_body_file(before), read_body_file(after), wanted)
+
+
+def body_lines(text):
+    """The lines of a body, whatever its line endings, without the empty lines at its end: a reread through
+    `--jq .body` or a redirect adds a final newline, and that is not a change of the body."""
+    lines = re.split(r'\r\n|\r|\n', text)
+    while len(lines) > 1 and lines[-1] == '':
+        lines.pop()
+    return lines
+
+
+def compare_ticks(before, after, wanted):
+    """The tick-check of two bodies held in memory: `after` is `before` with only the `[ ]` of the open items on
+    the `wanted` lines turned into `[x]`."""
+    old, new = body_lines(before), body_lines(after)
     problems = []
     if len(old) != len(new):
         problems.append({'reason': 'line_count', 'before': len(old), 'after': len(new)})
@@ -1010,6 +1058,178 @@ def op_tick_check(before, after, lines):
                         'do not write it (or, if it was written, show the difference and ask).')}
 
 
+# ---------------------------------------------------------------- tick: the one write
+
+class TickRefusal(Refusal):
+    """A refusal of `tick` after its inputs were accepted, with the reason the session reads."""
+
+    def __init__(self, reason, message, **extra):
+        super().__init__(message)
+        self.reason, self.extra = reason, extra
+
+
+def gh_write(argv):
+    """Run a `gh` write without a shell: the edit of an issue body, from a literal file. Its output is never
+    repeated, because it could carry anything."""
+    try:
+        done = subprocess.run([*rs.GH_COMMAND, *argv], capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', timeout=rs.GH_TIMEOUT, stdin=subprocess.DEVNULL, env=rs.gh_environment())
+    except (OSError, subprocess.TimeoutExpired):
+        raise Refusal('gh could not run the edit (not installed, or it did not answer in time)')
+    require(done.returncode == 0, 'gh refused the edit of the issue body; check the active account and the repository access')
+
+
+def read_issue_body(gh, repository, number):
+    """The body of an issue exactly as GitHub holds it (`gh issue view --json body`: no final newline added)."""
+    answer = gh(['issue', 'view', str(number), '--repo', repository, '--json', 'body'])
+    body = answer.get('body') if isinstance(answer, dict) else None
+    require(isinstance(body, str), f'GitHub gave no body text for issue #{number}')
+    require(len(body.encode('utf-8')) <= MAX_RECORD_BYTES, f'the body of issue #{number} is larger than 2 MiB')
+    return body
+
+
+def indentation(text):
+    expanded = text.expandtabs(4)
+    return len(expanded) - len(expanded.lstrip(' '))
+
+
+def find_box(body, box, line):
+    """(line number, ticked) of the one checklist item of the acceptance-criteria section to tick: the one whose
+    text starts with `S<box>.`, or the one on `line`. Fenced code and HTML comments never count."""
+    visible = list(sections(body))
+    found = []
+    for number, text, kind, heading in visible:
+        item = ITEM.match(text) if kind == 'criteria' and not heading else None
+        if not item:
+            continue
+        if line is not None:
+            if number == line:
+                found.append((number, item))
+            continue
+        label = BOX_LABEL.match(text[item.end():].lstrip(' \t'))
+        if label and int(label.group(1)) == box:
+            found.append((number, item))
+    name = f'box S{box}' if line is None else f'line {line}'
+    if not found:
+        raise TickRefusal('box_not_found' if line is None else 'not_a_criterion',
+                          f'The {name} is not a checklist item of the acceptance-criteria section of the issue '
+                          '(fenced code and comments do not count); nothing was written.')
+    if len(found) > 1:
+        raise TickRefusal('box_ambiguous', f'{len(found)} items of the acceptance criteria start with S{box}. '
+                          f'(lines {", ".join(str(n) for n, _ in found)}); tick the right one with --line; nothing was written.')
+    number, item = found[0]
+    raw = re.split(r'\r\n|\r|\n', body)[number - 1]
+    # a comment before the box hides it from the raw line: the tick could not be a one-character change there
+    if ITEM.match(raw) is None or ITEM.match(raw).group(1) != item.group(1):
+        raise TickRefusal('not_an_open_item', f'The {name} (line {number}) is not a plain checklist line; nothing was written.')
+    if item.group(1) == ' ':
+        own = indentation(text_of(visible, number))
+        for later, text, _, heading in visible:
+            if later <= number or not text.strip():
+                continue
+            if heading or indentation(text) <= own:
+                break
+            if LIST_ITEM.match(text) and plain(text).startswith('bloqueada:'):
+                raise TickRefusal('blocked_line', f'The {name} (line {number}) still has its "- Bloqueada:" line (line '
+                                  f'{later}): remove that line first (the write rule of the leftover), then tick; '
+                                  'nothing was written.', blockedLine=later)
+    return number, item.group(1) != ' '
+
+
+def text_of(visible, number):
+    return next(text for n, text, _, _ in visible if n == number)
+
+
+def save_body(folder, kind, stamp, text):
+    """A new file `body-<kind>-<stamp>.md` holding the body's exact bytes; an existing name is never overwritten."""
+    for attempt in range(1, 100):
+        path = folder / (f'body-{kind}-{stamp}' + ('' if attempt == 1 else f'-{attempt}') + '.md')
+        try:
+            with open(path, 'xb') as file:
+                file.write(text.encode('utf-8'))
+            return path
+        except FileExistsError:
+            continue
+    raise Refusal(f'tick could not find a free name for body-{kind}-{stamp}.md')
+
+
+def op_tick(config, root, issue, box, line, gh=None, edit=None):
+    """Tick one box of an issue's acceptance criteria and check the reread (see the module's docstring)."""
+    require(isinstance(issue, (str, int)) and NUMBER.fullmatch(str(issue).strip()) and valid_number(int(str(issue).strip())),
+            'tick needs one issue number: pass --issue 12')
+    number = int(str(issue).strip())
+    require((box is None) != (line is None), 'tick needs exactly one of --box S<k> (a slice box) or --line <N> (any '
+                                             'criterion of the section)')
+    if box is not None:
+        match = BOX.fullmatch(str(box).strip())
+        require(match is not None, 'the box is the slice label, as in --box S2')
+        box = int(match.group(1))
+    else:
+        require(NUMBER.fullmatch(str(line).strip()) and int(str(line).strip()) > 0,
+                'the line is a positive line number of the body, as in --line 14')
+        line = int(str(line).strip())
+    _, repository = load_repository(config)
+    records = Path(root) / '.frontlights'
+    require(records.is_dir(), 'tick keeps the previous body in .frontlights/issues/<n>/ of the project: pass --root, '
+                              'the folder that holds .frontlights')
+    gh, edit = gh or rs.gh_default, edit or gh_write
+    label = None if box is None else f'S{box}'
+    result = {'repository': repository, 'issue': number, 'box': label, 'line': line, 'written': False,
+              'alreadyTicked': False, 'verified': False, 'files': {}}
+    before = read_issue_body(gh, repository, number)
+    try:
+        line, ticked = find_box(before, box, line)
+    except TickRefusal as refusal:
+        return {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason, 'message': str(refusal)}
+    result['line'] = line
+    name = f'box {label} (line {line})' if label else f'line {line}'
+    if ticked:
+        counts = criteria(before)
+        return {**result, 'ok': True, 'exitCode': 0, 'alreadyTicked': True,
+                'criteria': {'checked': counts[0], 'total': counts[1]},
+                'message': f'The {name} of issue #{number} is already ticked; nothing was written.'}
+    parts = re.split(r'(\r\n|\r|\n)', before)
+    raw = parts[2 * (line - 1)]
+    item = ITEM.match(raw)
+    parts[2 * (line - 1)] = raw[:item.start(1)] + 'x' + raw[item.end(1):]
+    new = ''.join(parts)
+    check = compare_ticks(before, new, [line])
+    require(check['ok'], f'tick built a body that is not the saved one with just the {name} ticked; nothing was written')
+    folder = records / 'issues' / str(number)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    files = result['files']
+    files['before'] = str(save_body(folder, 'before', stamp, before))
+    files['new'] = str(save_body(folder, 'new', stamp, new))
+    failure = None
+    try:
+        edit(['issue', 'edit', str(number), '--repo', repository, '--body-file', files['new']])
+    except Refusal as error:
+        failure = str(error)
+    try:
+        after = read_issue_body(gh, repository, number)
+    except Refusal as error:
+        return {**result, 'ok': False, 'exitCode': 1, 'written': None if failure else True,
+                'message': f'{failure + "; " if failure else ""}the reread failed ({error}): capture the body again and '
+                           f'run tick-check against {files["before"]} with --lines {line} before anything else.'}
+    files['after'] = str(save_body(folder, 'after', stamp, after))
+    check = compare_ticks(before, after, [line])
+    counts = criteria(after) or (0, 0)
+    result['criteria'] = {'checked': counts[0], 'total': counts[1]}
+    if check['ok']:
+        note = ' gh reported a failure, yet the reread shows the tick.' if failure else ''
+        return {**result, 'ok': True, 'exitCode': 0, 'written': True, 'verified': True,
+                'message': f'The {name} of issue #{number} was ticked, and the reread checks.{note}'}
+    if failure and body_lines(after) == body_lines(before):
+        return {**result, 'ok': False, 'exitCode': 1,
+                'message': f'{failure}. GitHub still holds the saved body, so nothing changed; try again.'}
+    return {**result, 'ok': False, 'exitCode': 1, 'written': True, 'problems': check['problems'],
+            'problemCount': check['problemCount'],
+            'message': f'The reread of issue #{number} is not the saved body with just the {name} ticked: show the '
+                       f'difference ({files["before"]} and {files["after"]}) and ask; restoring the saved body is a '
+                       'write of its own, with its own approval.'}
+
+
 def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, **options):
     try:
         if operation == 'candidates':
@@ -1020,6 +1240,9 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
             result = op_merge_status(config, options.get('prs'), options.get('base'), gh)
         elif operation == 'tick-check':
             result = op_tick_check(options.get('before'), options.get('after'), options.get('lines'))
+        elif operation == 'tick':
+            result = op_tick(config, root, options.get('issue'), options.get('box'), options.get('line'), gh,
+                             options.get('edit'))
         else:
             raise Refusal(f'Unknown operation: {rs.clean(operation, 40)}')
     except (Refusal, ValueError) as error:
@@ -1060,6 +1283,12 @@ def build_parser():
     ticks.add_argument('--before', help='the saved body of the parent (required)')
     ticks.add_argument('--after', help='the body about to be written, or read back after the write (required)')
     ticks.add_argument('--lines', help='the line numbers that were ticked, such as 14,22 (required)')
+    tick = sub.add_parser('tick', allow_abbrev=False)
+    tick.add_argument('--config', required=True, help="the project's .frontlights/config.json")
+    tick.add_argument('--root', default='.', help='the project whose .frontlights/issues/<n>/ keeps the previous body')
+    tick.add_argument('--issue', help='the issue number, such as 12 (required)')
+    tick.add_argument('--box', help='the slice box to tick, such as S2')
+    tick.add_argument('--line', help='or the line of any criterion of the section, such as 14')
     return parser
 
 
@@ -1070,7 +1299,8 @@ def main(argv=None):
                      getattr(args, 'all_flag', False), prs=getattr(args, 'prs', None), base=getattr(args, 'base', None),
                      remote=getattr(args, 'remote', None),
                      before=getattr(args, 'before', None), after=getattr(args, 'after', None),
-                     lines=getattr(args, 'lines', None))
+                     lines=getattr(args, 'lines', None), issue=getattr(args, 'issue', None),
+                     box=getattr(args, 'box', None), line=getattr(args, 'line', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))
