@@ -511,6 +511,12 @@ Quando algo que a sessão entrega muda o que a pessoa vê (o plano liga o teste 
 - `python scripts/serve.py start|status|stop --config <config> --root <worktree> --issue <n>`
   sobe, consulta ou derruba os processos de `browserTest.processes` (lista de argumentos, sem
   shell), espera o `health` de cada um e grava os pids em `.frontlights/serve/<n>.json`;
+- `python scripts/serve.py preview start|status|stop|refresh --config <config> --root <worktree principal>`
+  cuida da prévia ao vivo do bloco `preview` (worktree, branch, `baseUrl` e processos próprios): sobe, consulta,
+  derruba ou refaz a branch da prévia a partir da main local com as branches de issue dadas em `--branch`
+  (opcional, repetível; `--base` troca a main local), com registro em `.frontlights/preview/registry.json`;
+  `serve.py relay` é interno, aberto pelo `preview start` para gravar o log mascarado de cada processo em
+  `.frontlights/preview/log/`, e nunca se roda à mão;
 - `"port": "auto"` reserva uma porta livre por processo na pasta comum do Git, vista por todas
   as worktrees (fora do Git, em `.frontlights/serve/ports/`, e repositórios diferentes não veem
   as reservas uns dos outros), e a entrega em `PORT`, `FRONTLIGHTS_PORT_<NOME>` e `{port}` no argv; o `health`
@@ -601,9 +607,13 @@ não uma barreira técnica: nada impede um modelo de deixar de chamá-lo.
 
 Limites: só o Windows foi exercitado (POSIX não). O `inspect` confere nesses blocos as regras do
 `serve` e do `checks` que dependem só do config: formato dos blocos, shell embutido nos argv de
-`checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Ele recusa o
-config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd`
-(`checks.run_directory`, `serve.process_cwd`), o `.cmd`/`.bat` com metacaractere e os nomes
+`checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Confere também
+`browserTest.isolated` (portas que nunca são as da prévia nem do serve, `baseUrl` na porta de um processo
+isolado, `cwd` relativo desses processos, passos do banco sem shell) e o bloco `preview` (worktree dentro do
+`--root`, branch, `baseUrl` local e processos, com as regras do `serve preview`). Ele recusa o
+config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd` de
+`checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o de `preview.processes`
+(`serve.process_cwd`, quando a prévia sobe), o `.cmd`/`.bat` com metacaractere e os nomes
 `checks.backend`/`checks.smoke.target` contra `browserTest.processes` só são conferidos na
 execução, antes de qualquer processo subir. Um `browserTest` que declara só as contas (e a
 `baseUrl`), porque o projeto sobe o próprio ambiente, é válido: o `inspect` mostra um aviso em
@@ -681,7 +691,8 @@ na mesma URL do início ao fim) → corpo da issue escrito sem nova
 entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
-implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
+implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
+configura) → desenvolvimento orientado a testes (TDD), revisão e evidências →
 merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
 espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
@@ -698,7 +709,9 @@ um conflito é desfeito e vira pergunta). Cada slice
 é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
 sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
 do lote: editar, testar,
-commitar, mesclar a branch da issue na main local com os três portões verdes, rodar a migration no banco de
+commitar, mesclar a branch da issue na main local com os três portões verdes, mesclar a main local e as
+branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira
+pergunta; a branch da prévia nunca é enviada), rodar a migration no banco de
 desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
 marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
 fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
@@ -719,6 +732,17 @@ respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
 só; o relato de um subagente é conferido antes de virar evidência.
+
+**Prévia ao vivo.** Num projeto com o bloco `preview` no `.frontlights/config.json`, a sessão sobe a prévia logo
+depois da aprovação do plano, antes da primeira CA, e a abre numa aba do Claude in Chrome: uma worktree fixa
+numa branch local de prévia (nunca enviada) com a main local e as branches das issues em andamento, refeita pelo
+`serve preview refresh` a cada CA pronta, para você testar à mão minutos depois de a CA ficar verde, só
+recarregando a aba. O log dos processos fica salvo e mascarado; um build quebrado vem numa linha com o arquivo e o
+erro. A prévia só para quando você pede, e a aba é sua: o teste assistido roda em outra janela e nunca nas portas
+dela. A prévia usa portas fixas, com a `baseUrl` na porta de um dos processos dela, para a aba continuar válida a
+cada refresh: o `serve preview` e o `inspect` recusam `"port": "auto"` nos processos da prévia, `{port}` no argv ou no
+`cwd` dos processos dela (escreva a porta fixa), `{port}` na `baseUrl` dela e uma `baseUrl` numa porta que nenhum processo dela usa; com o bloco `preview`, o `inspect` também
+recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia.
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na
@@ -792,11 +816,11 @@ python -m compileall -q skills/frontlights/scripts tests
 
 A suíte inteira leva dezenas de minutos, quase tudo em dois módulos que sobem processos e portas de
 verdade. Para conferir o todo entre slices, defina `FRONTLIGHTS_SUITE=rapida` (no PowerShell,
-`$env:FRONTLIGHTS_SUITE = 'rapida'` antes do comando): os módulos `tests.test_serve_ports` e
-`tests.test_checks_integration` são pulados, cada um relatado como um teste pulado com o motivo, que cita
+`$env:FRONTLIGHTS_SUITE = 'rapida'` antes do comando): os módulos `tests.test_serve_ports`,
+`tests.test_checks_integration` e `tests.test_serve_preview` são pulados, cada um relatado como um teste pulado com o motivo, que cita
 a variável; qualquer outro valor, ou a ausência dela, roda tudo. A regra está no `load_tests` de cada
 módulo, então vale igual para o `discover` e para o runner. A suíte rápida roda por `python tests/suite.py`
-(só Windows): os módulos seguros rodam em paralelo, num pool de 4 trabalhadores, e os cinco sensíveis
+(só Windows): os módulos seguros rodam em paralelo, num pool de 4 trabalhadores, e os seis sensíveis
 (portas, servidores reais, Chromium, asserções de tempo) numa fila serial, um por vez; cada módulo tem um
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,

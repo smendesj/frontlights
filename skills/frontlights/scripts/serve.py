@@ -58,6 +58,42 @@ The variable name is the process name upper-cased with non-alphanumerics as `_`,
 Processes with a fixed port or without `port` do not receive the variable, so their names may collide.
 The start output says whether the reservations are shared (`reservas_compartilhadas`).
 
+Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the
+top-level `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host,
+`processes` with the same rules as `browserTest.processes`, each `health` on a local host too). The preview runs on
+fixed ports only: it is opened once in a tab and only reloaded after each refresh, so its port can never change. No
+process takes `"port": "auto"`, there is no `{port}` in the `argv` or the `cwd` of a process (it is never filled in),
+`baseUrl` takes no `{port}`, and the port of `baseUrl` (explicit, or 80/443 by the
+scheme) is the fixed port (integer `port`, or else the port of the health) of one of its processes; the preview
+reserves no port. `preview.branch` is a
+plain branch name that is neither main, master nor a match (fnmatch without case, a pattern also covering
+`pattern/*`) of the `protected_branches` of any readable `<root>/.frontlights/authorization*.json`. Its processes run
+in the preview worktree, with their stdout and stderr relayed line by line by `relay --config <config> --log <file>`
+(a second process spawned by `preview start`, which loads the secrets of `browserTest.users` from the config itself
+and masks them) into `<root>/.frontlights/preview/log/<name>.log`. The record lives in
+`<root>/.frontlights/preview/registry.json` under its own lock (`<root>/.frontlights/preview/.lock`), so
+`stop --issue <n>` never touches it, and a new session finds the processes through it. `preview start` is
+refused while the preview is alive (any process or log relay of the record) and when the preview worktree does not
+exist. `preview status` and `preview stop` work from the record alone, with or without the `preview` block in the
+config (the mask still comes from its `browserTest.users`). `preview status` adds `alive` and `relayAlive` per process
+(`running` needs both for every process), `log` and the last `TAIL_LINES` lines of each log (`tail`, read from at most
+the last `TAIL_BYTES` of the file), masked again on output, and what the worktree holds (`base`, `baseCommit`,
+`merged`) when a refresh brought it up.
+`preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
+change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
+repository on `preview.branch`, or that has tracked changes or a merge in progress, and, when the preview worktree is
+missing, a `preview.branch` that already exists and is not the one the preview record names: `worktree add -B` would
+move it), then stops the preview, redoes `preview.branch` at the local base (`git checkout -B` inside the preview
+worktree, or `git worktree add --force -B` when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit` of the commit the check read, the
+one recorded in `merged`, with the message `Merge branch '<b>' into <preview.branch>`) and brings the processes up as
+`preview start` does. A conflict is aborted (`git merge --abort`), nothing comes up and the refusal names the branch
+and the files (`conflict: true`). A process that exits before its health, or whose health never answers, is a broken
+build: everything is torn down and the refusal carries `build: "quebrado"`, the log and its last lines written by
+this run (`tail`). A log relay that dies (or cannot start) before the health is an infrastructure failure, torn down
+the same way but without `build`: the process itself did not fail. Git runs from an argv list without a shell and
+without prompts, with a deadline; the refresh never pushes, rebases or forces a merge, and writes no branch but
+`preview.branch` (the local main and the issue branches never move). The preview branch is never pushed.
+
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and
 names the failing process, classified as an infrastructure failure).
 
@@ -68,6 +104,7 @@ config are never read into the record and are redacted from every string this he
 import argparse
 import contextlib
 import datetime as dt
+import fnmatch
 import http.client
 import json
 import os
@@ -102,6 +139,15 @@ PERSISTENT_ERRORS = 25
 MAX_PID = 2 ** 31 - 1
 REMOVE_ATTEMPTS = 40
 CONNECT_SECONDS = 0.05
+TAIL_LINES = 20
+TAIL_BYTES = 64 * 1024  # `tail_lines` reads at most this much from the end of a log
+RELAY_DRAIN_SECONDS = 3  # a torn-down preview process's relay gets this long to write the last lines
+GIT_SECONDS = 300  # deadline of each Git command of `preview refresh`
+DEFAULT_BASE = 'main'
+BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
+LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
+PROTECTED_BRANCHES = ('main', 'master')
+MAX_AUTHORIZATION_BYTES = 2 * 1024 * 1024  # an authorization record past this is skipped, never read
 
 _SECRETS = []
 
@@ -114,6 +160,11 @@ class Refusal(Exception):
         self.process = process
         self.category = category or INFRASTRUCTURE
         self.extra = extra or {}
+
+
+class RelayFailure(Refusal):
+    """The log relay of a preview process died or could not start: an infrastructure failure, never a broken
+    build (the process itself did not fail)."""
 
 
 def require(condition, message, process=None, category=None):
@@ -179,7 +230,7 @@ def scrub(value, skip=()):
     return value
 
 
-REGISTRY_EXACT = ('identity', 'startedAt')
+REGISTRY_EXACT = ('identity', 'relayIdentity', 'startedAt')
 
 
 def write_json_atomic(value, path):
@@ -206,18 +257,33 @@ def write_json_atomic(value, path):
 
 # ---------------------------------------------------------------- configuration
 
+def read_config(config_file):
+    try:
+        return json.loads(Path(config_file).read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        raise Refusal('Não foi possível ler o config informado em --config.')
+
+
 def load_block(config_file, need_processes=True):
     """Read browserTest. `need_processes=False` is for a caller that only checks the accounts: a block that
     declares no `processes` (the project starts its own environment) then gives back an empty list, while one
     that declares them wrongly is still refused."""
-    try:
-        config = json.loads(Path(config_file).read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
-        raise Refusal('Não foi possível ler o config informado em --config.')
+    config = read_config(config_file)
     block = config.get('browserTest') if isinstance(config, dict) else None
     require(isinstance(block, dict), 'O config não tem o bloco browserTest.')
+    load_secrets(block)
+    if 'processes' not in block:
+        require(not need_processes,
+                'O config não declara browserTest.processes: o serve não tem o que subir. Suba o ambiente você mesmo '
+                '(as contas de teste continuam valendo) ou declare os processos em browserTest.processes.', category=USAGE)
+        return []
+    return validate_processes(block.get('processes'), 'browserTest.processes')
+
+
+def load_secrets(block):
+    """Load the login and password of every account of a browserTest block (None: no accounts) into the mask."""
     _SECRETS.clear()
-    for user in block.get('users') or []:
+    for user in (block or {}).get('users') or []:
         if isinstance(user, dict):
             for key in ('login', 'password'):
                 value = user.get(key)
@@ -231,16 +297,14 @@ def load_block(config_file, need_processes=True):
                             'um segredo curto não pode ser mascarado com segurança na saída e nos registros. '
                             f'Use um {key} de teste com {MIN_SECRET} ou mais caracteres.', category=USAGE)
                     _SECRETS.extend([value, urllib.parse.quote(value, safe=''), urllib.parse.quote_plus(value)])
-    if 'processes' not in block:
-        require(not need_processes,
-                'O config não declara browserTest.processes: o serve não tem o que subir. Suba o ambiente você mesmo '
-                '(as contas de teste continuam valendo) ou declare os processos em browserTest.processes.', category=USAGE)
-        return []
-    processes = block.get('processes')
-    require(isinstance(processes, list) and processes, 'browserTest.processes precisa ser uma lista não vazia.')
+
+
+def validate_processes(processes, where):
+    """Refuse a process list (`where` names it: browserTest.processes or preview.processes) before anything runs."""
+    require(isinstance(processes, list) and processes, f'{where} precisa ser uma lista não vazia.')
     names, variables = set(), {}
     for item in processes:
-        require(isinstance(item, dict), 'Cada item de browserTest.processes precisa ser um objeto.')
+        require(isinstance(item, dict), f'Cada item de {where} precisa ser um objeto.')
         name = item.get('name')
         require(isinstance(name, str) and name and name not in names,
                 'Cada processo precisa de um name único e não vazio.')
@@ -290,6 +354,132 @@ def load_block(config_file, need_processes=True):
     return processes
 
 
+def load_preview_block(config_file, root, need_processes=True):
+    """Read the top-level `preview` block (worktree, branch, baseUrl, processes) and load the mask from
+    browserTest.users. `need_processes=False` (status, stop) only loads the mask and returns the block or None: those
+    two work from the record alone, so a config without the block still reaches them."""
+    config = read_config(config_file)
+    browser = config.get('browserTest') if isinstance(config, dict) else None
+    load_secrets(browser if isinstance(browser, dict) else None)
+    block = config.get('preview') if isinstance(config, dict) else None
+    if not need_processes:
+        return block if isinstance(block, dict) else None
+    require(isinstance(block, dict), 'O config não tem o bloco preview: declare worktree, branch, baseUrl e processes '
+            'nele para usar a prévia.', category=USAGE)
+    worktree = block.get('worktree')
+    require(isinstance(worktree, str) and worktree and '\0' not in worktree,
+            'preview.worktree precisa ser um caminho relativo ao --root (texto não vazio).', category=USAGE)
+    parts = Path(worktree)
+    require(not parts.is_absolute() and not parts.drive and not worktree.startswith(('/', '\\'))
+            and '..' not in parts.parts,
+            'preview.worktree precisa ser relativo ao --root, sem ".." e sem unidade ou raiz.', category=USAGE)
+    base = Path(root).resolve()
+    target = (base / worktree).resolve()
+    require(base in target.parents, 'preview.worktree precisa ficar dentro do --root (e não ser o próprio --root).',
+            category=USAGE)
+    branch = block.get('branch')
+    require(plain_branch(branch),
+            'preview.branch precisa ser um nome simples de branch (letras, dígitos, "/", "-", "_" e ".", começando '
+            'por letra ou dígito, sem "..", "//", "/." nem ".lock", e sem terminar em "/" ou ".").', category=USAGE)
+    pattern = protected_pattern(branch, protected_patterns(root))
+    require(pattern is None, f'preview.branch ({branch}) é uma branch protegida (casa com {pattern}: main, master ou '
+            'um padrão de protected_branches em .frontlights/authorization*.json). A prévia tem uma branch própria, '
+            'refeita a partir da base a cada refresh: escolha outro nome.', category=USAGE)
+    base_url = block.get('baseUrl')
+    try:
+        url = urllib.parse.urlsplit(base_url) if isinstance(base_url, str) else None
+    except ValueError:
+        url = None
+    require(url and url.scheme in ('http', 'https') and url.hostname in LOCAL_HOSTS and '@' not in url.netloc,
+            'preview.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, localhost ou ::1), sem usuário '
+            'e senha.', category=USAGE)
+    # the preview opens once in a tab and is only reloaded after each refresh: its port can never change
+    require('{port}' not in base_url, 'preview.baseUrl não aceita {port}: a prévia abre uma vez numa aba e só é '
+            'recarregada a cada refresh, então a porta dela é fixa. Use a porta fixa de um processo de '
+            'preview.processes.', category=USAGE)
+    base_port = url_port(url)
+    require(base_port is not None, 'preview.baseUrl tem uma porta inválida: use uma porta de 1 a 65535.',
+            category=USAGE)
+    require('processes' in block, 'O config não declara preview.processes: a prévia não tem o que subir.',
+            category=USAGE)
+    processes = validate_processes(block['processes'], 'preview.processes')
+    logs = {}
+    for item in processes:
+        require(not is_auto(item), f'O processo {item["name"]} de preview.processes usa port "{PORT_AUTO}", mas a '
+                'prévia usa portas fixas: ela abre uma vez numa aba e só é recarregada a cada refresh, então a porta '
+                'não pode mudar. Use port inteiro (ou a porta do health) e a mesma porta na preview.baseUrl, e '
+                'troque {port} no argv pela porta fixa.', item['name'], USAGE)
+        # a fixed process never gets {port} filled in: a leftover placeholder would reach the program as text, the
+        # health would fail and the refresh would blame a slice for a configuration error
+        for where, values in (('argv', item['argv']), ('cwd', [item.get('cwd') or ''])):
+            require(not any('{port}' in value for value in values),
+                    f'O processo {item["name"]} de preview.processes tem {{port}} no {where}, mas a prévia usa portas '
+                    'fixas e nunca o substitui: escreva a porta fixa no lugar.', item['name'], USAGE)
+        host = urllib.parse.urlsplit(item['health']).hostname  # parsed by validate_processes
+        require(host in LOCAL_HOSTS, f'O health do processo {item["name"]} precisa ficar em host local (127.0.0.1, '
+                'localhost ou ::1), como a preview.baseUrl.', item['name'], USAGE)
+        # case-folded: on Windows (and macOS) Web.log and web.log are the same file
+        log_name = log_file_name(item['name'])
+        require(log_name.casefold() not in logs, f'Os processos {logs.get(log_name.casefold())} e {item["name"]} '
+                f'gerariam o mesmo arquivo de log ({log_name}) depois de normalizar o nome. Renomeie um deles.',
+                item['name'], USAGE)
+        logs[log_name.casefold()] = item['name']
+    require(base_port in {process_port(item) for item in processes},
+            f'preview.baseUrl usa a porta {base_port}, mas nenhum processo de preview.processes usa essa porta (port '
+            'inteiro ou porta do health): a aba da prévia abriria numa porta onde ninguém responde. Use na baseUrl a '
+            'porta fixa de um dos processos da prévia.', category=USAGE)
+    return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
+
+
+def authorization_records(root):
+    """(file name, object) of every readable `<root>/.frontlights/authorization*.json`, in name order. A file that is
+    missing, unreadable, larger than `MAX_AUTHORIZATION_BYTES`, nested too deep for json or not an object is
+    skipped: these records are read only to refuse more, never to allow."""
+    try:
+        files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
+    except OSError:
+        files = []
+    records = []
+    for path in files:
+        try:
+            with open(path, 'rb') as handle:
+                raw = handle.read(MAX_AUTHORIZATION_BYTES + 1)
+            if len(raw) > MAX_AUTHORIZATION_BYTES:
+                continue
+            data = json.loads(raw.decode('utf-8-sig'))
+        except (OSError, ValueError, RecursionError, MemoryError):
+            continue
+        if isinstance(data, dict):
+            records.append((relative(Path(root), path), data))
+    return records
+
+
+def protected_patterns(root):
+    """main, master and the `protected_branches` of every readable `<root>/.frontlights/authorization*.json`
+    (`authorization_records`); an entry that is not a non-empty text is skipped."""
+    patterns = list(PROTECTED_BRANCHES)
+    for _, data in authorization_records(root):
+        listed = data.get('protected_branches')
+        if isinstance(listed, list):
+            patterns += [item for item in listed if isinstance(item, str) and item.strip('/')]
+    return patterns
+
+
+def protected_pattern(branch, patterns):
+    """The first pattern that protects `branch`, or None. The rule of `frontlights.authorize`: fnmatch without case,
+    and a pattern also protects everything below it (`pattern/*`)."""
+    folded = branch.casefold()
+    for pattern in patterns:
+        stem = pattern.casefold().rstrip('/')
+        if fnmatch.fnmatchcase(folded, stem) or fnmatch.fnmatchcase(folded, stem + '/*'):
+            return pattern
+    return None
+
+
+def log_file_name(name):
+    return re.sub(r'[^A-Za-z0-9._-]', '_', name) + '.log'
+
+
 def valid_port(value):
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
 
@@ -326,23 +516,23 @@ def process_port(item):
     return url_port(urllib.parse.urlsplit(item['health']))
 
 
-def process_cwd(root, item):
+def process_cwd(root, item, scope='da issue'):
     base = Path(root).resolve()
     target = (base / item['cwd']).resolve() if item.get('cwd') else base
     require(target == base or base in target.parents,
-            f'O cwd do processo {item["name"]} precisa ficar dentro da worktree da issue.', item['name'], USAGE)
+            f'O cwd do processo {item["name"]} precisa ficar dentro da worktree {scope}.', item['name'], USAGE)
     require(target.is_dir(), f'O cwd do processo {item["name"]} não existe.', item['name'], USAGE)
     return target
 
 
 # ---------------------------------------------------------------- process control
 
-def spawn(argv, cwd, env=None):
+def spawn(argv, cwd, env=None, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
+    """Start argv detached (its own process group, no console window), never through a shell."""
     executable = shutil.which(argv[0])
     if executable is None:
         raise OSError('executável não encontrado')
-    options = {'cwd': str(cwd), 'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL,
-               'stderr': subprocess.DEVNULL}
+    options = {'cwd': str(cwd), 'stdin': stdin, 'stdout': stdout, 'stderr': stderr}
     if env:
         options['env'] = dict(os.environ, **env)
     if os.name == 'nt':
@@ -370,7 +560,7 @@ def healthy(url):
         return False
 
 
-def wait_healthy(child, item):
+def wait_healthy(child, item, relay=None):
     timeout = item.get('timeoutSeconds', DEFAULT_TIMEOUT)  # validated by load_block, before anything is spawned
     reserved = f' (porta reservada {item["port"]})' if item.get('autoPort') else ''
     deadline = time.monotonic() + timeout
@@ -378,6 +568,9 @@ def wait_healthy(child, item):
         if child.poll() is not None:
             raise Refusal(f'O processo {item["name"]} terminou antes de ficar saudável{reserved} '
                           f'(código {child.returncode}).', item['name'])
+        if relay is not None and relay.poll() is not None:
+            raise RelayFailure(f'O relé do log do processo {item["name"]} terminou (código {relay.returncode}) antes '
+                               'de o processo ficar saudável: o log da prévia não seria gravado.', item['name'])
         if healthy(item['health']):
             return
         time.sleep(POLL_SECONDS)
@@ -509,26 +702,31 @@ def relative(root, path):
 
 
 def acquire_lock(root, issue):
-    """Create <issue>.lock exclusively; a lock of a dead owner is replaced, an unreadable one refused.
+    """Create <issue>.lock exclusively; see acquire_lock_file. `start` and `stop` of the issue both take it."""
+    return acquire_lock_file(root, lock_path(root, issue), f'da issue {issue}')
 
-    `start` and `stop` of the issue both take it. Creating, judging and replacing it happen under a short
-    operating-system lock on `.frontlights/serve/.locks.guard` (never moved nor deleted): two callers can never both
-    replace the same stale lock, and nobody reads a lock that is still being written. A lock that is EMPTY and older
-    than `EMPTY_LOCK_SECONDS` is the leftover of an owner killed between creating and writing it (the creator holds
-    the guard across both steps, so under the guard an empty lock has no live writer): it is replaced like the lock of
-    a dead owner; a recent empty one is waited for until the deadline. Any other content that is not a pid stays
-    refused. The loop has a single exit path per pass, the deadline check followed by a short sleep: no branch (a
-    lock being deleted by its owner on Windows, a replacement that did not remove the file, an empty lock) skips it,
-    so the call always ends within `RESERVE_LOCK_SECONDS` (the wait for the guard counts in it), plus the retries of
-    one removal. An I/O error becomes an infrastructure refusal, and a lock created but not written is removed again;
-    so does a denial that persists with no lock file there (`count_denial`), instead of waiting for the deadline.
+
+def acquire_lock_file(root, path, scope):
+    """Create the lock file `path` exclusively; a lock of a dead owner is replaced, an unreadable one refused.
+
+    `scope` names the owner in messages ("da issue 9", "da prévia"). Creating, judging and replacing it happen
+    under a short operating-system lock on `.locks.guard` next to it (never moved nor deleted): two callers can never
+    both replace the same stale lock, and nobody reads a lock that is still being written. A lock that is EMPTY and
+    older than `EMPTY_LOCK_SECONDS` is the leftover of an owner killed between creating and writing it (the creator
+    holds the guard across both steps, so under the guard an empty lock has no live writer): it is replaced like the
+    lock of a dead owner; a recent empty one is waited for until the deadline. Any other content that is not a pid
+    stays refused. The loop has a single exit path per pass, the deadline check followed by a short sleep: no branch
+    (a lock being deleted by its owner on Windows, a replacement that did not remove the file, an empty lock) skips
+    it, so the call always ends within `RESERVE_LOCK_SECONDS` (the wait for the guard counts in it), plus the retries
+    of one removal. An I/O error becomes an infrastructure refusal, and a lock created but not written is removed
+    again; so does a denial that persists with no lock file there (`count_denial`), instead of waiting for the
+    deadline.
     """
-    path = lock_path(root, issue)
     name = relative(Path(root), path)
     with io_guard('criar a pasta de travas'):
         path.parent.mkdir(parents=True, exist_ok=True)
     unreadable = (f'O arquivo de trava {name} está ilegível, então não dá para saber se outro start ou stop está em '
-                  f'andamento. Se nenhum start ou stop da issue {issue} estiver rodando, apague {name} à mão e tente '
+                  f'andamento. Se nenhum start ou stop {scope} estiver rodando, apague {name} à mão e tente '
                   'de novo.')
     deadline = time.monotonic() + RESERVE_LOCK_SECONDS
     guard = take_os_lock(path.parent / '.locks.guard',
@@ -567,7 +765,7 @@ def acquire_lock(root, issue):
                 owner = int(text) if re.fullmatch(r'\s*[0-9]{1,10}\s*', text) else None
                 require(valid_pid(owner), unreadable, category=USAGE)
                 require(not pid_alive(owner),
-                        f'Outro start ou stop da issue {issue} está em andamento (pid {owner}). Aguarde-o terminar; '
+                        f'Outro start ou stop {scope} está em andamento (pid {owner}). Aguarde-o terminar; '
                         f'se ele já não existe, apague {name} à mão.', category=USAGE)
                 remove_file(path)  # dead owner: under the guard nobody else replaces it meanwhile
             require(time.monotonic() < deadline,
@@ -585,6 +783,268 @@ def release_lock(path):
 def write_registry(root, issue, entries):
     write_json_atomic({'issue': issue, 'root': str(Path(root).resolve()), 'processes': entries},
                       registry_path(root, issue))
+
+
+# ---------------------------------------------------------------- preview (issue 34)
+
+def preview_dir(root):
+    return Path(root) / '.frontlights' / 'preview'
+
+
+def preview_registry_path(root):
+    return preview_dir(root) / 'registry.json'
+
+
+def preview_branch_marker_path(root):
+    """`{"branch": <name>}`: the branch the last refresh created or redid. `preview stop` keeps it (it deletes only
+    the record), so a refresh after a stop still knows the branch is the preview's own."""
+    return preview_dir(root) / 'branch.json'
+
+
+def preview_lock_path(root):
+    return preview_dir(root) / '.lock'
+
+
+def preview_log_dir(root):
+    return preview_dir(root) / 'log'
+
+
+def write_preview_registry(root, block, entries, started_at, contents=None):
+    """`contents` ({base, baseCommit, merged}, from `preview refresh`) says what the preview worktree holds."""
+    write_json_atomic({'root': str(Path(root).resolve()), 'worktree': block['worktree'], 'branch': block['branch'],
+                       'baseUrl': block['baseUrl'], **(contents or {}), 'startedAt': started_at,
+                       'processes': entries},
+                      preview_registry_path(root))
+
+
+def read_preview_registry(root):
+    path = preview_registry_path(root)
+    name = relative(Path(root), path)
+    require(path.is_file(), 'Não há registro da prévia nesta worktree: rode preview start.')
+    try:
+        record = json.loads(path.read_text(encoding='utf-8'))
+        require(isinstance(record.get('processes'), list), 'registro inválido')
+        for entry in record['processes']:
+            require(valid_pid(entry.get('pid')), 'registro inválido')
+            require(entry.get('relayPid') is None or valid_pid(entry['relayPid']), 'registro inválido')
+    except (OSError, ValueError, AttributeError, Refusal):
+        raise Refusal(f'O registro da prévia ({name}) está ilegível ou inválido, então preview start, status e stop '
+                      'não conseguem usá-lo. Confira se há processos da prévia em execução, encerre-os à mão e '
+                      f'apague {name}.')
+    return record
+
+
+def relay_argv(config_file, log_file):
+    """argv of the relay (absolute paths: it runs with the main worktree as cwd, not the caller's)."""
+    return [sys.executable, str(Path(__file__).resolve()), 'relay', '--config', str(Path(config_file).resolve()),
+            '--log', str(Path(log_file).resolve())]
+
+
+def relay(config_file, log_file):
+    """Copy stdin to the log file line by line, masking the secrets of browserTest.users, until EOF.
+
+    The secrets come from the config (never from argv or the environment). The file is opened in append mode and
+    flushed per line, so the log survives a crash of the process and of the relay itself. Limit: a secret split
+    across two lines is not masked.
+    """
+    config = read_config(config_file)
+    browser = config.get('browserTest') if isinstance(config, dict) else None
+    load_secrets(browser if isinstance(browser, dict) else None)
+    path = Path(log_file)
+    with io_guard('abrir o log da prévia'):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, 'a', encoding='utf-8', errors='replace', newline='')
+    lines = 0
+    with handle:
+        for raw in sys.stdin.buffer:
+            with io_guard('gravar o log da prévia'):
+                handle.write(protect(raw.decode('utf-8', errors='replace')))
+                handle.flush()
+            lines += 1
+    return {'ok': True, 'log': str(path), 'lines': lines}
+
+
+def preview_start(config_file, root):
+    block = load_preview_block(config_file, root)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        return preview_start_locked(block, config_file, root)
+    finally:
+        release_lock(lock)
+
+
+def preview_start_locked(block, config_file, root):
+    contents = None
+    if preview_registry_path(root).is_file():
+        previous = read_preview_registry(root)
+        # the process or its relay: a live relay alone still holds the log of a process nobody tracks any more
+        require(not any(same_process(item) for item in preview_kill_list(previous['processes'])),
+                'A prévia já está no ar (um processo ou o relé do log dele está vivo); rode `preview refresh` para '
+                'refazê-la ou `preview stop` para derrubá-la.', category=USAGE)
+        if previous.get('worktree') == block['worktree']:  # the same worktree still holds the merges of the refresh
+            contents = {key: previous[key] for key in ('base', 'baseCommit', 'merged') if key in previous} or None
+    worktree = (Path(root).resolve() / block['worktree'])
+    require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; rode `preview refresh` para '
+            'criá-la.', category=USAGE)
+    return launch_preview(block, config_file, root, contents)
+
+
+def launch_preview(block, config_file, root, contents=None):
+    """Bring the preview's processes up in its worktree (shared by `preview start` and `preview refresh`).
+
+    Each process gets its relay and log; the record is written after every spawn. A process that exits before it is
+    healthy, or whose health never answers, is a broken build: everything that came up is torn down (each process
+    before its relay, which is given `RELAY_DRAIN_SECONDS` to write the last lines) and the refusal carries
+    `build: "quebrado"`, the log (`log`) and its last `TAIL_LINES` lines written by this run (`tail`).
+    """
+    worktree = Path(root).resolve() / block['worktree']
+    processes = block['processes']
+    cwds = [process_cwd(worktree, item, 'da prévia') for item in processes]  # refused before anything is reserved
+    log_dir = preview_log_dir(root)
+    started, started_at, broken = [], now_iso(), None
+    try:
+        with io_guard('criar a pasta de log da prévia'):
+            log_dir.mkdir(parents=True, exist_ok=True)
+        for item, cwd in zip(processes, cwds):  # fixed ports only (load_preview_block): nothing is reserved
+            guard_batch(item['argv'], item['name'])
+            log_file = log_dir / log_file_name(item['name'])
+            offset = log_size(log_file)  # the tail of a broken build shows only what this run wrote
+            try:
+                child = spawn(item['argv'], cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            except (OSError, ValueError):  # ValueError: e.g. a NUL character in argv
+                raise Refusal(f'Não foi possível iniciar o processo {item["name"]}.', item['name'])
+            started.append({'name': item['name'], 'pid': child.pid, 'port': process_port(item),
+                            'url': item['health'], 'startedAt': now_iso(),
+                            'identity': process_identity(child.pid) or UNKNOWN_IDENTITY,
+                            'log': relative(Path(root), log_file)})
+            write_preview_registry(root, block, started, started_at, contents)  # from here on stop has something
+            try:
+                relay_child = spawn(relay_argv(config_file, log_file), Path(root).resolve(), stdin=child.stdout)
+            except (OSError, ValueError):
+                raise RelayFailure(f'Não foi possível iniciar o relé do log do processo {item["name"]}.',
+                                   item['name'])
+            finally:
+                child.stdout.close()  # only the relay keeps the read end: it sees EOF when the process dies
+            started[-1].update(relayPid=relay_child.pid,
+                               relayIdentity=process_identity(relay_child.pid) or UNKNOWN_IDENTITY)
+            write_preview_registry(root, block, started, started_at, contents)
+            try:
+                wait_healthy(child, item, relay_child)
+            except RelayFailure:
+                raise  # the relay died, not the process: infrastructure, never a broken build
+            except Refusal:
+                broken = (log_file, offset)
+                raise
+    except BaseException as failure:
+        left = kill_preview(started)
+        left_names = {entry['pid'] for entry in left}
+        kept = [entry for entry in started if entry['pid'] in left_names or entry.get('relayPid') in left_names]
+        try:
+            if kept:  # keep only what survived, so stop can retry
+                write_preview_registry(root, block, kept, started_at, contents)
+            else:
+                preview_registry_path(root).unlink(missing_ok=True)
+        except (OSError, Refusal):  # best effort: the original failure is what the user must see
+            pass
+        if broken and isinstance(failure, Refusal):  # read after the teardown, so the relay wrote the last lines
+            failure.extra = dict(failure.extra, build='quebrado', log=relative(Path(root), broken[0]),
+                                 tail=tail_lines(broken[0], offset=broken[1]))
+        if left and isinstance(failure, Refusal):
+            names = ', '.join(f'{entry["name"]} (pid {entry["pid"]})' for entry in left)
+            raise Refusal(f'{failure} Não foi possível derrubar: {names}; rode preview stop para tentar de novo.',
+                          failure.process, failure.category,
+                          dict(failure.extra, left=[{'name': entry['name'], 'pid': entry['pid']} for entry in left]))
+        raise
+    return {'ok': True, 'worktree': block['worktree'], 'branch': block['branch'], 'baseUrl': block['baseUrl'],
+            'processes': started, 'log': relative(Path(root), log_dir)}
+
+
+def log_size(path):
+    try:
+        return Path(path).stat().st_size
+    except OSError:
+        return 0
+
+
+def tail_lines(path, count=TAIL_LINES, offset=0):
+    """Last `count` lines of a log from byte `offset` on (decoded with replacement); unreadable or missing: [].
+
+    Only the end is read: at most `TAIL_BYTES` before the end of the file (never before `offset`). When that window
+    starts in the middle of a line, the cut line is dropped (the byte before the window says whether it is).
+    """
+    try:
+        with open(path, 'rb') as handle:
+            size = handle.seek(0, os.SEEK_END)
+            start = max(offset, size - TAIL_BYTES, 0)
+            if start > offset:  # the window cut the file: read from the byte before it and drop up to its first
+                handle.seek(start - 1)  # newline, so a window that starts on a line keeps that line
+                data = handle.read(TAIL_BYTES + 1).partition(b'\n')[2]
+            else:
+                handle.seek(start)
+                data = handle.read(TAIL_BYTES)
+    except OSError:
+        return []
+    return data.decode('utf-8', errors='replace').splitlines()[-count:]
+
+
+def kill_preview(started):
+    """Tear down what a preview launch brought up, last first: each process tree, then its relay, which is first
+    given `RELAY_DRAIN_SECONDS` to reach EOF and write the process's last lines. Returns the {name, pid, identity}
+    items whose root is still alive."""
+    left = []
+    for entry in reversed(started):
+        for item in preview_kill_list([entry]):
+            if item['pid'] == entry.get('relayPid'):
+                deadline = time.monotonic() + RELAY_DRAIN_SECONDS
+                while pid_alive(item['pid']) and time.monotonic() < deadline:
+                    time.sleep(POLL_SECONDS / 4)
+            left += kill_started([item])
+    return left
+
+
+def relay_alive(entry):
+    return valid_pid(entry.get('relayPid')) and same_process({'pid': entry['relayPid'],
+                                                             'identity': entry.get('relayIdentity')})
+
+
+def preview_status(config_file, root):
+    """Works from the record alone (the `preview` block may be gone from the config); the mask comes from the
+    config's browserTest.users. `running` needs every process and its log relay alive."""
+    load_preview_block(config_file, root, need_processes=False)
+    record = read_preview_registry(root)
+    # main masks the output, so the tail (already masked by the relay) is masked again on the way out
+    processes = [dict(entry, alive=same_process(entry), relayAlive=relay_alive(entry),
+                      tail=tail_lines(Path(root) / entry['log']) if isinstance(entry.get('log'), str) else [])
+                 for entry in record['processes']]
+    return {'ok': True, 'running': all(entry['alive'] and entry['relayAlive'] for entry in processes),
+            'worktree': record.get('worktree'),
+            'branch': record.get('branch'), 'baseUrl': record.get('baseUrl'),
+            **{key: record[key] for key in ('base', 'baseCommit', 'merged') if key in record},
+            'processes': processes}
+
+
+def preview_kill_list(entries):
+    """Processes of the preview and their relays, as {name, pid, identity} items, the process before its relay."""
+    items = []
+    for entry in entries:
+        items.append({'name': entry['name'], 'pid': entry['pid'], 'identity': entry.get('identity')})
+        if valid_pid(entry.get('relayPid')):
+            items.append({'name': f'{entry["name"]} (relé do log)', 'pid': entry['relayPid'],
+                          'identity': entry.get('relayIdentity')})
+    return items
+
+
+def kill_started(entries):
+    """Kill every entry's process tree, last first; returns the entries whose root is still alive."""
+    left = []
+    for entry in reversed(entries):
+        try:
+            dead = kill_tree(entry['pid'])
+        except Exception:
+            dead = False
+        if not dead:
+            left.append(entry)
+    return left
 
 
 def ports_location(root):
@@ -968,14 +1428,7 @@ def start_locked(processes, root, issue):
             write_registry(root, issue, started)  # a crash from here on leaves something stop can tear down
             wait_healthy(child, item)
     except BaseException as failure:
-        left = []
-        for entry in reversed(started):
-            try:
-                dead = kill_tree(entry['pid'])
-            except Exception:
-                dead = False
-            if not dead:
-                left.append(entry)
+        left = kill_started(started)
         try:
             if left:
                 write_registry(root, issue, left)  # keep only what survived, so stop can retry
@@ -1036,9 +1489,21 @@ def stop_locked(root, issue):
             # an unreadable record may still describe live processes, so then the reservations stay
             refusal.extra = dict(refusal.extra, reservas_liberadas=release_ports(root, issue))
         raise
-    name = relative(Path(root), registry_path(root, issue))
+    result = stop_entries(root, record['processes'], registry_path(root, issue),
+                          lambda: release_ports(root, issue), 'stop')
+    return {'ok': True, 'issue': issue, **result}
+
+
+def stop_entries(root, entries, registry_file, release, retry):
+    """Kill the recorded processes ({name, pid, identity} each), remove the record and release the ports.
+
+    Every identity is checked first, so a refusal kills nothing. `release` frees the port reservations and returns
+    them (None for the preview, which reserves no port: the output then has no `reservas_liberadas`); `retry` names
+    the command to run again. Returns {'processes': [...], 'reservas_liberadas': [...]}.
+    """
+    name = relative(Path(root), registry_file)
     stopped, left = [], []
-    for entry in record['processes']:  # check every identity first, so a refusal kills nothing
+    for entry in entries:  # check every identity first, so a refusal kills nothing
         if pid_alive(entry['pid']):
             recorded, current = entry.get('identity'), process_identity(entry['pid'])
             require(recorded not in (None, UNKNOWN_IDENTITY) and current is not None,
@@ -1046,7 +1511,7 @@ def stop_locked(root, issue):
                     'o registro não prova que o pid ainda é o processo iniciado, então ele não foi encerrado '
                     'para não derrubar um processo alheio. Confira e encerre manualmente; depois apague '
                     f'{name} à mão.')
-    for entry in record['processes']:
+    for entry in entries:
         item = {'name': entry.get('name'), 'pid': entry['pid']}
         if not pid_alive(entry['pid']):
             stopped.append(dict(item, stopped=True))
@@ -1067,16 +1532,290 @@ def stop_locked(root, issue):
         raise Refusal('Nem todos os processos foram encerrados; o registro foi mantido para nova tentativa.',
                       extra={'left': left, 'processes': stopped})
     try:
-        registry_path(root, issue).unlink()
+        registry_file.unlink()
     except OSError as error:
         detail = error.strerror or type(error).__name__
         raise Refusal(f'Os processos foram encerrados, mas não foi possível apagar o registro {name} ({detail}). '
-                      'Apague-o à mão ou rode stop de novo.',
-                      extra={'processes': stopped, 'reservas_liberadas': release_ports(root, issue)}) from error
-    return {'ok': True, 'issue': issue, 'processes': stopped, 'reservas_liberadas': release_ports(root, issue)}
+                      f'Apague-o à mão ou rode {retry} de novo.',
+                      extra=released(stopped, release)) from error
+    return released(stopped, release)
 
 
-def run(operation, config_file, root, issue):
+def released(stopped, release):
+    return {'processes': stopped, **({'reservas_liberadas': release()} if release else {})}
+
+
+def preview_stop(config_file, root):
+    """Stop the preview's processes and relays under the preview lock; an issue's stop never reaches them. Like
+    status, it works from the record alone, with or without the `preview` block in the config."""
+    load_preview_block(config_file, root, need_processes=False)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        record = read_preview_registry(root)
+        result = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root), None,
+                              'preview stop')
+        return {'ok': True, 'worktree': record.get('worktree'), 'branch': record.get('branch'), **result}
+    finally:
+        release_lock(lock)
+
+
+# ---------------------------------------------------------------- preview refresh (issue 34, slice 2)
+
+def git(cwd, *args, timeout=GIT_SECONDS):
+    """(exit code, stdout, stderr) of `git -C <cwd> ...`: an argv list found by shutil.which, never a shell, no
+    prompts, with a deadline."""
+    executable = shutil.which('git')
+    require(executable, 'O git não foi encontrado no PATH; o preview refresh precisa dele.')
+    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_MERGE_AUTOEDIT='no')
+    try:
+        done = subprocess.run([executable, '-C', str(cwd), *args], capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal(f'O git não respondeu a `git {args[0]}` (ausente, ou além do prazo de {timeout} s).')
+    return done.returncode, done.stdout, done.stderr
+
+
+def git_text(text):
+    """Git's own text as one line of at most 200 characters (main masks it on output)."""
+    return ' '.join(text.split())[:200] or 'sem detalhe'
+
+
+def plain_branch(value):
+    """A local branch name Git accepts and no argv can mistake for an option: BRANCH_NAME (starts with a letter or
+    digit), no "..", "//" or component starting with "." or ending in ".lock", and no trailing "/" or "."."""
+    return (isinstance(value, str) and bool(BRANCH_NAME.fullmatch(value)) and '..' not in value and '//' not in value
+            and not value.endswith(('/', '.')) and not any(part.startswith('.') or part.endswith('.lock')
+                                                            for part in value.split('/')))
+
+
+def git_commit(cwd, ref):
+    """The commit `ref` names in the repository of `cwd`, or None."""
+    code, out, _ = git(cwd, 'rev-parse', '--verify', '--quiet', f'{ref}^{{commit}}')
+    return out.strip() if code == 0 and re.fullmatch(r'[0-9a-f]{40,64}', out.strip()) else None
+
+
+def path_key(path):
+    return os.path.normcase(str(Path(path).resolve()))
+
+
+def registered_worktrees(root):
+    """{path key: branch name or None} of every worktree Git knows in the repository of `root`."""
+    code, out, err = git(root, 'worktree', 'list', '--porcelain')
+    require(code == 0, f'O git não listou as worktrees do repositório: {git_text(err)}')
+    found, current = {}, None
+    for line in out.splitlines():
+        if line.startswith('worktree '):
+            current = path_key(line[len('worktree '):])
+            found[current] = None
+        elif line.startswith('branch refs/heads/') and current is not None:
+            found[current] = line[len('branch refs/heads/'):]
+    return found
+
+
+def tracked_changes(worktree):
+    code, out, err = git(worktree, 'status', '--porcelain', '--untracked-files=no')
+    require(code == 0, f'O git não leu o estado da worktree da prévia: {git_text(err)}')
+    return [line for line in out.splitlines() if line.strip()]
+
+
+def check_refresh(block, root, branches, base):
+    """Every refusal of `preview refresh` that needs no change: run before the preview is stopped, so a refused
+    refresh leaves the preview as it was. Returns (worktree path, exists, base commit, {branch: commit})."""
+    preview_branch = block['branch']
+    require(plain_branch(base), '--base precisa ser um nome simples de branch local (por exemplo main).',
+            category=USAGE)
+    require(base != preview_branch, f'A base não pode ser a própria branch da prévia ({preview_branch}).',
+            category=USAGE)
+    for name in branches:
+        require(plain_branch(name), f'--branch {name} não é um nome simples de branch local.', category=USAGE)
+        require(name not in (preview_branch, base), f'--branch {name} não pode ser a branch da prévia nem a base: '
+                'passe só as branches das issues em andamento.', category=USAGE)
+    require(len(set(branches)) == len(branches), 'Cada --branch pode aparecer uma vez só.', category=USAGE)
+    worktree = Path(root).resolve() / block['worktree']
+    here = path_key(worktree)
+    for name, key, branch in issue_worktrees(root):
+        # with or without a preview record: the refresh redoes its branch and worktree from the base
+        require(branch is None or branch.casefold() != preview_branch.casefold(), f'preview.branch '
+                f'({preview_branch}) é a branch de uma worktree de issue registrada em {name}: o refresh a refaria a '
+                'partir da base. Escolha em preview.branch uma branch só da prévia.', category=USAGE)
+        require(key != here, f'preview.worktree ({block["worktree"]}) é uma worktree de issue registrada em {name}: '
+                'o refresh a refaria a partir da base. Escolha em preview.worktree uma pasta só da prévia.',
+                category=USAGE)
+    code, _, _ = git(root, 'rev-parse', '--show-toplevel')
+    require(code == 0, 'O --root não é uma worktree Git; o preview refresh precisa do repositório.', category=USAGE)
+    base_commit = git_commit(root, f'refs/heads/{base}')
+    require(base_commit, f'A branch base {base} não existe localmente.', category=USAGE)
+    commits = {}
+    for name in branches:
+        commits[name] = git_commit(root, f'refs/heads/{name}')
+        require(commits[name], f'A branch {name} não existe localmente; passe em --branch só branches de issue que '
+                'existem neste repositório.', category=USAGE)
+    known = registered_worktrees(root)
+    elsewhere = [path for path, branch in known.items() if branch == preview_branch and path != here]
+    require(not elsewhere, f'A branch da prévia ({preview_branch}) está em uso em outra worktree; o refresh só a '
+            'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
+    exists = worktree.exists()
+    if not exists and git_commit(root, f'refs/heads/{preview_branch}'):
+        # `worktree add --force -B` would move it: only a branch the preview's own record or marker names may be
+        # redone
+        require(preview_branch in (recorded_preview_branch(root), marked_preview_branch(root)), f'A branch '
+                f'{preview_branch} já existe e não é da prévia (nem o registro nem o marcador da prévia a nomeiam), e '
+                'a worktree da prévia não existe: o refresh a moveria para a base. Escolha outro nome em '
+                'preview.branch ou, se ela não guarda nada, apague a branch à mão; se a pasta da worktree da prévia '
+                'foi apagada sem `git worktree remove`, rode `git worktree prune` antes de apagar a branch.',
+                category=USAGE)
+    if exists:
+        require(worktree.is_dir() and here in known, f'{block["worktree"]} existe, mas não é uma worktree deste '
+                'repositório; o refresh não toca nela. Confira preview.worktree no config.', category=USAGE)
+        require(known[here] == preview_branch, f'A worktree da prévia ({block["worktree"]}) não está na branch '
+                f'{preview_branch}; o refresh não toca nela. Confira preview.branch no config.', category=USAGE)
+        require(not tracked_changes(worktree) and git_commit(worktree, 'MERGE_HEAD') is None,
+                'A worktree da prévia tem alterações; ela é refeita a cada refresh, então nada se edita nela. '
+                f'Confira {block["worktree"]} e desfaça as alterações antes de um novo refresh.', category=USAGE)
+    return worktree, exists, base_commit, commits
+
+
+def issue_worktrees(root):
+    """(record name, path key or None, branch or None) of each item of `worktrees` in the readable
+    `.frontlights/authorization*.json` (`authorization_records`); a relative `path` is taken from the `--root`."""
+    found = []
+    for name, data in authorization_records(root):
+        entries = data.get('worktrees')
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            path, branch, key = entry.get('path'), entry.get('branch'), None
+            if isinstance(path, str) and path.strip() and '\0' not in path:
+                try:
+                    key = path_key(Path(root).resolve() / path)
+                except (OSError, ValueError):
+                    key = None
+            found.append((name, key, branch if isinstance(branch, str) and branch else None))
+    return found
+
+
+def recorded_preview_branch(root):
+    """The `branch` the preview record names, or None (no record, unreadable, or without it)."""
+    try:
+        record = json.loads(preview_registry_path(root).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    return record.get('branch') if isinstance(record, dict) else None
+
+
+def marked_preview_branch(root):
+    """The `branch` of the marker of the preview branch, or None (no marker, unreadable, or without it)."""
+    try:
+        record = json.loads(preview_branch_marker_path(root).read_text(encoding='utf-8'))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return record.get('branch') if isinstance(record, dict) else None
+
+
+def recreate_preview_worktree(block, root, worktree, exists, base_commit):
+    """The preview branch is reset to the base commit inside the preview worktree (`checkout -B`), or the worktree is
+    added on it; the local main and the issue branches are never written. The marker of the preview branch is written
+    after Git did it."""
+    if exists:
+        code, _, err = git(worktree, 'checkout', '-q', '-B', block['branch'], base_commit)
+    else:
+        with io_guard('criar a pasta da worktree da prévia'):
+            worktree.parent.mkdir(parents=True, exist_ok=True)
+        code, _, err = git(root, 'worktree', 'add', '-q', '--force', '-B', block['branch'], str(worktree), base_commit)
+    require(code == 0, f'O git não refez a worktree da prévia na base: {git_text(err)}')
+    write_json_atomic({'branch': block['branch']}, preview_branch_marker_path(root))
+
+
+def merge_branches(block, worktree, branches, commits):
+    """Merge each issue branch, in order, into the preview branch; a conflict is aborted and refused."""
+    merged = []
+    for name in branches:
+        before = git_commit(worktree, 'HEAD')
+        # the commit check_refresh read (the one recorded in `merged`), never the branch read again: a branch that
+        # moved meanwhile, or a tag with the same name, cannot change what enters the preview
+        code, _, err = git(worktree, 'merge', '--no-ff', '--no-edit', '-m',
+                           f"Merge branch '{name}' into {block['branch']}", commits[name])
+        if code == 0:
+            merged.append({'branch': name, 'commit': commits[name]})
+            continue
+        _, unmerged, _ = git(worktree, 'diff', '--name-only', '--diff-filter=U')
+        files = sorted(line.strip() for line in unmerged.splitlines() if line.strip())
+        conflicted = bool(files) or git_commit(worktree, 'MERGE_HEAD') is not None
+        if conflicted:
+            git(worktree, 'merge', '--abort')
+        require(not tracked_changes(worktree) and git_commit(worktree, 'MERGE_HEAD') is None
+                and git_commit(worktree, 'HEAD') == before,
+                f'O merge de {name} na branch da prévia falhou e a worktree da prévia não voltou limpa a '
+                f'{(before or "?")[:7]}; confira {block["worktree"]} à mão.')
+        if not conflicted:
+            raise Refusal(f'O git não mesclou {name} na branch da prévia: {git_text(err)}. A prévia ficou fora do ar.',
+                          extra={'branch': name, 'merged': merged})
+        raise Refusal(f'O merge de {name} na branch da prévia ({block["branch"]}) tem conflito em: '
+                      f'{", ".join(files) or "(arquivos não listados pelo git)"}. O merge foi desfeito, a worktree da '
+                      'prévia ficou limpa e a prévia não foi subida de novo: pergunte ao usuário como seguir.',
+                      extra={'conflict': True, 'branch': name, 'files': files, 'merged': merged})
+    return merged
+
+
+def preview_refresh(config_file, root, branches, base):
+    block = load_preview_block(config_file, root)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        return preview_refresh_locked(block, config_file, root, branches, base)
+    finally:
+        release_lock(lock)
+
+
+def preview_refresh_locked(block, config_file, root, branches, base):
+    """Stop the preview, redo its branch from the local base, merge the issue branches in progress and bring it up.
+
+    Git runs as argv lists without a shell; it never pushes, never rebases, never forces a merge and writes no branch
+    but `preview.branch`. A conflict is aborted (nothing comes up); a broken build is torn down and refused with its
+    log (`launch_preview`).
+    """
+    worktree, exists, base_commit, commits = check_refresh(block, root, branches, base)
+    stopped = []
+    if preview_registry_path(root).is_file():
+        record = read_preview_registry(root)
+        stopped = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root), None,
+                               'preview refresh')['processes']
+    recreate_preview_worktree(block, root, worktree, exists, base_commit)
+    merged = merge_branches(block, worktree, branches, commits)
+    contents = {'base': base, 'baseCommit': base_commit, 'merged': merged}
+    result = launch_preview(block, config_file, root, contents)
+    return dict(result, **contents, stopped=stopped)
+
+
+def preview(action, config_file, root, branches=None, base=None):
+    require(action is not None, 'preview precisa da ação: preview start, preview refresh, preview status ou '
+            'preview stop.', category=USAGE)
+    require(action == 'refresh' or (branches is None and base is None),
+            '--branch e --base só valem para preview refresh.', category=USAGE)
+    if action == 'start':
+        return preview_start(config_file, root)
+    if action == 'refresh':
+        return preview_refresh(config_file, root, branches or [], base or DEFAULT_BASE)
+    if action == 'status':
+        return preview_status(config_file, root)
+    return preview_stop(config_file, root)
+
+
+def run(operation, config_file, root, issue, action=None, log=None, branches=None, base=None):
+    """Dispatch one operation; the flags each one needs are refused as `uso` when missing (argparse only
+    requires --config, shared by all)."""
+    if operation != 'preview':
+        require(branches is None and base is None, '--branch e --base só valem para preview refresh.',
+                category=USAGE)
+    if operation == 'relay':
+        require(log, 'relay precisa de --log <arquivo>.', category=USAGE)
+        return relay(config_file, log)
+    require(root, f'{operation} precisa de --root <worktree>.', category=USAGE)
+    require(log is None, '--log só vale para relay.', category=USAGE)
+    if operation == 'preview':
+        return preview(action, config_file, root, branches, base)
+    require(action is None, f'{operation} não aceita uma ação depois do nome; a ação é só de preview.',
+            category=USAGE)
+    require(issue is not None, f'{operation} precisa de --issue <n>.', category=USAGE)
     if operation == 'start':
         return start(config_file, root, issue)
     if operation == 'status':
@@ -1086,15 +1825,22 @@ def run(operation, config_file, root, issue):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('operation', choices=('start', 'stop', 'status'))
+    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
+    parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),
+                        help='só para preview: start, refresh, status ou stop')
     parser.add_argument('--config', required=True)
-    parser.add_argument('--root', required=True)
-    parser.add_argument('--issue', required=True, type=int)
+    parser.add_argument('--root', help='worktree da issue (start, stop, status) ou worktree principal (preview)')
+    parser.add_argument('--issue', type=int, help='número da issue (start, stop, status)')
+    parser.add_argument('--log', help='só para relay: arquivo de log a acrescentar')
+    parser.add_argument('--branch', action='append', help='só para preview refresh: branch de issue em andamento a '
+                        'mesclar na branch da prévia (repetível, na ordem dada)')
+    parser.add_argument('--base', help=f'só para preview refresh: branch base local (padrão {DEFAULT_BASE})')
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     try:
-        result = run(args.operation, args.config, args.root, args.issue)
+        result = run(args.operation, args.config, args.root, args.issue, args.action, args.log, args.branch,
+                     args.base)
         code = 0
     except (Refusal, OSError) as failure:
         # the safety net: an I/O error that escaped every specific handler is still a refusal with JSON

@@ -51,6 +51,7 @@ SERIAL = (
                          'pré-escolhidas'),
     ('test_checks_integration', 'portas pré-escolhidas e PIDs mortos'),
     ('test_serve', 'portas pré-escolhidas, servidores reais'),
+    ('test_serve_preview', 'servidores reais da prévia, relés de log e reservas de porta'),
     ('test_browser_app_example', 'Chromium quando o Playwright existe'),
     ('test_checks', 'asserções de 14 s e 20 s com prazos reais de 1 s; por último, para não disputar CPU'),
 )

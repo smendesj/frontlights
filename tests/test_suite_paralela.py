@@ -33,7 +33,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SUITE = ROOT / 'tests' / 'suite.py'
 VARIABLE = 'FRONTLIGHTS_SUITE'
-SERIAL_REAL = ('test_serve_ports', 'test_checks_integration', 'test_serve', 'test_browser_app_example', 'test_checks')
+SERIAL_REAL = ('test_serve_ports', 'test_checks_integration', 'test_serve', 'test_serve_preview', 'test_browser_app_example',
+               'test_checks')
 
 PASSES = """
 import unittest

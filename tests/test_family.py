@@ -224,12 +224,48 @@ class FamilyRulesTextTests(unittest.TestCase):
                    "of a family's or batch's verified branches into a local integration branch that is never pushed, "
                    "of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone "
                    "and becomes a question), "
+                   "of the local main and the branches of the issues in progress into the preview branch by "
+                   "`serve preview refresh` (a conflict is undone and becomes a question), "
                    "and of the branch of the issue into the local main once its three gates are green")
         for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
             with self.subTest(file=name[-1]):
                 text = flat(read(*name))
                 self.assertIn(allowed, text)
                 self.assertRegex(text, r'(Do not|Never) merge (pull requests|a pull request), write the remote main')
+
+    def test_the_merge_into_the_preview_branch_is_covered_in_the_five_texts_and_never_pushed(self):
+        """Issue 34, CA S2: the five texts of the covered operations name the merge into the preview branch by
+        `serve preview refresh`, and say in one clause that the preview branch is never pushed."""
+        phrases = {
+            ('skills', 'frontlights', 'SKILL.md'): (
+                'the merge of the local main and the branches of the issues in progress into the preview branch by '
+                '`serve preview refresh` among them',
+                'the preview branch is never pushed'),
+            ('skills', 'frontlights', 'references', 'development.md'): (
+                'the merge of the local main and the branches of the issues in progress into the preview branch by '
+                '`serve preview refresh` among them',
+                "`git merge` of the local main and the branches of the issues in progress into the preview branch by "
+                "`serve preview refresh` (a conflict is undone and becomes a question)",
+                'the preview branch is never pushed'),
+            ('skills', 'frontlights', 'docs', 'protocol.md'): (
+                'o da main local e das branches das issues em andamento na branch da prévia pelo '
+                '`serve preview refresh`',
+                'a branch da prévia nunca é enviada'),
+            ('skills', 'frontlights', 'docs', 'security.md'): (
+                ', o merge da main local e das branches das issues em andamento na branch da prévia pelo '
+                '`serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na '
+                'main local',
+                'a branch da prévia nunca é enviada'),
+            ('README.md',): (
+                'mesclar a main local e as branches das issues em andamento na branch da prévia pelo '
+                '`serve preview refresh`',
+                'a branch da prévia nunca é enviada'),
+        }
+        for name, expected in phrases.items():
+            text = flat(read(*name))
+            for phrase in expected:
+                with self.subTest(file=name[-1], phrase=phrase):
+                    self.assertIn(phrase, text)
 
     def test_example_authorization_shows_a_stacked_worktree_base(self):
         import json

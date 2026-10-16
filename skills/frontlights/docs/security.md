@@ -358,6 +358,14 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   com a instrução exata aprovada. É uma regra da skill, não uma barreira técnica; e as máscaras do Frontlights cobrem só os valores de
   `browserTest.users`, então a senha de um login criado pelo teste não é mascarada pelos auxiliares: ela nunca é
   impressa, gravada em registro nem repetida na conversa.
+- **Instância isolada do teste assistido (`browserTest.isolated`):** o teste assistido roda numa instância
+  própria, com portas próprias, nunca nas portas da prévia nem no banco de desenvolvimento: antes de cada teste, o
+  `copyDatabase` faz uma cópia do banco de desenvolvimento local, que é dado de teste criado pelo próprio teste,
+  registrado em `dados-de-teste.json` e descartada no fim pelo `dropDatabase`. Os dois comandos e os processos da
+  instância rodam sem shell, nunca produção nem homologação, e o `inspect` recusa o bloco com shell embutido, host
+  que não é local, porta fixa igual à da prévia ou do `serve`, `baseUrl` fixa que não é a porta de um processo
+  isolado, `cwd` de processo que sai da worktree, ou `cwd` nos passos do banco. É regra da skill, não
+  barreira: o comando de cópia é do projeto, e o Frontlights não lê o que ele faz por dentro.
 - **Teste assistido e perfil de teste:** o teste com o usuário assistindo só roda depois da
   resposta dele à pergunta "pronto para assistir?", no ambiente local e com contas de
   `browserTest.users`. Quando o ponto é permissão, ele pode mover um usuário de teste de perfil
@@ -373,7 +381,10 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   Nada disso vale para conta real, homologação ou produção. O `ANTES` roda a base com `serve
   start --root <checkout-da-base>`, o `serve stop` encerra só os pids que o registro da issue
   guardou, e um processo que o teste não subiu nunca é encerrado. A janela é de um perfil
-  descartável do navegador, nunca o pessoal do usuário. A aprovação do que foi assistido é só a
+  descartável do navegador, nunca o pessoal do usuário. A aba da prévia é do usuário (aberta uma vez no Claude in
+  Chrome dele) e fica fora dessa regra: a sessão não a dirige, e o teste assistido nunca usa a prévia nem as portas dela
+  (com o bloco `preview`, o `inspect` recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl`
+  igual a uma porta da prévia; a prévia usa só portas fixas, com a `baseUrl` na porta de um processo dela). A aprovação do que foi assistido é só a
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
@@ -387,7 +398,7 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   trazer uma base por `git merge` para a branch da própria issue, o merge
   da branch de uma slice na branch da própria issue quando o ciclo dela fecha, o merge da branch da issue (ou da slice de que
   depende) na branch de uma slice para atualizá-la, juntar as branches
-verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos. O utilitário `authorize`
+verificadas de uma família ou de um lote numa branch de integração local, que nunca é enviada, o merge de `origin/main` na main local pelo `homolog sync` (um conflito é desfeito e vira pergunta), o merge da main local e das branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos, e a branch da prévia nunca é enviada. O utilitário `authorize`
   confere `edit`, `test`, `checkpoint` e `merge_into_local_main`, rejeita qualquer outro merge (e, numa worktree de slice, só aceita a
   operação que nomeia a mesma slice), e essas operações
   externas seguem as permissões nativas e a aprovação humana. O merge de PR, a escrita na
@@ -395,7 +406,12 @@ verificadas de uma família ou de um lote numa branch de integração local, que
 - **Sem aprovação do bloco:** ao contrário do resumo para a diretoria, esses blocos não têm
   aprovação assinada. O `inspect` confere só as regras que dependem do config (formato dos
   blocos, shell embutido nos argv de `checks`, hosts locais, `{port}` com porta `auto`, segredos
-  mascaráveis); `cwd`, `.cmd`/`.bat` com metacaractere e os nomes `checks.backend`/`checks.smoke.target`
+  mascaráveis), inclusive em `browserTest.isolated` (portas fora das da prévia e do serve, `baseUrl` na
+  porta de um processo isolado, `cwd` relativo desses processos, passos do banco sem shell) e no bloco
+  `preview` (worktree dentro do `--root`, branch, `baseUrl` local na porta fixa de um processo dela, processos sem
+  porta `auto` e sem `{port}` no argv nem no `cwd`, e portas de `browserTest.processes` e da `browserTest.baseUrl` fora das da prévia); o `cwd` de `checks` e de
+  `browserTest.processes`, o de `preview.processes` (`process_cwd`, quando a prévia sobe), `.cmd`/`.bat` com
+  metacaractere e os nomes `checks.backend`/`checks.smoke.target`
   contra `browserTest.processes` são conferidos na execução, antes de qualquer processo subir. Isso
   barra erro de configuração, não comando mal-intencionado. Revise-os antes de rodar num projeto
   clonado.

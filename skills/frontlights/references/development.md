@@ -17,11 +17,13 @@ The user decided, permanently and for every project, that the opening question o
 stage 6 (concurrency, stacking and the bounded implementation authorization) is not
 asked. Covered, for the issues of the family or batch at hand: editing, testing,
 committing, the merges the stacking authorization names (the merge of the branch of the issue
-into the local main with its three gates green among them, "Into the local main" below), running migrations on the
+into the local main with its three gates green and the merge of the local main and the branches of the issues in
+progress into the preview branch by `serve preview refresh` among them, "Into the local main" below), running migrations on the
 local development database, creating and removing test data through the product's own
 endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of
 an issue goes to GitHub before the release: the branches of the issue and of its slices are never
-pushed, and the only pull request is the release's, offered at the end of each homologated issue.
+pushed, the preview branch is never pushed either, and the only pull request is the release's, offered at the end
+of each homologated issue.
 
 Never covered, and asked one operation at a time with `AskUserQuestion` ("Sim" first,
 "Não" second, the exact operation and command in the question): merging a pull
@@ -75,6 +77,19 @@ true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito
 never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
 not, the two commits, a conflict and its answer) in the handoff.
 
+**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block, and after the hook and
+the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an issue
+in progress as `--branch`, open its `baseUrl` once in a tab of Claude in Chrome and tell the user. The list: each
+issue branch in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
+branches stay out), plus each one in the `merged` of `serve preview status`, minus each one the local main already
+holds (`git merge-base --is-ancestor <branch> main`), and only those that exist locally (`git rev-parse --verify
+--quiet refs/heads/<branch>`); at the very start it may be empty, and the session never takes another issue's work
+in progress out of the preview. From then on the preview follows the work (below,
+"Slices in order"); it stops only when the user asks, and the session that finds it already up (its record)
+refreshes it instead of starting another one. The tab belongs to the user, never to a test. The commands, the
+record and the log are in `references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the
+preview's branch, the branches merged into it and the last refresh.
+
 ## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 
 An issue is worked on one issue branch, cut from the local main (the base branch of the charter,
@@ -104,7 +119,9 @@ measured commands), the slice branch is merged into the branch of the issue (`gi
 <branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below)
 and then comes the tick of its box: capture the body, tick that line only, run
 `closeout.py tick-check` before and after the write, and leave a short comment on the issue with
-the commit and the commands. The session may end in the middle of an issue: the handoff names
+the commit and the commands; then `serve preview refresh` with the branches of the issues in progress, in a
+project with a preview ("The start of stage 6"), so the slice reaches the user's tab; a conflict is a question
+and a broken build goes back to the slice that owns the file before the next one starts. The session may end in the middle of an issue: the handoff names
 the slice in progress with its worktree, and the slices already ticked, and a fresh session resumes at the first
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
 `SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
@@ -120,10 +137,10 @@ the fast suite is how the whole is checked between slices, when the project has 
 Frontlights repository the fast suite runs through `python tests/suite.py` with
 `FRONTLIGHTS_SUITE=rapida` (Windows only). The variable lives in each module's `load_tests`, so
 it works the same for the runner and for `python -m unittest discover -s tests`: both skip the
-modules that start real processes and ports (`tests.test_serve_ports` and
-`tests.test_checks_integration`), each one reported as skipped with a reason that names the
+modules that start real processes and ports (`tests.test_serve_ports`,
+`tests.test_checks_integration` and `tests.test_serve_preview`), each one reported as skipped with a reason that names the
 variable; any other value, or no variable, runs everything. The runner runs the safe modules in
-parallel and the five sensitive ones in a serial queue, one at a time; `--report <file>` writes
+parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Before the independent review and before the merge into the local main, run the whole
 suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
 without CI in the project: the runner does not make the whole suite faster than `discover`, a
@@ -214,7 +231,7 @@ through the parent's branch, once its three gates are green ("Into the local mai
 GitHub with the release. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
 not the base, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), `git merge` of a verified child's branch into its parent's branch, `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
+branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), `git merge` of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
 the remote main, deploying or releasing. When the user chose to wait, a dependent
 stays parked until its dependency is in the local main.
 
@@ -450,7 +467,7 @@ their own approval (`references/closeout.md`). The release's pull request is cov
 the host's native approval; the branches of issues and slices are never pushed. Never
 merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,
