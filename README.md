@@ -321,8 +321,8 @@ de acordo com o RoadS. Com a resposta "sim", o Frontlights:
    feita, você é avisado;
 3. escreve a prosa em cópias temporárias do `ROADMAP.md` do ano e do `SPRINT_*.md` de cada
    sprint que tem mudança. A pasta e o arquivo de uma sprint nova são criados dentro do
-   `scrumRoot`, seguindo os títulos e as seções do `SPRINT_*.md` mais recente. O mesmo vale para as conclusões: um item de sprint que o RoadS mostra como concluído (`done`, dentro do limite da
-   sprint) e que ainda não foi registrado entra no plano como "concluída", com a data da **sincronização** (não a da
+   `scrumRoot`, seguindo os títulos e as seções do `SPRINT_*.md` mais recente. O mesmo vale para as conclusões: um item de sprint que o RoadS mostra como concluído (`done`, inclusive acima do
+   limite da sprint) e que ainda não foi registrado entra no plano como "concluída", com a data da **sincronização** (não a da
    entrega), no `ROADMAP.md` e no arquivo da sprint dele. Isso vem só do `done` do estado, nunca de a issue estar
    fechada, não existe na fila do RoadS e por isso nunca é confirmado ao RoadS: um plano só de conclusões termina
    sem `ack` (`not_needed`). `roadmapSync.markCompleted: false` desliga;
@@ -341,9 +341,11 @@ de acordo com o RoadS. Com a resposta "sim", o Frontlights:
    editado. Ao final, `gaps` roda de novo para conferir. Campo sem opção no quadro é apenas
    informado.
 
-Quem decide o limite de itens por sprint é o RoadS: o Frontlights escreve na sprint só os itens
-dentro do limite e avisa, sem perguntar, quais ficaram de fora; as mudanças desses itens vão só
-para o roadmap.
+Quem decide o limite de itens por sprint é o RoadS, e o limite é só informação: o Frontlights
+escreve no arquivo da semana todos os itens, na ordem do `position` (a ordem que o Scrum Master
+arrastou no RoadS), com os itens dentro do limite primeiro, depois a linha "Acima do limite de N:"
+uma única vez e depois os demais, e avisa, sem perguntar, quais passaram do limite. Cada sprint é
+uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
 
 Quando uma issue é renomeada no GitHub, o RoadS faz o item acompanhar o título e enfileira um `modify` só com o
 título novo. O Frontlights acha a entrada pelo número da issue que a mudança traz (o `#N` ou o link que os arquivos
