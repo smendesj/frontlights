@@ -14,7 +14,7 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
 
 ## Verificação automatizada
 
-- `python -m unittest discover -s tests -v`: **1651 testes em 41 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 15/10/2026, issue 33 na branch da issue depois das correções da revisão independente, pelo que `unittest.TestLoader().discover('tests')` carrega, sem a variável).
+- `python -m unittest discover -s tests -v`: **1662 testes em 42 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 15/10/2026, issue 34 na branch da CA S1, pelo que `unittest.TestLoader().discover('tests')` carrega, sem a variável).
   É a suíte inteira e o comando da CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
   runner da issue 27, só Windows): pula esses dois módulos com o motivo, roda os seguros em paralelo e os cinco
