@@ -490,7 +490,8 @@ main"): the full suite green at the tip of the branch of the issue, `review-gate
 `merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
 missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
 user, never a merge. Right after each merge into the local main, `homolog bundle --root <main worktree>
---config <config>` writes a Git bundle of the local main and of the work branches into the folder of the
+--config <config>` writes a Git bundle of the local main and of the work branches of every `branch_prefix` in the authorization
+records into the folder of the
 `homolog.backupDir` key of `.frontlights/config.json` (covered; the only write the run makes outside the
 project, and only into that folder); without the key it writes nothing and the session says so in one line,
 naming the key, and asks nothing.
@@ -499,7 +500,7 @@ Anything else on that list waits for the user's "Sim" to its own question (above
 **The release, offered at the end of each homologated issue** (`references/development.md`, "The release").
 Once the issue is in the local main and its bundle is written, run `homolog sync` again and `homolog release-plan
 --root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet and names
-the branch `<branch_prefix>release-<date>`. Show the list and ask with `AskUserQuestion` "Lançar a release com as
+the branch `<branch_prefix>release-<date>` (the prefix of the newest authorization record). Show the list and ask with `AskUserQuestion` "Lançar a release com as
 issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
 from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
 the body from `templates/pr.md`: Resumo and Evidência per issue, Risco do merge consolidated, the three gates of

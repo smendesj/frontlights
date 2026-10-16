@@ -38,7 +38,7 @@ das branches das issues em andamento na branch da prévia pelo `serve preview re
 desfeito e virando pergunta, e o da branch
 da issue na main local, só com os três portões verdes), conferir no início de cada etapa 6 o hook `pre-push`
 de `homolog hook` (instalado só com o "Sim" da pergunta que mostra o script; nunca por cima de um hook de
-outra origem), gravar a cada merge na main local o bundle da main local e das branches de trabalho na pasta
+outra origem), gravar a cada merge na main local o bundle da main local e das branches de trabalho de todo `branch_prefix` dos registros de autorização na pasta
 `homolog.backupDir` do config (`homolog bundle`; sem a chave, nada é gravado e a sessão avisa), rodar
 migrations no banco de desenvolvimento local, criar e
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
@@ -76,7 +76,7 @@ conferência relê o GitHub. Nenhuma outra autorização cobre essa escrita.
 
 A release é oferecida ao fim de cada issue homologada (`references/development.md`, "The release"): depois de
 `homolog sync`, o `homolog release-plan` (só leitura) lista as issues que estão na main local e ainda não em
-`origin/main` e nomeia a branch `<prefixo>release-<data>`; a sessão mostra a lista e pergunta "Lançar a release com as
+`origin/main` e nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo); a sessão mostra a lista e pergunta "Lançar a release com as
 issues #a, #b agora?" ("Sim, lançar" / "Agora não"). Com o "Sim", cortar a branch da main local, enviá-la (a única
 branch do fluxo que é enviada) e abrir a PR única (corpo pelo modelo `templates/pr.md`, com Resumo e Evidência por issue e o Risco do merge consolidado; a
 Evidência aponta os prints do teste assistido, os testes do checkpoint e os três portões de cada issue) são operações cobertas. Depois de abrir a PR da release, a sessão aguarda o merge por padrão e
