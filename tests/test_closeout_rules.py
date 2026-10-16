@@ -37,22 +37,26 @@ class SkillTests(unittest.TestCase):
 
     def test_stage_seven_is_its_own_approval_and_never_merges_or_reopens(self):
         stage7 = ' '.join(self.text.split('## 7.')[1].split())
-        for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md', 'all ticked',
-                       'children before parents', 'exact commands', 'explicit approval of that list',
-                       'rereads GitHub to verify, asks separately whether to remove the worktrees and branches the work created (`scripts/cleanup.py`, its own approval) and, because RoadS reads only the card Status, offers a new roadmap sync', 'No implementation authorization, merged PR or green test covers it',
-                       'never merges, deploys or reopens an issue; the only issue body it edits is the approved tick in a parent'):
+        for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md',
+                       'Closing (with the tick in a parent, in the same approval) and the cleanup each wait for '
+                       'their own approval of the list shown in full', 'no implementation authorization, merged PR or green test covers them'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
+        closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
+        for phrase in ('no implementation authorization, no merged PR and no green test stands in for it',
+                       'Never close a parent before every one of its children is closed', '**The tick in a parent.**',
+                       'cleanup.py', 'offer a new sync'):
+            with self.subTest(file='closeout.md', phrase=phrase):
+                self.assertIn(phrase, closeout)
 
     def test_the_description_and_the_reference_list_mention_the_closeout(self):
-        head = self.text.split('---')[1]
-        self.assertIn('close them and move their cards to Done', head)
         self.assertIn('`references/closeout.md` (stage 7 and the closeout question of stage 1)', ' '.join(self.text.split()))
         self.assertTrue((SKILL / 'references' / 'closeout.md').is_file())
 
     def test_the_charter_still_forbids_closing_and_points_to_the_closeout(self):
         stage6 = ' '.join(self.text.split('## 6.')[1].split('## 7.')[0].split())
-        self.assertIn('close issues or expand scope under this charter', stage6)
+        self.assertIn('An operation on the denied list', stage6)
+        self.assertIn('closing an issue', flat('skills', 'frontlights', 'references', 'development.md'))
 
 
 class ReferenceTests(unittest.TestCase):

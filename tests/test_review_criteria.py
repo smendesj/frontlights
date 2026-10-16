@@ -143,12 +143,14 @@ class StopCriterionTests(unittest.TestCase):
         self.assertIn('When a recheck finds a sério or médio, its fix gets one round, and a sério or médio still open '
                       'after it goes to the question of the limit.', self.review)
 
-    def test_the_protocol_and_the_readme_carry_the_recheck_exception(self):
-        # Rodada 5, médio 1: a exceção estava só em development.md e na SKILL.md.
-        phrase = 'Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.'
+    def test_the_protocol_and_the_readme_point_to_the_stop_criterion(self):
+        # Rodada 5, médio 1, depois da fonte única: a exceção da reconferência vive em development.md, e o
+        # protocolo e o README apontam para "When the review is done" em vez de copiar o critério.
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
+            text = flat(read(*name))
             with self.subTest(file='/'.join(name)):
-                self.assertIn(phrase, flat(read(*name)))
+                self.assertIn('"When the review is done"', text)
+                self.assertNotIn('"Mais uma rodada"', text)
 
     def test_the_ladder_names_the_default_of_the_baixos(self):
         # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
@@ -200,10 +202,8 @@ class DocumentationTests(unittest.TestCase):
     def test_the_protocol_says_it_in_portuguese(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         for phrase in ('O revisor julga pelo padrão de `references/review.md`', 'que só o brief do revisor cita',
-                       'A revisão termina na primeira rodada com 0 sérios e 0 médios',
-                       'com no máximo três rodadas por issue', '"Mais uma rodada"', '"Dar destino pela escada"',
-                       'como critério novo da issue de origem', 'revê o delta desde a anterior',
-                       'sem o que a base trouxe, quando ela entrou entre as rodadas'):
+                       'a rodada que só reconfere a base e o destino dos baixos estão numa fonte só',
+                       '`references/development.md`, "When the review is done"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, protocol)
 
@@ -212,8 +212,8 @@ class DocumentationTests(unittest.TestCase):
         for phrase in ('A revisão independente segue o padrão de `skills/frontlights/references/review.md`',
                        'um achado é um defeito com cenário de falha', 'largura de linha, linhas em branco',
                        'são estilo e nunca viram achado', 'Só o brief do revisor cita esse arquivo',
-                       'A revisão termina na primeira rodada com 0 sérios e 0 médios',
-                       'com no máximo três rodadas por issue', 'critério novo da issue de origem'):
+                       'A revisão termina na primeira rodada sem achado sério nem médio',
+                       '#review-checkpoints-and-renewal'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
 

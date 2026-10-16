@@ -110,8 +110,8 @@ class FamilyRulesTextTests(unittest.TestCase):
     def test_the_skill_moves_an_issue_with_all_its_open_sub_issues(self):
         text = flat(read('skills', 'frontlights', 'SKILL.md'))
         for phrase in ('An issue and its sub-issues move together', 'all its open sub-issues',
-                       'subIssuesSummary', 'Never narrow the work to the parent alone',
-                       '"the parent now, the children after its merge"',
+                       'subIssuesSummary', 'Work the parent and every open child together',
+                       'only an explicit choice of the user narrows the work',
                        'does not serialize the work behind a merge', 'the issue has open sub-issues'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -126,9 +126,10 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertIn('every layer', stage5)
         self.assertIn('layers analysed', stage5)
         self.assertIn('The scope is the whole family', stage6)
-        self.assertIn('stacking question', stage6)
-        self.assertIn('independent children', stage6)
-        self.assertIn('without waiting for the merge', stage6)
+        development = flat(read('skills', 'frontlights', 'references', 'development.md'))
+        for phrase in ('no stacking question', 'independent children', 'without waiting for the merge'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
 
     def test_issues_reference_defines_the_slice_and_its_layers(self):
         issues = read('skills', 'frontlights', 'references', 'issues.md')
@@ -198,7 +199,8 @@ class FamilyRulesTextTests(unittest.TestCase):
                        'unless one already contains the other',
                        "A verified child is merged into its parent's branch", 'the family enters the local main as one',
                        'never a rebase or a force-push', 'conflicts on the hunks the child shares',
-                       'it never covers merging a PR, writing the remote main, deploying or releasing',
+                       'which are the only merges it allows; merging a PR, writing the remote main, deploying and '
+                       'releasing stay on the denied list',
                        'No branch of the family is pushed and no pull request is opened for the parent or a child',
                        'only `"base": "<dependency-branch>"`'):
             with self.subTest(phrase=phrase):
@@ -216,56 +218,26 @@ class FamilyRulesTextTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assertLessEqual(len(label.split()), 5)
 
-    def test_the_merge_rule_names_the_only_merges_stacking_allows(self):
-        allowed = ("the only merges allowed are the ones the stacking authorization names: of a base into an issue's own branch, "
-                   "of a slice's branch into the branch of its own issue when its loop closes, "
-                   "of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, "
-                   "of a verified child's branch into its parent's branch, "
-                   "of a family's or batch's verified branches into a local integration branch that is never pushed, "
-                   "of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone "
-                   "and becomes a question), "
-                   "of the local main and the branches of the issues in progress into the preview branch by "
-                   "`serve preview refresh` (a conflict is undone and becomes a question), "
-                   "and of the branch of the issue into the local main once its three gates are green")
-        for name in (('skills', 'frontlights', 'SKILL.md'), ('skills', 'frontlights', 'references', 'development.md')):
-            with self.subTest(file=name[-1]):
-                text = flat(read(*name))
-                self.assertIn(allowed, text)
-                self.assertRegex(text, r'(Do not|Never) merge (pull requests|a pull request), write the remote main')
-
-    def test_the_merge_into_the_preview_branch_is_covered_in_the_five_texts_and_never_pushed(self):
-        """Issue 34, CA S2: the five texts of the covered operations name the merge into the preview branch by
-        `serve preview refresh`, and say in one clause that the preview branch is never pushed."""
-        phrases = {
-            ('skills', 'frontlights', 'SKILL.md'): (
-                'the merge of the local main and the branches of the issues in progress into the preview branch by '
-                '`serve preview refresh` among them',
-                'the preview branch is never pushed'),
-            ('skills', 'frontlights', 'references', 'development.md'): (
-                'the merge of the local main and the branches of the issues in progress into the preview branch by '
-                '`serve preview refresh` among them',
-                "`git merge` of the local main and the branches of the issues in progress into the preview branch by "
-                "`serve preview refresh` (a conflict is undone and becomes a question)",
-                'the preview branch is never pushed'),
-            ('skills', 'frontlights', 'docs', 'protocol.md'): (
-                'o da main local e das branches das issues em andamento na branch da prévia pelo '
-                '`serve preview refresh`',
-                'a branch da prévia nunca é enviada'),
-            ('skills', 'frontlights', 'docs', 'security.md'): (
-                ', o merge da main local e das branches das issues em andamento na branch da prévia pelo '
-                '`serve preview refresh` (um conflito é desfeito e vira pergunta) e o merge da branch da issue na '
-                'main local',
-                'a branch da prévia nunca é enviada'),
-            ('README.md',): (
-                'mesclar a main local e as branches das issues em andamento na branch da prévia pelo '
-                '`serve preview refresh`',
-                'a branch da prévia nunca é enviada'),
-        }
-        for name, expected in phrases.items():
-            text = flat(read(*name))
-            for phrase in expected:
-                with self.subTest(file=name[-1], phrase=phrase):
-                    self.assertIn(phrase, text)
+    def test_the_covered_merges_are_one_list_in_development(self):
+        """The covered merges are listed once, in development.md ("Standing authorization and the denied
+        operations"); the other texts point there (tests/test_single_source.py catches a copy)."""
+        body = flat(section(read('skills', 'frontlights', 'references', 'development.md'),
+                            'Standing authorization and the denied operations') or '')
+        for phrase in ('**Covered merges.** The run makes these merges on its own, and only these:',
+                       "a base into an issue's own branch;",
+                       "a slice's branch into the branch of its own issue when its loop closes;",
+                       "the branch of the issue (or of the slice it depends on) into a slice's branch, to bring it "
+                       "up to date;",
+                       "a verified child's branch into its parent's branch;",
+                       "a family's or batch's verified branches into a local integration branch that stays local;",
+                       "`origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is "
+                       "undone and becomes a question);",
+                       'the local main and the branches of the issues in progress into the preview branch by '
+                       '`serve preview refresh` (a conflict is undone and becomes a question);',
+                       'the branch of the issue into the local main once its three gates are green',
+                       'the preview branch stays local too'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, body)
 
     def test_example_authorization_shows_a_stacked_worktree_base(self):
         import json

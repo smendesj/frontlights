@@ -1,5 +1,7 @@
 # Closing finished issues
 
+On entering, read `docs/security.md`, "Fechamento e limpeza", and `docs/protocol.md`, "Fechamento e release".
+
 Read this when the stage 1 closeout question is answered yes, when the release of stage 6
 (`development.md`, "The release") finds its pull request merged into the approved base and the local main brought
 up to it, or when the user asks to close or move finished issues. Everything the user reads

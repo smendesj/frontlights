@@ -201,7 +201,10 @@ class FollowUpsManifestTests(unittest.TestCase):
 
     def test_skill_board_rule_is_top_level_only(self):
         text = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
-        self.assertIn('every top-level issue joins the board; a sub-issue joins only through its parent', text)
+        self.assertIn('every top-level issue joins the configured board with its fields in the same approved write; '
+                      'a sub-issue joins only through its parent', ' '.join(text.split()))
+        self.assertIn('A sub-issue joins only through its parent',
+                      (SKILL / 'references' / 'issues.md').read_text(encoding='utf-8'))
         self.assertNotIn('including follow-ups proposed after delivery', text)
 
     def test_issue_template_has_depends_on_without_a_parent_line(self):

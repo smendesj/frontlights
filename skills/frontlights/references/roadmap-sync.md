@@ -1,5 +1,8 @@
 # Roadmap sync with RoadS
 
+On entering, read `docs/security.md`, "RoadS: consultas, roadmap e lacunas", and `docs/protocol.md`,
+"Roadmap e resumo".
+
 Brings the pending changes a Scrum Master made in the RoadS Roadmap into the project's
 `ROADMAP.md` and the `SPRINT_*.md` of every sprint those changes touch, with the user's approval
 before every write and an acknowledgement to RoadS only after the files are verified. RoadS runs
