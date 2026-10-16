@@ -830,6 +830,7 @@ def validate_test_blocks(config, path):
                 warnings.append('browserTest.processes não está declarado: o serve não tem o que subir, então o ambiente precisa '
                                 'estar no ar antes do teste (só as contas e a baseUrl foram conferidas).')
             checks.require_local_declarations(path)
+            validate_isolated_block(config)
             if browser.get('frontPaths') is not None:
                 import browser_gate
                 browser_gate.validate_front_paths(browser['frontPaths'])
@@ -849,6 +850,19 @@ def validate_test_blocks(config, path):
     except (serve.Refusal, checks.Refused, checks.Infra) as refusal:
         raise ValueError(checks.redact(str(refusal))) from None
     return warnings
+
+
+def validate_isolated_block(config):
+    """Refuse an invalid `browserTest.isolated` (the assisted test in its own instance, with the development
+    database copied before each test and dropped at the end). Absent or null: nothing is checked. Works on the
+    config already read: the caller masks the refusal text."""
+    import checks
+    block = config['browserTest'].get('isolated')
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl, processes, copyDatabase e '
+                             'dropDatabase.')
 
 
 def validate_homolog_block(config):

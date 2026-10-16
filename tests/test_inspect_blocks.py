@@ -302,5 +302,49 @@ class AccountsOnlyBrowserTestTests(unittest.TestCase):
         self.assertEqual(caught.exception.category, serve.USAGE)
 
 
+def isolated(**overrides):
+    """Bloco browserTest.isolated válido: instância própria, porta automática, banco copiado e descartado."""
+    block = {'baseUrl': 'http://127.0.0.1:{port}/',
+             'processes': [process(name='web', argv=['python', 'APP_SCRIPT', '{port}'])],
+             'copyDatabase': {'argv': ['python', 'COPY_DB_SCRIPT'], 'timeoutSeconds': 600},
+             'dropDatabase': {'argv': ['python', 'DROP_DB_SCRIPT'], 'timeoutSeconds': 120}}
+    block.update(overrides)
+    return block
+
+
+def with_isolated(block=None, *processes, preview=None, **overrides):
+    """browserTest com a subchave isolated (`block` substitui o bloco inteiro; `overrides`, campos dele)."""
+    config = with_browser(*processes)
+    config['browserTest']['isolated'] = isolated(**overrides) if block is None else block
+    if preview is not None:
+        config['preview'] = preview
+    return config
+
+
+class IsolatedBlockTests(unittest.TestCase):
+    """browserTest.isolated: o teste assistido em instância própria, com banco copiado a cada teste e descartado.
+
+    Ausente ou null, nada muda; presente, o inspect recusa o bloco inválido antes de qualquer coisa rodar.
+    """
+
+    def refuse(self, config, pattern):
+        return InspectRefusesInvalidBlocksTests.refuse(self, config, pattern)
+
+    def test_a_valid_block_is_accepted_and_does_not_change_the_output(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertEqual(stable(inspect_file(with_isolated(), root)), stable(inspect_file(with_browser(), root)))
+
+    def test_a_null_block_counts_as_absent(self):
+        with tempfile.TemporaryDirectory() as root:
+            config = with_browser()
+            config['browserTest']['isolated'] = None
+            self.assertEqual(stable(inspect_file(config, root)), stable(inspect_file(with_browser(), root)))
+
+    def test_the_block_must_be_an_object(self):
+        for value in ('instancia', ['web'], 7, True):
+            with self.subTest(value=value):
+                self.refuse(with_isolated(value), r'browserTest\.isolated precisa ser um objeto')
+
+
 if __name__ == '__main__':
     unittest.main()
