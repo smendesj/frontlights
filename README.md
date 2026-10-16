@@ -833,10 +833,32 @@ variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover 
 deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
 pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
+Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
+pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao
+`HEAD` (no índice, fora dele e não rastreados), roda o `compileall` e os módulos `tests/test_*.py` que estão
+entre eles, inteiros, e os que citam o nome de um deles ou importam um script mudado (`import roadmap_sync`);
+destes, só as classes de teste que citam ou importam (`-k '*.<Classe>.*'`), ou o módulo inteiro quando isso
+fica fora delas. Os módulos rodam com
+`FRONTLIGHTS_SUITE=rapida`, do menor arquivo para o maior, quatro de cada vez, sob um prazo total de 20 s
+(`--timeout`): o que não termina no prazo morre com a árvore de processos, o que não começou fica de fora, e os
+dois aparecem como "fica para a suíte inteira", sem contar como falha. Sai com 0 quando está
+verde, 1 quando o `compileall` ou um módulo falhou (com o comando para rodá-lo sozinho), 2 num erro de uso ou
+do Git e 130 quando é interrompido. Ele só relata, nenhum hook o roda, e confere a árvore de trabalho, não o
+índice; a suíte inteira continua obrigatória antes da revisão independente e do merge na main local.
+
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
 commit, edição ou arquivo novo depois dela.
+
+`python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
+etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`
+sem a seção), com a contagem das issues (`count`) e das abertas (`open`); a carga do RoadS vira contagem
+e o quadro sai igual. O corpo de uma issue, e o de cada candidata a duplicata antes da deduplicação, é
+lido por `gh issue view <n>`. Sem `--summary` a saída continua a mesma, com o JSON inteiro das issues.
+`authorize --operation -` lê a operação da entrada padrão, além de um arquivo, e só a worktree da
+operação precisa existir: as outras entradas do charter (uma CA empilhada declarada antes de ser cortada)
+são conferidas pela forma, sem exigir a pasta.
 
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
 (`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
