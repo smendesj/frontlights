@@ -771,6 +771,12 @@ def preview_registry_path(root):
     return preview_dir(root) / 'registry.json'
 
 
+def preview_branch_marker_path(root):
+    """`{"branch": <name>}`: the branch the last refresh created or redid. `preview stop` keeps it (it deletes only
+    the record), so a refresh after a stop still knows the branch is the preview's own."""
+    return preview_dir(root) / 'branch.json'
+
+
 def preview_lock_path(root):
     return preview_dir(root) / '.lock'
 
@@ -1635,10 +1641,13 @@ def check_refresh(block, root, branches, base):
             'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
     exists = worktree.exists()
     if not exists and git_commit(root, f'refs/heads/{preview_branch}'):
-        # `worktree add --force -B` would move it: only a branch the preview's own record names may be redone
-        require(recorded_preview_branch(root) == preview_branch, f'A branch {preview_branch} já existe e não é da '
-                'prévia (o registro da prévia não a nomeia), e a worktree da prévia não existe: o refresh a moveria '
-                'para a base. Escolha outro nome em preview.branch ou, se ela não guarda nada, apague a branch à mão.',
+        # `worktree add --force -B` would move it: only a branch the preview's own record or marker names may be
+        # redone
+        require(preview_branch in (recorded_preview_branch(root), marked_preview_branch(root)), f'A branch '
+                f'{preview_branch} já existe e não é da prévia (nem o registro nem o marcador da prévia a nomeiam), e '
+                'a worktree da prévia não existe: o refresh a moveria para a base. Escolha outro nome em '
+                'preview.branch ou, se ela não guarda nada, apague a branch à mão; se a pasta da worktree da prévia '
+                'foi apagada sem `git worktree remove`, rode `git worktree prune` antes de apagar a branch.',
                 category=USAGE)
     if exists:
         require(worktree.is_dir() and here in known, f'{block["worktree"]} existe, mas não é uma worktree deste '
@@ -1679,9 +1688,19 @@ def recorded_preview_branch(root):
     return record.get('branch') if isinstance(record, dict) else None
 
 
+def marked_preview_branch(root):
+    """The `branch` of the marker of the preview branch, or None (no marker, unreadable, or without it)."""
+    try:
+        record = json.loads(preview_branch_marker_path(root).read_text(encoding='utf-8'))
+    except (OSError, ValueError, RecursionError):
+        return None
+    return record.get('branch') if isinstance(record, dict) else None
+
+
 def recreate_preview_worktree(block, root, worktree, exists, base_commit):
     """The preview branch is reset to the base commit inside the preview worktree (`checkout -B`), or the worktree is
-    added on it; the local main and the issue branches are never written."""
+    added on it; the local main and the issue branches are never written. The marker of the preview branch is written
+    after Git did it."""
     if exists:
         code, _, err = git(worktree, 'checkout', '-q', '-B', block['branch'], base_commit)
     else:
@@ -1689,6 +1708,7 @@ def recreate_preview_worktree(block, root, worktree, exists, base_commit):
             worktree.parent.mkdir(parents=True, exist_ok=True)
         code, _, err = git(root, 'worktree', 'add', '-q', '--force', '-B', block['branch'], str(worktree), base_commit)
     require(code == 0, f'O git não refez a worktree da prévia na base: {git_text(err)}')
+    write_json_atomic({'branch': block['branch']}, preview_branch_marker_path(root))
 
 
 def merge_branches(block, worktree, branches, commits):

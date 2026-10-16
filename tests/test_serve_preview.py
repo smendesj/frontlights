@@ -459,6 +459,21 @@ class PreviewRefreshTest(RefreshTestCase):
         self.assertEqual(self.git('rev-parse', 'previa^2'), issue)
 
 
+    def test_after_a_stop_and_the_worktree_removed_the_refresh_redoes_the_branch_its_marker_names(self):
+        """2nd review of issue 34 (B2): the stop deletes the record, not the marker of the preview branch."""
+        marker = self.root / '.frontlights' / 'preview' / 'branch.json'
+        self.assertEqual(self.refresh('issue-1').returncode, 0, done_text(self.last))
+        self.assertEqual(json.loads(marker.read_text(encoding='utf-8')), {'branch': 'previa'})
+        self.assertTrue(self.payload(self.serve('preview', 'stop'))['ok'], done_text(self.last))
+        self.assertFalse(self.registry().exists())
+        self.assertTrue(marker.is_file(), 'o stop apagou o marcador da branch da prévia')
+        self.git('worktree', 'remove', '--force', str(self.worktree))
+        done = self.refresh('issue-1')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        self.assertEqual((self.rev('previa^1'), self.rev('previa^2')), (self.rev('main'), self.rev('issue-1')))
+        self.assertEqual(json.loads(marker.read_text(encoding='utf-8')), {'branch': 'previa'})
+
+
 class PreviewRefreshBrokenBuildTest(RefreshTestCase):
     def assert_broken_build(self, done):
         self.assertEqual(done.returncode, 1, done_text(done))
@@ -1004,6 +1019,7 @@ class PreviewRefreshGuardTest(FakeRecordMixin, RefreshTestCase):
         result = self.payload(done)
         self.assertEqual(result['category'], 'uso')
         self.assertIn('já existe', result['error'])
+        self.assertIn('git worktree prune', result['error'])
         self.assertEqual(self.rev('previa'), own, 'o refresh moveu uma branch que não era da prévia')
         self.assertFalse(self.worktree.exists())
         self.live(branch='antiga')  # a record that names another branch does not vouch for this one
