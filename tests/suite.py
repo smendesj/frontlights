@@ -304,15 +304,16 @@ class Reader(threading.Thread):
             pass
 
 
-def run_module(current, name, kind, root, timeout, live, stopping):
+def run_module(current, name, kind, root, timeout, live, stopping, command=None):
     """Roda um módulo como processo filho e devolve o Outcome, ou None quando a rodada foi interrompida. O filho
     roda em grupo próprio, que o livra só do Ctrl+C do console: o Ctrl+Break do teclado chega a todos os processos
     do console, e o filho morre com 0xC000013A (STATUS_CONTROL_C_EXIT) antes de a thread principal reagir; esse
     código liga `stopping` e conta como interrupção, não como erro do módulo. Passado o prazo, mata a árvore e
     guarda a saída parcial; se a árvore não morrer, é erro de infraestrutura. `live` é o registro dos filhos vivos,
-    para o abort; `stopping` encerra a espera quando a suíte foi interrompida."""
+    para o abort; `stopping` encerra a espera quando a suíte foi interrompida. `command` troca o comando padrão
+    (`command_for`), como o `tests/pre_commit.py` faz para rodar só algumas classes com `-k`."""
     started = time.monotonic()
-    process = subprocess.Popen(command_for(current.tests_dir, name), cwd=str(root), env=dict(os.environ),
+    process = subprocess.Popen(command or command_for(current.tests_dir, name), cwd=str(root), env=dict(os.environ),
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
     reader = Reader(process.stdout)
