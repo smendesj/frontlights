@@ -23,6 +23,7 @@ SINGLE = {
     '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`': 'os três portões',
     'Lançar a release com as issues': 'a pergunta da release',
     '"Mesclar a PR #<n> em <base>?"': 'a pergunta do merge da release',
+    '"Dar destino pela escada"': 'a pergunta do limite de rodadas da revisão',
 }
 
 # cópias em português que deram lugar a um ponteiro

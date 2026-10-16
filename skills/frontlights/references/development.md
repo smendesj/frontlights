@@ -3,7 +3,8 @@
 Read the recorded authorization and the current GitHub issues, and from `docs/security.md` the sections
 "Hooks e escritas em `.git/`", "Autorização permanente", "Subagentes", "`authorize` e a main local",
 "`homolog sync` e `homolog bundle`", "Registro de autorização e `branch_prefix`", "Permissões do host e
-AFK", "Revisão e sobras" and "`serve`, `checks` e o teste no navegador"; from `docs/protocol.md`,
+AFK", "Revisão e sobras", "Fechamento e limpeza" (the limits of `closeout.py tick`) and "`serve`, `checks` e o
+teste no navegador"; from `docs/protocol.md`,
 "Desenvolvimento e release" (the format of the authorization record and of its `monitoring` block), "Registros"
 (`plan.json`), "Ponto de retomada e continuação" and "Contexto e conclusão". Stage 6 runs under
 the standing authorization (below): the session fills the run itself, announces it in one block and records

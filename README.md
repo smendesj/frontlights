@@ -851,10 +851,10 @@ commit, edição ou arquivo novo depois dela.
 A revisão independente segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
 cenário de falha, em três gravidades (sério, médio, baixo), e largura de linha, linhas em branco, quebra de
 parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o brief do revisor cita esse arquivo; o
-implementador trabalha pela issue. A revisão termina na primeira rodada com 0 sérios e 0 médios, com no máximo
-três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
-critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
-Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.
+implementador trabalha pela issue. A revisão termina na primeira rodada sem achado sério nem médio; o limite de
+rodadas e o destino dos baixos estão em
+[`references/development.md`](skills/frontlights/references/development.md#review-checkpoints-and-renewal)
+("When the review is done").
 
 `python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
 etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`
