@@ -409,7 +409,7 @@ verificadas de uma família ou de um lote numa branch de integração local, que
   mascaráveis), inclusive em `browserTest.isolated` (portas fora das da prévia e do serve, `baseUrl` na
   porta de um processo isolado, `cwd` relativo desses processos, passos do banco sem shell) e no bloco
   `preview` (worktree dentro do `--root`, branch, `baseUrl` local na porta fixa de um processo dela, processos sem
-  porta `auto`, e portas de `browserTest.processes` e da `browserTest.baseUrl` fora das da prévia); o `cwd` de `checks` e de
+  porta `auto` e sem `{port}` no argv nem no `cwd`, e portas de `browserTest.processes` e da `browserTest.baseUrl` fora das da prévia); o `cwd` de `checks` e de
   `browserTest.processes`, o de `preview.processes` (`process_cwd`, quando a prévia sobe), `.cmd`/`.bat` com
   metacaractere e os nomes `checks.backend`/`checks.smoke.target`
   contra `browserTest.processes` são conferidos na execução, antes de qualquer processo subir. Isso

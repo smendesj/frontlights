@@ -105,6 +105,22 @@ class PreviewInTheFlowTests(unittest.TestCase):
                     self.assertNotIn(stale, text)
 
 
+
+class PreviewPortRulesTextTests(unittest.TestCase):
+    """5ª revisão da issue 34: as listas de recusas da prévia citam o {port} no argv e no cwd dos processos."""
+
+    def test_every_list_of_preview_refusals_names_the_port_placeholder_of_a_process(self):
+        sources = {
+            'serve.py': (read('skills', 'frontlights', 'scripts', 'serve.py'), 'no `{port}` in the `argv` or the `cwd` of a process'),
+            'browser-testing.md': (read('skills', 'frontlights', 'references', 'browser-testing.md'),
+                                   'no `{port}` in the `argv` or the `cwd` of its processes'),
+            'README.md': (read('README.md'), '`{port}` no argv ou no `cwd` dos processos dela'),
+            'security.md': (read('skills', 'frontlights', 'docs', 'security.md'), 'sem `{port}` no argv nem no `cwd`'),
+        }
+        for name, (text, phrase) in sources.items():
+            with self.subTest(file=name):
+                self.assertIn(phrase, flat(text))
+
 class IsolatedWatchedRunTests(unittest.TestCase):
     """Issue 34, S4: o teste assistido numa instância isolada, com banco copiado e descartado."""
 

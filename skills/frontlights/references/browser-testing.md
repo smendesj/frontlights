@@ -195,7 +195,8 @@ tail of each log). `preview start` is refused while the preview is alive: run
 
 The preview uses fixed ports, so its tab stays valid across every refresh: it is
 opened once and only reloaded. No process of the `preview` block takes
-`"port": "auto"`, its `baseUrl` takes no `{port}`, and the port of that
+`"port": "auto"`, there is no `{port}` in the `argv` or the `cwd` of its processes
+(a fixed port is written as is), its `baseUrl` takes no `{port}`, and the port of that
 `baseUrl` (explicit, or 80/443 by the scheme) is the fixed port of one of its
 processes (integer `port`, or else the port of the health); anything else is
 refused as `uso`, by `serve preview` and by `inspect`. With the `preview` block

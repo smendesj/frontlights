@@ -62,7 +62,8 @@ Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode
 top-level `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host,
 `processes` with the same rules as `browserTest.processes`, each `health` on a local host too). The preview runs on
 fixed ports only: it is opened once in a tab and only reloaded after each refresh, so its port can never change. No
-process takes `"port": "auto"`, `baseUrl` takes no `{port}`, and the port of `baseUrl` (explicit, or 80/443 by the
+process takes `"port": "auto"`, there is no `{port}` in the `argv` or the `cwd` of a process (it is never filled in),
+`baseUrl` takes no `{port}`, and the port of `baseUrl` (explicit, or 80/443 by the
 scheme) is the fixed port (integer `port`, or else the port of the health) of one of its processes; the preview
 reserves no port. `preview.branch` is a
 plain branch name that is neither main, master nor a match (fnmatch without case, a pattern also covering
