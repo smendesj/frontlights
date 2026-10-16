@@ -230,13 +230,15 @@ anos 2000 a 2100), o `fetch` é recusado sem alternativa automática. Cada sprin
 seu `SPRINT_*.md`, montado com as datas do RoadS; um `move_lane` alcança a sprint de origem e a
 de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), nunca do texto do id, e a lane
 casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posicional antiga (`atual`, `proxima`,
-`terceira`) ou na forma `sprint-DD-MM-AAAA`. O RoadS mantém no estado toda semana citada por mudança ainda sem ack
-(com `items: []` quando ficou vazia, inclusive a encerrada pela virada); uma lane sem semana nem grupo no estado lido
-não alcança arquivo de sprint por essa lane, e o `fetch` a avisa como inesperada. Pasta e arquivo novos só são
+`terceira`) ou na forma `sprint-DD-MM-AAAA`. Na forma por data, o RoadS mantém no estado toda semana citada por
+mudança ainda sem ack (com `items: []` quando ficou vazia, inclusive a encerrada pela virada); na forma posicional,
+até a migração, um `move_lane` enfileirado antes da virada cita a lane como ela era, e a skill pergunta quando ela
+não bate com a semana que o usuário lembra. Uma lane sem semana nem grupo no estado lido não alcança arquivo de
+sprint por essa lane: o `fetch` a avisa como inesperada e a skill pergunta antes do `apply`. Pasta e arquivo novos só são
 criados dentro do
-`scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. Itens com
-`overLimit` entram no arquivo da semana depois da linha "Acima do limite de N:", na ordem do `position`, e são
-avisados; `snapshotStale` indica cópia do quadro com mais de
+`scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. As mudanças dos itens com
+`overLimit` entram no arquivo da semana como as dos demais, depois da linha "Acima do limite de N:" (que só aparece
+quando algum item do excedente tem entrada no arquivo), na ordem do `position`, e esses itens são avisados; `snapshotStale` indica cópia do quadro com mais de
 24 h ou ausente. Marcas, backups, recusa de encolhimento e confirmação continuam como antes. Um item de sprint
 com `done` verdadeiro (inclusive acima do limite), ainda sem marca no `ROADMAP.md` nem no arquivo da sprint dele, entra no
 plano como uma mudança sintética `completed` (id `done-<itemId>`, com `completedOn` na data da sincronização em São

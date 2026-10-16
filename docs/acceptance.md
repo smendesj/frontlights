@@ -72,7 +72,8 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   mudança aditiva e regra de quebra.
 - As semanas identificadas pela data (issue 39) só têm cobertura simulada: o `fetch` e o `apply` foram testados
   com estados nas duas formas (posicional e `sprint-DD-MM-AAAA`), excedente no arquivo da semana e lane sem par
-  avisada, sem o RoadS real; falta a primeira sincronização real depois da migração do RoadS.
+  avisada, sem o RoadS real; falta a primeira sincronização real depois da migração do RoadS, que também prova a
+  promessa do RoadS de manter a semana encerrada (com `items: []`) no estado até o ack.
 
 ## Defeitos achados no uso real e corrigidos nesta versão
 

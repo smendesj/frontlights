@@ -300,7 +300,8 @@ resumos da mesma semana (quarta e sexta) nunca dividem arquivo. Prints salvos an
   marcas recusadas) só têm cobertura simulada nos testes; a produção real exercitou o caminho
   feliz.
 - As semanas por data (15/10/2026: ids `sprint-DD-MM-AAAA`, N semanas, excedente escrito, lane sem par avisada) só
-  têm cobertura simulada até a primeira sincronização real depois da migração do RoadS.
+  têm cobertura simulada até a primeira sincronização real depois da migração do RoadS, e a semana encerrada vir
+  vazia no estado até o ack é promessa do RoadS ainda não vista numa resposta real.
 - A contagem de partes por caixas (14/10/2026) ainda não apareceu num resumo real: no período de 09/10 a 13/10
   nenhuma entrega usava caixas, e a coleta real não mudou.
 - O RoadS registra, das chamadas feitas com segredo válido, o método, a rota, o status, o User-Agent declarado
