@@ -839,6 +839,16 @@ class HomologBundleTests(unittest.TestCase):
         code, result = self.bundle(config)
         self.assertEqual((result['prefixes'], result['prefixSource'], result['skipped']), (['equipe/'], 'records', 2))
 
+    def test_a_record_with_malformed_worktrees_is_left_out_and_counted(self):
+        """Issue 44, 2ª revisão: o registro com `worktrees` que não é lista fica fora dos prefixos e entra em
+        `skipped`, como na leitura das branches das issues."""
+        self.team_branches()
+        self.record('authorization-1.json', branch_prefix='claude/')
+        self.record('authorization-2.json', branch_prefix='equipe/', worktrees='x')
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}))
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['prefixes'], result['prefixSource'], result['skipped']), (['claude/'], 'records', 1))
+
     def test_an_explicit_prefix_still_wins(self):
         """Issue 44, S1: `--prefix` explícito vale sozinho, com registros de outro prefixo."""
         self.team_branches()
@@ -1023,6 +1033,13 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.record(name='authorization-2.json', branch_prefix='segundo/')
         code, result = self.plan()
         self.assertEqual((result['prefix'], result['prefixSource']), ('segundo/', 'records'))
+
+    def test_a_record_with_malformed_worktrees_never_names_the_release(self):
+        """Issue 44, 2ª revisão: o registro que a leitura das branches ignora também não nomeia a release."""
+        self.record(name='authorization-a.json', branch_prefix='equipe/', issued_at='2026-02-01T10:00:00+00:00',
+                    worktrees='x')
+        code, result = self.plan()
+        self.assertEqual((result['prefix'], result['prefixSource'], result['skipped']), ('claude/', 'records', 1))
 
     def test_without_a_valid_record_the_release_keeps_the_default(self):
         """Issue 44, S2: sem registro válido, `claude/`, como antes."""

@@ -21,13 +21,12 @@ Operations (each prints one JSON object on stdout):
          --no-edit <remote>/<base>`, a fast-forward when possible. A conflict is aborted at once, the worktree is
          checked clean again at the commit it stood on, and the conflicting files are reported for the session to
          ask the user. It never pushes, never touches another branch, never uses --force, reset or rebase.
-  bundle write one Git bundle of the local base and of every local branch under the work prefixes: `--prefix` alone
-         when given; otherwise every `branch_prefix` of the valid `.frontlights/authorization*.json` records under
-         `--records` (default the root; a record without the key counts as `claude/`), and `claude/` when there is
-         no valid record (issue 44); `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which, and
-         `skipped` counts the records left out;
-         into the folder that `homolog.backupDir` in the config names (`backup_dir` validates the key, and
-         `inspect` reuses it). Without the key it says there is no folder and writes nothing. The folder must exist and
+  bundle write one Git bundle of the local base and of every local branch under the work prefixes into the folder
+         that `homolog.backupDir` in the config names. The prefixes are `--prefix` alone when given; otherwise every
+         `branch_prefix` of the valid `.frontlights/authorization*.json` records under `--records` (default the root;
+         a record without the key counts as `claude/`), and `claude/` when there is no valid record (issue 44);
+         `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which, and `skipped` counts the
+         records left out. `backup_dir` validates the key, and `inspect` reuses it. Without the key it says there is no folder and writes nothing. The folder must exist and
          must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
          storage, not redirection, and is allowed); it is never created. The file is
          `<root folder>-<YYYYmmdd>-<HHMMSS>.bundle` in local time, `-2`, `-3`... when the name is taken: nothing
@@ -477,7 +476,8 @@ def record_files(folder):
 
 def record_prefixes(folder):
     """([{'file', 'prefix', 'issuedAt'}], skipped) for every record under `folder` whose `branch_prefix` (absent:
-    DEFAULT_PREFIX) is a valid prefix; an unreadable record, a bad prefix, and every record past RECORD_LIMIT, is
+    DEFAULT_PREFIX) is a valid prefix and whose `worktrees` (absent: none) is a list, the same validity as
+    `issue_branches`; an unreadable record, a bad prefix or `worktrees`, and every record past RECORD_LIMIT, is
     skipped and counted (issue 44)."""
     files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
@@ -485,7 +485,8 @@ def record_prefixes(folder):
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
         prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
-        if data is None or not is_prefix(prefix):
+        entries = data.get('worktrees', []) if data is not None else None
+        if data is None or not is_prefix(prefix) or not isinstance(entries, list):
             skipped += 1
             continue
         found.append({'file': file.name, 'prefix': prefix, 'issuedAt': data.get('issued_at')})
