@@ -214,7 +214,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
 
     def test_the_protocol_and_the_readme_say_the_same_in_portuguese(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
-        self.assertIn('corpo pelo modelo `templates/pr.md`, com Resumo e Evidência por issue e o Risco do merge consolidado', protocol)
+        self.assertIn('a PR única leva o corpo do modelo `templates/pr.md`', protocol)
         self.assertNotIn('`templates/pr.md` quando existir', protocol)
         readme = flat(read('README.md'))
         for phrase in ('abre a PR única pelo modelo `templates/pr.md`', 'Resumo (o menor visual) e Evidência (antes e depois) por issue',

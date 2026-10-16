@@ -1,5 +1,7 @@
 # Discovery interview
 
+On entering, read `docs/security.md`, "Artefato do grilling".
+
 Stress-test the request until the user and you share one understanding of what
 will be built and how. Walk the decision tree branch by branch, answer from the
 code whatever the code can answer, and ask the user only what is theirs to

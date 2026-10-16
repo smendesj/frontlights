@@ -78,14 +78,14 @@ class FanOutRuleTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         for phrase in ('**Paralelismo.**', 'um subagente por parte', 'lançados numa única mensagem',
                        'slices independentes ao mesmo tempo, cada uma na própria worktree', 'recurso compartilhado',
-                       'nunca serializa em silêncio', 'A sessão coordenadora é uma só',
+                       'registra o limite de capacidade', 'A sessão coordenadora é uma só',
                        'afirmação, não evidência', 'o revisor nunca é o autor'):
             with self.subTest(file='protocol', phrase=phrase):
                 self.assertIn(phrase, protocol)
-        self.assertIn('slices independentes em paralelo dentro da issue e entre issues', protocol)
         self.assertNotIn('slices em paralelo só entre issues', protocol)
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
-        for phrase in ('**Subagentes.**', 'não cria autoridade', 'nunca para um agente que a execute por ela',
+        for phrase in ('**Subagentes.**', 'um subagente trabalha sob as mesmas permissões nativas da sessão que o lançou',
+                       'nunca para um agente que a execute por ela',
                        'continuam valendo para cada agente', 'antes de virar evidência'):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
