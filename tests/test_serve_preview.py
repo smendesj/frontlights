@@ -14,6 +14,7 @@ import time
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import serve  # noqa: E402
@@ -283,15 +284,24 @@ class IssueStopKeepsThePreviewTest(PreviewTestCase):
 
 
 class PreviewUsageTest(PreviewTestCase):
-    def test_without_the_preview_block_every_preview_action_is_refused_as_usage(self):
+    def test_without_the_preview_block_start_and_refresh_are_refused_as_usage(self):
         self.write_config(preview=None)
-        for action in ('start', 'status', 'stop'):
+        for action in ('start', 'refresh'):
             with self.subTest(action=action):
                 done = self.serve('preview', action)
                 self.assertEqual(done.returncode, 1, done_text(done))
                 result = self.payload(done)
                 self.assertEqual(result['category'], 'uso')
                 self.assertIn('bloco preview', result['error'])
+        self.assertFalse(self.registry().exists())
+
+    def test_without_the_preview_block_nor_a_registry_status_and_stop_say_there_is_no_registry(self):
+        self.write_config(preview=None)
+        for action in ('status', 'stop'):
+            with self.subTest(action=action):
+                done = self.serve('preview', action)
+                self.assertEqual(done.returncode, 1, done_text(done))
+                self.assertIn('Não há registro da prévia', self.payload(done)['error'])
         self.assertFalse(self.registry().exists())
 
     def test_start_without_the_preview_worktree_is_refused_as_usage_and_points_to_refresh(self):
@@ -533,6 +543,456 @@ class PreviewRefreshRefusalTest(RefreshTestCase):
                 self.assertEqual(self.payload(done)['category'], 'uso')
                 self.assertIn('preview refresh', self.payload(done)['error'])
         self.assertFalse(self.worktree.exists())
+
+
+class FakeRecordMixin:
+    """Fake records of the preview pointing at Python processes that only sleep (no server comes up), and a spy of
+    the records `launch_preview` writes, to learn every pid a launch started."""
+
+    def sleeper(self):
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])
+        self.addCleanup(child.wait)
+        self.addCleanup(child.kill)
+        identity = serve.process_identity(child.pid)
+        self.assertIsNotNone(identity)
+        return {'pid': child.pid, 'identity': identity, 'child': child}
+
+    def dead(self):
+        """A pid that is no longer alive, with the identity it had (a reused pid then is not the same process)."""
+        item = self.sleeper()
+        item['child'].kill()
+        item['child'].wait()
+        return item
+
+    def fake_registry(self, process, relay, branch='previa'):
+        entry = {'name': 'web', 'pid': process['pid'], 'identity': process['identity'], 'port': 1,
+                 'url': 'http://127.0.0.1:1/', 'startedAt': serve.now_iso(), 'log': '.frontlights/preview/log/web.log',
+                 'relayPid': relay['pid'], 'relayIdentity': relay['identity']}
+        path = self.registry()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({'root': str(self.root.resolve()), 'worktree': '.claude/worktrees/previa',
+                                    'branch': branch, 'baseUrl': 'http://127.0.0.1:1/', 'startedAt': serve.now_iso(),
+                                    'processes': [entry]}), encoding='utf-8')
+        # runs before kill_leftovers: a fake record must never make the safety net kill a reused pid
+        self.addCleanup(path.unlink, missing_ok=True)
+        return path.read_text(encoding='utf-8')
+
+    def recording(self):
+        """(list of the entries of every record written, patch that records them)."""
+        seen, real = [], serve.write_preview_registry
+
+        def record(root, block, entries, started_at, contents=None):
+            seen.append(json.loads(json.dumps(entries)))
+            return real(root, block, entries, started_at, contents)
+        return seen, mock.patch.object(serve, 'write_preview_registry', record)
+
+    def preview_reservations(self):
+        folder = serve.ports_dir(self.root)
+        return [path for path in folder.glob('*.json')
+                if json.loads(path.read_text(encoding='utf-8')).get('issue') == 'preview'] if folder.is_dir() else []
+
+
+class PreviewConfigRefusalTest(PreviewTestCase):
+    """Refusals of the `preview` block (category `uso`), read in process: nothing is created and nothing comes up."""
+
+    def block(self, **changes):
+        block = {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
+                 'processes': [self.preview_process()]}
+        block.update(changes)
+        return block
+
+    def refused(self, block, needle):
+        self.write_config(preview=block)
+        with self.assertRaises(serve.Refusal) as caught:
+            serve.load_preview_block(self.config, self.root)
+        self.assertEqual(caught.exception.category, 'uso', str(caught.exception))
+        self.assertIn(needle, str(caught.exception))
+        self.assertFalse((self.root / '.frontlights' / 'preview').exists(), 'uma recusa de config criou algo')
+        return caught.exception
+
+    def accepted(self, block):
+        self.write_config(preview=block)
+        return serve.load_preview_block(self.config, self.root)
+
+    def test_a_preview_worktree_with_dots_absolute_with_a_drive_outside_or_equal_to_the_root_is_refused(self):
+        outside = Path(self.tmp.name) / 'fora'
+        (outside / 'previa').mkdir(parents=True)
+        link = self.root / 'atalho'  # a junction (or symlink) inside the root that leads out of it
+        if os.name == 'nt':
+            import _winapi
+            _winapi.CreateJunction(str(outside), str(link))
+        else:
+            link.symlink_to(outside, target_is_directory=True)
+        relative_only, inside = 'sem ".." e sem unidade ou raiz', 'dentro do --root'
+        values = [('', 'texto não vazio'), ('../fora', relative_only), ('.claude/../../fora', relative_only),
+                  (str(outside), relative_only), ('/fora', relative_only), ('\\fora', relative_only),
+                  ('atalho/previa', inside), ('.', inside), ('./', inside)]
+        if os.name == 'nt':
+            values += [('C:fora', relative_only), ('C:\\fora', relative_only)]
+        for value, needle in values:
+            with self.subTest(worktree=value):
+                self.assertIn('preview.worktree', str(self.refused(self.block(worktree=value), needle)))
+        self.assertEqual([path.name for path in outside.iterdir()], ['previa'])
+
+    def test_a_preview_branch_named_main_or_master_in_any_case_is_refused(self):
+        for value in ('main', 'master', 'Main', 'MASTER'):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'protegida')
+
+    def test_a_preview_branch_with_an_invalid_name_is_refused(self):
+        for value in ('', '-x', 'a b', 'a..b', 'nome.lock', 'a/b.lock', 'a/', 'a//b', 'a/.b', 'a.', 7):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'preview.branch')
+
+    def test_a_preview_branch_that_matches_protected_branches_of_an_authorization_is_refused(self):
+        folder = self.root / '.frontlights'
+        folder.mkdir()
+        (folder / 'authorization.json').write_text(json.dumps({'protected_branches': ['release', 'hotfix/*', 'Prod*']}),
+                                                   encoding='utf-8')
+        (folder / 'authorization-ilegivel.json').write_text('{ ilegivel', encoding='utf-8')
+        (folder / 'authorization-lista.json').write_text(json.dumps({'protected_branches': 'release-x'}),
+                                                         encoding='utf-8')
+        (folder / 'authorization-pasta.json').mkdir()
+        for value in ('release', 'RELEASE', 'release/x', 'hotfix/a', 'hotfix/a/b', 'producao'):
+            with self.subTest(branch=value):
+                self.refused(self.block(branch=value), 'protegida')
+        for value in ('previa', 'releases', 'hotfix', 'release-x'):  # unreadable files are skipped, never fatal
+            with self.subTest(branch=value):
+                self.assertEqual(self.accepted(self.block(branch=value))['branch'], value)
+
+    def test_a_process_health_outside_the_local_host_is_refused_naming_the_process(self):
+        for health in ('http://example.test:{port}/', 'http://10.0.0.5:{port}/', 'http://0.0.0.0:{port}/'):
+            with self.subTest(health=health):
+                error = self.refused(self.block(processes=[self.preview_process(),
+                                                           self.preview_process('api', health=health)]), 'api')
+                self.assertEqual(error.process, 'api')
+        for health in ('http://localhost:{port}/', 'http://[::1]:{port}/'):
+            with self.subTest(health=health):
+                self.accepted(self.block(processes=[self.preview_process(health=health)]))
+
+    def test_two_processes_whose_names_give_the_same_log_file_are_refused(self):
+        for first, second in (('web api', 'web_api'), ('Web', 'web')):
+            with self.subTest(names=(first, second)):
+                port = free_port()
+                processes = [self.preview_process(name, port=port + index, health=f'http://127.0.0.1:{port + index}/')
+                             for index, name in enumerate((first, second))]
+                error = self.refused(self.block(processes=processes), 'mesmo arquivo de log')
+                self.assertEqual(error.process, second)
+
+
+class PreviewStartRecordTest(FakeRecordMixin, PreviewTestCase):
+    """`preview start` with an old record: any live pid of it (process or relay) refuses; nothing alive goes on."""
+
+    def start(self):
+        with mock.patch.object(serve, 'launch_preview', return_value={'ok': True}) as launch:
+            try:
+                return launch, serve.preview_start(self.config, self.root), None
+            except serve.Refusal as refusal:
+                return launch, None, refusal
+
+    def test_a_live_relay_of_the_old_record_refuses_the_start(self):
+        self.write_config()
+        before = self.fake_registry(self.dead(), self.sleeper())
+        launch, _, refusal = self.start()
+        self.assertIsNotNone(refusal, 'o start seguiu com o relé antigo vivo')
+        self.assertEqual(refusal.category, 'uso')
+        self.assertIn('refresh', str(refusal))
+        launch.assert_not_called()
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), before)
+
+    def test_a_live_process_of_the_old_record_refuses_the_start(self):
+        self.write_config()
+        before = self.fake_registry(self.sleeper(), self.dead())
+        launch, _, refusal = self.start()
+        self.assertIsNotNone(refusal)
+        self.assertEqual(refusal.category, 'uso')
+        launch.assert_not_called()
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), before)
+
+    def test_an_old_record_with_nothing_alive_lets_the_start_go_on(self):
+        self.write_config()
+        self.fake_registry(self.dead(), self.dead())
+        launch, result, refusal = self.start()
+        self.assertIsNone(refusal)
+        self.assertEqual(result, {'ok': True})
+        launch.assert_called_once()
+
+
+class PreviewStatusRecordTest(FakeRecordMixin, PreviewTestCase):
+    def test_status_reports_the_relay_and_running_needs_the_process_and_its_relay(self):
+        self.write_config()
+        process, relay = self.sleeper(), self.sleeper()
+        self.fake_registry(process, relay)
+        result = serve.preview_status(self.config, self.root)
+        self.assertTrue(result['running'])
+        self.assertEqual((result['processes'][0]['alive'], result['processes'][0]['relayAlive']), (True, True))
+        relay['child'].kill()
+        relay['child'].wait()
+        result = serve.preview_status(self.config, self.root)
+        self.assertEqual((result['processes'][0]['alive'], result['processes'][0]['relayAlive']), (True, False))
+        self.assertFalse(result['running'], 'a prévia sem relé (sem log) foi dada como no ar')
+
+    def test_status_and_stop_work_without_the_preview_block_when_there_is_a_registry(self):
+        self.write_config(preview=None)
+        process, relay = self.sleeper(), self.sleeper()
+        self.fake_registry(process, relay)
+        self.log().parent.mkdir(parents=True, exist_ok=True)
+        self.log().write_text(f'linha com {PASSWORD} e {LOGIN}\n', encoding='utf-8')
+        done = self.serve('preview', 'status')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        result = self.payload(done)
+        self.assertTrue(result['running'])
+        self.assertEqual(result['processes'][0]['tail'], [f'linha com {MASK} e {MASK}'])
+        self.assertNotIn(PASSWORD, done_text(done))
+        done = self.serve('preview', 'stop')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        self.assertTrue(all(item['stopped'] for item in self.payload(done)['processes']), done_text(done))
+        self.assertFalse(self.registry().exists())
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(process['pid'])))
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(relay['pid'])))
+
+
+# A process that never prints and never listens: alive until killed, its health never answers.
+QUIET_SERVER = r"""import time
+time.sleep(600)
+"""
+
+
+class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
+    """A failed launch with two processes, and a relay that dies, both in process (the pids come from the spy)."""
+
+    def config_with(self, second):
+        self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
+                                   'baseUrl': 'http://127.0.0.1:1/', 'processes': [self.preview_process(), second]})
+
+    def exiting(self):
+        script = Path(self.tmp.name) / 'exiting_server.py'
+        script.write_text(EXITING_SERVER, encoding='utf-8')
+        return {'name': 'quebra', 'argv': [sys.executable, str(script)], 'port': 'auto',
+                'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+
+    def pids(self, seen):
+        return {pid for entries in seen for entry in entries for pid in (entry['pid'], entry.get('relayPid')) if pid}
+
+    def test_when_the_second_process_fails_the_first_and_its_relay_are_torn_down(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        with spy, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        failure = caught.exception
+        self.assertEqual((failure.process, failure.category, failure.extra.get('build')),
+                         ('quebra', 'infraestrutura', 'quebrado'))
+        self.assertNotIn('left', failure.extra)
+        pids = self.pids(seen)
+        self.assertEqual(len(pids), 4, seen)
+        for pid in pids:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertFalse(self.registry().exists(), 'o registro ficou depois de derrubar tudo')
+        self.assertEqual(self.preview_reservations(), [])
+
+    def test_relays_that_do_not_stop_at_the_end_of_their_process_are_torn_down_too(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        stubborn = mock.patch.object(serve, 'relay_argv',  # a relay that never reads stdin, so never sees EOF
+                                     lambda config, log: [sys.executable, '-c', 'import time; time.sleep(60)'])
+        with spy, stubborn, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        self.assertEqual(caught.exception.process, 'quebra')
+        relays = {entry['relayPid'] for entries in seen for entry in entries if entry.get('relayPid')}
+        self.assertEqual(len(relays), 2, seen)
+        for pid in relays:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o relé {pid} ficou vivo')
+        self.assertFalse(self.registry().exists())
+
+    def test_what_cannot_be_torn_down_is_all_the_registry_keeps(self):
+        self.config_with(self.exiting())
+        seen, spy = self.recording()
+        real_kill = serve.kill_tree
+
+        def stubborn(pid):  # the first process "survives" the teardown
+            return False if pid == seen[0][0]['pid'] else real_kill(pid)
+        with spy, mock.patch.object(serve, 'kill_tree', stubborn), self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        first = seen[0][0]['pid']
+        self.assertEqual(caught.exception.extra['left'], [{'name': 'web', 'pid': first}])
+        record = json.loads(self.registry().read_text(encoding='utf-8'))
+        self.assertEqual([(entry['name'], entry['pid']) for entry in record['processes']], [('web', first)])
+        self.assertTrue(serve.pid_alive(first))
+        for pid in self.pids(seen) - {first}:
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertEqual(len(self.preview_reservations()), 1, 'a porta do que sobrou foi liberada')
+
+    def test_a_relay_that_dies_before_the_health_is_infrastructure_not_a_broken_build(self):
+        script = Path(self.tmp.name) / 'quiet_server.py'
+        script.write_text(QUIET_SERVER, encoding='utf-8')
+        self.write_config(preview={'worktree': '.claude/worktrees/previa', 'branch': 'previa',
+                                   'baseUrl': 'http://127.0.0.1:1/',
+                                   'processes': [{'name': 'web', 'argv': [sys.executable, str(script)], 'port': 'auto',
+                                                  'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}]})
+        seen, spy = self.recording()
+        dying = mock.patch.object(serve, 'relay_argv',
+                                  lambda config, log: [sys.executable, '-c', 'raise SystemExit(3)'])
+        with spy, dying, self.assertRaises(serve.Refusal) as caught:
+            serve.preview_start(self.config, self.root)
+        failure = caught.exception
+        self.assertEqual((failure.process, failure.category), ('web', 'infraestrutura'))
+        self.assertIn('relé', str(failure))
+        self.assertNotIn('build', failure.extra, 'a morte do relé foi dada como build quebrado')
+        for pid in self.pids(seen):
+            self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
+        self.assertFalse(self.registry().exists())
+        self.assertEqual(self.preview_reservations(), [])
+
+
+class TailLinesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / 'web.log'
+
+    def test_tail_reads_only_the_end_of_the_file_and_drops_the_line_cut_by_the_window(self):
+        lines = [f'linha-{number:05d}-{"x" * 88}\n'.encode() for number in range(3000)]  # 101 bytes each
+        self.path.write_bytes(b''.join(lines))
+        handles, real_open = [], open
+
+        class Spy:
+            def __init__(self, handle):
+                self.handle, self.read_bytes = handle, 0
+                handles.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *error):
+                self.handle.close()
+
+            def read(self, *size):
+                data = self.handle.read(*size)
+                self.read_bytes += len(data)
+                return data
+
+            def __getattr__(self, name):
+                return getattr(self.handle, name)
+
+        with mock.patch.object(serve, 'open', create=True, side_effect=lambda *a, **k: Spy(real_open(*a, **k))):
+            tail = serve.tail_lines(self.path, count=10000)
+        self.assertEqual(len(handles), 1)
+        self.assertLessEqual(handles[0].read_bytes, 64 * 1024 + 1, 'o tail leu o arquivo inteiro')
+        self.assertLessEqual(len(tail), 64 * 1024 // 101)
+        self.assertEqual(tail, [line.decode().rstrip('\n') for line in lines[-len(tail):]])
+
+    def test_a_window_that_starts_on_a_line_boundary_keeps_that_line(self):
+        lines = [f'{number:063d}\n'.encode() for number in range(2000)]  # 64 bytes: the window is 1024 whole lines
+        self.path.write_bytes(b''.join(lines))
+        tail = serve.tail_lines(self.path, count=5000)
+        self.assertEqual(len(tail), 1024)
+        self.assertEqual(tail[0], f'{976:063d}')
+
+    def test_the_offset_of_this_run_still_limits_the_tail(self):
+        for before in (b'antes\n' * 100, b'antes\n' * 40000):  # inside and before the 64 KB window
+            with self.subTest(size=len(before)):
+                self.path.write_bytes(before + b'depois 1\ndepois 2\n')
+                self.assertEqual(serve.tail_lines(self.path, offset=len(before)), ['depois 1', 'depois 2'])
+        self.assertEqual(serve.tail_lines(Path(self.tmp.name) / 'nao-existe.log'), [])
+
+
+class PreviewMergeCommitTest(RefreshTestCase):
+    def test_the_merge_uses_the_commit_read_by_the_check_not_the_branch_read_again(self):
+        old = self.rev('issue-1')
+        self.git('worktree', 'add', '-q', '-b', 'previa', str(self.worktree), 'main')
+        self.git('checkout', '-q', 'issue-1')  # the branch moves after the check read it
+        (self.root / 'issue1.txt').write_text('mudou depois do check\n', encoding='utf-8')
+        self.git('commit', '-q', '-am', 'depois do check')
+        self.git('checkout', '-q', 'main')
+        self.assertNotEqual(self.rev('issue-1'), old)
+        block = serve.load_preview_block(self.config, self.root)
+        merged = serve.merge_branches(block, self.worktree, ['issue-1'], {'issue-1': old})
+        self.assertEqual(merged, [{'branch': 'issue-1', 'commit': old}])
+        self.assertEqual(self.rev('previa^2'), old)
+        self.assertEqual(self.git('log', '-1', '--format=%s', 'previa'), "Merge branch 'issue-1' into previa")
+
+
+class PreviewRefreshGuardTest(FakeRecordMixin, RefreshTestCase):
+    """Refusals of `preview refresh` before anything is stopped: a fake live preview (sleeping processes) proves
+    nothing was torn down, and neither the preview worktree nor any branch moves."""
+
+    def live(self, branch='previa'):
+        self.process, self.relay = self.sleeper(), self.sleeper()
+        self.before = self.fake_registry(self.process, self.relay, branch)
+        self.refs = self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads')
+
+    def assert_refused(self, done, needle):
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso', result)
+        self.assertIn(needle, result['error'])
+        self.assertEqual(self.registry().read_text(encoding='utf-8'), self.before)
+        self.assertTrue(serve.pid_alive(self.process['pid']) and serve.pid_alive(self.relay['pid']),
+                        'uma recusa de uso derrubou a prévia')
+        self.assertEqual(self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads'), self.refs)
+        self.assertFalse(serve.preview_log_dir(self.root).exists())
+        return result
+
+    def test_a_dangerous_branch_name_is_refused(self):
+        self.live()
+        for value in ('-x', 'a..b', 'nome.lock', 'com espaço', 'a/', 'a//b'):
+            with self.subTest(branch=value):
+                self.assert_refused(self.serve('preview', 'refresh', f'--branch={value}'),
+                                    'não é um nome simples')
+        self.assertFalse(self.worktree.exists())
+
+    def test_a_base_that_is_the_preview_branch_or_a_dangerous_name_is_refused(self):
+        self.live()
+        for value, needle in (('previa', 'própria branch da prévia'), ('-x', '--base precisa'),
+                              ('a..b', '--base precisa')):
+            with self.subTest(base=value):
+                self.assert_refused(self.serve('preview', 'refresh', f'--base={value}'), needle)
+        self.assertFalse(self.worktree.exists())
+
+    def test_a_preview_worktree_that_is_not_a_worktree_of_this_repository_is_refused(self):
+        self.live()
+        self.worktree.mkdir(parents=True)
+        (self.worktree / 'meu.txt').write_text('nao e da previa\n', encoding='utf-8')
+        self.assert_refused(self.refresh('issue-1'), 'não é uma worktree deste repositório')
+        self.git('init', '-q', '-b', 'outro', cwd=self.worktree)  # another repository in its place
+        self.assert_refused(self.refresh('issue-1'), 'não é uma worktree deste repositório')
+        self.assertEqual((self.worktree / 'meu.txt').read_text(encoding='utf-8'), 'nao e da previa\n')
+
+    def test_a_preview_worktree_on_another_branch_is_refused(self):
+        self.git('worktree', 'add', '-q', '-b', 'outra', str(self.worktree), 'main')
+        self.live()
+        self.assert_refused(self.refresh('issue-1'), 'não está na branch previa')
+        self.assertEqual(self.git('symbolic-ref', '--short', 'HEAD', cwd=self.worktree), 'outra')
+
+    def test_a_preview_branch_in_use_in_another_worktree_is_refused(self):
+        self.git('worktree', 'add', '-q', '-b', 'previa', str(Path(self.tmp.name) / 'outra'), 'main')
+        self.live()
+        self.assert_refused(self.refresh('issue-1'), 'em uso em outra worktree')
+        self.assertFalse(self.worktree.exists())
+
+    def test_an_existing_branch_that_is_not_the_previews_is_never_moved_by_the_first_refresh(self):
+        self.branch('previa', {'proprio.txt': 'commit proprio\n'})
+        own = self.rev('previa')
+        done = self.refresh('issue-1')  # no record at all
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso')
+        self.assertIn('já existe', result['error'])
+        self.assertEqual(self.rev('previa'), own, 'o refresh moveu uma branch que não era da prévia')
+        self.assertFalse(self.worktree.exists())
+        self.live(branch='antiga')  # a record that names another branch does not vouch for this one
+        self.assert_refused(self.refresh('issue-1'), 'já existe')
+        self.assertEqual(self.rev('previa'), own)
+        self.assertFalse(self.worktree.exists())
+
+    def test_the_first_refresh_redoes_the_branch_the_registry_names(self):
+        self.branch('previa', {'proprio.txt': 'commit proprio\n'})
+        self.fake_registry(self.dead(), self.dead(), 'previa')
+        with mock.patch.object(serve, 'launch_preview', return_value={'ok': True}) as launch:
+            result = serve.preview_refresh(self.config, self.root, ['issue-1'], 'main')
+        launch.assert_called_once()
+        self.assertEqual(result['merged'], [{'branch': 'issue-1', 'commit': self.rev('issue-1')}])
+        self.assertEqual((self.rev('previa^1'), self.rev('previa^2')), (self.rev('main'), self.rev('issue-1')))
 
 
 def done_text(done):
