@@ -58,6 +58,18 @@ The variable name is the process name upper-cased with non-alphanumerics as `_`,
 Processes with a fixed port or without `port` do not receive the variable, so their names may collide.
 The start output says whether the reservations are shared (`reservas_compartilhadas`).
 
+Preview (issue 34): `preview start|status|stop` is the long-running mode, one per project, read from the top-level
+`preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host, `processes` with
+the same rules as `browserTest.processes`). Its processes run in the preview worktree, with their stdout and stderr
+relayed line by line by `relay --config <config> --log <file>` (a second process spawned by `preview start`, which
+loads the secrets of `browserTest.users` from the config itself and masks them) into
+`<root>/.frontlights/preview/log/<name>.log`. The record lives in `<root>/.frontlights/preview/registry.json` under
+its own lock (`<root>/.frontlights/preview/.lock`), so `stop --issue <n>` never touches it, and a new session finds
+the processes through it. Port reservations of the preview carry `"issue": "preview"`, so the release of an issue's
+reservations never frees them. `preview start` is refused while the preview is alive (`preview refresh`, the next
+slice, recreates it) and when the preview worktree does not exist. `preview status` adds `alive`, `log` and the last
+`TAIL_LINES` lines of each log (`tail`), masked again on output.
+
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and
 names the failing process, classified as an infrastructure failure).
 
@@ -102,6 +114,10 @@ PERSISTENT_ERRORS = 25
 MAX_PID = 2 ** 31 - 1
 REMOVE_ATTEMPTS = 40
 CONNECT_SECONDS = 0.05
+PREVIEW_ISSUE = 'preview'  # the `issue` of the preview's port reservations: never an issue number
+TAIL_LINES = 20
+BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
+LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
 
 _SECRETS = []
 
@@ -179,7 +195,7 @@ def scrub(value, skip=()):
     return value
 
 
-REGISTRY_EXACT = ('identity', 'startedAt')
+REGISTRY_EXACT = ('identity', 'relayIdentity', 'startedAt')
 
 
 def write_json_atomic(value, path):
@@ -206,18 +222,33 @@ def write_json_atomic(value, path):
 
 # ---------------------------------------------------------------- configuration
 
+def read_config(config_file):
+    try:
+        return json.loads(Path(config_file).read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        raise Refusal('Não foi possível ler o config informado em --config.')
+
+
 def load_block(config_file, need_processes=True):
     """Read browserTest. `need_processes=False` is for a caller that only checks the accounts: a block that
     declares no `processes` (the project starts its own environment) then gives back an empty list, while one
     that declares them wrongly is still refused."""
-    try:
-        config = json.loads(Path(config_file).read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
-        raise Refusal('Não foi possível ler o config informado em --config.')
+    config = read_config(config_file)
     block = config.get('browserTest') if isinstance(config, dict) else None
     require(isinstance(block, dict), 'O config não tem o bloco browserTest.')
+    load_secrets(block)
+    if 'processes' not in block:
+        require(not need_processes,
+                'O config não declara browserTest.processes: o serve não tem o que subir. Suba o ambiente você mesmo '
+                '(as contas de teste continuam valendo) ou declare os processos em browserTest.processes.', category=USAGE)
+        return []
+    return validate_processes(block.get('processes'), 'browserTest.processes')
+
+
+def load_secrets(block):
+    """Load the login and password of every account of a browserTest block (None: no accounts) into the mask."""
     _SECRETS.clear()
-    for user in block.get('users') or []:
+    for user in (block or {}).get('users') or []:
         if isinstance(user, dict):
             for key in ('login', 'password'):
                 value = user.get(key)
@@ -231,16 +262,14 @@ def load_block(config_file, need_processes=True):
                             'um segredo curto não pode ser mascarado com segurança na saída e nos registros. '
                             f'Use um {key} de teste com {MIN_SECRET} ou mais caracteres.', category=USAGE)
                     _SECRETS.extend([value, urllib.parse.quote(value, safe=''), urllib.parse.quote_plus(value)])
-    if 'processes' not in block:
-        require(not need_processes,
-                'O config não declara browserTest.processes: o serve não tem o que subir. Suba o ambiente você mesmo '
-                '(as contas de teste continuam valendo) ou declare os processos em browserTest.processes.', category=USAGE)
-        return []
-    processes = block.get('processes')
-    require(isinstance(processes, list) and processes, 'browserTest.processes precisa ser uma lista não vazia.')
+
+
+def validate_processes(processes, where):
+    """Refuse a process list (`where` names it: browserTest.processes or preview.processes) before anything runs."""
+    require(isinstance(processes, list) and processes, f'{where} precisa ser uma lista não vazia.')
     names, variables = set(), {}
     for item in processes:
-        require(isinstance(item, dict), 'Cada item de browserTest.processes precisa ser um objeto.')
+        require(isinstance(item, dict), f'Cada item de {where} precisa ser um objeto.')
         name = item.get('name')
         require(isinstance(name, str) and name and name not in names,
                 'Cada processo precisa de um name único e não vazio.')
@@ -290,6 +319,58 @@ def load_block(config_file, need_processes=True):
     return processes
 
 
+def load_preview_block(config_file, root, need_processes=True):
+    """Read the top-level `preview` block (worktree, branch, baseUrl, processes) and load the mask from
+    browserTest.users. `need_processes=False` (status, stop) only requires the block and loads the mask."""
+    config = read_config(config_file)
+    browser = config.get('browserTest') if isinstance(config, dict) else None
+    load_secrets(browser if isinstance(browser, dict) else None)
+    block = config.get('preview') if isinstance(config, dict) else None
+    require(isinstance(block, dict), 'O config não tem o bloco preview: declare worktree, branch, baseUrl e processes '
+            'nele para usar a prévia.', category=USAGE)
+    if not need_processes:
+        return block
+    worktree = block.get('worktree')
+    require(isinstance(worktree, str) and worktree and '\0' not in worktree,
+            'preview.worktree precisa ser um caminho relativo ao --root (texto não vazio).', category=USAGE)
+    parts = Path(worktree)
+    require(not parts.is_absolute() and not parts.drive and not worktree.startswith(('/', '\\'))
+            and '..' not in parts.parts,
+            'preview.worktree precisa ser relativo ao --root, sem ".." e sem unidade ou raiz.', category=USAGE)
+    base = Path(root).resolve()
+    target = (base / worktree).resolve()
+    require(base in target.parents, 'preview.worktree precisa ficar dentro do --root (e não ser o próprio --root).',
+            category=USAGE)
+    branch = block.get('branch')
+    require(isinstance(branch, str) and BRANCH_NAME.fullmatch(branch),
+            'preview.branch precisa ser um nome simples de branch (letras, dígitos, "/", "-", "_" e ".").',
+            category=USAGE)
+    require(branch not in ('main', 'master'), 'preview.branch não pode ser main nem master: a prévia tem uma branch '
+            'própria, refeita a partir da base.', category=USAGE)
+    base_url = block.get('baseUrl')
+    try:
+        url = urllib.parse.urlsplit(base_url) if isinstance(base_url, str) else None
+    except ValueError:
+        url = None
+    require(url and url.scheme in ('http', 'https') and url.hostname in LOCAL_HOSTS and '@' not in url.netloc,
+            'preview.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, localhost ou ::1), sem usuário '
+            'e senha.', category=USAGE)
+    require('processes' in block, 'O config não declara preview.processes: a prévia não tem o que subir.',
+            category=USAGE)
+    processes = validate_processes(block['processes'], 'preview.processes')
+    logs = {}
+    for item in processes:
+        log_name = log_file_name(item['name'])
+        require(log_name not in logs, f'Os processos {logs.get(log_name)} e {item["name"]} gerariam o mesmo arquivo '
+                f'de log ({log_name}) depois de normalizar o nome. Renomeie um deles.', item['name'], USAGE)
+        logs[log_name] = item['name']
+    return {'worktree': worktree, 'branch': branch, 'baseUrl': base_url, 'processes': processes}
+
+
+def log_file_name(name):
+    return re.sub(r'[^A-Za-z0-9._-]', '_', name) + '.log'
+
+
 def valid_port(value):
     return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535
 
@@ -326,23 +407,23 @@ def process_port(item):
     return url_port(urllib.parse.urlsplit(item['health']))
 
 
-def process_cwd(root, item):
+def process_cwd(root, item, scope='da issue'):
     base = Path(root).resolve()
     target = (base / item['cwd']).resolve() if item.get('cwd') else base
     require(target == base or base in target.parents,
-            f'O cwd do processo {item["name"]} precisa ficar dentro da worktree da issue.', item['name'], USAGE)
+            f'O cwd do processo {item["name"]} precisa ficar dentro da worktree {scope}.', item['name'], USAGE)
     require(target.is_dir(), f'O cwd do processo {item["name"]} não existe.', item['name'], USAGE)
     return target
 
 
 # ---------------------------------------------------------------- process control
 
-def spawn(argv, cwd, env=None):
+def spawn(argv, cwd, env=None, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL):
+    """Start argv detached (its own process group, no console window), never through a shell."""
     executable = shutil.which(argv[0])
     if executable is None:
         raise OSError('executável não encontrado')
-    options = {'cwd': str(cwd), 'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL,
-               'stderr': subprocess.DEVNULL}
+    options = {'cwd': str(cwd), 'stdin': stdin, 'stdout': stdout, 'stderr': stderr}
     if env:
         options['env'] = dict(os.environ, **env)
     if os.name == 'nt':
@@ -370,7 +451,7 @@ def healthy(url):
         return False
 
 
-def wait_healthy(child, item):
+def wait_healthy(child, item, relay=None):
     timeout = item.get('timeoutSeconds', DEFAULT_TIMEOUT)  # validated by load_block, before anything is spawned
     reserved = f' (porta reservada {item["port"]})' if item.get('autoPort') else ''
     deadline = time.monotonic() + timeout
@@ -378,6 +459,9 @@ def wait_healthy(child, item):
         if child.poll() is not None:
             raise Refusal(f'O processo {item["name"]} terminou antes de ficar saudável{reserved} '
                           f'(código {child.returncode}).', item['name'])
+        if relay is not None and relay.poll() is not None:
+            raise Refusal(f'O relé do log do processo {item["name"]} terminou (código {relay.returncode}) antes de o '
+                          'processo ficar saudável: o log da prévia não seria gravado.', item['name'])
         if healthy(item['health']):
             return
         time.sleep(POLL_SECONDS)
@@ -509,26 +593,31 @@ def relative(root, path):
 
 
 def acquire_lock(root, issue):
-    """Create <issue>.lock exclusively; a lock of a dead owner is replaced, an unreadable one refused.
+    """Create <issue>.lock exclusively; see acquire_lock_file. `start` and `stop` of the issue both take it."""
+    return acquire_lock_file(root, lock_path(root, issue), f'da issue {issue}')
 
-    `start` and `stop` of the issue both take it. Creating, judging and replacing it happen under a short
-    operating-system lock on `.frontlights/serve/.locks.guard` (never moved nor deleted): two callers can never both
-    replace the same stale lock, and nobody reads a lock that is still being written. A lock that is EMPTY and older
-    than `EMPTY_LOCK_SECONDS` is the leftover of an owner killed between creating and writing it (the creator holds
-    the guard across both steps, so under the guard an empty lock has no live writer): it is replaced like the lock of
-    a dead owner; a recent empty one is waited for until the deadline. Any other content that is not a pid stays
-    refused. The loop has a single exit path per pass, the deadline check followed by a short sleep: no branch (a
-    lock being deleted by its owner on Windows, a replacement that did not remove the file, an empty lock) skips it,
-    so the call always ends within `RESERVE_LOCK_SECONDS` (the wait for the guard counts in it), plus the retries of
-    one removal. An I/O error becomes an infrastructure refusal, and a lock created but not written is removed again;
-    so does a denial that persists with no lock file there (`count_denial`), instead of waiting for the deadline.
+
+def acquire_lock_file(root, path, scope):
+    """Create the lock file `path` exclusively; a lock of a dead owner is replaced, an unreadable one refused.
+
+    `scope` names the owner in messages ("da issue 9", "da prévia"). Creating, judging and replacing it happen
+    under a short operating-system lock on `.locks.guard` next to it (never moved nor deleted): two callers can never
+    both replace the same stale lock, and nobody reads a lock that is still being written. A lock that is EMPTY and
+    older than `EMPTY_LOCK_SECONDS` is the leftover of an owner killed between creating and writing it (the creator
+    holds the guard across both steps, so under the guard an empty lock has no live writer): it is replaced like the
+    lock of a dead owner; a recent empty one is waited for until the deadline. Any other content that is not a pid
+    stays refused. The loop has a single exit path per pass, the deadline check followed by a short sleep: no branch
+    (a lock being deleted by its owner on Windows, a replacement that did not remove the file, an empty lock) skips
+    it, so the call always ends within `RESERVE_LOCK_SECONDS` (the wait for the guard counts in it), plus the retries
+    of one removal. An I/O error becomes an infrastructure refusal, and a lock created but not written is removed
+    again; so does a denial that persists with no lock file there (`count_denial`), instead of waiting for the
+    deadline.
     """
-    path = lock_path(root, issue)
     name = relative(Path(root), path)
     with io_guard('criar a pasta de travas'):
         path.parent.mkdir(parents=True, exist_ok=True)
     unreadable = (f'O arquivo de trava {name} está ilegível, então não dá para saber se outro start ou stop está em '
-                  f'andamento. Se nenhum start ou stop da issue {issue} estiver rodando, apague {name} à mão e tente '
+                  f'andamento. Se nenhum start ou stop {scope} estiver rodando, apague {name} à mão e tente '
                   'de novo.')
     deadline = time.monotonic() + RESERVE_LOCK_SECONDS
     guard = take_os_lock(path.parent / '.locks.guard',
@@ -567,7 +656,7 @@ def acquire_lock(root, issue):
                 owner = int(text) if re.fullmatch(r'\s*[0-9]{1,10}\s*', text) else None
                 require(valid_pid(owner), unreadable, category=USAGE)
                 require(not pid_alive(owner),
-                        f'Outro start ou stop da issue {issue} está em andamento (pid {owner}). Aguarde-o terminar; '
+                        f'Outro start ou stop {scope} está em andamento (pid {owner}). Aguarde-o terminar; '
                         f'se ele já não existe, apague {name} à mão.', category=USAGE)
                 remove_file(path)  # dead owner: under the guard nobody else replaces it meanwhile
             require(time.monotonic() < deadline,
@@ -585,6 +674,201 @@ def release_lock(path):
 def write_registry(root, issue, entries):
     write_json_atomic({'issue': issue, 'root': str(Path(root).resolve()), 'processes': entries},
                       registry_path(root, issue))
+
+
+# ---------------------------------------------------------------- preview (issue 34)
+
+def preview_dir(root):
+    return Path(root) / '.frontlights' / 'preview'
+
+
+def preview_registry_path(root):
+    return preview_dir(root) / 'registry.json'
+
+
+def preview_lock_path(root):
+    return preview_dir(root) / '.lock'
+
+
+def preview_log_dir(root):
+    return preview_dir(root) / 'log'
+
+
+def write_preview_registry(root, block, entries, started_at):
+    write_json_atomic({'root': str(Path(root).resolve()), 'worktree': block['worktree'], 'branch': block['branch'],
+                       'baseUrl': block['baseUrl'], 'startedAt': started_at, 'processes': entries},
+                      preview_registry_path(root))
+
+
+def read_preview_registry(root):
+    path = preview_registry_path(root)
+    name = relative(Path(root), path)
+    require(path.is_file(), 'Não há registro da prévia nesta worktree: rode preview start.')
+    try:
+        record = json.loads(path.read_text(encoding='utf-8'))
+        require(isinstance(record.get('processes'), list), 'registro inválido')
+        for entry in record['processes']:
+            require(valid_pid(entry.get('pid')), 'registro inválido')
+            require(entry.get('relayPid') is None or valid_pid(entry['relayPid']), 'registro inválido')
+    except (OSError, ValueError, AttributeError, Refusal):
+        raise Refusal(f'O registro da prévia ({name}) está ilegível ou inválido, então preview start, status e stop '
+                      'não conseguem usá-lo. Confira se há processos da prévia em execução, encerre-os à mão e '
+                      f'apague {name}.')
+    return record
+
+
+def relay_argv(config_file, log_file):
+    """argv of the relay (absolute paths: it runs with the main worktree as cwd, not the caller's)."""
+    return [sys.executable, str(Path(__file__).resolve()), 'relay', '--config', str(Path(config_file).resolve()),
+            '--log', str(Path(log_file).resolve())]
+
+
+def relay(config_file, log_file):
+    """Copy stdin to the log file line by line, masking the secrets of browserTest.users, until EOF.
+
+    The secrets come from the config (never from argv or the environment). The file is opened in append mode and
+    flushed per line, so the log survives a crash of the process and of the relay itself. Limit: a secret split
+    across two lines is not masked.
+    """
+    config = read_config(config_file)
+    browser = config.get('browserTest') if isinstance(config, dict) else None
+    load_secrets(browser if isinstance(browser, dict) else None)
+    path = Path(log_file)
+    with io_guard('abrir o log da prévia'):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = open(path, 'a', encoding='utf-8', errors='replace', newline='')
+    lines = 0
+    with handle:
+        for raw in sys.stdin.buffer:
+            with io_guard('gravar o log da prévia'):
+                handle.write(protect(raw.decode('utf-8', errors='replace')))
+                handle.flush()
+            lines += 1
+    return {'ok': True, 'log': str(path), 'lines': lines}
+
+
+def preview_start(config_file, root):
+    block = load_preview_block(config_file, root)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        return preview_start_locked(block, config_file, root)
+    finally:
+        release_lock(lock)
+
+
+def preview_start_locked(block, config_file, root):
+    if preview_registry_path(root).is_file():
+        previous = read_preview_registry(root)
+        require(not any(same_process(entry) for entry in previous['processes']),
+                'A prévia já está no ar; rode `preview refresh` para refazê-la ou `preview stop` para derrubá-la.',
+                category=USAGE)
+    worktree = (Path(root).resolve() / block['worktree'])
+    require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; `preview refresh` a cria.',
+            category=USAGE)
+    processes = block['processes']
+    cwds = [process_cwd(worktree, item, 'da prévia') for item in processes]  # refused before anything is reserved
+    log_dir = preview_log_dir(root)
+    started, started_at = [], now_iso()
+    try:
+        with io_guard('criar a pasta de log da prévia'):
+            log_dir.mkdir(parents=True, exist_ok=True)
+        ports = reserve_ports(root, PREVIEW_ISSUE, [item['name'] for item in processes if is_auto(item)])
+        for item, cwd in zip(processes, cwds):
+            env = None
+            if is_auto(item):
+                port = ports[item['name']]
+                env = {'PORT': str(port), env_name(item['name']): str(port)}
+                item = with_port(item, port)
+            guard_batch(item['argv'], item['name'])
+            if env:
+                mark_spawning(root, port)
+            log_file = log_dir / log_file_name(item['name'])
+            try:
+                child = spawn(item['argv'], cwd, env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            except (OSError, ValueError):  # ValueError: e.g. a NUL character in argv
+                raise Refusal(f'Não foi possível iniciar o processo {item["name"]}.', item['name'])
+            started.append({'name': item['name'], 'pid': child.pid, 'port': process_port(item),
+                            'url': item['health'], 'startedAt': now_iso(),
+                            'identity': process_identity(child.pid) or UNKNOWN_IDENTITY,
+                            'log': relative(Path(root), log_file)})
+            if env:
+                attach_child(root, port, started[-1])
+            write_preview_registry(root, block, started, started_at)  # a crash from here on leaves something to stop
+            try:
+                relay_child = spawn(relay_argv(config_file, log_file), Path(root).resolve(), stdin=child.stdout)
+            except (OSError, ValueError):
+                raise Refusal(f'Não foi possível iniciar o relé do log do processo {item["name"]}.', item['name'])
+            finally:
+                child.stdout.close()  # only the relay keeps the read end: it sees EOF when the process dies
+            started[-1].update(relayPid=relay_child.pid,
+                               relayIdentity=process_identity(relay_child.pid) or UNKNOWN_IDENTITY)
+            write_preview_registry(root, block, started, started_at)
+            wait_healthy(child, item, relay_child)
+    except BaseException as failure:
+        left = kill_started(preview_kill_list(started))
+        left_names = {entry['pid'] for entry in left}
+        kept = [entry for entry in started if entry['pid'] in left_names or entry.get('relayPid') in left_names]
+        try:
+            if kept:
+                write_preview_registry(root, block, kept, started_at)  # keep only what survived, so stop can retry
+            else:
+                preview_registry_path(root).unlink(missing_ok=True)
+        except (OSError, Refusal):  # best effort: the original failure is what the user must see
+            pass
+        release_ports(root, PREVIEW_ISSUE, keep=[entry['port'] for entry in kept])
+        if left and isinstance(failure, Refusal):
+            names = ', '.join(f'{entry["name"]} (pid {entry["pid"]})' for entry in left)
+            raise Refusal(f'{failure} Não foi possível derrubar: {names}; rode preview stop para tentar de novo.',
+                          failure.process, failure.category,
+                          {'left': [{'name': entry['name'], 'pid': entry['pid']} for entry in left]})
+        raise
+    return {'ok': True, 'worktree': block['worktree'], 'branch': block['branch'], 'baseUrl': block['baseUrl'],
+            'processes': started, 'log': relative(Path(root), log_dir),
+            'reservas_compartilhadas': ports_location(root)[1]}
+
+
+def tail_lines(path, count=TAIL_LINES):
+    """Last `count` lines of a log (decoded with replacement); an unreadable or missing file gives []."""
+    try:
+        text = Path(path).read_bytes().decode('utf-8', errors='replace')
+    except OSError:
+        return []
+    return text.splitlines()[-count:]
+
+
+def preview_status(config_file, root):
+    load_preview_block(config_file, root, need_processes=False)  # the block must exist; the mask comes from it
+    record = read_preview_registry(root)
+    # main masks the output, so the tail (already masked by the relay) is masked again on the way out
+    processes = [dict(entry, alive=same_process(entry),
+                      tail=tail_lines(Path(root) / entry['log']) if isinstance(entry.get('log'), str) else [])
+                 for entry in record['processes']]
+    return {'ok': True, 'running': all(entry['alive'] for entry in processes), 'worktree': record.get('worktree'),
+            'branch': record.get('branch'), 'baseUrl': record.get('baseUrl'), 'processes': processes}
+
+
+def preview_kill_list(entries):
+    """Processes of the preview and their relays, as {name, pid, identity} items, the process before its relay."""
+    items = []
+    for entry in entries:
+        items.append({'name': entry['name'], 'pid': entry['pid'], 'identity': entry.get('identity')})
+        if valid_pid(entry.get('relayPid')):
+            items.append({'name': f'{entry["name"]} (relé do log)', 'pid': entry['relayPid'],
+                          'identity': entry.get('relayIdentity')})
+    return items
+
+
+def kill_started(entries):
+    """Kill every entry's process tree, last first; returns the entries whose root is still alive."""
+    left = []
+    for entry in reversed(entries):
+        try:
+            dead = kill_tree(entry['pid'])
+        except Exception:
+            dead = False
+        if not dead:
+            left.append(entry)
+    return left
 
 
 def ports_location(root):
@@ -968,14 +1252,7 @@ def start_locked(processes, root, issue):
             write_registry(root, issue, started)  # a crash from here on leaves something stop can tear down
             wait_healthy(child, item)
     except BaseException as failure:
-        left = []
-        for entry in reversed(started):
-            try:
-                dead = kill_tree(entry['pid'])
-            except Exception:
-                dead = False
-            if not dead:
-                left.append(entry)
+        left = kill_started(started)
         try:
             if left:
                 write_registry(root, issue, left)  # keep only what survived, so stop can retry
@@ -1036,9 +1313,20 @@ def stop_locked(root, issue):
             # an unreadable record may still describe live processes, so then the reservations stay
             refusal.extra = dict(refusal.extra, reservas_liberadas=release_ports(root, issue))
         raise
-    name = relative(Path(root), registry_path(root, issue))
+    result = stop_entries(root, record['processes'], registry_path(root, issue),
+                          lambda: release_ports(root, issue), 'stop')
+    return {'ok': True, 'issue': issue, **result}
+
+
+def stop_entries(root, entries, registry_file, release, retry):
+    """Kill the recorded processes ({name, pid, identity} each), remove the record and release the ports.
+
+    Every identity is checked first, so a refusal kills nothing. `release` frees the port reservations and returns
+    them; `retry` names the command to run again. Returns {'processes': [...], 'reservas_liberadas': [...]}.
+    """
+    name = relative(Path(root), registry_file)
     stopped, left = [], []
-    for entry in record['processes']:  # check every identity first, so a refusal kills nothing
+    for entry in entries:  # check every identity first, so a refusal kills nothing
         if pid_alive(entry['pid']):
             recorded, current = entry.get('identity'), process_identity(entry['pid'])
             require(recorded not in (None, UNKNOWN_IDENTITY) and current is not None,
@@ -1046,7 +1334,7 @@ def stop_locked(root, issue):
                     'o registro não prova que o pid ainda é o processo iniciado, então ele não foi encerrado '
                     'para não derrubar um processo alheio. Confira e encerre manualmente; depois apague '
                     f'{name} à mão.')
-    for entry in record['processes']:
+    for entry in entries:
         item = {'name': entry.get('name'), 'pid': entry['pid']}
         if not pid_alive(entry['pid']):
             stopped.append(dict(item, stopped=True))
@@ -1067,16 +1355,56 @@ def stop_locked(root, issue):
         raise Refusal('Nem todos os processos foram encerrados; o registro foi mantido para nova tentativa.',
                       extra={'left': left, 'processes': stopped})
     try:
-        registry_path(root, issue).unlink()
+        registry_file.unlink()
     except OSError as error:
         detail = error.strerror or type(error).__name__
         raise Refusal(f'Os processos foram encerrados, mas não foi possível apagar o registro {name} ({detail}). '
-                      'Apague-o à mão ou rode stop de novo.',
-                      extra={'processes': stopped, 'reservas_liberadas': release_ports(root, issue)}) from error
-    return {'ok': True, 'issue': issue, 'processes': stopped, 'reservas_liberadas': release_ports(root, issue)}
+                      f'Apague-o à mão ou rode {retry} de novo.',
+                      extra={'processes': stopped, 'reservas_liberadas': release()}) from error
+    return {'processes': stopped, 'reservas_liberadas': release()}
 
 
-def run(operation, config_file, root, issue):
+def preview_stop(config_file, root):
+    """Stop the preview's processes and relays under the preview lock; an issue's stop never reaches them."""
+    load_preview_block(config_file, root, need_processes=False)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        try:
+            record = read_preview_registry(root)
+        except Refusal as refusal:
+            if not preview_registry_path(root).is_file():
+                refusal.extra = dict(refusal.extra, reservas_liberadas=release_ports(root, PREVIEW_ISSUE))
+            raise
+        result = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root),
+                              lambda: release_ports(root, PREVIEW_ISSUE), 'preview stop')
+        return {'ok': True, 'worktree': record.get('worktree'), 'branch': record.get('branch'), **result}
+    finally:
+        release_lock(lock)
+
+
+def preview(action, config_file, root):
+    require(action is not None, 'preview precisa da ação: preview start, preview status ou preview stop.',
+            category=USAGE)
+    if action == 'start':
+        return preview_start(config_file, root)
+    if action == 'status':
+        return preview_status(config_file, root)
+    return preview_stop(config_file, root)
+
+
+def run(operation, config_file, root, issue, action=None, log=None):
+    """Dispatch one operation; the flags each one needs are refused as `uso` when missing (argparse only
+    requires --config, shared by all)."""
+    if operation == 'relay':
+        require(log, 'relay precisa de --log <arquivo>.', category=USAGE)
+        return relay(config_file, log)
+    require(root, f'{operation} precisa de --root <worktree>.', category=USAGE)
+    require(log is None, '--log só vale para relay.', category=USAGE)
+    if operation == 'preview':
+        return preview(action, config_file, root)
+    require(action is None, f'{operation} não aceita uma ação depois do nome; a ação é só de preview.',
+            category=USAGE)
+    require(issue is not None, f'{operation} precisa de --issue <n>.', category=USAGE)
     if operation == 'start':
         return start(config_file, root, issue)
     if operation == 'status':
@@ -1086,15 +1414,18 @@ def run(operation, config_file, root, issue):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('operation', choices=('start', 'stop', 'status'))
+    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
+    parser.add_argument('action', nargs='?', choices=('start', 'status', 'stop'),
+                        help='só para preview: start, status ou stop')
     parser.add_argument('--config', required=True)
-    parser.add_argument('--root', required=True)
-    parser.add_argument('--issue', required=True, type=int)
+    parser.add_argument('--root', help='worktree da issue (start, stop, status) ou worktree principal (preview)')
+    parser.add_argument('--issue', type=int, help='número da issue (start, stop, status)')
+    parser.add_argument('--log', help='só para relay: arquivo de log a acrescentar')
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     try:
-        result = run(args.operation, args.config, args.root, args.issue)
+        result = run(args.operation, args.config, args.root, args.issue, args.action, args.log)
         code = 0
     except (Refusal, OSError) as failure:
         # the safety net: an I/O error that escaped every specific handler is still a refusal with JSON
