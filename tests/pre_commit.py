@@ -5,9 +5,10 @@ Roda em segundos o que pega um commit vermelho por erro de script ou de texto, s
 1. os arquivos mudados em relação ao HEAD: no índice, fora dele e não rastreados (`git status --porcelain -z
    --untracked-files=all`; um renomeado conta pelo nome novo);
 2. `python -m compileall -q skills/frontlights/scripts tests`;
-3. os módulos `tests/test_*.py` que estão entre os mudados (inteiros) e os que citam o nome de um arquivo mudado:
-   desses, só as classes de teste que o citam (`-k <Classe>`), ou o módulo inteiro quando a citação está fora de
-   uma classe com métodos `test*` (uma constante, um helper, uma classe base sem testes);
+3. os módulos `tests/test_*.py` que estão entre os mudados (inteiros) e os que citam o nome de um arquivo mudado
+   ou importam um script mudado (`import roadmap_sync`): desses, só as classes de teste que citam ou importam
+   (`-k '*.<Classe>.*'`), ou o módulo inteiro quando isso está fora de uma classe com métodos `test*` (um import
+   no topo, uma constante, um helper, uma classe base sem testes);
 4. cada um como no `tests/suite.py` (o `run_module` dele: `python -m unittest discover -s tests -p <módulo>.py`,
    que respeita o `load_tests` da suíte rápida), com `FRONTLIGHTS_SUITE=rapida`, do menor arquivo para o maior,
    num pool de `--workers`, sob um prazo TOTAL (`--timeout`, 20 s): no prazo, o que está rodando morre com a
@@ -17,7 +18,8 @@ Nenhum hook o roda: o `CLAUDE.md` manda rodá-lo antes de cada commit. Ele confe
 índice, e não substitui a suíte inteira, obrigatória antes da revisão independente e do merge na main local.
 Limite conhecido: uma classe que herda os testes de uma classe base que cita o arquivo não é escolhida pelo `-k`
 da base. Código 0: verde, inclusive com o que ficou para a suíte; 1: o compileall ou um módulo falhou (ou não
-importou); 2: erro de uso ou do Git. Só biblioteca padrão; só Windows, como o `tests/suite.py`.
+importou); 2: erro de uso ou do Git; 130: interrompido (Ctrl+C). Só biblioteca padrão; só Windows, como o
+`tests/suite.py`.
 
 Uso: python tests/pre_commit.py [--timeout S] [--workers N] [--root PASTA]
 """
@@ -81,51 +83,70 @@ def changed_files(root):
     return paths
 
 
-def citing_classes(source, names):
-    """As classes de teste (com métodos `test*`) cujo corpo cita um dos nomes, ou None quando o módulo inteiro tem
-    de rodar: a citação aparece fora delas (o docstring do módulo não conta) ou o arquivo não é Python válido."""
+def uses(node, stems):
+    """Se o nó importa um script mudado pelo nome do módulo (`import roadmap_sync`, `from closeout import x`) ou o
+    carrega por uma string igual a ele (`importlib.import_module('serve')`): a forma como os testes de unidade
+    chegam aos scripts sem escrever o nome do arquivo."""
+    for item in ast.walk(node):
+        if isinstance(item, ast.Import) and any(alias.name.split('.')[0] in stems for alias in item.names):
+            return True
+        if isinstance(item, ast.ImportFrom):
+            if item.module and item.module.split('.')[0] in stems:
+                return True
+            if not item.module and any(alias.name in stems for alias in item.names):
+                return True
+        if isinstance(item, ast.Constant) and isinstance(item.value, str) and item.value in stems:
+            return True
+    return False
+
+
+def citing_classes(source, names, stems):
+    """As classes de teste (com métodos `test*`) que citam um dos nomes ou importam um dos scripts mudados, ou None
+    quando o módulo inteiro tem de rodar: a citação ou o import aparece fora delas (o docstring do módulo não conta)
+    ou o arquivo não é Python válido. Lista vazia: nada no módulo cita nem importa."""
     try:
         tree = ast.parse(source)
     except SyntaxError:
         return None
     classes = []
-    rest = []
     for index, node in enumerate(tree.body):
-        segment = ast.get_source_segment(source, node) or ''
         if index == 0 and isinstance(node, ast.Expr) and isinstance(getattr(node, 'value', None), ast.Constant):
             continue  # o docstring do módulo descreve, não lê
+        segment = ast.get_source_segment(source, node) or ''
+        if not (any(name in segment for name in names) or uses(node, stems)):
+            continue
         has_tests = isinstance(node, ast.ClassDef) and any(
             isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name.startswith('test')
             for item in node.body)
-        if has_tests and any(name in segment for name in names):
-            classes.append(node.name)
-        else:
-            rest.append(segment)
-    if any(name in '\n'.join(rest) for name in names):
-        return None
+        if not has_tests:
+            return None
+        classes.append(node.name)
     return classes
 
 
 def selected(tests_dir, changed):
     """[(módulo, classes ou None)], do menor arquivo para o maior: o tamanho é a estimativa barata do tempo (os de
     texto são pequenos e levam 1-2 s; os que sobem processos e repositórios são grandes), e assim os pesados não
-    ocupam o pool enquanto os leves esperam. Um módulo mudado roda inteiro; um que só cita roda as classes que
-    citam."""
+    ocupam o pool enquanto os leves esperam. Um módulo mudado roda inteiro; um que cita ou importa roda as classes
+    que citam ou importam (ou inteiro, quando é fora delas); um que não cita nem importa fica de fora."""
     names = {Path(path).name for path in changed}
+    stems = {Path(path).stem for path in changed if path.endswith('.py')}
     chosen = []
     for path in tests_dir.glob('test_*.py'):
         source = path.read_text(encoding='utf-8', errors='replace')
         if path.name in names:
             chosen.append((path.stat().st_size, path.stem, None))
-        elif any(name in source for name in names):
-            chosen.append((path.stat().st_size, path.stem, citing_classes(source, names)))
+        elif any(word in source for word in names | stems):
+            classes = citing_classes(source, names, stems)
+            if classes != []:
+                chosen.append((path.stat().st_size, path.stem, classes))
     return [(name, classes) for _, name, classes in sorted(chosen)]
 
 
 def command(tests_dir, name, classes):
     argv = suite.command_for(tests_dir, name)
     for cls in classes or ():
-        argv += ['-k', cls]
+        argv += ['-k', f'*.{cls}.*']  # com `*`, o unittest casa o id inteiro, não um pedaço do nome
     return argv
 
 
@@ -148,17 +169,26 @@ class Round:
         self.deadline = time.monotonic() + timeout
         self.live = suite.Live()
         self.stopping = threading.Event()
-        self.results = {}
+        self.results = {}  # só os que começaram; None é o que a interrupção cortou
+        self.printing = threading.Lock()
 
     def one(self, name, classes):
-        remaining = self.deadline - time.monotonic()
+        started = time.monotonic()
+        remaining = self.deadline - started
         if remaining <= 0 or self.stopping.is_set():
             return
-        argv = command(self.current.tests_dir, name, classes)
-        outcome = suite.run_module(self.current, name, 'commit', self.root, remaining, self.live, self.stopping,
-                                   command=argv)
+        try:
+            outcome = suite.run_module(self.current, name, 'commit', self.root, remaining, self.live, self.stopping,
+                                       command=command(self.current.tests_dir, name, classes))
+        except Exception as error:  # um erro aqui é vermelho, nunca um módulo que "não começou"
+            outcome = suite.Outcome(name, 'commit', time.monotonic() - started, None, '',
+                                    problem=f'erro interno: {type(error).__name__}: {error}')
         self.results[name] = outcome
-        print(line_for(name, classes, outcome), flush=True)
+        self.say(line_for(name, classes, outcome))
+
+    def say(self, text):
+        with self.printing:
+            print(text, flush=True)
 
     def execute(self):
         with ThreadPoolExecutor(max_workers=self.workers) as pool:
@@ -166,13 +196,15 @@ class Round:
             try:
                 while pending:  # a thread principal nunca bloqueia sem prazo: é assim que o Ctrl+C chega a ela
                     _, pending = wait(pending, timeout=suite.POLL_SECONDS)
+                    if self.stopping.is_set():  # o Ctrl+Break pode ligar `stopping` na thread de trabalho primeiro
+                        raise KeyboardInterrupt
             except KeyboardInterrupt:
                 self.stopping.set()
                 self.live.kill_all()
                 raise
         for name, classes in self.chosen:
-            if self.results.get(name) is None:
-                print(f'[commit] {name:<34}       -   não começou no prazo; {LEFT}{suffix(classes)}', flush=True)
+            if name not in self.results:
+                self.say(f'[commit] {name:<34}       -   não começou no prazo; {LEFT}{suffix(classes)}')
         return [(name, classes, self.results.get(name)) for name, classes in self.chosen]
 
 
@@ -218,7 +250,7 @@ def main(argv=None):
     print('compileall: ' + ('ok' if compiled else 'FALHOU'), flush=True)
     if not compiled:
         print(compile_output)
-    chosen = [(name, classes) for name, classes in selected(root / 'tests', changed) if classes != []]
+    chosen = selected(root / 'tests', changed)
     results = []
     if not chosen:
         print('Nenhum teste é tocado pelas mudanças.')

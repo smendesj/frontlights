@@ -67,9 +67,39 @@ class Texto(unittest.TestCase):
         self.assertTrue(doc.read_text(encoding='utf-8'))
 
 
-class Pesado(unittest.TestCase):
+class TextoPesado(unittest.TestCase):
     def test_que_nao_cita_o_guia(self):
         self.fail('a classe que nao cita o documento nao devia rodar')
+"""
+
+IMPORTS_SCRIPT = """
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
+import ferramenta
+
+
+class Ferramenta(unittest.TestCase):
+    def test_o_valor(self):
+        self.assertEqual(ferramenta.VALOR, 1)
+"""
+
+IMPORTS_IN_CLASS = """
+import unittest
+
+
+class SemImport(unittest.TestCase):
+    def test_que_falha_se_rodar(self):
+        self.fail('a classe que nao importa o script nao devia rodar')
+
+
+class ComImport(unittest.TestCase):
+    def test_carrega(self):
+        import importlib
+        self.assertIsNone(importlib.util.find_spec('ferramenta_que_nao_existe'))
+        self.assertTrue('ferramenta')
 """
 
 DOCSTRING_ONLY = """
@@ -223,7 +253,7 @@ class ClassSelectionTest(RepositoryCase):
         done, _ = self.run_pre_commit()
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertRegex(done.stdout, r'test_misto .*\(Texto\)')
-        self.assertNotIn('Pesado', done.stdout)
+        self.assertNotIn('TextoPesado', done.stdout)
 
     def test_a_citation_outside_a_test_class_runs_the_whole_module(self):
         self.write('docs/guia.md', 'Uma frase conferida pelo teste, editada.\n')
@@ -241,7 +271,34 @@ class ClassSelectionTest(RepositoryCase):
         self.write('tests/test_misto.py', MIXED + '\n')
         done, _ = self.run_pre_commit()
         self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
-        self.assertIn('Pesado', done.stdout)
+        self.assertIn('TextoPesado', done.stdout)
+
+
+@unittest.skipUnless(os.name == 'nt', 'o comando reaproveita o runner de tests/suite.py, que só roda no Windows')
+class ImportTest(RepositoryCase):
+    MODULES = {'test_ferramenta': IMPORTS_SCRIPT, 'test_dentro': IMPORTS_IN_CLASS, 'test_outro': UNRELATED}
+
+    def test_a_changed_script_runs_the_modules_that_import_it(self):
+        self.write('skills/frontlights/scripts/ferramenta.py', 'VALOR = 2\n')
+        done, _ = self.run_pre_commit()
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn('test_ferramenta', done.stdout)
+        self.assertNotIn('test_outro', done.stdout)
+
+    def test_a_string_with_the_module_name_inside_a_class_runs_only_that_class(self):
+        self.write('skills/frontlights/scripts/ferramenta.py', 'VALOR = 1  # editado\n')
+        done, _ = self.run_pre_commit()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertRegex(done.stdout, r'test_dentro .*\(ComImport\)')
+        self.assertNotIn('SemImport', done.stdout)
+
+
+@unittest.skipUnless(os.name == 'nt', 'o comando reaproveita o runner de tests/suite.py, que só roda no Windows')
+class RenameTest(RepositoryCase):
+    def test_a_renamed_file_counts_by_its_new_name(self):
+        self.git('mv', 'docs/guia.md', 'docs/guia2.md')
+        done, _ = self.run_pre_commit()
+        self.assertIn('Mudados (1): docs/guia2.md', done.stdout, done.stdout + done.stderr)
 
 
 @unittest.skipUnless(os.name == 'nt', 'o comando reaproveita o runner de tests/suite.py, que só roda no Windows')
@@ -250,7 +307,7 @@ class DeadlineTest(RepositoryCase):
 
     def test_a_slow_module_is_left_to_the_whole_suite_without_failing(self):
         self.write('docs/guia.md', 'Uma frase conferida pelo teste, editada.\n')
-        done, wall = self.run_pre_commit('--timeout', '4')
+        done, wall = self.run_pre_commit('--timeout', '12')
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn('fica para a suíte inteira', done.stdout)
         self.assertLess(wall, 30, done.stdout)
