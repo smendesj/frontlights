@@ -916,7 +916,7 @@ class WeekByDateTests(RoadmapSyncTestCase):
         for phrase in ('lists the weeks in the order of their dates (`startDate`)', '`sprint-DD-MM-YYYY`',
                        'the week that ended at the week turn included', 'A week with no change gets no file',
                        'a move queued before the week turned names the lane as it was then',
-                       'counts the others as not shown',
+                       'past the first ten it counts the rest as more',
                        'that is not expected'):
             self.assertIn(phrase, reference)
         self.assertIn('na forma `sprint-DD-MM-AAAA`', protocol)
@@ -940,6 +940,24 @@ class WeekByDateTests(RoadmapSyncTestCase):
         result, _ = self.approve_and_fetch(payload, state=state)
         self.assertTrue(result['ok'], result['message'])
         self.assertNotIn('match no week or group', result['message'])
+
+    def test_lanes_past_the_first_ten_are_counted_as_more(self):
+        state, payload = dated(state_fixture()), fixture()
+        state['removedPending'] = [{'changeId': REMOVE_ID, 'itemId': None, 'title': 'x', 'laneId': 'sprint-07-09-2026'}]
+        lanes = [f'sprint-{day:02d}-08-2026' for day in range(1, 11)]
+        payload['changes'][3]['payload'] = {'from_lane_id': lanes[0], 'lane_id': 'g1'}
+        payload['changes'][0]['action'] = 'move_lane'
+        payload['changes'][0]['payload'] = {'from_lane_id': lanes[1], 'lane_id': lanes[2]}
+        payload['changes'][1]['action'] = 'move_lane'
+        payload['changes'][1]['payload'] = {'from_lane_id': lanes[3], 'lane_id': lanes[4]}
+        extra = [dict(payload['changes'][3], id=f'7f1c2d3e-0000-4000-8000-0000000001{n:02d}',
+                      payload={'from_lane_id': lanes[5 + n], 'lane_id': 'g1'}) for n in range(5)]
+        payload['changes'].extend(extra)
+        result, _ = self.approve_and_fetch(payload, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertIn('11 lane(s) of the queue match no week or group', result['message'])
+        self.assertIn(', 1 more)', result['message'])
+        self.assertNotIn('not shaped like an id', result['message'])
 
     def test_a_lane_that_is_not_an_id_is_counted_but_never_quoted(self):
         state, payload = dated(state_fixture()), fixture()
@@ -998,6 +1016,10 @@ class OverLimitTests(RoadmapSyncTestCase):
         self.assertIn('Acima do limite de N:', protocol)
         self.assertIn('only when at least one `outOfLimit` item has an entry in the file', reference)
         self.assertIn('never repeated when the file already has it', reference)
+        self.assertIn('rewrite the N of the line already there instead of adding a second one', reference)
+        self.assertIn('take the line out', reference)
+        self.assertIn('the only things you may move or rewrite', reference)
+        self.assertIn('só quando algum item acima do limite tem entrada no arquivo', readme)
         self.assertIn('As mudanças dos itens com `overLimit` entram no arquivo da semana como as dos demais', protocol)
         self.assertIn('a skill pergunta antes do `apply`', protocol)
         self.assertNotIn('ficam fora da sprint e são avisados', protocol)

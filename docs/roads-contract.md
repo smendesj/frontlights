@@ -114,8 +114,8 @@ usuário.
   nunca entram no `roadmap-state`. Semana sem mudança não ganha arquivo.
 - **Ordem e limite.** `position` segue a ordem que o scrum master arrastou no RoadS (`sort_order` normalizado), e o
   arquivo da semana segue o `position`. `overLimit` continua só informativo: o Frontlights escreve no arquivo da
-  semana as mudanças dos itens acima do limite como as dos demais, com os itens 1 a N primeiro e, só quando há
-  excedente, a linha "Acima do limite de N:" uma única vez e depois os demais.
+  semana as mudanças dos itens acima do limite como as dos demais, com os itens 1 a N primeiro e, só quando algum
+  item acima do limite tem entrada no arquivo, a linha "Acima do limite de N:" uma única vez e depois os demais.
 
 ### `GET pending-changes[?since=<instante>]`
 
