@@ -420,11 +420,12 @@ review", not completed. Do not manufacture reviewer identities or approvals.
 Classify the review's findings, and those of tests and live checks, by the
 destination ladder of the Follow-ups section in `issues.md` (same PR, a new
 acceptance criterion in the source issue, top-level issue only for new scope; never a
-new sub-issue), decided as one batch.
+new sub-issue), decided as one batch (the baixos of a finished review take the default of "When the review is
+done", below).
 
 **The reviewer's brief.** The brief that dispatches the independent reviewer names `references/review.md`, the
 reviewer's standard (what a finding is, its severity, what is only style, the rounds and the report), the issue,
-its base and, from the second round on, the tip of the previous round with its findings. The standard belongs to
+its base and, from the second round on, the tip of the previous round, the base it had and its findings. The standard belongs to
 the reviewer: the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out.
 
 **When the review is done.** A round is one dispatch of the reviewer on the current tip. The review of an issue is

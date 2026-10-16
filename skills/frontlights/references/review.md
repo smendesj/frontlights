@@ -48,6 +48,11 @@ of the previous round (`git diff <previous tip>..HEAD`), the code that delta tou
 earlier rounds, marked fixed or open. A new finding in a later round comes from that delta or from what it touches;
 text the earlier rounds read and left unchanged raises one only as a sério or médio they missed, said so.
 
+When the base was brought into the branch between the rounds, the delta is the issue's own change, not what the base
+brought: compare the two ranges with `git range-diff <previous base>..<previous tip> <base>..HEAD` and read how the
+merge was resolved with `git show --remerge-diff <merge commit>`; the code the base brought belongs to the issues that
+delivered it.
+
 ## The report
 
 First the line of counts, `sérios/médios/baixos: s/m/b`, then one block per finding, the most severe first:
