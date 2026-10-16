@@ -62,9 +62,11 @@ their language; quote the helper's English messages only when useful.
   through its changes (an item with no change is not added to the file). Whenever you write a sprint
   file, put its entries in the order of `position` (the order the scrum master dragged on RoadS),
   without changing their prose: first the `items` of that entry of `plan.sprints` (within the
-  limit), then, only when `outOfLimit` is not empty, the line "Acima do limite de N:" (N is
-  `plan.maxSprintItems`) written once, then the `outOfLimit` items, each list in the order of
-  `position`. A change of an item past the limit is written in the sprint file like any other. Do not ask about the limit; tell the user which items are past it. A change in
+  limit), then, only when at least one `outOfLimit` item has an entry in the file (a change of this
+  plan or an earlier entry), the line "Acima do limite de N:" (N is `plan.maxSprintItems`), written
+  once and never repeated when the file already has it, then the entries of the `outOfLimit` items,
+  each list in the order of `position`. A change of an item past the limit is written in the sprint
+  file like any other. Do not ask about the limit; tell the user which items are past it. A change in
   the order alone, with no queued change for that week, writes nothing: the order follows at the
   next change of that week.
 - New work is a GitHub issue, cited as `#N` (or its URL), never a retired GuardianS task
@@ -120,11 +122,15 @@ their language; quote the helper's English messages only when useful.
   `laneId` of the roadmap-state read by this fetch, and RoadS sends each answer in one shape only:
   before its migration, `laneId` is positional (`atual`, `proxima`, `terceira`) and `sprintId` is
   `sprint-YYYY-MM-DD`; after it, `laneId` and `sprintId` are both `sprint-DD-MM-YYYY`. A week with
-  no change gets no file. RoadS keeps in the state every week that a change not yet acknowledged
-  cites, with `items: []` when it has none left (the week that ended at the week turn included), so
-  the exit and the removal reach that week's file. When the message says that some lanes match no
-  week or group, that is not expected: the changes that reach a sprint only through them go in the
-  roadmap only; tell the user which lanes and ask before `apply`.
+  no change gets no file. In the dated shape, RoadS keeps in the state every week that a change not
+  yet acknowledged cites, with `items: []` when it has none left (the week that ended at the week
+  turn included), so the exit and the removal reach that week's file. In the positional shape, until
+  RoadS migrates, a move queued before the week turned names the lane as it was then (`atual` is
+  another week after the turn) and no note shows it: when its lanes no longer match the week the
+  user remembers, say so and ask. When the message says that some lanes match no week or group, that
+  is not expected: the changes that reach a sprint only through them go in the roadmap only; tell
+  the user which lanes (the message names only the lanes shaped like an id and counts the others as
+  not shown) and ask before `apply`.
 
 ## Steps
 

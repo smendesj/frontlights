@@ -107,7 +107,9 @@ class DocumentShapeTests(unittest.TestCase):
                      'a próxima e a terceira sprint existem só no RoadS', '"sprintId": "sprint-2026-01-05", "laneId": "proxima"'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, flat)
+        self.assertIn('a semana encerrada vir vazia no estado até o ack é promessa do RoadS', flat)
         acceptance = ' '.join((ROOT / 'docs' / 'acceptance.md').read_text(encoding='utf-8').split())
+        self.assertIn('manter a semana encerrada (com `items: []`) no estado até o ack', acceptance)
         self.assertIn('As semanas identificadas pela data (issue 39) só têm cobertura simulada', acceptance)
 
     def test_the_contract_records_what_the_service_does_with_the_project_status(self):
