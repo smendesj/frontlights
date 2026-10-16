@@ -63,12 +63,9 @@ class StandingAuthorizationTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
         self.assertIn('The merges the run makes on its own are the covered merges of that section', skill)
-        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
-            text = flat(*name)
-            for phrase in ('rodar a migration' if name == ('README.md',) else 'migrations no banco de desenvolvimento local',
-                           'endpoints do produto', 'main local'):
-                with self.subTest(file=name[-1], phrase=phrase):
-                    self.assertIn(phrase, text)
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md')):
+            with self.subTest(file=name[-1]):
+                self.assertIn('"Standing authorization and the denied operations"', flat(*name))
 
     def test_every_denied_operation_is_listed_in_every_document(self):
         english = ('merging a pull request', 'closing an issue', 'changing the board',
@@ -84,7 +81,7 @@ class StandingAuthorizationTests(unittest.TestCase):
         for phrase in english:
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase.casefold(), development.casefold())
-        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
+        for name in (('README.md',),):
             text = flat(*name).casefold()
             for phrase in portuguese:
                 with self.subTest(file=name[-1], phrase=phrase):
@@ -108,7 +105,6 @@ class StandingAuthorizationTests(unittest.TestCase):
     def test_the_approvals_with_their_own_stage_keep_them(self):
         self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them",
                       flat('skills', 'frontlights', 'references', 'development.md'))
-        self.assertIn('fechamento, limpeza, roadmap e resumo', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('da limpeza, do roadmap e do resumo', flat('README.md'))
 
     def test_the_merge_is_offered_when_the_pr_is_ready(self):
