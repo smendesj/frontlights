@@ -500,7 +500,7 @@ Anything else on that list waits for the user's "Sim" to its own question (above
 **The release, offered at the end of each homologated issue** (`references/development.md`, "The release").
 Once the issue is in the local main and its bundle is written, run `homolog sync` again and `homolog release-plan
 --root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet and names
-the branch `<branch_prefix>release-<date>`. Show the list and ask with `AskUserQuestion` "Lançar a release com as
+the branch `<branch_prefix>release-<date>` (the prefix of the newest authorization record). Show the list and ask with `AskUserQuestion` "Lançar a release com as
 issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
 from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
 the body from `templates/pr.md`: Resumo and Evidência per issue, Risco do merge consolidated, the three gates of
