@@ -866,6 +866,17 @@ def validate_isolated_block(config):
     if not isolated_local_url(block.get('baseUrl')):
         raise checks.Refused('browserTest.isolated.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, '
                              'localhost ou ::1), sem usuário e senha; {port} pode ocupar o lugar da porta.')
+    import serve
+    where = 'browserTest.isolated.processes'
+    try:
+        processes = serve.validate_processes(block.get('processes'), where)
+    except serve.Refusal as refusal:  # the serve text names the process, not the block: say which list it is
+        message = str(refusal)
+        raise checks.Refused(message if where in message else f'{where}: {message}') from None
+    for item in processes:
+        if not isolated_local_url(item['health']):
+            raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
+                                 'instância isolada só roda na própria máquina (127.0.0.1, localhost ou ::1).')
 
 
 def isolated_local_url(value):
@@ -878,7 +889,8 @@ def isolated_local_url(value):
         parts.port  # an out-of-range or non-numeric port raises here
     except ValueError:
         return False
-    return parts.scheme in ('http', 'https') and (parts.hostname or '').lower() in checks.LOCAL_HOSTS         and '@' not in parts.netloc
+    return parts.scheme in ('http', 'https') and (parts.hostname or '').lower() in checks.LOCAL_HOSTS \
+        and '@' not in parts.netloc
 
 
 def validate_homolog_block(config):

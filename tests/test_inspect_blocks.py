@@ -356,6 +356,22 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(baseUrl=value), tempfile.TemporaryDirectory() as root:
                 inspect_file(with_isolated(baseUrl=value), root)
 
+    def test_processes_follow_the_serve_rules(self):
+        cases = {'ausentes': None, 'vazios': [], 'texto': 'web',
+                 'argv como texto (shell)': [process(argv='python APP_SCRIPT {port}')],
+                 'sem health': [process(health=None)],
+                 'auto sem {port} no health': [process(health='http://127.0.0.1:8080/health')]}
+        for case, value in cases.items():
+            with self.subTest(case=case):
+                self.refuse(with_isolated(processes=value), r'browserTest\.isolated\.processes')
+
+    def test_process_health_must_be_local(self):
+        for health in ('http://10.0.0.5:{port}/health', 'https://app.example.com:{port}/'):
+            with self.subTest(health=health):
+                message = self.refuse(with_isolated(processes=[process(health=health)]),
+                                      r'browserTest\.isolated\.processes')
+                self.assertIn('local', message)
+
 
 if __name__ == '__main__':
     unittest.main()
