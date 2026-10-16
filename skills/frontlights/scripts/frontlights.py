@@ -1001,11 +1001,28 @@ def validate_homolog_block(config):
         raise ValueError(str(refusal)) from None
 
 
+def validate_preview_block(config, path, root):
+    """Refuse an invalid top-level `preview` block with the rules of `serve preview` (worktree inside `root`,
+    branch, baseUrl, processes). Absent or null: nothing is read. The refusal gets the masks of serve (loaded by
+    `load_preview_block` from browserTest.users) and of checks, so it never echoes a test login or password."""
+    if config.get('preview') is None:
+        return
+    require(path is not None, 'preview: o inspect precisa do caminho do config para validar o bloco')
+    import checks
+    import serve
+    try:
+        serve.load_preview_block(path, root)
+    except serve.Refusal as refusal:  # a process-level text names the process, not the block: say which one
+        message = str(refusal) if 'preview' in str(refusal) else f'preview: {refusal}'
+        raise ValueError(checks.redact(serve.protect(message))) from None
+
+
 def inspect(config, root, config_path=None):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
     warnings = validate_test_blocks(config, config_path)
+    validate_preview_block(config, config_path, root)
     validate_homolog_block(config)
     repo = config['repository']
     result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
