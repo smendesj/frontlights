@@ -358,7 +358,7 @@ título novo. O Frontlights acha a entrada pelo número da issue que a mudança 
 citam), e não pelo título, que nos arquivos pode ser o antigo: troca o título antigo pelo novo no `ROADMAP.md` e em
 cada `SPRINT_*.md` do plano, sem tocar no resto, e diz quantos `modify` de título o plano tem. Sem número (um item
 ainda sem issue, por exemplo), acha pelo título e pela lane. Se um `modify` ou `move_lane` não achar entrada no roadmap,
-se um `add` achar entrada do mesmo `#N`, ou se qualquer mudança achar mais de uma, ele pergunta em vez de abrir uma
+se um `add` achar entrada do mesmo `#N`, ou se qualquer mudança achar mais de uma, ele pergunta antes de abrir uma
 segunda.
 
 Quem escreve os arquivos é sempre esta máquina: o RoadS não alcança a pasta onde eles ficam.

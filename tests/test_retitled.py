@@ -84,7 +84,7 @@ class RuleTextTests(unittest.TestCase):
         self.reference = flat('skills', 'frontlights', 'references', 'roadmap-sync.md')
 
     def test_the_entry_is_found_by_the_issue_number_and_never_by_the_title_alone(self):
-        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one)',
+        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one;',
                        'by the issue number the change carries (the `#N` of `item.githubIssueUrl`, or its URL, as the files cite it)',
                        'tell them apart by the repository in the URL (and `item.produto`), and ask if that does not settle it',
                        'never by title alone, because the title in the files may be older than the one in the change',
@@ -100,7 +100,7 @@ class RuleTextTests(unittest.TestCase):
                        '(`payload.from_lane_id` for a `move_lane`, `payload.lane_id` for a `remove`, `item.lane` otherwise;',
                        'Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap and when an `add` finds an entry of its `#N`. '
                        'Ask also when any change this rule finds (a `modify`, `move_lane`, `remove`, `completed` or `add`) finds more than one',
-                       "Ask once, listing every such change and proposing the closest candidate in the item's lane, and never open a second entry",
+                       "Ask once, listing every such change and proposing the closest candidate in the item's lane (for an `add`, the entry of its `#N` wherever it is), and never open a second entry on your own (for an `add`, only when the user chooses it)",
                        'when the lane is missing, by title alone, asking if more than one entry matches'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.reference)
@@ -135,7 +135,7 @@ class RuleTextTests(unittest.TestCase):
         for phrase in ('e quantos foram renomeados, quando o RoadS informa', 'O Frontlights acha a entrada pelo número da issue que a mudança traz',
                        'e não pelo título', 'e diz quantos `modify` de título o plano tem', 'Sem número (um item ainda sem issue, por exemplo), acha pelo título e pela lane',
                        'Se um `modify` ou `move_lane` não achar entrada no roadmap, se um `add` achar entrada do mesmo `#N`, ou se qualquer '
-                       'mudança achar mais de uma, ele pergunta em vez de abrir uma segunda'):
+                       'mudança achar mais de uma, ele pergunta antes de abrir uma segunda'):
             with self.subTest(doc='README', phrase=phrase):
                 self.assertIn(phrase, readme)
         contract = flat('docs', 'roads-contract.md')

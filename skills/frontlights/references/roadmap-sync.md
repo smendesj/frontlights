@@ -88,14 +88,15 @@ their language; quote the helper's English messages only when useful.
   written `issue-N`.
 - `add` creates an entry; an `add` whose `#N` (in the same repository) already has an entry in the roadmap or
   in a sprint file of `change.sprintTargets` is not written on its own: list it in the single question of the
-  rule of finding an entry, below, and propose reusing that entry (recording the return and moving it to the lane
-  of `item.lane` and to its place by `position`) or opening another, as the user chooses; `modify` updates the existing entry in place (a modify whose only news is
+  rule of finding an entry, below, and propose reusing that entry (recording the return when its latest record is an
+  exit or removal, and moving it to the lane of `item.lane` and to its place by `position`) or opening another, as
+  the user chooses; `modify` updates the existing entry in place (a modify whose only news is
   `item.githubIssueUrl` adds the issue link to the entry, it never duplicates it); `move_lane` moves
   the entry between lanes or into or out of a sprint (an exit is recorded in the sprint it left,
   an entry in the sprint it joined); `remove` (`itemMissing` true, identified by
   `itemId` and `item.title`) records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`. A change whose `knownAction` is
   false is described to the user and handled only as they direct.
-- Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one), by the
+- Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one; an `add` only by its `#N`: an `add` without one creates its entry), by the
   issue number the change carries (the `#N` of `item.githubIssueUrl`, or its URL, as the files cite it), never by title
   alone, because the title in the files may be older than the one in the change; when the files cite the same number for
   more than one repository or product, tell them apart by the repository in the URL (and `item.produto`), and ask if
@@ -106,11 +107,12 @@ their language; quote the helper's English messages only when useful.
   for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
   and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined), for a
   sprint file that does not exist yet, for a `remove` (recorded in the roadmap even for an item never written) and for a
-  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry at the end of that file, out of the order of `position`); a `modify` with no entry in a sprint file that exists leaves that file as
+  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint, or a `remove`, whose file has no entry for the item (its exit or removal goes into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file otherwise, out of the order of `position`; such an entry never counts for keeping that line); a `modify` with no entry in a sprint file that exists leaves that file as
   it is and says so. Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap and when an
   `add` finds an entry of its `#N`. Ask also when any change this rule finds (a `modify`, `move_lane`, `remove`,
   `completed` or `add`) finds more than one. Ask once, listing every such change and proposing the closest candidate in
-  the item's lane, and never open a second entry. A row of a table and the section of the same item are one entry; a
+  the item's lane (for an `add`, the entry of its `#N` wherever it is), and never open a second entry on your own (for
+  an `add`, only when the user chooses it). A row of a table and the section of the same item are one entry; a
   mention inside another entry is not. A
   `modify` that only changes `item.title` (its `payload` says the title follows the issue on GitHub) replaces the old
   title with the new one in the entry, in the roadmap and in the file of every sprint in `change.sprintTargets`, and
