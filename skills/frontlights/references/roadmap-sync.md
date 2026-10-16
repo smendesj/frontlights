@@ -74,7 +74,9 @@ their language; quote the helper's English messages only when useful.
   the limit is left after it (an item moved back within the limit, say), take the line out. The entry
   of an item that left the week (a `move_lane` out of it, or a `remove`) is in neither list: it stays
   where it is, out of the order of `position`, with its exit or removal recorded in it, and while it
-  sits after the line it counts as an entry past the limit that keeps the line. Moving entries and
+  sits after the line it counts as an entry past the limit that keeps the line. When the item comes
+  back to the week, that same entry records the return and moves to its place by `position`; never
+  open a second entry for it. Moving entries and
   rewriting or removing that line join the in-place `modify` as the exceptions to adding only. A
   change of an item past the limit is written in the sprint file like any other. Do not ask about the limit; tell the user which items are past it. A change in
   the order alone, with no queued change for that week, writes nothing: the order follows at the
