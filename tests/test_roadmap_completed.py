@@ -81,7 +81,7 @@ class WhatBecomesACompletionTests(CompletedTestCase):
                           'githubIssueUrl': None, 'lane': 'Sprint da semana'})
         self.assertEqual(plan['pending'], [DONE_E])
         self.assertEqual(plan['targets'][CURRENT]['changeIds'], [DONE_E])
-        self.assertEqual(plan['targets'][CURRENT]['outOfLimitChangeIds'], [])
+        self.assertNotIn('outOfLimitChangeIds', plan['targets'][CURRENT])
         self.assertEqual(plan['completed'], {'enabled': True, 'new': 1, 'alreadyRecorded': 0,
                                              'completedOn': '2026-09-28', 'completedOnMeans': 'sync date'})
         self.assertRegex(change['marker'], r'^<!-- roads:done-\S+ [0-9a-f]{16} -->$')
@@ -117,12 +117,6 @@ class WhatBecomesACompletionTests(CompletedTestCase):
             moved = {k: v for k, v in state['sprints'][0]['items'].pop(2).items() if k != 'overLimit'}
             state['groups'][0]['items'].append(dict(moved, done=True, status='done'))
 
-        def over_limit(state):
-            items = state['sprints'][0]['items']
-            items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-00000000000f', position=4, title='Quarto item'))
-            items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item',
-                              overLimit=True, done=True, status='done'))
-
         def status_without_the_flag(state):
             state['sprints'][0]['items'][2].update(status='done', done=False)
 
@@ -131,7 +125,7 @@ class WhatBecomesACompletionTests(CompletedTestCase):
                                                    githubIssueUrl='https://github.com/OWNER/REPOSITORY/issues/99',
                                                    issueNumber=99, status='development', done=False)
 
-        cases = {'a group item': in_group, 'an item past the limit': over_limit,
+        cases = {'a group item': in_group,
                  'status done without the flag': status_without_the_flag, 'text and a closed issue': text_and_issue_are_not_evidence}
         for label, mutate in cases.items():
             with self.subTest(label):
@@ -143,6 +137,21 @@ class WhatBecomesACompletionTests(CompletedTestCase):
                 self.assertIn('Nothing pending', result['message'])
                 self.assertEqual(result['completed']['new'], 0)
                 self.assertFalse((self.sync_dir / 'plan.json').exists())
+
+    def test_a_done_item_past_the_limit_is_a_completion_in_its_week(self):
+        state = state_fixture()
+        items = state['sprints'][0]['items']
+        items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-00000000000f', position=4, title='Quarto item'))
+        items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item',
+                          overLimit=True, done=True, status='done'))
+        result, _ = self.approve_and_fetch(NO_CHANGES, state=state)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertNotIn('Nothing pending', result['message'])
+        change, = result['plan']['changes']
+        self.assertEqual((change['action'], change['itemId'], change['item']['title']),
+                         ('completed', '5a5a5a5a-0000-4000-8000-000000000010', 'Quinto item'))
+        self.assertEqual(change['sprintTargets'], [CURRENT])
+        self.assertEqual(result['completed']['new'], 1)
 
     def test_a_done_item_without_a_title_is_left_out_and_reported(self):
         state = done_state()
@@ -679,11 +688,14 @@ class SafetyTests(CompletedTestCase):
         state = done_state()
         items = state['sprints'][0]['items']
         items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-00000000000f', position=4, title='Quarto item', done=False, status='open'))
-        items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item', done=False,
-                          status='open', overLimit=True, pendingChangeIds=[DONE_E]))
+        nxt = state['sprints'][1]['items']
+        nxt.extend(dict(items[2], id=f'5a5a5a5a-0000-4000-8000-00000000002{n}', position=n + 2, title=f'Item {n}', done=False,
+                        status='open') for n in range(3))
+        nxt.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item', done=False,
+                        status='open', overLimit=True, pendingChangeIds=[DONE_E]))
         result, _ = self.approve_and_fetch(NO_CHANGES, state=state)
-        self.assertEqual(result['plan']['targets'][CURRENT]['outOfLimitChangeIds'], [])
-        self.assertNotIn('outside the sprint limit', result['message'])
+        self.assertEqual(list(result['plan']['targets']), ['roadmap', CURRENT])
+        self.assertEqual(result['plan']['changes'][0]['sprintTargets'], [CURRENT])
 
     def test_nothing_is_written_outside_the_scrum_root(self):
         self.assertTrue(self.run_op('approve')['ok'])

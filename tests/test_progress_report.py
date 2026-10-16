@@ -675,6 +675,13 @@ class PluginContractTests(unittest.TestCase):
                        'setx FRONTLIGHTS_API_SECRET', 'Concluído', 'Em validação', 'Em andamento', 'Bloqueado', 'Próximo'):
             self.assertIn(needle, text)
 
+    def test_reference_reads_the_items_past_the_sprint_limit_as_such(self):
+        text = ' '.join(self.read('skills', 'frontlights', 'references', 'progress-report.md').split())
+        self.assertIn('The items after the line "Acima do limite de N:" of the sprint file are past the sprint limit', text)
+        self.assertIn('they are not commitments of the week', text)
+        self.assertIn('is not an item of the week at all, wherever it sits', text)
+        self.assertIn('with no later return to the week', text)
+
     def test_reference_covers_the_guide_the_sprint_sources_and_the_prints_step(self):
         text = self.read('skills', 'frontlights', 'references', 'progress-report.md')
         for needle in ('draftGuide', 'shotsDir', 'captions.json', 'roadmap_sync.py', 'status --root', 'current week',
