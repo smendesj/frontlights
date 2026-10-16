@@ -179,6 +179,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   serve/<n>.json     pids e portas dos processos que o `serve start` subiu para a issue
   preview/registry.json  pids, portas, branch e merges da prévia (`serve preview`), que sobrevive à issue e à sessão
   preview/log/<nome>.log  log mascarado de cada processo da prévia
+  preview/branch.json    nome da branch da prévia, que o `preview stop` não apaga (o primeiro refresh reconhece a branch como da prévia)
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```

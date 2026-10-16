@@ -186,7 +186,8 @@ The preview is the long-running mode, one per project, declared in the `preview`
 block of the config (`worktree`, `branch`, `baseUrl`, `processes`). `serve preview`
 runs its processes in the preview worktree; each one's output goes through
 `serve relay` (spawned by `preview start`, never by hand) into a log saved and
-masked in `.frontlights/preview/log/`, and its record in
+masked in `.frontlights/preview/log/`, its branch named in
+`.frontlights/preview/branch.json` (kept by `preview stop`), and its record in
 `.frontlights/preview/registry.json` survives the `serve stop` of an issue and a
 change of session (`preview status` finds the processes through it and returns the
 tail of each log). `preview start` is refused while the preview is alive: run
