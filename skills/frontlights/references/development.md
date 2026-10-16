@@ -513,7 +513,8 @@ When the last slice of the issue is merged into the branch of the issue, in this
    when there is none; `--prefix` names one prefix alone), into the folder named by `homolog.backupDir` in `.frontlights/config.json`
    (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,
    and the real path never enters a repository), verifies it with `git bundle verify` and reports `path`,
-   `refs`, `bytes`, `prefixes` and `prefixSource`. The folder must already exist; nothing else is written there and old bundles are never
+   `refs`, `bytes`, `prefixes`, `prefixSource` and `skipped`; say in one line how many records `skipped` counts
+   when it is above zero (a broken record may leave its branches out of the backup). The folder must already exist; nothing else is written there and old bundles are never
    deleted. Exit code 1 with `configured: false` means no folder is configured: say so in one line, name the
    key, ask nothing and go on; any other refusal (a missing folder, a junction in its path, a Git failure) is
    said in one line and recorded in the handoff as a backup not taken.
@@ -538,8 +539,8 @@ offers the release again with everything accumulated.
   release-plan --root <main worktree> --base <base>`: it reads the issue branches from the authorization records,
   lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
-  record by `issued_at` (`claude/` when there is none; `--prefix` names it alone; `prefix` and `prefixSource` say
-  which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
+  record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
   must be synced first: say so in one line. It only reads.
 - **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
   com as issues #a, #b agora?", with "Sim, lançar" first and "Agora não" second; one question per release.

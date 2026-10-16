@@ -24,7 +24,8 @@ Operations (each prints one JSON object on stdout):
   bundle write one Git bundle of the local base and of every local branch under the work prefixes: `--prefix` alone
          when given; otherwise every `branch_prefix` of the valid `.frontlights/authorization*.json` records under
          `--records` (default the root; a record without the key counts as `claude/`), and `claude/` when there is
-         no valid record (issue 44); `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which;
+         no valid record (issue 44); `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which, and
+         `skipped` counts the records left out;
          into the folder that `homolog.backupDir` in the config names (`backup_dir` validates the key, and
          `inspect` reuses it). Without the key it says there is no folder and writes nothing. The folder must exist and
          must not sit behind a junction, symbolic link or other reparse point (a OneDrive cloud placeholder is
@@ -421,25 +422,27 @@ def write_bundle(root, folder, refs):
 
 
 def bundle_prefixes(prefix, records):
-    """(prefixes, source): `[prefix]` and `argument` when one is given; otherwise the sorted union of the
-    `branch_prefix` of the valid records and `records`, or `[DEFAULT_PREFIX]` and `default` without one (issue 44)."""
+    """(prefixes, source, skipped): `[prefix]` and `argument` when one is given; otherwise the sorted union of the
+    `branch_prefix` of the valid records and `records`, or `[DEFAULT_PREFIX]` and `default` without one; `skipped`
+    counts the records left out (issue 44)."""
     if prefix is not None:
-        return [branch_prefix(prefix)], 'argument'
-    found, _ = record_prefixes(records)
+        return [branch_prefix(prefix)], 'argument', 0
+    found, skipped = record_prefixes(records)
     if found:
-        return sorted({entry['prefix'] for entry in found}), 'records'
-    return [DEFAULT_PREFIX], 'default'
+        return sorted({entry['prefix'] for entry in found}), 'records', skipped
+    return [DEFAULT_PREFIX], 'default', skipped
 
 
 def op_bundle(root, config_path, base, prefix, records=None):
     worktree(root)
     base = plain_name(base, 'a branch base')
-    prefixes, source = bundle_prefixes(prefix, root if records is None else records)
+    prefixes, source, skipped = bundle_prefixes(prefix, root if records is None else records)
     folder = backup_dir(load_config(config_path))
     if folder is None:
-        return {'configured': False, 'written': False, 'prefixes': prefixes, 'prefixSource': source, 'exitCode': 1,
+        return {'configured': False, 'written': False, 'prefixes': prefixes, 'prefixSource': source,
+                'skipped': skipped, 'exitCode': 1,
                 'message': 'não há pasta de backup configurada (homolog.backupDir); nada foi gravado'}
-    result = {'configured': True, 'written': False, 'prefixes': prefixes, 'prefixSource': source}
+    result = {'configured': True, 'written': False, 'prefixes': prefixes, 'prefixSource': source, 'skipped': skipped}
     try:
         check_backup_folder(folder)
         path, heads = write_bundle(root, folder, bundle_refs(root, base, prefixes))

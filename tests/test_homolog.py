@@ -312,7 +312,7 @@ class LocalMainTextTests(unittest.TestCase):
         step = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('the local main and the work branches of every `branch_prefix` in the authorization records '
                        '(`.frontlights/authorization*.json`; `claude/` when there is none',
-                       '`--prefix` names one prefix alone', '`prefixes` and `prefixSource`'):
+                       '`--prefix` names one prefix alone', '`prefixes`, `prefixSource` and `skipped`'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, step)
         self.assertNotIn('the local main and every branch under the `branch_prefix`', step)
@@ -324,13 +324,20 @@ class LocalMainTextTests(unittest.TestCase):
     def test_the_release_name_follows_the_newest_record(self):
         """Issue 44, S2: o nome da release usa o prefixo do registro de autorização mais recente, sem `--prefix`."""
         release = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ("the prefix of the newest authorization record by `issued_at` (`claude/` when there is none; "
-                       "`--prefix` names it alone", '`prefix` and `prefixSource` say which'):
+        for phrase in ("the prefix of the newest authorization record by `issued_at` (without `issued_at`, the last "
+                       "record by file name; `claude/` when there is none; `--prefix` names it alone", '`prefix` and `prefixSource` say which'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, release)
+        self.assertIn('without `issued_at`, the last record by file name', release)
+        self.assertIn('say in one line how many records `skipped` counts', release)
         self.assertIn('the prefix of the newest authorization record', stage(6))
-        self.assertIn('o prefixo do registro de autorização mais recente', flat('skills', 'frontlights', 'docs', 'protocol.md'))
-        self.assertIn('o prefixo do registro de autorização mais recente', flat('README.md'))
+        for file in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
+            with self.subTest(file=file[-1]):
+                text = flat(*file)
+                self.assertIn('o prefixo do registro de autorização mais recente', text)
+                self.assertIn('sem `issued_at`, o último registro pelo nome do arquivo', text)
+        self.assertIn('das branches de trabalho de todo `branch_prefix` dos registros de autorização',
+                      flat('skills', 'frontlights', 'docs', 'security.md'))
 
     def test_the_release_replaces_the_pull_request_per_issue(self):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
@@ -822,11 +829,15 @@ class HomologBundleTests(unittest.TestCase):
         self.assertEqual(code, 0, result)
         self.assertEqual(set(result['refs']), {'main', 'claude/issue-1', 'claude/issue-1-s2'})
         self.assertEqual((result['prefixes'], result['prefixSource']), (['claude/'], 'default'))
+        self.assertEqual(result['skipped'], 0)
         self.record('authorization-bad.json', branch_prefix='x$/')
         (self.work / '.frontlights' / 'authorization-broken.json').write_text('[1, 2]', encoding='utf-8')
         code, result = self.bundle(config)
         self.assertEqual(code, 0, result)
-        self.assertEqual((result['prefixes'], result['prefixSource']), (['claude/'], 'default'))
+        self.assertEqual((result['prefixes'], result['prefixSource'], result['skipped']), (['claude/'], 'default', 2))
+        self.record('authorization-new.json', branch_prefix='equipe/')
+        code, result = self.bundle(config)
+        self.assertEqual((result['prefixes'], result['prefixSource'], result['skipped']), (['equipe/'], 'records', 2))
 
     def test_an_explicit_prefix_still_wins(self):
         """Issue 44, S1: `--prefix` explícito vale sozinho, com registros de outro prefixo."""
@@ -847,6 +858,7 @@ class HomologBundleTests(unittest.TestCase):
         code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}), '--records', str(elsewhere))
         self.assertEqual(code, 0, result)
         self.assertEqual((result['prefixes'], result['prefixSource']), (['equipe/'], 'records'))
+        self.assertEqual(set(result['refs']), {'main', 'equipe/issue-2', 'equipe/issue-2-s1'})
 
     def test_an_unreadable_config_is_a_refusal_in_json(self):
         code, result = self.bundle(self.base / 'absent.json')
@@ -995,6 +1007,22 @@ class HomologReleasePlanTests(unittest.TestCase):
         code, result = self.plan()
         self.assertRegex(result['releaseBranch'], r'^equipe/release-\d{4}-\d{2}-\d{2}$')
         self.assertEqual((result['prefix'], result['prefixSource']), ('equipe/', 'records'))
+
+    def test_instants_are_compared_across_offsets_and_an_invalid_one_ranks_last(self):
+        """Issue 44, S2: `Z` e fusos diferentes valem pelo instante; `issued_at` inválido fica atrás, mesmo com o
+        maior nome de arquivo; sem `issued_at` em nenhum, vale o último registro pelo nome do arquivo."""
+        (self.work / '.frontlights' / 'authorization.json').unlink()
+        self.record(name='authorization-a.json', branch_prefix='equipe/', issued_at='2026-01-02T10:00:00+05:00')
+        self.record(name='authorization-b.json', branch_prefix='antigo/', issued_at='2026-01-02T06:00:00Z')
+        self.record(name='authorization-z.json', branch_prefix='outro/', issued_at='ontem')
+        code, result = self.plan()
+        self.assertEqual((result['prefix'], result['prefixSource']), ('antigo/', 'records'))
+        for name in ('authorization-a.json', 'authorization-b.json', 'authorization-z.json'):
+            (self.work / '.frontlights' / name).unlink()
+        self.record(name='authorization-1.json', branch_prefix='primeiro/')
+        self.record(name='authorization-2.json', branch_prefix='segundo/')
+        code, result = self.plan()
+        self.assertEqual((result['prefix'], result['prefixSource']), ('segundo/', 'records'))
 
     def test_without_a_valid_record_the_release_keeps_the_default(self):
         """Issue 44, S2: sem registro válido, `claude/`, como antes."""
