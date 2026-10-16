@@ -37,7 +37,7 @@ their language; quote the helper's English messages only when useful.
 - Write only into the staged files named in the plan (`targets.*.staged`). Never edit the real
   roadmap or sprint files. Only add to the text of the target, except where a rule below says to
   rewrite: the entry a `modify` updates in place (a title-only `modify` included), where an entry
-  sits (the lane a `move_lane` moves it to in the roadmap, or its order in a sprint file) and the
+  sits (the lane a `move_lane` moves it to in the roadmap, its order in a sprint file, or the lane and place the user chose for an `add` that reuses an entry) and the
   line of the sprint limit; your own draft may be revised freely before approval. The staged copy
   starts as an exact copy of its target (or
   empty, for a sprint file that does not exist yet), and `apply` refuses a copy that shrinks
@@ -77,9 +77,8 @@ their language; quote the helper's English messages only when useful.
   sits after the line it counts as an entry past the limit that keeps the line. When the item comes
   back to the week, that same entry records the return and moves to its place by `position`; never
   open a second entry for it: a `move_lane` back into a week finds the entry of its item in that sprint
-  file the same way the rule of finding an entry, below, finds it, and an `add` whose `#N` (in the same
-  repository) already has an entry whose latest record is its exit or removal records the return in
-  that entry, in that sprint file and in the roadmap. Moving entries and
+  file the same way the rule of finding an entry, below, finds it (an `add` of the same `#N` is a
+  question, below). Moving entries and
   rewriting or removing that line join the in-place `modify` as the exceptions to adding only. A
   change of an item past the limit is written in the sprint file like any other. Do not ask about the limit; tell the user which items are past it. A change in
   the order alone, with no queued change for that week, writes nothing: the order follows at the
@@ -87,14 +86,16 @@ their language; quote the helper's English messages only when useful.
 - New work is a GitHub issue, cited as `#N` (or its URL), never a retired GuardianS task
   identifier (see "The unit of work is the GitHub issue" in `SKILL.md`). A branch for an issue is
   written `issue-N`.
-- `add` creates an entry, except an `add` that recreates a removed item (an `#N` whose entry's latest
-  record is its removal), which records the return in that entry (above); `modify` updates the existing entry in place (a modify whose only news is
+- `add` creates an entry; an `add` whose `#N` (in the same repository) already has an entry in the roadmap or
+  in a sprint file of `change.sprintTargets` is not written on its own: list it in the single question of the
+  rule of finding an entry, below, and propose reusing that entry (recording the return and moving it to the lane
+  of `item.lane` and to its place by `position`) or opening another, as the user chooses; `modify` updates the existing entry in place (a modify whose only news is
   `item.githubIssueUrl` adds the issue link to the entry, it never duplicates it); `move_lane` moves
   the entry between lanes or into or out of a sprint (an exit is recorded in the sprint it left,
   an entry in the sprint it joined); `remove` (`itemMissing` true, identified by
-  `itemId` and `item.title`) records the removal in the roadmap. A change whose `knownAction` is
+  `itemId` and `item.title`) records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`. A change whose `knownAction` is
   false is described to the user and handled only as they direct.
-- Find the existing entry of a `modify`, `move_lane`, `remove` or `completed`, or of an `add` that recreates a removed item (when the file already has one), by the
+- Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one), by the
   issue number the change carries (the `#N` of `item.githubIssueUrl`, or its URL, as the files cite it), never by title
   alone, because the title in the files may be older than the one in the change; when the files cite the same number for
   more than one repository or product, tell them apart by the repository in the URL (and `item.produto`), and ask if
@@ -102,12 +103,13 @@ their language; quote the helper's English messages only when useful.
   item with no issue yet) or the `modify` that only adds the link (the files cannot cite it yet) is found by title and
   by the lane the item was in (`payload.from_lane_id` for a `move_lane`, `payload.lane_id` for a `remove`, `item.lane`
   otherwise; when the lane is missing, by title alone, asking if more than one entry matches). Look in the roadmap and,
-  for a `modify`, a `move_lane` and a `completed`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
+  for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
   and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined), for a
   sprint file that does not exist yet, for a `remove` (recorded in the roadmap even for an item never written) and for a
-  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry in that file); a `modify` with no entry in a sprint file that exists leaves that file as
-  it is and says so. Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap. Ask also
-  when any of them finds more than one. Ask once, listing every such change and proposing the closest candidate in
+  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry at the end of that file, out of the order of `position`); a `modify` with no entry in a sprint file that exists leaves that file as
+  it is and says so. Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap and when an
+  `add` finds an entry of its `#N`. Ask also when any change this rule finds (a `modify`, `move_lane`, `remove`,
+  `completed` or `add`) finds more than one. Ask once, listing every such change and proposing the closest candidate in
   the item's lane, and never open a second entry. A row of a table and the section of the same item are one entry; a
   mention inside another entry is not. A
   `modify` that only changes `item.title` (its `payload` says the title follows the issue on GitHub) replaces the old

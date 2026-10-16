@@ -928,17 +928,22 @@ class WeekByDateTests(RoadmapSyncTestCase):
         readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
         protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
         for phrase in ('a `move_lane` back into a week finds the entry of its item in that sprint file the same way',
-                       'an `add` whose `#N` (in the same repository) already has an entry whose latest record is its exit or '
-                       'removal records the return in that entry, in that sprint file and in the roadmap',
-                       '`add` creates an entry, except an `add` that recreates a removed item',
-                       'or of an `add` that recreates a removed item',
-                       'for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry in that file)'):
+                       '`add` creates an entry; an `add` whose `#N` (in the same repository) already has an entry in the roadmap or '
+                       'in a sprint file of `change.sprintTargets` is not written on its own',
+                       'propose reusing that entry (recording the return and moving it to the lane of `item.lane` and to its place by '
+                       '`position`) or opening another, as the user chooses',
+                       'records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`',
+                       'for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint',
+                       'for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry at the end '
+                       'of that file, out of the order of `position`)',
+                       'or the lane and place the user chose for an `add` that reuses an entry'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, reference)
         for label, text in (('README', readme), ('protocol', protocol)):
             with self.subTest(label=label):
                 self.assertIn('quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar dela pelo `position`', text)
-        self.assertIn('sem segunda entrada, no arquivo da semana nem no roadmap', readme)
+                self.assertIn('um `add` cujo `#N` já tem entrada vira pergunta', text)
+        self.assertNotIn('recreates a removed item', reference)
 
     def test_lanes_of_weeks_and_groups_raise_no_note_in_both_shapes(self):
         for shape, convert, origin in (('positional', lambda s: s, 'atual'), ('dated', dated, 'sprint-28-09-2026')):

@@ -84,7 +84,7 @@ class RuleTextTests(unittest.TestCase):
         self.reference = flat('skills', 'frontlights', 'references', 'roadmap-sync.md')
 
     def test_the_entry_is_found_by_the_issue_number_and_never_by_the_title_alone(self):
-        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove` or `completed`, or of an `add` that recreates a removed item (when the file already has one)',
+        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove`, `completed` or `add` (when the file already has one)',
                        'by the issue number the change carries (the `#N` of `item.githubIssueUrl`, or its URL, as the files cite it)',
                        'tell them apart by the repository in the URL (and `item.produto`), and ask if that does not settle it',
                        'never by title alone, because the title in the files may be older than the one in the change',
@@ -98,14 +98,15 @@ class RuleTextTests(unittest.TestCase):
         for phrase in ('A change without an issue number (a `remove` whose payload has no `github_issue_url`, an item with no issue yet)',
                        'or the `modify` that only adds the link (the files cannot cite it yet) is found by title and by the lane the item was in '
                        '(`payload.from_lane_id` for a `move_lane`, `payload.lane_id` for a `remove`, `item.lane` otherwise;',
-                       'Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap. Ask also when any of them finds more than one',
+                       'Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap and when an `add` finds an entry of its `#N`. '
+                       'Ask also when any change this rule finds (a `modify`, `move_lane`, `remove`, `completed` or `add`) finds more than one',
                        "Ask once, listing every such change and proposing the closest candidate in the item's lane, and never open a second entry",
                        'when the lane is missing, by title alone, asking if more than one entry matches'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.reference)
 
     def test_the_lookup_says_where_to_look_and_which_misses_are_expected(self):
-        for phrase in ('Look in the roadmap and, for a `modify`, a `move_lane` and a `completed`, in the file of each sprint in `change.sprintTargets`',
+        for phrase in ('Look in the roadmap and, for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint in `change.sprintTargets`',
                        'a `modify` with no entry in a sprint file that exists leaves that file as it is and says so',
                        'A missing entry is expected, and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined)',
                        'for a sprint file that does not exist yet',
@@ -133,7 +134,8 @@ class RuleTextTests(unittest.TestCase):
         readme = flat('README.md')
         for phrase in ('e quantos foram renomeados, quando o RoadS informa', 'O Frontlights acha a entrada pelo número da issue que a mudança traz',
                        'e não pelo título', 'e diz quantos `modify` de título o plano tem', 'Sem número (um item ainda sem issue, por exemplo), acha pelo título e pela lane',
-                       'Se um `modify` ou `move_lane` não achar entrada no roadmap, ou se achar mais de uma, ele pergunta em vez de abrir uma segunda'):
+                       'Se um `modify` ou `move_lane` não achar entrada no roadmap, se um `add` achar entrada do mesmo `#N`, ou se qualquer '
+                       'mudança achar mais de uma, ele pergunta em vez de abrir uma segunda'):
             with self.subTest(doc='README', phrase=phrase):
                 self.assertIn(phrase, readme)
         contract = flat('docs', 'roads-contract.md')
