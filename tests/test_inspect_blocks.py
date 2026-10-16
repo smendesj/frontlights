@@ -462,6 +462,16 @@ class IsolatedBlockTests(unittest.TestCase):
                 self.assertNotIn(login, message)
                 self.assertNotIn(PASSWORD, message)
 
+    def test_the_example_declares_the_block_with_generic_markers_and_is_accepted(self):
+        block = EXAMPLE['browserTest']['isolated']
+        self.assertEqual(block['baseUrl'], 'http://127.0.0.1:{port}/')
+        self.assertTrue(all(item['port'] == 'auto' and item['health'].startswith('http://127.0.0.1:{port}/')
+                            for item in block['processes']))
+        self.assertIn('COPY_DB_SCRIPT', block['copyDatabase']['argv'])
+        self.assertIn('DROP_DB_SCRIPT', block['dropDatabase']['argv'])
+        with tempfile.TemporaryDirectory() as root:
+            inspect_file(local(EXAMPLE), root)
+
 
 if __name__ == '__main__':
     unittest.main()
