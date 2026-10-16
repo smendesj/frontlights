@@ -59,7 +59,7 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('Never decide alone that the interview is over.', grilling)
         self.assertLess(grilling.index('## 2. Project conventions'), grilling.index('## 3. Solution round'))
         stage3 = (skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0]
-        self.assertIn('never skips the solution round', stage3)
+        self.assertIn('still runs the solution round', stage3)
         for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Decisões de implementação')):
             with self.subTest(template=template):
                 self.assertIn(heading, (ROOT / 'skills' / 'frontlights' / 'templates' / template).read_text(encoding='utf-8'))

@@ -143,16 +143,20 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
-        for phrase in ('cut from the local main', 'never from `origin/main`', 'stays local and is never pushed',
-                       'the merge of the branch of the issue into the local main with its three gates green',
-                       'Nothing of an issue goes to GitHub before the release',
-                       'writing the remote main (`origin/main`, the base branch on GitHub)',
-                       'the local main is written only by the covered merge below',
-                       'the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and '
-                       '`browser-gate` `answered` (or `not_needed`)',
-                       '`merge_into_local_main`', 'a red gate is a question to the user, never a merge'):
+        for phrase in ('one issue branch, cut from the local main and kept local',
+                       'the merge of the branch of the issue once its three gates are green, then the bundle',
+                       '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        development = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ('never `origin/main`', 'stays local and is never pushed',
+                       'Nothing of an issue goes to GitHub before the release',
+                       'writing the remote main (`origin/main`, the base branch on GitHub)',
+                       'the local main is written only by the covered merge',
+                       '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`',
+                       '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
         for gone in ('pushing the work branches', 'one issue branch and one PR', 'write the base branch'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, text)
@@ -174,7 +178,7 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, body)
         whole = ' '.join(text.split())
         for phrase in ('one merge into the local main per issue', 'delivered by one merge into the local main',
-                       'the branches of the issue and of its slices are never pushed',
+                       'the branches of the issue and of its slices stay local',
                        'writing the remote main (`origin/main`, the base branch on GitHub)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, whole)
@@ -184,22 +188,19 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('cortada da main local', 'fica só local, nunca é enviada e entra na main local',
-                       'três portões verdes', 'conferidos pelo `authorize` como `merge_into_local_main`',
-                       'Nada da issue vai ao GitHub antes da release',
-                       'escrever na main remota (`origin/main`, a branch base no GitHub)',
-                       'a main local só recebe o merge coberto', 'a saída do `authorize` do merge na main local'):
+        for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes',
+                       '"Standing authorization and the denied operations"', 'em "Into the local main"',
+                       'a saída do `authorize` do merge na main local'):
             with self.subTest(file='protocol', phrase=phrase):
                 self.assertIn(phrase, protocol)
         security = flat('skills', 'frontlights', 'docs', 'security.md')
-        for phrase in ('**Main local e main remota.**', 'cortada da main local e fica só local',
-                       'escrever na main remota (`origin/main`)',
+        for phrase in ('**Main local e main remota.**',
                        '`merge_into_local_main` só com `target` igual a `base.branch`', 'são recusados como main remota',
                        'nunca de uma slice',
                        '`full_suite: green`, `review_gate: current` e `browser_gate: answered` ou `not_needed`',
                        'conferência prévia, não barreira', 'não lê o Git',
                        'confere `edit`, `test`, `checkpoint` e `merge_into_local_main`',
-                       'e o merge da branch da issue na main local com os três portões verdes). Esses são os únicos merges permitidos'):
+                       'os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"), os únicos permitidos'):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
         for name, text in (('protocol', protocol), ('security', security)):
@@ -211,8 +212,8 @@ class LocalMainTextTests(unittest.TestCase):
         readme = flat('README.md')
         for phrase in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
                        'numa branch por issue, cortada da main local',
-                       'mesclar a branch da issue na main local com os três portões verdes',
-                       'escrever na main remota (`origin/main`)'):
+                       'o da branch da issue na main local com os três portões verdes',
+                       'nada da issue vai ao GitHub antes da release'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
         self.assertNotIn('enviar as branches, abrir PRs rascunho', readme)
@@ -237,18 +238,19 @@ class LocalMainTextTests(unittest.TestCase):
         """S2: a skill, a referência, o protocolo, a segurança e o README dizem quando o hook e o sync rodam, o que
         perguntam, e declaram as três escritas da skill dentro de `.git/`."""
         skill = stage(6)
-        for phrase in ('**Hook and sync, at the start of every stage 6.**',
-                       '"Instalar o hook `pre-push` que recusa enviar a main local?"', '"Sim, instalar"',
-                       'never overwrite it', 'the only hook the skill installs',
-                       '`homolog sync --root <main worktree> --base <base>`', 'never a push, a reset or a rebase',
-                       '"Resolver o conflito agora na worktree principal"', 'gets neither the hook nor the sync'):
+        for phrase in ('1. **Hook and sync** (development.md, "The start of stage 6"): `homolog hook`, then `homolog sync` '
+                       'brings `origin/<base>` into the local main',):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
         heading = '## The start of stage 6: the pre-push hook and the sync of the local main'
         self.assertLess(text.index(heading), text.index('## Slices in order'))
         body = ' '.join(text.split(heading)[1].split('## Slices in order')[0].split())
-        for phrase in ('`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
+        for phrase in ('"Instalar o hook `pre-push` que recusa enviar a main local?"', '"Sim, instalar"',
+                       'it is never overwritten', 'It is the only hook the skill installs',
+                       '`homolog sync --root <main worktree> --base <base>', 'never pushes',
+                       '"Resolver o conflito agora na worktree principal"', 'gets neither',
+                       '`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
                        '**The hook.**', '`installed`, `ours`, `foreign`, `path` and `script`', '`foreign: true`',
                        'refuses with exit code 1', 'a guard and not a barrier', '`--no-verify`',
                        '**The sync.**', 'no tracked change pending and no merge in progress',
@@ -257,16 +259,16 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         security = flat('skills', 'frontlights', 'docs', 'security.md')
-        for phrase in ('instala um único hook', 'não instala hooks', 'nunca sobrescreve um hook de outra origem',
+        for phrase in ('instala um único hook', 'Esse `pre-push` é o único hook que o Frontlights instala',
+                       'nunca sobrescreve um hook de outra origem',
                        'É uma guarda, não uma barreira', 'As escritas da skill dentro de `.git/` são três',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
-                       'o merge de `origin/main` na main local pelo `homolog sync`'):
+                       'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):
             with self.subTest(file='security.md', phrase=phrase):
                 self.assertIn(phrase, security)
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('`origin/main` na main local pelo `homolog sync`', 'o hook `pre-push` de `homolog hook`',
-                       'nunca por cima de um hook de outra origem'):
+        for phrase in ('o hook `pre-push`, a sincronização da main local e a prévia, em "The start of stage 6"',):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
         readme = flat('README.md')
@@ -281,14 +283,12 @@ class LocalMainTextTests(unittest.TestCase):
     def test_the_bundle_follows_each_merge_into_the_local_main(self):
         """S3: a skill, a referência, o protocolo, a segurança, o README e o exemplo de config dizem quando o bundle
         é gravado, onde, e que sem a chave nada é gravado."""
-        skill = stage(6)
-        for phrase in ('`homolog bundle --root <main worktree> --config <config>`', '`homolog.backupDir`',
-                       'the only write the run makes outside the project', 'without the key it writes nothing'):
-            with self.subTest(file='SKILL.md', phrase=phrase):
-                self.assertIn(phrase, skill)
+        self.assertIn('once its three gates are green, then the bundle', stage(6))
         text = read('skills', 'frontlights', 'references', 'development.md')
         body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
-        for phrase in ('6. **Back it up.**', '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
+        for phrase in ('6. **Back it up.**', 'homolog bundle --root <main worktree> --config',
+                       'the only write the run makes outside the project, and only into that folder',
+                       '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
                        '`configured: false`', 'name the key, ask nothing and go on', '7. **Record it.**',
                        '"sem backup configurado"'):
             with self.subTest(file='development.md', phrase=phrase):
@@ -296,10 +296,10 @@ class LocalMainTextTests(unittest.TestCase):
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('**Backup da main local (`homolog bundle`).**', 'a única gravação da execução fora do projeto',
                        'o utilitário nunca a cria', 'nunca se sobrescreve nem se apaga um bundle', 'não há rede',
-                       'nunca entra neste repositório', 'A chave nunca liga nem amplia a autorização'):
+                       'nunca entra neste repositório', 'A chave só diz onde gravar'):
             with self.subTest(file='security.md', phrase=phrase):
                 self.assertIn(phrase, security)
-        self.assertIn('`homolog.backupDir` do config (`homolog bundle`; sem a chave, nada é gravado e a sessão avisa)',
+        self.assertIn('os três portões do merge na main local e o bundle depois dele, em "Into the local main"',
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('a chave `homolog.backupDir` aponta uma pasta sua, por caminho absoluto', flat('README.md'))
         example = json.loads(read('skills', 'frontlights', 'examples', 'config.json'))
@@ -316,9 +316,6 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, step)
         self.assertNotIn('the local main and every branch under the `branch_prefix`', step)
-        self.assertIn('the work branches of every `branch_prefix` in the authorization records', stage(6))
-        self.assertIn('das branches de trabalho de todo `branch_prefix` dos registros de autorização',
-                      flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('das branches de trabalho de todo prefixo dos registros de autorização', flat('README.md'))
 
     def test_the_release_name_follows_the_newest_record(self):
@@ -330,7 +327,6 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, release)
         self.assertIn('without `issued_at`, the last record by file name', release)
         self.assertIn('say in one line how many records `skipped` counts', release)
-        self.assertIn('the prefix of the newest authorization record', stage(6))
         for file in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
             with self.subTest(file=file[-1]):
                 text = flat(*file)
@@ -343,12 +339,12 @@ class LocalMainTextTests(unittest.TestCase):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
         skill = stage(6)
-        for phrase in ('**The release, offered at the end of each homologated issue**', '`homolog release-plan',
-                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       '`gh pr create --base <base> --head <release branch>`', 'the body from `templates/pr.md`',
-                       '`git pull --ff-only` on the local main', 'before the merge into the local main, before a PR is opened or updated'):
+        for phrase in ('7. **The release** (development.md, "The release"), offered at the end of each homologated issue',
+                       "the session then waits for the user's merge"):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
+        self.assertIn('before such an issue is merged into the local main, and before a PR is opened or updated',
+                      flat('skills', 'frontlights', 'references', 'browser-testing.md'))
         self.assertNotIn("After a PR is opened, wait for the user's merge by default", skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
         self.assertNotIn('## After the pull request', text)
@@ -356,6 +352,8 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('## Integrating a family before the local main', text)
         body = ' '.join(text.split('## The release: from the local main to GitHub')[1].split())
         for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
+                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
+                       '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
                        '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
                        '**No closing keyword.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
@@ -363,7 +361,7 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada', 'a única\nbranch do fluxo que é enviada'.replace('\n', ' '),
+        for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
                        '"Agora não" deixa a issue homologada na main local'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)

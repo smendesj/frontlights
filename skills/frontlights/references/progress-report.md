@@ -1,5 +1,7 @@
 # Progress report ("Resumo para a diretoria") in RoadS
 
+On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "Roadmap e resumo".
+
 Prepares the plain-language progress summary for people who follow the work from outside, and
 sends the collected content to RoadS as a draft. Reviewing, editing, checking the numbers, copying
 to e-mail and marking as sent all happen in RoadS. Frontlights never e-mails anything and never

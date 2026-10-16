@@ -86,7 +86,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('publicar o artefato (uma página por grilling, na mesma URL, só com dados fictícios)', protocol)
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
-        for phrase in ('**Artefato do grilling.**', 'só dados fictícios',
+        for phrase in ('## Artefato do grilling', 'só dados fictícios',
                        'nenhum dado real, segredo, endpoint, nome de pessoa, cliente ou organização entra na página',
                        'fica fora da máquina', 'nunca do artefato'):
             with self.subTest(phrase=phrase):
