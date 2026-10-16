@@ -234,9 +234,10 @@ casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posi
 virada encerrou, não alcança arquivo de sprint, e o `fetch` a avisa. Pasta e arquivo novos só são
 criados dentro do
 `scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. Itens com
-`overLimit` ficam fora da sprint e são avisados; `snapshotStale` indica cópia do quadro com mais de
+`overLimit` entram no arquivo da semana depois da linha "Acima do limite de N:", na ordem do `position`, e são
+avisados; `snapshotStale` indica cópia do quadro com mais de
 24 h ou ausente. Marcas, backups, recusa de encolhimento e confirmação continuam como antes. Um item de sprint
-com `done` verdadeiro e dentro do limite, ainda sem marca no `ROADMAP.md` nem no arquivo da sprint dele, entra no
+com `done` verdadeiro (inclusive acima do limite), ainda sem marca no `ROADMAP.md` nem no arquivo da sprint dele, entra no
 plano como uma mudança sintética `completed` (id `done-<itemId>`, com `completedOn` na data da sincronização em São
 Paulo): ela passa pelo mesmo diff, aprovação, marca e verificação, mas não existe na fila do RoadS, então o `ack` só
 cobre as mudanças reais e um plano só de conclusões termina com `ack: not_needed`. `roadmapSync.markCompleted`

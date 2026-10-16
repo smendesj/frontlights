@@ -921,29 +921,43 @@ class OverLimitTests(RoadmapSyncTestCase):
                           overLimit=True, pendingChangeIds=[ADD_ID]))
         return state
 
-    def test_an_over_limit_item_is_listed_as_left_out_and_not_written(self):
+    def test_a_change_of_an_over_limit_item_reaches_the_week_file(self):
         result, _ = self.approve_and_fetch(state=self.over_limit_state())
         self.assertTrue(result['ok'], result['message'])
         plan = result['plan']
         current = next(s for s in plan['sprints'] if s['sprintId'] == 'sprint-2026-09-28')
         self.assertEqual([i['position'] for i in current['items']], [1, 2, 3, 4])
         self.assertEqual([(i['position'], i['title']) for i in current['outOfLimit']], [(5, 'Exportar em CSV')])
-        self.assertNotIn(ADD_ID, plan['targets'][CURRENT]['changeIds'])
-        self.assertEqual(plan['targets'][CURRENT]['outOfLimitChangeIds'], [ADD_ID])
-        self.assertEqual(next(c for c in plan['changes'] if c['id'] == ADD_ID)['sprintTargets'], [])
-        self.assertIn('outside the sprint limit', result['message'])
+        self.assertIn(ADD_ID, plan['targets'][CURRENT]['changeIds'])
+        self.assertNotIn('outOfLimitChangeIds', plan['targets'][CURRENT])
+        self.assertEqual(next(c for c in plan['changes'] if c['id'] == ADD_ID)['sprintTargets'], [CURRENT])
+        self.assertNotIn('outside the sprint limit', result['message'])
 
-    def test_a_marker_for_an_over_limit_change_in_that_sprint_file_is_refused(self):
+    def test_a_marker_for_an_over_limit_change_in_the_week_file_is_written(self):
         result, _ = self.approve_and_fetch(state=self.over_limit_state())
         plan = result['plan']
         self.draft(plan)
-        staged = Path(plan['targets'][CURRENT]['staged'])
         marker = next(c for c in plan['changes'] if c['id'] == ADD_ID)['marker']
-        staged.write_text(staged.read_text(encoding='utf-8') + f'\nFora do limite. {marker}\n', encoding='utf-8')
-        applied = self.run_op('apply')
-        self.assertFalse(applied['ok'])
-        self.assertIn('limit', applied['message'])
-        self.assertEqual(applied['written'], [])
+        self.assertIn(marker, Path(plan['targets'][CURRENT]['staged']).read_text(encoding='utf-8'))
+        applied = self.run_op('apply', Transport((200, {'acked': 4})))
+        self.assertTrue(applied['ok'], applied['message'])
+        self.assertIn(str(self.sprint), applied['written'])
+        self.assertIn(marker, self.sprint.read_text(encoding='utf-8'))
+
+    def test_the_reference_writes_the_items_past_the_limit_after_one_line(self):
+        root = Path(__file__).resolve().parents[1]
+        reference = ' '.join((root / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
+        readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
+        protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
+        for phrase in ('"Acima do limite de N:"', 'written once, then the `outOfLimit` items', 'in the order of `position`',
+                       'when one of its items (past the limit too) lists the change'):
+            self.assertIn(phrase, reference)
+        self.assertNotIn('stay out of that sprint file', reference)
+        self.assertNotIn('a change past the sprint limit in that sprint', reference)
+        self.assertIn('Acima do limite de N:', readme)
+        self.assertNotIn('escreve na sprint só os itens dentro do limite', readme)
+        self.assertIn('Acima do limite de N:', protocol)
+        self.assertNotIn('ficam fora da sprint e são avisados', protocol)
 
     def test_the_service_limit_wins_over_the_configuration(self):
         state = state_fixture()

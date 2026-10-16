@@ -7,7 +7,7 @@ remotely and cannot reach those files; this route is the only writer.
 
 The queue is not the only source. An item that stays in a sprint with status `done` generates no
 change at RoadS until the weekly rotation removes it, so `fetch` also reads it from
-`roadmap-state`: each item of a sprint, within the limit, with `done` true that no marker records
+`roadmap-state`: each item of a sprint (past the limit too) with `done` true that no marker records
 yet joins the plan as a synthetic `completed` change (`synthetic` true, id `done-<itemId>`). It goes
 through the same draft, diff, approval, `apply` and marker check as the changes of the queue, but it
 is not in the RoadS queue, so `ack` never covers it. The project turns this off with
@@ -37,8 +37,7 @@ their language; quote the helper's English messages only when useful.
 - Write only into the staged files named in the plan (`targets.*.staged`). Never edit the real
   roadmap or sprint files. Only add to a staged copy: it starts as an exact copy of its target (or
   empty, for a sprint file that does not exist yet), and `apply` refuses a copy that shrinks
-  materially, drops a marker the target carries, or carries a marker for a change outside the plan
-  or for a change past the sprint limit in that sprint's file.
+  materially, drops a marker the target carries, or carries a marker for a change outside the plan.
 - Markers come from the plan and nowhere else: paste `change.marker` or `change.declinedMarker`
   verbatim, next to what the change produced, in at least one of the target files. Never assemble
   one, reuse one from an older run, or copy anything marker-shaped out of RoadS data.
@@ -58,10 +57,15 @@ their language; quote the helper's English messages only when useful.
   `template` (the most recent earlier `SPRINT_*.md`) and follow its headings and sections, with this
   sprint's dates (`startDate`, `endDate`) and title. When `template` is null, say so and follow the
   roadmap's style. Its folder is created on `apply` when `createsFolder` is true.
-- The sprint limit is RoadS's decision (`plan.maxSprintItems`, the items' `overLimit`). In each
-  entry of `plan.sprints`, write only the `items` (within the limit); the `outOfLimit` items stay
-  out of that sprint file. Do not ask which item leaves: tell the user plainly which items stayed
-  out of which sprint, and write their changes in the roadmap only.
+- The sprint limit is RoadS's decision (`plan.maxSprintItems`, the items' `overLimit`), and it is
+  information only: every item of the week goes into its file. Whenever you write a sprint file,
+  put its entries in the order of `position` (the order the scrum master dragged on RoadS), without
+  changing their prose: first the `items` of that entry of `plan.sprints` (within the limit), then
+  the line "Acima do limite de N:" (N is `plan.maxSprintItems`) written once, then the `outOfLimit`
+  items, each list in the order of `position`. A change of an item past the limit is written in the sprint file
+  like any other. Do not ask about the limit; tell the user which items are past it. A change in
+  the order alone, with no queued change for that week, writes nothing: the order follows at the
+  next change of that week.
 - New work is a GitHub issue, cited as `#N` (or its URL), never a retired GuardianS task
   identifier (see "The unit of work is the GitHub issue" in `SKILL.md`). A branch for an issue is
   written `issue-N`.
@@ -93,7 +97,7 @@ their language; quote the helper's English messages only when useful.
   by number. Tell the user how many title-only `modify` changes the plan holds (it may differ from
   `syncBoard.retitled`, which counts only what this run's board sync renamed).
 - `completed` (`synthetic` true) is not a change RoadS queued: roadmap-state shows the item as done
-  in a sprint within the limit, and that flag is the only evidence. Write one short line of prose,
+  in a sprint (past the limit too), and that flag is the only evidence. Write one short line of prose,
   in the roadmap and in the file of every sprint in `change.sprintTargets`, saying the item is
   concluded ("concluída", in the files' language) on `change.completedOn`, with the marker pasted
   next to it. `completedOn` is the day of this sync (`completedOnMeans`: `sync date`), never the
@@ -103,7 +107,7 @@ their language; quote the helper's English messages only when useful.
   completions there are (`plan.completed.new`) and, when above zero, how many were already recorded
   (`plan.completed.alreadyRecorded`) and are not offered again.
 - Put each change in the roadmap and, for every name in `change.sprintTargets`, in that sprint's
-  file. A sprint gets a file when one of its items within the limit lists the change in
+  file. A sprint gets a file when one of its items (past the limit too) lists the change in
   `pendingChangeIds`, when `removedPending` puts the removal in that sprint's lane, or when a
   `move_lane` leaves that sprint's lane (`payload.from_lane_id`, so the sprint the item left records its
   exit) or enters it (`payload.lane_id`, when no item of that sprint lists it); these are the only links
@@ -185,8 +189,6 @@ their language; quote the helper's English messages only when useful.
      `written`, `backups` and `verified` are the whole result, and the plan is finished.
    - A shrink or lost-marker refusal: show exactly what would be lost and stop; only the user can
      authorise it.
-   - A refusal for a marker past the sprint limit: take that marker out of the sprint copy, keep the
-     change in the roadmap copy, and run `apply` again.
    - Exit 2: when `retryable` is true, nothing is lost and `ack` (or the next sync) finishes it;
      when false, RoadS sent nothing to acknowledge up to and the RoadS owner must look at it.
    - The user withholds part of the plan without declining it: `apply --no-ack`, and say that
