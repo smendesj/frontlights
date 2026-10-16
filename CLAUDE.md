@@ -41,4 +41,7 @@ para ela: as da etapa 6 (autorização permanente, merges cobertos, negadas, tr�
 `skills/frontlights/docs/security.md`. Cada referência abre com as seções desses dois docs que a etapa lê.
 Execute `python -m unittest discover -s tests -v` e
 `python -m compileall -q skills/frontlights/scripts tests`.
+Antes de cada commit, rode `python tests/pre_commit.py` (segundos: `compileall` e os módulos de
+teste que as mudanças tocam ou citam): saiu 1, corrija antes de commitar. Ele só relata, nenhum
+hook o roda, e não substitui a suíte inteira.
 Não apresente testes com dados simulados como homologação de integrações reais.
