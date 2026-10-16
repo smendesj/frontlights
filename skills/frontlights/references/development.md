@@ -120,10 +120,10 @@ the fast suite is how the whole is checked between slices, when the project has 
 Frontlights repository the fast suite runs through `python tests/suite.py` with
 `FRONTLIGHTS_SUITE=rapida` (Windows only). The variable lives in each module's `load_tests`, so
 it works the same for the runner and for `python -m unittest discover -s tests`: both skip the
-modules that start real processes and ports (`tests.test_serve_ports` and
-`tests.test_checks_integration`), each one reported as skipped with a reason that names the
+modules that start real processes and ports (`tests.test_serve_ports`,
+`tests.test_checks_integration` and `tests.test_serve_preview`), each one reported as skipped with a reason that names the
 variable; any other value, or no variable, runs everything. The runner runs the safe modules in
-parallel and the five sensitive ones in a serial queue, one at a time; `--report <file>` writes
+parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Before the independent review and before the merge into the local main, run the whole
 suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
 without CI in the project: the runner does not make the whole suite faster than `discover`, a

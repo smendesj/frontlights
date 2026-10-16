@@ -784,11 +784,11 @@ python -m compileall -q skills/frontlights/scripts tests
 
 A suíte inteira leva dezenas de minutos, quase tudo em dois módulos que sobem processos e portas de
 verdade. Para conferir o todo entre slices, defina `FRONTLIGHTS_SUITE=rapida` (no PowerShell,
-`$env:FRONTLIGHTS_SUITE = 'rapida'` antes do comando): os módulos `tests.test_serve_ports` e
-`tests.test_checks_integration` são pulados, cada um relatado como um teste pulado com o motivo, que cita
+`$env:FRONTLIGHTS_SUITE = 'rapida'` antes do comando): os módulos `tests.test_serve_ports`,
+`tests.test_checks_integration` e `tests.test_serve_preview` são pulados, cada um relatado como um teste pulado com o motivo, que cita
 a variável; qualquer outro valor, ou a ausência dela, roda tudo. A regra está no `load_tests` de cada
 módulo, então vale igual para o `discover` e para o runner. A suíte rápida roda por `python tests/suite.py`
-(só Windows): os módulos seguros rodam em paralelo, num pool de 4 trabalhadores, e os cinco sensíveis
+(só Windows): os módulos seguros rodam em paralelo, num pool de 4 trabalhadores, e os seis sensíveis
 (portas, servidores reais, Chromium, asserções de tempo) numa fila serial, um por vez; cada módulo tem um
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,

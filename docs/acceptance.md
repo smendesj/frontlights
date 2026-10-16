@@ -17,8 +17,8 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
 - `python -m unittest discover -s tests -v`: **1662 testes em 42 módulos, nenhum falhando** (alguns pulados por dependências ausentes no ambiente, como o Playwright; contagem de 15/10/2026, issue 34 na branch da CA S1, pelo que `unittest.TestLoader().discover('tests')` carrega, sem a variável).
   É a suíte inteira e o comando da CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
-  runner da issue 27, só Windows): pula esses dois módulos com o motivo, roda os seguros em paralelo e os cinco
-  sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada; a rodada inteira sem a variável,
+  runner da issue 27, só Windows): pula esses dois módulos e o da prévia (`test_serve_preview`, issue 34) com o
+  motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada; a rodada inteira sem a variável,
   pelo `discover`, continua obrigatória antes da revisão independente e do merge na main local.
 - `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
