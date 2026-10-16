@@ -673,7 +673,8 @@ na mesma URL do início ao fim) → corpo da issue escrito sem nova
 entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
-implementação, anunciada sem pergunta → desenvolvimento orientado a testes (TDD), revisão e evidências →
+implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
+configura) → desenvolvimento orientado a testes (TDD), revisão e evidências →
 merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
 espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
@@ -713,6 +714,14 @@ respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
 só; o relato de um subagente é conferido antes de virar evidência.
+
+**Prévia ao vivo.** Num projeto com o bloco `preview` no `.frontlights/config.json`, a sessão sobe a prévia logo
+depois da aprovação do plano, antes da primeira CA, e a abre numa aba do Claude in Chrome: uma worktree fixa
+numa branch local de prévia (nunca enviada) com a main local e as branches das issues em andamento, refeita pelo
+`serve preview refresh` a cada CA pronta, para você testar à mão minutos depois de a CA ficar verde, só
+recarregando a aba. O log dos processos fica salvo e mascarado; um build quebrado vem numa linha com o arquivo e o
+erro. A prévia só para quando você pede, e a aba é sua: o teste assistido roda em outra janela e nunca nas portas
+dela.
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na

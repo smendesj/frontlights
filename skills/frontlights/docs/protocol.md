@@ -10,7 +10,7 @@
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling; sem seção, dito uma vez, quando o log do grilling diz "não se aplica") e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
-| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes (suíte inteira, `review-gate` atual, `browser-gate` respondido); cada operação negada só com o "Sim" da pergunta própria | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
+| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes (suíte inteira, `review-gate` atual, `browser-gate` respondido); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
 | Release | Ao fim de cada issue homologada: `homolog sync`, `homolog release-plan` (só leitura), a oferta da release ("Lançar a release com as issues #a, #b agora?") e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
@@ -177,6 +177,8 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   progress-report/
     approval.json    aprovação do bloco exato `roadmapSync.progress` (hash assinado com a chave do usuário)
   serve/<n>.json     pids e portas dos processos que o `serve start` subiu para a issue
+  preview/registry.json  pids, portas, branch e merges da prévia (`serve preview`), que sobrevive à issue e à sessão
+  preview/log/<nome>.log  log mascarado de cada processo da prévia
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```
@@ -185,7 +187,7 @@ O teste de navegador roda quando algo que a sessão entrega muda o que a pessoa 
 `## Navegador e testes ligados` com `Toca o frontend: sim`, ou o `browser-gate` acha a mudança visível no
 diff), uma vez por issue e antes da revisão independente de qualquer fatia que muda a tela, só
 com o que o plano liga e nesta ordem: `checks regression`, `serve start`,
-`checks integration`, navegador e permissões entre contas, `checks smoke`, `serve stop`.
+`checks integration`, navegador e permissões entre contas, `checks smoke`, `serve stop` da issue (nunca o da prévia).
 O `frontlights.py browser-gate --config <config> --base <base> --root <worktree> ... [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente>
 --record <result.json>` lê o diff, devolve `not_needed`, `answered`, `pending`, `stale`, `contradiction` ou
 `unconfigured` (saída 0 para os dois primeiros, 2 para os demais) e roda onde o `review-gate` roda. O
