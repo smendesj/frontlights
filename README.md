@@ -645,10 +645,12 @@ substitui essa aprovação. Os utilitários são
 #### Homologar na main local, lançar a release, fechar e limpar
 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
-`review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
+`review-gate` em dia e `browser-gate` respondido; o passo a passo está em
+[`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
-as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
-agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
+as issues que estão na main local e ainda não em `origin/main`, e ele pergunta se lança a release com elas agora
+("Sim, lançar" ou "Agora não"; o passo a passo está em
+[`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
@@ -700,30 +702,24 @@ merge na main local com três portões verdes e bundle de backup → oferta da r
 espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local (nunca de
-`origin/main`), que fica só local, nunca é enviada e entra na main local por um merge com três portões verdes
-(suíte inteira, `review-gate` em dia e `browser-gate` respondido), cada CA na própria
-worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
-em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
-concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
-e começa; antes, no início de cada etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado
-só com o seu "Sim" a uma pergunta que mostra o script) e traz `origin/main` para a main local (`homolog sync`;
-um conflito é desfeito e vira pergunta). Cada slice
-é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
-sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
-do lote: editar, testar,
-commitar, mesclar a branch da issue na main local com os três portões verdes, mesclar a main local e as
-branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira
-pergunta; a branch da prévia nunca é enviada), rodar a migration no banco de
-desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
-marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
-fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
-migration já registrada, escrever na main remota (`origin/main`) ou numa branch protegida, ligar configuração, chave ou flag em
-produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
-"Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
-assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
-do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do
-próprio Claude Code não são do Frontlights e continuam valendo.
+Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
+empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Antes, no início de cada
+etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado só com o seu "Sim" a uma pergunta que
+mostra o script) e traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
+Ele trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local, cada CA na própria
+worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é um ciclo de TDD, um ponto
+de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
+aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
+commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
+produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com os
+três portões verdes; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. As operações
+negadas, as que mexem no GitHub, em produção ou em dado que não é de teste, viram, cada uma, uma pergunta própria
+com "Sim" e "Não" e o comando exato; só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
+merges cobertos e das operações negadas fica num lugar só, em
+[`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
+As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
+aprovações do texto da issue, do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de
+permissão do próprio Claude Code não são do Frontlights e continuam valendo.
 
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
 não depende de outra coisa, com tantos subagentes quantas forem as partes: as leituras do início da

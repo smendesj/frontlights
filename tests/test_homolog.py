@@ -212,8 +212,8 @@ class LocalMainTextTests(unittest.TestCase):
         readme = flat('README.md')
         for phrase in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
                        'numa branch por issue, cortada da main local',
-                       'mesclar a branch da issue na main local com os três portões verdes',
-                       'escrever na main remota (`origin/main`)'):
+                       'o da branch da issue na main local com os três portões verdes',
+                       'nada da issue vai ao GitHub antes da release'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
         self.assertNotIn('enviar as branches, abrir PRs rascunho', readme)
