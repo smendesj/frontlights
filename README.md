@@ -634,7 +634,9 @@ Cada issue entra na **main local** do projeto, a homologação, por um merge com
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
 agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` da main local,
-envia só ela e abre a PR única (uma parte por issue, com os três portões). Depois de abrir a PR da release, o
+envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
+com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
+de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
 independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
