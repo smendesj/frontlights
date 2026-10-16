@@ -224,7 +224,7 @@ class DocsAndEvalsTests(unittest.TestCase):
     def test_the_documents_carry_the_rules(self):
         cases = {
             ('README.md',): ('#### Homologar na main local, lançar a release, fechar e limpar', 'aguarda o seu merge por padrão',
-                             '"Lançar a release com as issues #a, #b agora?"', 'a branch `<prefixo>release-<data>`',
+                             'pergunta se lança a release com elas agora', 'a branch `<prefixo>release-<data>`',
                              'nunca leva palavra de fechamento', 'só vale o merge **na branch base aprovada**',
                              '`closeout.py tick-check` antes e depois', 'Sem item citando a filha, ela só fecha',
                              '`cleanup.py plan`', 'Nunca usa `--force`', 'Responder "Não agora" ao fechamento não gera a pergunta da limpeza',

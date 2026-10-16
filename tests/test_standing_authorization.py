@@ -72,8 +72,6 @@ class StandingAuthorizationTests(unittest.TestCase):
                    'deploying or publishing to production', 'editing a migration already registered',
                    'writing the remote main (`origin/main`, the base branch on GitHub) or a protected branch',
                    'turning on a setting, key or flag in production')
-        portuguese = ('merge de PR', 'fechar issue', 'mexer no quadro', 'produção', 'migration já registrada',
-                      'escrever na main remota (`origin/main`', 'chave ou flag em produção')
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         self.assertIn('An operation on the denied list (development.md, "Standing authorization and the denied '
@@ -81,11 +79,12 @@ class StandingAuthorizationTests(unittest.TestCase):
         for phrase in english:
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase.casefold(), development.casefold())
-        for name in (('README.md',),):
-            text = flat(*name).casefold()
-            for phrase in portuguese:
-                with self.subTest(file=name[-1], phrase=phrase):
-                    self.assertIn(phrase.casefold(), text)
+        readme = flat('README.md')
+        for phrase in ('As operações negadas, as que mexem no GitHub, em produção ou em dado que não é de teste, viram, '
+                       'cada uma, uma pergunta própria com "Sim" e "Não" e o comando exato',
+                       '#standing-authorization-and-the-denied-operations'):
+            with self.subTest(file='README.md', phrase=phrase):
+                self.assertIn(phrase, readme)
 
     def test_a_denied_operation_runs_only_after_its_own_yes(self):
         skill = stage(6)
