@@ -348,7 +348,8 @@ quando algum item acima do limite tem entrada no arquivo, a linha "Acima do limi
 (atualizada quando o N muda e tirada quando não sobra entrada depois dela) e depois os demais; a entrada de
 um item que saiu da semana (por `move_lane` ou `remove`) fica onde está, com a saída registrada, e mantém a linha
 enquanto estiver depois dela, e quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar
-dela pelo `position` (sem segunda entrada, seja a volta um `move_lane` ou um `add` do mesmo `#N`); e avisa, sem
+dela pelo `position` (sem segunda entrada, no arquivo da semana nem no roadmap, seja a volta um `move_lane` ou um
+`add` do mesmo `#N`); e avisa, sem
 perguntar, quais passaram do limite. Cada sprint é
 uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
 
