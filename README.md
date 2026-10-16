@@ -833,6 +833,19 @@ variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover 
 deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
 pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
+Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
+pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao
+`HEAD` (no índice, fora dele e não rastreados), roda o `compileall` e os módulos `tests/test_*.py` que estão
+entre eles, inteiros, e os que citam o nome de um deles ou importam um script mudado (`import roadmap_sync`);
+destes, só as classes de teste que citam ou importam (`-k '*.<Classe>.*'`), ou o módulo inteiro quando isso
+fica fora delas. Os módulos rodam com
+`FRONTLIGHTS_SUITE=rapida`, do menor arquivo para o maior, quatro de cada vez, sob um prazo total de 20 s
+(`--timeout`): o que não termina no prazo morre com a árvore de processos, o que não começou fica de fora, e os
+dois aparecem como "fica para a suíte inteira", sem contar como falha. Sai com 0 quando está
+verde, 1 quando o `compileall` ou um módulo falhou (com o comando para rodá-lo sozinho), 2 num erro de uso ou
+do Git e 130 quando é interrompido. Ele só relata, nenhum hook o roda, e confere a árvore de trabalho, não o
+índice; a suíte inteira continua obrigatória antes da revisão independente e do merge na main local.
+
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
