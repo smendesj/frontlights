@@ -91,7 +91,8 @@ class PullRequestTemplateTests(unittest.TestCase):
 
     def test_a_print_is_cited_by_name_and_relative_folder_never_attached(self):
         evidence = flat(section(self.text, 'Evidência'))
-        for phrase in ('pelo nome do arquivo e pela pasta relativa ao projeto', 'uma frase do que ele mostra',
+        for phrase in ('pelo nome do arquivo e pela pasta `.frontlights/issues/<n>/browser/` da worktree da issue',
+                       '(a da issue líder, numa família)', 'uma frase do que ele mostra',
                        'quem revisa o abre no projeto local', 'nunca caminho absoluto', 'imagem anexada ou commitada',
                        'login', 'dado de pessoa'):
             with self.subTest(phrase=phrase):
@@ -184,7 +185,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
                 self.assertIn(phrase, self.release)
 
     def test_prints_door_and_language_say_the_same_as_the_template(self):
-        for phrase in ('a print is cited by its file name and its folder relative to the project',
+        for phrase in ("a print is cited by its file name and its folder in the issue's worktree (the lead issue's for a family)",
                        "never an absolute path, an attached or committed image, a login or a person's data",
                        'a one-way door when a migration or deleted data is in it, a two-way door otherwise',
                        "in the user's language, with the project's domain vocabulary"):

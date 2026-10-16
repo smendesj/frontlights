@@ -34,8 +34,8 @@ tela; depois vem o teste que falhava e passou a passar (o nome dele ou um pseudo
 e o resultado medidos. A evidência só aponta registros que já existem: os prints do teste assistido, o
 checkpoint e os comandos de cada CA, a revisão independente e os três portões do merge na main local. A
 sessão nunca inventa evidência nem descreve um teste que não rodou. Um print é citado pelo nome do arquivo e
-pela pasta relativa ao projeto (`.frontlights/issues/<n>/browser/`), com uma frase do que ele mostra, e quem
-revisa o abre no projeto local: nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
+pela pasta `.frontlights/issues/<n>/browser/` da worktree da issue (a da issue líder, numa família), com uma
+frase do que ele mostra, e quem revisa o abre no projeto local: nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
 
 ### Issue #<a>
 
