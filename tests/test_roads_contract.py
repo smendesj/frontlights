@@ -99,7 +99,7 @@ class DocumentShapeTests(unittest.TestCase):
                        'itens de semanas futuras não recebem `move_lane` de virada', 'issue closed before its sprint',
                        'a ordem que o scrum master arrastou', '"Acima do limite de N:"',
                        'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1',
-                       'toda semana citada por uma mudança ainda sem ack', 'só quando há excedente',
+                       'toda semana citada por uma mudança ainda sem ack', 'só quando algum item acima do limite tem entrada no arquivo',
                        'o `from_lane_id` (de `move_lane`)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)

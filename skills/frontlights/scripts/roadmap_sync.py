@@ -1404,9 +1404,10 @@ def _fetch(root, today, transport, since, discard_staged, result):
     if unmatched:
         # A lane is RoadS text: only one shaped like an id is named in the message, so no line break or prose
         # from the service reaches the instructions; the others are only counted.
-        shown = [lane for lane in unmatched if re.fullmatch(ID_PATTERN, lane)][:10]
-        hidden = len(unmatched) - len(shown)
-        named = ', '.join(shown + ([f'{hidden} not shown, not shaped like an id'] if hidden else []))
+        shaped = [lane for lane in unmatched if re.fullmatch(ID_PATTERN, lane)]
+        more, odd = len(shaped) - len(shaped[:10]), len(unmatched) - len(shaped)
+        named = ', '.join(shaped[:10] + ([f'{more} more'] if more else [])
+                          + ([f'{odd} not shown, not shaped like an id'] if odd else []))
         notes.append(f' {len(unmatched)} lane(s) of the queue match no week or group ({named}): RoadS keeps every week a '
                      'pending change cites, so this is not expected. Their changes reach no sprint file through that lane, '
                      'only the roadmap and the sprint files of their other lanes; ask the user before apply.')
