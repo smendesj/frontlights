@@ -345,6 +345,17 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.refuse(with_isolated(value), r'browserTest\.isolated precisa ser um objeto')
 
+    def test_base_url_must_be_local_http_without_credentials(self):
+        for value in ('http://10.0.0.5:{port}/', 'https://app.example.com/', 'ftp://127.0.0.1:{port}/',
+                      'http://conta@127.0.0.1:{port}/', 'http://[::1/', '', 7, None):
+            with self.subTest(baseUrl=value):
+                self.refuse(with_isolated(baseUrl=value), r'browserTest\.isolated\.baseUrl')
+
+    def test_local_base_urls_are_accepted(self):
+        for value in ('http://localhost:{port}/', 'https://127.0.0.1:8443/app', 'http://[::1]:{port}/'):
+            with self.subTest(baseUrl=value), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(baseUrl=value), root)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -863,6 +863,22 @@ def validate_isolated_block(config):
     if not isinstance(block, dict):
         raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl, processes, copyDatabase e '
                              'dropDatabase.')
+    if not isolated_local_url(block.get('baseUrl')):
+        raise checks.Refused('browserTest.isolated.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, '
+                             'localhost ou ::1), sem usuário e senha; {port} pode ocupar o lugar da porta.')
+
+
+def isolated_local_url(value):
+    """True for an http(s) URL on this machine, without credentials; `{port}` stands for an automatic port."""
+    import checks
+    if not isinstance(value, str) or not value or '\0' in value:
+        return False
+    try:
+        parts = urllib.parse.urlsplit(value.replace(checks.PORT_PLACEHOLDER, checks.STAND_IN_PORT))
+        parts.port  # an out-of-range or non-numeric port raises here
+    except ValueError:
+        return False
+    return parts.scheme in ('http', 'https') and (parts.hostname or '').lower() in checks.LOCAL_HOSTS         and '@' not in parts.netloc
 
 
 def validate_homolog_block(config):
