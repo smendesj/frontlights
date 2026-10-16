@@ -77,6 +77,15 @@ true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito
 never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
 not, the two commits, a conflict and its answer) in the handoff.
 
+**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block, and after the hook
+and the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an
+issue in progress as `--branch` (none at the very start), open its `baseUrl` once in a tab of Claude in Chrome
+and tell the user. From then on the preview follows the work (below, "Slices in order"); it stops only when the
+user asks, and the session that finds it already up (its record) refreshes it instead of starting another one.
+The tab belongs to the user, never to a test. The commands, the record and the log are in
+`references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the preview's branch, the
+branches merged into it and the last refresh.
+
 ## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 
 An issue is worked on one issue branch, cut from the local main (the base branch of the charter,
@@ -106,7 +115,9 @@ measured commands), the slice branch is merged into the branch of the issue (`gi
 <branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below)
 and then comes the tick of its box: capture the body, tick that line only, run
 `closeout.py tick-check` before and after the write, and leave a short comment on the issue with
-the commit and the commands. The session may end in the middle of an issue: the handoff names
+the commit and the commands; then `serve preview refresh` with the branches of the issues in progress, in a
+project with a preview ("The start of stage 6"), so the slice reaches the user's tab; a conflict is a question
+and a broken build goes back to the slice that owns the file before the next one starts. The session may end in the middle of an issue: the handoff names
 the slice in progress with its worktree, and the slices already ticked, and a fresh session resumes at the first
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
 `SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
