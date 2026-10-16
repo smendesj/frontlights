@@ -606,7 +606,8 @@ Limites: só o Windows foi exercitado (POSIX não). O `inspect` confere nesses b
 isolado, `cwd` relativo desses processos, passos do banco sem shell) e o bloco `preview` (worktree dentro do
 `--root`, branch, `baseUrl` local e processos, com as regras do `serve preview`). Ele recusa o
 config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd` de
-`checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o `.cmd`/`.bat` com metacaractere e os nomes
+`checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o de `preview.processes`
+(`serve.process_cwd`, quando a prévia sobe), o `.cmd`/`.bat` com metacaractere e os nomes
 `checks.backend`/`checks.smoke.target` contra `browserTest.processes` só são conferidos na
 execução, antes de qualquer processo subir. Um `browserTest` que declara só as contas (e a
 `baseUrl`), porque o projeto sobe o próprio ambiente, é válido: o `inspect` mostra um aviso em
