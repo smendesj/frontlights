@@ -248,7 +248,12 @@ when `.workflows/` was excluded there. Never merge the two folders when both
 exist: report it and use `.frontlights/`.
 
 Use `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" inspect --config
-<config-path> --root <project>`. `repository: null` is a supported local project
+<config-path> --root <project> --summary`: per issue only its number, title, state and
+acceptance-criteria `boxes` (checked and total, null without that section), with the count of
+issues and of open ones, the RoadS payload counted, and the board as without the flag, so a
+repository with hundreds of issues does not flood the context. Read with `gh issue view <n>` the
+body of an issue the work needs, and of every candidate duplicate before deduplicating (below);
+drop `--summary` only when the full JSON is needed (the RoadS payload, an issue's labels). `repository: null` is a supported local project
 without a remote: GitHub reads as `unconfigured`, plans use `repository: null`
 and `url: null`, and issue snapshots carry `source: "local"`. The helper reports
 npm scripts, Python verification candidates, `path_risk` and, in `warnings`, anything the config
