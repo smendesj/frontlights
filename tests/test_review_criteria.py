@@ -130,6 +130,14 @@ class StopCriterionTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.review)
 
+    def test_a_recheck_after_the_base_comes_in_stays_outside_the_limit(self):
+        # Achado da sessão coordenadora (rodada 4): a base entrou duas vezes depois de a revisão fechar em 0/0, e
+        # "three rounds at most" podia ser lido como proibição da 4ª rodada que o `review-gate` exige.
+        self.assertIn('A round that only rechecks a base brought in after the review was done (`review.md`, '
+                      '"Rounds") stays outside the limit.', self.review)
+        stage6 = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development'))
+        self.assertIn('three rounds at most (a recheck after the base comes in stays outside)', stage6)
+
     def test_the_ladder_names_the_default_of_the_baixos(self):
         # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
         # fechada em 0 sérios e 0 médios têm o critério novo como proposta padrão, e a correção vira opção do lote.
@@ -169,8 +177,9 @@ class OnlyTheReviewerReadsItTests(unittest.TestCase):
         self.assertIn("`references/review.md` (the independent reviewer's standard, named only in the reviewer's "
                       "brief)", flat(text))
         stage6 = flat(section(text, '6. Bounded development'))
-        self.assertIn('The review is done at the first round with 0 sérios and 0 médios, three rounds at most, '
-                      'and the reviewer judges by `references/review.md`', stage6)
+        self.assertIn('The review is done at the first round with 0 sérios and 0 médios, three rounds at most',
+                      stage6)
+        self.assertIn('and the reviewer judges by `references/review.md`', stage6)
 
 
 class DocumentationTests(unittest.TestCase):

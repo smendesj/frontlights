@@ -437,7 +437,8 @@ is no source issue with a criteria section, or it is closed; the ladder of `issu
 with `AskUserQuestion` "Mais uma rodada" or "Dar destino pela escada" (a new acceptance criterion of the source
 issue or a top-level issue, in the findings batch); while a sério or médio has no destination, the issue stays out
 of the local main. Baixos the user chose to fix get one more round on their delta, outside the limit. The handoff
-records each round: its HEAD and its counts.
+records each round: its HEAD and its counts. A round that only rechecks a base brought in after the review was done (`review.md`,
+"Rounds") stays outside the limit.
 
 **Gate on the findings.** Before an issue is reported as reviewed or complete, and before
 the merge into the local main and before a PR is opened or updated, every open finding (review, tests, live check, any other
