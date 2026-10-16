@@ -936,9 +936,10 @@ class WeekByDateTests(RoadmapSyncTestCase):
                        'for a `move_lane` out of a sprint, or a `remove`, whose sprint file has no entry for the item (its exit or removal goes '
                        'into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file '
                        'otherwise, out of the order of `position`, and it stays before that line also when the line is written later; '
-                       'such an entry never counts for keeping that line;',
+                       'such an entry never counts for keeping that line)',
                        'the line goes after every entry already in the file that is not of an `outOfLimit` item',
-                       'in the roadmap, the removal of an item never written goes into the lane of `payload.lane_id`',
+                       'for a `remove` (recorded in the roadmap even for an item never written, in the lane of `payload.lane_id`, or at '
+                       'the end of the roadmap when the lane is missing)',
                        'recording the return when its latest record is an exit or removal',
                        'an `add` only by its `#N`: an `add` without one creates its entry',
                        'for an `add`, the entries of its `#N` wherever they are, the one in `item.lane` first',

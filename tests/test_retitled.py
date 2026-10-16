@@ -110,7 +110,7 @@ class RuleTextTests(unittest.TestCase):
                        'a `modify` with no entry in a sprint file that exists leaves that file as it is and says so',
                        'A missing entry is expected, and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined)',
                        'for a sprint file that does not exist yet',
-                       'for a `remove` (recorded in the roadmap even for an item never written) and for a `completed` (its line goes into a new entry)',
+                       'for a `remove` (recorded in the roadmap even for an item never written, in the lane of `payload.lane_id`, or at the end of the roadmap when the lane is missing) and for a `completed` (its line goes into a new entry)',
                        'A row of a table and the section of the same item are one entry; a mention inside another entry is not'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.reference)
