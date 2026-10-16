@@ -352,9 +352,12 @@ class IsolatedBlockTests(unittest.TestCase):
                 self.refuse(with_isolated(baseUrl=value), r'browserTest\.isolated\.baseUrl')
 
     def test_local_base_urls_are_accepted(self):
-        for value in ('http://localhost:{port}/', 'https://127.0.0.1:8443/app', 'http://[::1]:{port}/'):
+        fixed = [process(port=8443, health='https://127.0.0.1:8443/health')]
+        for value, processes in (('http://localhost:{port}/', None), ('https://127.0.0.1:8443/app', fixed),
+                                 ('http://[::1]:{port}/', None)):
+            overrides = {'baseUrl': value} if processes is None else {'baseUrl': value, 'processes': processes}
             with self.subTest(baseUrl=value), tempfile.TemporaryDirectory() as root:
-                inspect_file(with_isolated(baseUrl=value), root)
+                inspect_file(with_isolated(**overrides), root)
 
     def test_a_port_placeholder_in_the_base_url_needs_an_automatic_process(self):
         """Issue 34, S4 (revisão da sessão): {port} na baseUrl só tem a que porta se referir com um processo auto."""
@@ -373,7 +376,51 @@ class IsolatedBlockTests(unittest.TestCase):
         preview['baseUrl'] = 'http://127.0.0.1:8095/'
         self.refuse(with_isolated(processes=[process(port=8091, health='http://127.0.0.1:8091/health')],
                                   baseUrl='http://127.0.0.1:8091/', preview=preview),
-                    r'8091')
+                    r'browserTest\.isolated\.baseUrl.*8091.*preview\.processes')
+
+    def test_a_fixed_base_url_port_never_is_a_port_of_the_serve(self):
+        """Revisão da issue 34 (M2): a baseUrl fixa da isolada nunca é a porta de browserTest.processes nem da
+        browserTest.baseUrl, mesmo com os processos isolados em auto."""
+        serve_fixed = process(port=8080, health='http://127.0.0.1:8080/health')
+        message = self.refuse(with_isolated(None, serve_fixed, baseUrl='http://127.0.0.1:8080/'),
+                              r'browserTest\.isolated\.baseUrl.*8080.*browserTest\.processes')
+        self.assertIn('web', message)
+        config = with_isolated(processes=[process(port=8080, health='http://127.0.0.1:8080/health')],
+                               baseUrl='http://127.0.0.1:8080/')
+        config['browserTest']['baseUrl'] = 'http://127.0.0.1:8080/'
+        self.refuse(config, r'browserTest\.isolated\.baseUrl.*8080.*browserTest\.baseUrl')
+        config['browserTest']['baseUrl'] = 'http://127.0.0.1:{port}/'
+        with tempfile.TemporaryDirectory() as root:
+            inspect_file(config, root)
+
+    def test_a_fixed_base_url_port_is_the_port_of_an_isolated_process(self):
+        """Revisão da issue 34 (M2): a baseUrl fixa aponta para um processo que a sessão sobe na instância isolada."""
+        cases = {'processos auto': [process()],
+                 'processo fixo em outra porta': [process(port=8090, health='http://127.0.0.1:8090/health')]}
+        for case, processes in cases.items():
+            with self.subTest(case=case):
+                message = self.refuse(with_isolated(processes=processes, baseUrl='http://127.0.0.1:8095/'),
+                                      r'browserTest\.isolated\.baseUrl.*8095')
+                self.assertIn('browserTest.isolated.processes', message)
+        accepted = {'porta inteira': process(port=8095, health='http://127.0.0.1:8095/health'),
+                    'porta do health': {'name': 'web', 'argv': ['python', 'APP_SCRIPT'],
+                                        'health': 'http://localhost:8095/health'}}
+        for case, item in accepted.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(processes=[process(name='api'), item], baseUrl='http://127.0.0.1:8095/'),
+                             root)
+
+    def test_process_working_folders_stay_inside_the_worktree(self):
+        """Revisão da issue 34 (B7): o serve nunca sobe esses processos, então o inspect contém o cwd deles."""
+        for cwd in ('../fora', 'web/../../fora', r'web\..\..\fora', 'C:/fora', 'C:fora', '/fora', r'\fora',
+                    r'\\servidor\pasta'):
+            with self.subTest(cwd=cwd):
+                message = self.refuse(with_isolated(processes=[process(name='front', cwd=cwd)]),
+                                      r'browserTest\.isolated\.processes.*front.*cwd')
+                self.assertIn('relativo', message)
+        for cwd in ('web', 'apps/web', r'apps\web', ''):
+            with self.subTest(cwd=cwd), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(processes=[process(name='front', cwd=cwd)]), root)
 
     def test_database_steps_refuse_a_working_folder(self):
         """Issue 34, S4: cwd nos passos do banco é recusado, nunca ignorado em silêncio."""
