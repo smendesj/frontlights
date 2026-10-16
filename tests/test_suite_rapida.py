@@ -14,7 +14,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VARIABLE = 'FRONTLIGHTS_SUITE'
-SLOW_MODULES = ('tests.test_serve_ports', 'tests.test_checks_integration')
+SLOW_MODULES = ('tests.test_serve_ports', 'tests.test_checks_integration', 'tests.test_serve_preview')
+# Quantos testes cada um carrega, no mínimo, sem a variável: a prova de que o pulo é só da suíte rápida.
+MINIMUM_LOADED = {'tests.test_serve_ports': 100, 'tests.test_checks_integration': 100, 'tests.test_serve_preview': 10}
 
 # Conta e nomeia o que o carregador carrega para cada módulo pedido, sem rodar nada.
 COUNT_LOADED = r"""
@@ -113,7 +115,7 @@ class FastSuiteRunnerTests(unittest.TestCase):
         other = loaded('completa')
         for module in SLOW_MODULES:
             with self.subTest(module=module):
-                self.assertGreater(absent[module]['count'], 100, absent[module])
+                self.assertGreater(absent[module]['count'], MINIMUM_LOADED[module], absent[module])
                 self.assertEqual(absent[module]['count'], other[module]['count'])
                 self.assertEqual(absent[module]['errors'], [])
                 self.assertEqual(other[module]['errors'], [])
@@ -140,7 +142,8 @@ class FastSuiteTextTests(unittest.TestCase):
                        'reported as skipped with a reason that names the variable',
                        'any other value, or no variable, runs everything',
                        'Before the independent review and before the merge into the local main, run the whole suite without the variable',
-                       'with or without CI in the project'):
+                       'with or without CI in the project', '`tests.test_serve_preview`',
+                       'the six sensitive ones in a serial queue'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
@@ -149,7 +152,8 @@ class FastSuiteTextTests(unittest.TestCase):
         for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
                        'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
                        'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
-                       'com ou sem CI no projeto', 'A CI do GitHub não define a variável'):
+                       'com ou sem CI no projeto', 'A CI do GitHub não define a variável', '`tests.test_serve_preview`',
+                       'os seis sensíveis'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertIn('python -m unittest discover -s tests -v', read('README.md'))
@@ -159,7 +163,8 @@ class FastSuiteTextTests(unittest.TestCase):
         for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que a slice toca',
                        'a suíte rápida é a forma de conferir o todo entre slices',
                        'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
-                       'obrigatória com ou sem CI no projeto'):
+                       'obrigatória com ou sem CI no projeto', 'os módulos de portas e da prévia do `serve`',
+                       'os seis sensíveis numa fila serial'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 

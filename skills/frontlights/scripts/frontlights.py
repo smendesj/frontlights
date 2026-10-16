@@ -10,7 +10,7 @@ import hashlib
 import itertools
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import subprocess
 import sys
@@ -830,6 +830,7 @@ def validate_test_blocks(config, path):
                 warnings.append('browserTest.processes não está declarado: o serve não tem o que subir, então o ambiente precisa '
                                 'estar no ar antes do teste (só as contas e a baseUrl foram conferidas).')
             checks.require_local_declarations(path)
+            validate_isolated_block(config)
             if browser.get('frontPaths') is not None:
                 import browser_gate
                 browser_gate.validate_front_paths(browser['frontPaths'])
@@ -851,6 +852,142 @@ def validate_test_blocks(config, path):
     return warnings
 
 
+def validate_isolated_block(config):
+    """Refuse an invalid `browserTest.isolated` (the assisted test in its own instance, with the development
+    database copied before each test and dropped at the end). Absent or null: nothing is checked. Works on the
+    config already read: the caller masks the refusal text."""
+    import checks
+    block = config['browserTest'].get('isolated')
+    if block is None:
+        return
+    if not isinstance(block, dict):
+        raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl, processes, copyDatabase e '
+                             'dropDatabase.')
+    if not isolated_local_url(block.get('baseUrl')):
+        raise checks.Refused('browserTest.isolated.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, '
+                             'localhost ou ::1), sem usuário e senha; {port} pode ocupar o lugar da porta.')
+    import serve
+    where = 'browserTest.isolated.processes'
+    try:
+        processes = serve.validate_processes(block.get('processes'), where)
+    except serve.Refusal as refusal:  # the serve text names the process, not the block: say which list it is
+        message = str(refusal)
+        raise checks.Refused(message if where in message else f'{where}: {message}') from None
+    base_url = block['baseUrl']
+    for item in processes:
+        if not isolated_local_url(item['health']):
+            raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
+                                 'instância isolada só roda na própria máquina (127.0.0.1, localhost ou ::1).')
+        cwd = item.get('cwd')
+        folder = PureWindowsPath(cwd) if cwd else None  # splits on / and \, and sees a drive (C:) or a root
+        if folder is not None and (folder.anchor or '..' in folder.parts):  # serve never starts these: check here
+            raise checks.Refused(f'{where}: o processo {item["name"]} declara um cwd que sai da worktree; o cwd '
+                                 'precisa ser relativo a ela, sem ".." e sem unidade ou raiz.')
+    browser = config['browserTest']
+    preview = config.get('preview') if isinstance(config.get('preview'), dict) else {}
+    taken = {'preview.processes': fixed_ports(preview.get('processes')),
+             'browserTest.processes': fixed_ports(browser.get('processes'))}
+    if checks.PORT_PLACEHOLDER not in base_url:
+        base_port = serve.url_port(urllib.parse.urlsplit(base_url))
+        if base_port is None:
+            raise checks.Refused('browserTest.isolated.baseUrl tem uma porta inválida: use uma porta de 1 a 65535 '
+                                 'ou {port}.')
+        clash = [f'{key} ({url})' for key, url in (('preview.baseUrl', preview.get('baseUrl')),
+                                                   ('browserTest.baseUrl', browser.get('baseUrl')))
+                 if fixed_url_port(url) == base_port]
+        clash += [f'o processo {ports[base_port]} de {other}' for other, ports in taken.items() if base_port in ports]
+        if clash:
+            raise checks.Refused(f'browserTest.isolated.baseUrl usa a porta {base_port}, que colide com '
+                                 f'{" e ".join(clash)}: o teste assistido nunca roda nas portas da prévia nem do '
+                                 'serve.')
+        if base_port not in fixed_ports(processes):
+            raise checks.Refused(f'browserTest.isolated.baseUrl usa a porta fixa {base_port}, mas nenhum processo de '
+                                 f'{where} usa essa porta (port inteiro ou porta do health): ninguém responderia '
+                                 'nela. Use a porta fixa de um processo ou {port} com um processo de port "auto".')
+    for port, name in fixed_ports(processes).items():
+        for other, ports in taken.items():
+            if port in ports:
+                raise checks.Refused(f'{where}: o processo {name} usa a porta fixa {port}, a mesma do processo '
+                                     f'{ports[port]} em {other}. A instância isolada nunca roda nas portas da prévia '
+                                     'nem do serve: use port "auto" (com {port} no health) ou outra porta.')
+    if checks.PORT_PLACEHOLDER in base_url and not any(serve.is_auto(item) for item in processes):
+        raise checks.Refused('browserTest.isolated.baseUrl usa {port}, mas nenhum processo de '
+                             'browserTest.isolated.processes tem port "auto": a que porta ele se referiria? Use a '
+                             'porta fixa do processo na baseUrl ou port "auto" no processo.')
+    for field in ('copyDatabase', 'dropDatabase'):
+        validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
+
+
+def fixed_url_port(url):
+    """Port of a declared base URL without `{port}`; None when it is absent, automatic or unreadable."""
+    import checks
+    import serve
+    if not isinstance(url, str) or checks.PORT_PLACEHOLDER in url:
+        return None
+    try:
+        return serve.url_port(urllib.parse.urlsplit(url))
+    except ValueError:
+        return None
+
+
+def fixed_ports(processes):
+    """{port: process name} of the processes that do not use port "auto" (the integer `port`, or else the port of
+    the health URL). Read-only and lenient: items this block's own validator would refuse are skipped here."""
+    import serve
+    ports = {}
+    for item in processes if isinstance(processes, list) else []:
+        if not isinstance(item, dict) or serve.is_auto(item):
+            continue
+        port = item.get('port')
+        if not isinstance(port, int) or isinstance(port, bool):
+            health = item.get('health')
+            try:
+                port = serve.url_port(urllib.parse.urlsplit(health)) if isinstance(health, str) else None
+            except ValueError:
+                port = None
+        if port is not None:
+            ports.setdefault(port, item.get('name'))
+    return ports
+
+
+def validate_isolated_command(command, where):
+    """`{argv, timeoutSeconds?}` of a database step of the isolated instance, with the shell filter of checks."""
+    import checks
+    if not isinstance(command, dict):
+        raise checks.Refused(f'{where} precisa ser um objeto com argv (lista de argumentos) e, opcionalmente, '
+                             'timeoutSeconds.')
+    argv = command.get('argv')
+    if not isinstance(argv, list) or not argv or not all(isinstance(part, str) and part for part in argv):
+        raise checks.Refused(f'{where}.argv precisa ser uma lista não vazia de textos não vazios, não uma string.')
+    if any('\0' in part for part in argv):
+        raise checks.Refused(f'{where}.argv não aceita byte NUL em nenhum argumento.')
+    reason = checks.embedded_shell(argv)
+    if reason:
+        raise checks.Refused(f'{where}.argv não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, '
+                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus '
+                             'argumentos.')
+    timeout = command.get('timeoutSeconds')
+    if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
+        raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
+    if 'cwd' in command:
+        raise checks.Refused(f'{where}.cwd não é aceito: o passo do banco roda na worktree principal do projeto; '
+                             'declare o caminho do script no argv.')
+
+
+def isolated_local_url(value):
+    """True for an http(s) URL on this machine, without credentials; `{port}` stands for an automatic port."""
+    import checks
+    if not isinstance(value, str) or not value or '\0' in value:
+        return False
+    try:
+        parts = urllib.parse.urlsplit(value.replace(checks.PORT_PLACEHOLDER, checks.STAND_IN_PORT))
+        parts.port  # an out-of-range or non-numeric port raises here
+    except ValueError:
+        return False
+    return parts.scheme in ('http', 'https') and (parts.hostname or '').lower() in checks.LOCAL_HOSTS \
+        and '@' not in parts.netloc
+
+
 def validate_homolog_block(config):
     """Refuse an invalid `homolog` block (`homolog.backupDir`, the backup folder of `homolog bundle`) with the rule
     of homolog.py. An absent, null or valid block adds nothing to the output, and the folder itself is not checked
@@ -864,11 +1001,57 @@ def validate_homolog_block(config):
         raise ValueError(str(refusal)) from None
 
 
+def validate_preview_block(config, path, root):
+    """Refuse an invalid top-level `preview` block with the rules of `serve preview` (worktree inside `root`,
+    branch, baseUrl, processes). Absent or null: nothing is read. The refusal gets the masks of serve (loaded by
+    `load_preview_block` from browserTest.users) and of checks, so it never echoes a test login or password."""
+    if config.get('preview') is None:
+        return
+    require(path is not None, 'preview: o inspect precisa do caminho do config para validar o bloco')
+    import checks
+    import serve
+    try:
+        serve.load_preview_block(path, root)
+    except serve.Refusal as refusal:  # a process-level text names the process, not the block: say which one
+        message = str(refusal) if 'preview' in str(refusal) else f'preview: {refusal}'
+        raise ValueError(checks.redact(serve.protect(message))) from None
+
+
+def validate_preview_ports(config):
+    """With the `preview` block present (already validated), refuse a fixed port of `browserTest.processes` (integer
+    `port`, or else the port of the health) or of `browserTest.baseUrl` that is a fixed port of the preview (one of
+    `preview.processes`, or the port of `preview.baseUrl`), with or without `browserTest.isolated`: the assisted test
+    never runs on the ports of the preview. `auto` and `{port}` never collide here."""
+    browser, preview = config.get('browserTest'), config.get('preview')
+    if not isinstance(browser, dict) or not isinstance(preview, dict):
+        return
+    import checks
+    import serve
+    base_url = preview.get('baseUrl')
+    taken = fixed_ports(preview.get('processes'))
+
+    def sides(port):
+        found = [f'da preview.baseUrl ({base_url})'] if fixed_url_port(base_url) == port else []
+        return found + ([f'do processo {taken[port]} de preview.processes'] if port in taken else [])
+    clashes = [(f'browserTest.processes: o processo {name} usa a porta fixa {port}', sides(port))
+               for port, name in fixed_ports(browser.get('processes')).items()]
+    own = fixed_url_port(browser.get('baseUrl'))
+    if own is not None:
+        clashes.append((f'browserTest.baseUrl ({browser["baseUrl"]}) usa a porta {own}', sides(own)))
+    for what, found in clashes:
+        if found:
+            message = (f'{what}, a mesma {" e ".join(found)}: o teste assistido nunca roda nas portas da '
+                       'prévia. Use port "auto" (com {port} no health e na browserTest.baseUrl) ou outra porta.')
+            raise ValueError(checks.redact(serve.protect(message)))
+
+
 def inspect(config, root, config_path=None):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
     warnings = validate_test_blocks(config, config_path)
+    validate_preview_block(config, config_path, root)
+    validate_preview_ports(config)
     validate_homolog_block(config)
     repo = config['repository']
     result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),

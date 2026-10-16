@@ -257,6 +257,14 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     merge consolidated for the release (a one-way door when a migration or deleted data is in it, a two-way door
     otherwise, and the blast radius), no `Closes`, `Fixes` or `Resolves` in the body or the commits,
     and no finding left only in the body.
+30. Live preview (issue 34). In a disposable project with a `preview` block and `browserTest.isolated`, confirm that
+    right after the plan is approved, before the first slice, the session runs `serve preview refresh` and opens the
+    preview once in a tab of Claude in Chrome; that each slice merged into its issue branch is followed by a refresh that
+    shows it on reload, a conflict comes back as a question and a broken build as one line with the log file and the
+    error; that `serve stop` of an issue, the report and a new session leave the preview up and only `preview stop`, at
+    the user's request, takes it down; and that the watched run copies the development database with `copyDatabase`,
+    runs ANTES and DEPOIS in sequence in the isolated instance, never on the preview's ports nor in its tab, and drops
+    the copy with `dropDatabase` at the end.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

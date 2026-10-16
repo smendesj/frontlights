@@ -350,7 +350,8 @@ leftover (body captured, append only, difference checked, reread) and the text t
 is not edited. Stages 4 and 5 run in the same window. Publish only after approval and
 verify by rereading GitHub: the body, the boxes (the x/y the issue list shows) and the board
 values. If permissions block writes, preserve the approved draft and identify the exact
-blocked operation.
+blocked operation. In a project whose config has a `preview` block, the preview comes up right after the plan
+is approved, before the first slice (stage 6, "The preview, right after the hook and the sync").
 
 These publication rules cover every issue the session creates, on any path and
 at any stage: every top-level issue joins the board; a sub-issue joins only through its parent.
@@ -396,6 +397,22 @@ another branch checked out there, no remote branch) is said in one line and the 
 handoff. A project without a remote (`repository: null`, no `origin`) gets neither the hook nor the sync,
 said in one line (`references/development.md`, "The start of stage 6").
 
+**The preview, right after the hook and the sync.** In a project whose config has a `preview` block, the session
+brings the live preview up before the first slice: `serve preview refresh` with the branches of the issues in
+progress, then it opens the `baseUrl` once in a tab of Claude in Chrome, the user's own browser, and says in one
+line where the preview is. It runs again after each slice is merged into the branch of its issue, with the branches
+of the issues in progress, so every finished slice shows up there on reload. Those branches are the issue branches
+named in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
+branches never), plus the ones in the `merged` of `serve preview status`, minus those the local main already holds
+(`git merge-base --is-ancestor <branch> main`), and only those that exist locally (`git rev-parse --verify --quiet
+refs/heads/<branch>`): the session never takes another issue's work in progress out of the preview. A conflict comes back as a question, and a broken build is said in one line with the log file and the
+error, and the slice that owns the file fixes it before the next slice starts. The preview stops only when the user
+asks (`serve preview stop`): reporting an issue, the release or a new session never stop it, and a new session
+finds it through its record. The tab is the user's: the session opens it and never drives it, it stays outside the
+rule of the disposable window of the watched run, and the watched run never uses the preview nor its ports
+(`references/browser-testing.md`). Without the block, nothing of this runs, said in one line
+(`references/development.md`, "The start of stage 6").
+
 **Standing authorization.** The user decided, permanently and for every project, that stage 6
 opens without a question: there is no concurrency question, no stacking question and no
 implementation authorization question. Each issue gets one issue branch, cut from the local main (the
@@ -419,10 +436,12 @@ each issue, stacking when a family exists, worktree base and branch prefix, the 
 and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
 only: editing, testing, committing, the merges the stacking authorization names (the merge of the
-branch of the issue into the local main with its three gates green among them, below), running migrations
+branch of the issue into the local main with its three gates green and the merge of the local main and the
+branches of the issues in progress into the preview branch by `serve preview refresh` among them, below), running migrations
 on the local development database, creating and removing test data through the product's own
 endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of an
-issue goes to GitHub before the release: its branches are never pushed, and the only pull request is
+issue goes to GitHub before the release: its branches are never pushed, the preview branch is never pushed
+either, and the only pull request is
 the release's, offered at the end of each homologated issue. A batch of
 independent issues watched together gets the same local integration, and the authorization names
 that merge. Record the charter in `.frontlights/authorization.json` with the user in
@@ -464,7 +483,7 @@ session's tool. Do not merge pull requests, write the remote main, deploy, relea
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
 issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or
-batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the
+batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and of the branch of the
 issue into the local main once its three gates are green (`references/development.md`, "Into the local
 main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
 `browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as

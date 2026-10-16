@@ -32,7 +32,7 @@ contradiction from the diff); never turn tests on or off alone. Run only what is
 `checks integration`, browser and cross-account steps (the browser step opens with
 the watched-run question below and, when the user watched, ends with the question of
 what to do next), `checks smoke` (it reuses the running serve),
-`serve stop`. The commands below read `browserTest` and `checks` from the project's
+`serve stop` of the issue (never `preview stop`: the preview stays up). The commands below read `browserTest` and `checks` from the project's
 `.frontlights/config.json` (main worktree included, as stage 2 says).
 
 ## One watched run per issue
@@ -175,6 +175,47 @@ infrastructure, naming the process.
 Stop what this session started before reporting the issue, and say in one line
 which processes are still up when the user chose to keep them.
 
+```powershell
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview start --config <config> --root <main worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview refresh --config <config> --root <main worktree> [--base main] [--branch <issue branch> ...]
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview status --config <config> --root <main worktree>
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview stop --config <config> --root <main worktree>
+```
+
+The preview is the long-running mode, one per project, declared in the `preview`
+block of the config (`worktree`, `branch`, `baseUrl`, `processes`). `serve preview`
+runs its processes in the preview worktree; each one's output goes through
+`serve relay` (spawned by `preview start`, never by hand) into a log saved and
+masked in `.frontlights/preview/log/`, its branch named in
+`.frontlights/preview/branch.json` (kept by `preview stop`), and its record in
+`.frontlights/preview/registry.json` survives the `serve stop` of an issue and a
+change of session (`preview status` finds the processes through it and returns the
+tail of each log). `preview start` is refused while the preview is alive: run
+`preview refresh` instead. Run `preview stop` only when the user asks.
+
+The preview uses fixed ports, so its tab stays valid across every refresh: it is
+opened once and only reloaded. No process of the `preview` block takes
+`"port": "auto"`, there is no `{port}` in the `argv` or the `cwd` of its processes
+(a fixed port is written as is), its `baseUrl` takes no `{port}`, and the port of that
+`baseUrl` (explicit, or 80/443 by the scheme) is the fixed port of one of its
+processes (integer `port`, or else the port of the health); anything else is
+refused as `uso`, by `serve preview` and by `inspect`. With the `preview` block
+present, `inspect` also refuses a fixed port of `browserTest.processes` or of
+`browserTest.baseUrl` that is a port of the preview: the watched run never runs on
+the ports of the preview.
+
+`preview refresh` redoes the preview branch from the local main (`git checkout -B`
+inside the preview worktree, or `git worktree add` when it is missing; never the
+local main nor the branches of the issues, which do not move), merges the branches
+of the issues in progress given in `--branch`, in order, brings the processes up
+again and checks health and log. The preview branch is never pushed and nothing is
+edited in the preview worktree: one with tracked changes is refused as `uso`, like
+a branch that does not exist locally. A conflict is undone (`conflict: true`, the
+branch and the files) and nothing comes up: ask the user. A broken build (a
+process that exits before its health, or a health that never answers) is torn down
+and refused with `build: "quebrado"`, the process, the `log` and its last lines
+(`tail`); say it in one line with the log file and the error, then ask.
+
 ## Checks: `checks`
 
 ```powershell
@@ -239,7 +280,8 @@ When the user will watch:
   false` in Playwright, or the session's browser on screen), in a disposable browser
   context or profile, never the user's personal one. If the session cannot open
   one, the watched run did not happen: report the reason and ask; never fall back to
-  a hidden window silently.
+  a hidden window silently. The tab of the preview is the user's and stays outside
+  this rule: the watched run never drives it and runs never on the ports of the preview.
 - **The whole screen, always.** The user must see the whole page and the strip without
   scrolling or resizing anything. Size the window to the screen's available area (start
   maximized, or read the screen size and open the window at it) and let the page
@@ -266,6 +308,23 @@ When the user will watch:
   of it (`serve status` and the owning pid of `Get-NetTCPConnection -LocalPort
   <port>`), or DEPOIS could be answered by the base. Stop the ANTES record in every
   case before reporting.
+- **The isolated instance.** When the project declares `browserTest.isolated` (which
+  `inspect` validates), the watched run never touches the preview nor the development
+  data. Before ANTES, run its `copyDatabase` argv, without a shell, from the main
+  worktree and within its timeout: a fresh copy of the development database for this
+  run, never on the development database itself. ANTES and DEPOIS run one after the other in that instance:
+  bring up the processes of `browserTest.isolated.processes` from the checkout of the
+  base, check each health, run ANTES, stop them, then bring them up from the delivered
+  state for DEPOIS, and open `browserTest.isolated.baseUrl` in the disposable window
+  each time; never on the ports of the preview. The session (or the driver of the run)
+  starts those processes itself, from their argv, and stops only what it started. A
+  process with `"port": "auto"` gets a free port the session picks before starting it,
+  passed in `PORT` and in place of `{port}` in its argv, its health and the `baseUrl`,
+  as `serve` does for its own; a fixed `port` is used as declared. The
+  copy is test data the run created: record it in `dados-de-teste.json` before the
+  copy, and run `dropDatabase` at the cleanup of section "Test data the run creates",
+  marking it removed. Without the block, the passes run on the issue's own serve as
+  above.
 - **A strip on every page.** The test injects a fixed strip into the page, pinned to the
   top edge across the full width, thin, above every other element and never
   covered by a popup, toast or dialog (an init script or a DOM node, visible in the screenshots): "ANTES: <base>" ("ANTES: main"
