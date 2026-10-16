@@ -87,19 +87,23 @@ class Ferramenta(unittest.TestCase):
 """
 
 IMPORTS_IN_CLASS = """
+import importlib
+import sys
 import unittest
+from pathlib import Path
+
+PASTA = ('skills', 'ferramenta')  # uma string solta igual ao nome do script não é carga
 
 
 class SemImport(unittest.TestCase):
     def test_que_falha_se_rodar(self):
-        self.fail('a classe que nao importa o script nao devia rodar')
+        self.fail('a classe que so tem a string ferramenta solta nao devia rodar: ' + 'ferramenta')
 
 
 class ComImport(unittest.TestCase):
     def test_carrega(self):
-        import importlib
-        self.assertIsNone(importlib.util.find_spec('ferramenta_que_nao_existe'))
-        self.assertTrue('ferramenta')
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
+        self.assertEqual(importlib.import_module('ferramenta').VALOR, 1)
 """
 
 DOCSTRING_ONLY = """
@@ -285,7 +289,7 @@ class ImportTest(RepositoryCase):
         self.assertIn('test_ferramenta', done.stdout)
         self.assertNotIn('test_outro', done.stdout)
 
-    def test_a_string_with_the_module_name_inside_a_class_runs_only_that_class(self):
+    def test_a_loader_call_in_a_class_runs_only_it_and_a_loose_string_runs_nothing(self):
         self.write('skills/frontlights/scripts/ferramenta.py', 'VALOR = 1  # editado\n')
         done, _ = self.run_pre_commit()
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)

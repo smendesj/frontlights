@@ -40,6 +40,7 @@ DEFAULT_TIMEOUT = 20
 DEFAULT_WORKERS = 4
 COMPILED = ('skills/frontlights/scripts', 'tests')
 LEFT = 'fica para a suíte inteira'
+LOADERS = ('import_module', '__import__', 'spec_from_file_location')  # o 1º argumento é o nome do módulo
 
 
 def parse(argv):
@@ -85,9 +86,14 @@ def changed_files(root):
 
 def uses(node, stems):
     """Se o nó importa um script mudado pelo nome do módulo (`import roadmap_sync`, `from closeout import x`) ou o
-    carrega por uma string igual a ele (`importlib.import_module('serve')`): a forma como os testes de unidade
-    chegam aos scripts sem escrever o nome do arquivo."""
+    carrega por ele como primeiro argumento de uma chamada de carga (`importlib.import_module('serve')`): a forma
+    como os testes de unidade chegam aos scripts sem escrever o nome do arquivo. Uma string solta igual ao nome não
+    conta: `'frontlights'` é pedaço de quase todo caminho dos testes (`ROOT / 'skills' / 'frontlights'`)."""
     for item in ast.walk(node):
+        if isinstance(item, ast.Call) and item.args and isinstance(item.args[0], ast.Constant):
+            called = getattr(item.func, 'attr', None) or getattr(item.func, 'id', None)
+            if called in LOADERS and item.args[0].value in stems:
+                return True
         if isinstance(item, ast.Import) and any(alias.name.split('.')[0] in stems for alias in item.names):
             return True
         if isinstance(item, ast.ImportFrom):
@@ -95,8 +101,6 @@ def uses(node, stems):
                 return True
             if not item.module and any(alias.name in stems for alias in item.names):
                 return True
-        if isinstance(item, ast.Constant) and isinstance(item.value, str) and item.value in stems:
-            return True
     return False
 
 
