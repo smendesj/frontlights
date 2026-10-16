@@ -17,11 +17,13 @@ The user decided, permanently and for every project, that the opening question o
 stage 6 (concurrency, stacking and the bounded implementation authorization) is not
 asked. Covered, for the issues of the family or batch at hand: editing, testing,
 committing, the merges the stacking authorization names (the merge of the branch of the issue
-into the local main with its three gates green among them, "Into the local main" below), running migrations on the
+into the local main with its three gates green and the merge of the local main and the branches of the issues in
+progress into the preview branch by `serve preview refresh` among them, "Into the local main" below), running migrations on the
 local development database, creating and removing test data through the product's own
 endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of
 an issue goes to GitHub before the release: the branches of the issue and of its slices are never
-pushed, and the only pull request is the release's, offered at the end of each homologated issue.
+pushed, the preview branch is never pushed either, and the only pull request is the release's, offered at the end
+of each homologated issue.
 
 Never covered, and asked one operation at a time with `AskUserQuestion` ("Sim" first,
 "Não" second, the exact operation and command in the question): merging a pull
@@ -214,7 +216,7 @@ through the parent's branch, once its three gates are green ("Into the local mai
 GitHub with the release. Record the stacking in the
 authorization, with the repository operations it needs: branch from a branch that is
 not the base, `git merge` of a base into the issue's own branch, `git merge` of a slice's branch into the branch of its own issue when its loop closes, `git merge` of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date ("Slices in order", above), `git merge` of a verified child's branch into its parent's branch, `git merge` of a family's or batch's verified
-branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
+branches into a local integration branch that is never pushed, `git merge` of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), `git merge` of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and `git merge` of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Those are the only merges it allows: it never covers merging a PR, writing
 the remote main, deploying or releasing. When the user chose to wait, a dependent
 stays parked until its dependency is in the local main.
 
@@ -450,7 +452,7 @@ their own approval (`references/closeout.md`). The release's pull request is cov
 the host's native approval; the branches of issues and slices are never pushed. Never
 merge a pull request, write the remote main, deploy, release, delete data or close
 issues as routine AFK work; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
-branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
+branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and of the branch of the issue into the local main once its three gates are green ("Into the local main", below). Anything
 else on the denied list runs only after the user's "Sim" to its own question (above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, exact tests/results, review evidence,

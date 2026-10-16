@@ -418,10 +418,12 @@ each issue, stacking when a family exists, worktree base and branch prefix, the 
 and the stop conditions; the user may change any of it at any time, and a
 change goes back through `AskUserQuestion`. It covers, for the issues of that family or batch
 only: editing, testing, committing, the merges the stacking authorization names (the merge of the
-branch of the issue into the local main with its three gates green among them, below), running migrations
+branch of the issue into the local main with its three gates green and the merge of the local main and the
+branches of the issues in progress into the preview branch by `serve preview refresh` among them, below), running migrations
 on the local development database, creating and removing test data through the product's own
 endpoints, commenting on the issues and ticking acceptance criteria with evidence. Nothing of an
-issue goes to GitHub before the release: its branches are never pushed, and the only pull request is
+issue goes to GitHub before the release: its branches are never pushed, the preview branch is never pushed
+either, and the only pull request is
 the release's, offered at the end of each homologated issue. A batch of
 independent issues watched together gets the same local integration, and the authorization names
 that merge. Record the charter in `.frontlights/authorization.json` with the user in
@@ -463,7 +465,7 @@ session's tool. Do not merge pull requests, write the remote main, deploy, relea
 close issues or expand scope under this charter; the only merges allowed are the ones the stacking authorization names: of a base into an issue's own
 branch, of a slice's branch into the branch of its own issue when its loop closes, of the branch of the
 issue (or of the slice it depends on) into a slice's branch to bring it up to date, of a verified child's branch into its parent's branch, of a family's or
-batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), and of the branch of the
+batch's verified branches into a local integration branch that is never pushed, of `origin/<base>` into the local main by `homolog sync` at the start of stage 6 (a conflict is undone and becomes a question), of the local main and the branches of the issues in progress into the preview branch by `serve preview refresh` (a conflict is undone and becomes a question), and of the branch of the
 issue into the local main once its three gates are green (`references/development.md`, "Into the local
 main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
 `browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as

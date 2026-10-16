@@ -320,9 +320,219 @@ class PreviewUsageTest(PreviewTestCase):
                               encoding='utf-8', errors='replace')
         self.assertEqual(done.returncode, 0)
         self.assertIn('{start,stop,status,preview,relay}', done.stdout)
-        self.assertIn('[{start,status,stop}]', done.stdout)
-        for flag in ('--config', '--root', '--issue', '--log'):
+        self.assertIn('[{start,refresh,status,stop}]', done.stdout)
+        for flag in ('--config', '--root', '--issue', '--log', '--branch', '--base'):
             self.assertIn(flag, done.stdout)
+
+
+# Broken builds of the fake server: one exits at once, the other never listens (its health never answers).
+EXITING_SERVER = r"""import sys
+print('ERRO-DE-BUILD: app.py linha 3: SyntaxError', flush=True)
+sys.exit(1)
+"""
+SILENT_SERVER = r"""import sys
+import time
+print('ERRO-DE-BUILD: o servidor nao abriu a porta', flush=True)
+time.sleep(600)
+"""
+
+
+class RefreshTestCase(PreviewTestCase):
+    """A real Git repository in the temporary folder: `main` with the fake server, issue branches beside it, and
+    `preview.worktree` inside the repository (as the worktrees of `.claude/worktrees`). The preview worktree does
+    not exist at first: `preview refresh` creates it."""
+
+    def setUp(self):
+        super().setUp()
+        self.worktree.rmdir()
+        self.git('init', '-q', '-b', 'main')
+        for key, value in (('user.name', 'Teste'), ('user.email', 'teste@exemplo.test'),
+                           ('commit.gpgsign', 'false'), ('core.autocrlf', 'false')):
+            self.git('config', key, value)
+        (self.root / '.gitignore').write_text('.claude/\n.frontlights/\n', encoding='utf-8')
+        (self.root / 'preview_server.py').write_text(PREVIEW_SERVER, encoding='utf-8')
+        (self.root / 'feature.txt').write_text('base\n', encoding='utf-8')
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'inicio')
+        self.branch('issue-1', {'issue1.txt': 'da issue 1\n'})
+        self.write_config(preview=self.refresh_block())
+
+    def git(self, *args, cwd=None):
+        done = subprocess.run(['git', *args], cwd=cwd or self.root, capture_output=True, text=True,
+                              encoding='utf-8', timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout.strip()
+
+    def branch(self, name, files):
+        """A branch cut from main with one commit that writes `files`; the main worktree goes back to main."""
+        self.git('checkout', '-q', '-b', name, 'main')
+        for path, text in files.items():
+            (self.root / path).write_text(text, encoding='utf-8')
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', f'commit de {name}')
+        self.git('checkout', '-q', 'main')
+
+    def refresh_block(self, **extra):
+        process = {'name': 'web', 'argv': [sys.executable, 'preview_server.py', '{port}', MARKER, PASSWORD],
+                   'port': 'auto', 'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}
+        process.update(extra)
+        return {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:1/',
+                'processes': [process]}
+
+    def refresh(self, *branches):
+        argv = ['preview', 'refresh']
+        for name in branches:
+            argv += ['--branch', name]
+        return self.serve(*argv)
+
+    def rev(self, ref):
+        return self.git('rev-parse', ref)
+
+
+class PreviewRefreshTest(RefreshTestCase):
+    def test_refresh_without_the_worktree_creates_it_merges_the_branch_and_brings_the_preview_up(self):
+        done = self.refresh('issue-1')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        result = self.payload(done)
+        self.assertTrue(result['ok'])
+        self.assertEqual((result['worktree'], result['branch'], result['base']),
+                         ('.claude/worktrees/previa', 'previa', 'main'))
+        self.assertEqual(result['baseCommit'], self.rev('main'))
+        self.assertEqual(result['merged'], [{'branch': 'issue-1', 'commit': self.rev('issue-1')}])
+        self.assertEqual((self.worktree / 'issue1.txt').read_text(encoding='utf-8'), 'da issue 1\n')
+        self.assertEqual(self.git('symbolic-ref', '--short', 'HEAD', cwd=self.worktree), 'previa')
+        self.assertTrue(reachable(result['processes'][0]['url']))
+        record = json.loads(self.registry().read_text(encoding='utf-8'))
+        self.assertEqual(record['merged'], [{'branch': 'issue-1', 'commit': self.rev('issue-1')}])
+        self.assertEqual((record['base'], record['baseCommit']), ('main', self.rev('main')))
+        status = self.payload(self.serve('preview', 'status'))
+        self.assertTrue(status['running'])
+        self.assertEqual(status['merged'], record['merged'])
+
+    def test_refresh_of_a_live_preview_brings_it_down_and_up_again_with_new_processes(self):
+        first = self.payload(self.refresh('issue-1'))
+        old = json.loads(self.registry().read_text(encoding='utf-8'))['processes'][0]
+        self.branch('issue-2', {'issue2.txt': 'da issue 2\n'})
+        done = self.refresh('issue-1', 'issue-2')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        result = self.payload(done)
+        self.assertNotEqual(result['processes'][0]['pid'], old['pid'])
+        self.assertTrue(all(item['stopped'] for item in result['stopped']), result['stopped'])
+        self.assertEqual(sorted(item['pid'] for item in result['stopped']), sorted([old['pid'], old['relayPid']]))
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(old['pid'])), 'o processo antigo continuou vivo')
+        self.assertTrue(wait_until(lambda: not serve.pid_alive(old['relayPid'])), 'o relé antigo continuou vivo')
+        self.assertTrue(reachable(result['processes'][0]['url']))
+        self.assertEqual([item['branch'] for item in result['merged']], ['issue-1', 'issue-2'])
+        self.assertTrue((self.worktree / 'issue2.txt').is_file())
+        status = self.payload(self.serve('preview', 'status'))
+        self.assertTrue(status['running'])
+        self.assertEqual(status['processes'][0]['pid'], result['processes'][0]['pid'])
+        self.assertNotEqual(first['processes'][0]['pid'], status['processes'][0]['pid'])
+
+    def test_refresh_merges_the_branch_even_when_a_tag_has_the_same_name(self):
+        self.git('tag', 'issue-1', 'main')  # `git merge issue-1` would take the tag (main) before the branch
+        done = self.refresh('issue-1')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        self.assertTrue((self.worktree / 'issue1.txt').is_file(), 'o refresh mesclou a tag, não a branch')
+        self.assertEqual(self.rev('previa^2'), self.rev('refs/heads/issue-1'))
+        self.assertEqual(self.git('log', '-1', '--format=%s', 'previa'), "Merge branch 'issue-1' into previa")
+
+    def test_refresh_leaves_the_local_main_and_the_issue_branch_where_they_were(self):
+        main, issue = self.rev('main'), self.rev('issue-1')
+        self.assertEqual(self.refresh('issue-1').returncode, 0, done_text(self.last))
+        self.assertEqual(self.refresh('issue-1').returncode, 0, done_text(self.last))
+        self.assertEqual((self.rev('main'), self.rev('issue-1')), (main, issue))
+        self.assertEqual(self.git('symbolic-ref', '--short', 'HEAD'), 'main')
+        self.assertEqual(self.git('status', '--porcelain', '--untracked-files=no'), '')
+        self.assertNotEqual(self.rev('previa'), main)  # the merge commit lives only on the preview branch
+        self.assertEqual(self.git('rev-parse', 'previa^1'), main)
+        self.assertEqual(self.git('rev-parse', 'previa^2'), issue)
+
+
+class PreviewRefreshBrokenBuildTest(RefreshTestCase):
+    def assert_broken_build(self, done):
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['category'], 'infraestrutura')
+        self.assertEqual(result['build'], 'quebrado')
+        self.assertEqual(result['failedProcess'], 'web')
+        self.assertEqual(result['log'], '.frontlights/preview/log/web.log')
+        self.assertTrue(result['tail'], result)
+        self.assertTrue(result['tail'][-1].startswith('ERRO-DE-BUILD:'), result['tail'])
+        self.assertNotIn('left', result)
+        self.assertFalse(self.registry().exists(), 'o registro ficou com processos de um build quebrado')
+        reservations = [json.loads(path.read_text(encoding='utf-8'))
+                        for path in serve.ports_dir(self.root).glob('*.json')]
+        self.assertEqual([item for item in reservations if item.get('issue') == 'preview'], [])
+        return result
+
+    def test_a_process_that_exits_before_its_health_fails_the_refresh_with_the_log_and_its_last_lines(self):
+        live = self.payload(self.refresh('issue-1'))['processes'][0]  # an earlier, healthy run fills the log first
+        self.branch('quebrada', {'preview_server.py': EXITING_SERVER})
+        result = self.assert_broken_build(self.refresh('issue-1', 'quebrada'))
+        self.assertIn('terminou antes de ficar saudável', result['error'])
+        self.assertFalse(any(MARKER in line for line in result['tail']), 'o tail trouxe linhas da execução anterior')
+        self.assertTrue(wait_until(lambda: not reachable(live['url'])))
+
+    def test_a_health_that_never_answers_fails_the_refresh_and_kills_the_process(self):
+        self.write_config(preview=self.refresh_block(timeoutSeconds=3))
+        self.branch('sem-health', {'preview_server.py': SILENT_SERVER})
+        result = self.assert_broken_build(self.refresh('sem-health'))
+        self.assertIn('não ficou saudável', result['error'])
+
+
+class PreviewRefreshRefusalTest(RefreshTestCase):
+    def test_two_branches_that_conflict_are_aborted_with_the_files_and_leave_the_worktree_clean(self):
+        self.branch('conflito-a', {'feature.txt': 'versao A\n'})
+        self.branch('conflito-b', {'feature.txt': 'versao B\n'})
+        main, a, b = self.rev('main'), self.rev('conflito-a'), self.rev('conflito-b')
+        done = self.refresh('conflito-a', 'conflito-b')
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'infraestrutura')
+        self.assertIs(result['conflict'], True)
+        self.assertEqual(result['branch'], 'conflito-b')
+        self.assertEqual(result['files'], ['feature.txt'])
+        self.assertEqual(result['merged'], [{'branch': 'conflito-a', 'commit': a}])
+        self.assertEqual(self.git('status', '--porcelain', cwd=self.worktree), '')
+        merging = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], cwd=self.worktree,
+                                 capture_output=True, text=True, timeout=60)
+        self.assertNotEqual(merging.returncode, 0, 'ficou um merge em andamento na worktree da prévia')
+        self.assertEqual((self.rev('previa^1'), self.rev('previa^2')), (main, a))  # the merge before the conflict
+
+        self.assertFalse(self.registry().exists(), 'um conflito subiu a prévia')
+        self.assertEqual((self.rev('main'), self.rev('conflito-a'), self.rev('conflito-b')), (main, a, b))
+
+    def test_a_branch_that_does_not_exist_is_refused_as_usage_and_touches_nothing(self):
+        done = self.refresh('issue-1', 'nao-existe')
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso')
+        self.assertIn('nao-existe', result['error'])
+        self.assertFalse(self.worktree.exists(), 'uma recusa de uso criou a worktree da prévia')
+        self.assertFalse(self.registry().exists())
+
+    def test_a_preview_worktree_with_tracked_changes_is_refused_as_usage_and_the_preview_stays_up(self):
+        live = self.payload(self.refresh('issue-1'))['processes'][0]
+        (self.worktree / 'feature.txt').write_text('editado na previa\n', encoding='utf-8')
+        done = self.refresh('issue-1')
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso')
+        self.assertIn('nada se edita nela', result['error'])
+        self.assertEqual((self.worktree / 'feature.txt').read_text(encoding='utf-8'), 'editado na previa\n')
+        self.assertTrue(reachable(live['url']), 'uma recusa de uso derrubou a prévia')
+
+    def test_branch_and_base_are_refused_outside_preview_refresh(self):
+        for argv in (('preview', 'start', '--branch', 'issue-1'), ('preview', 'status', '--base', 'main'),
+                     ('start', '--branch', 'issue-1')):
+            with self.subTest(argv=argv):
+                done = self.serve(*argv)
+                self.assertEqual(done.returncode, 1, done_text(done))
+                self.assertEqual(self.payload(done)['category'], 'uso')
+                self.assertIn('preview refresh', self.payload(done)['error'])
+        self.assertFalse(self.worktree.exists())
 
 
 def done_text(done):

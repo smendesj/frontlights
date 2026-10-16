@@ -33,7 +33,9 @@ worktrees, os testes e as condições de parada, e grava `authorization.json` co
 `"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
 horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, os merges que a
 autorização de empilhamento nomeia (entre eles o de `origin/main` na main local pelo `homolog sync`, no
-início de cada etapa 6 e antes da release, com um conflito desfeito na hora e virando pergunta, e o da branch
+início de cada etapa 6 e antes da release, com um conflito desfeito na hora e virando pergunta, o da main local e
+das branches das issues em andamento na branch da prévia pelo `serve preview refresh`, também com um conflito
+desfeito e virando pergunta, e o da branch
 da issue na main local, só com os três portões verdes), conferir no início de cada etapa 6 o hook `pre-push`
 de `homolog hook` (instalado só com o "Sim" da pergunta que mostra o script; nunca por cima de um hook de
 outra origem), gravar a cada merge na main local o bundle da main local e das branches de trabalho na pasta
@@ -41,7 +43,7 @@ outra origem), gravar a cada merge na main local o bundle da main local e das br
 migrations no banco de desenvolvimento local, criar e
 remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
 evidência. Nada da issue vai ao GitHub antes da release: as branches da issue e das slices nunca são
-enviadas, e a única PR é a da release, oferecida ao fim de cada issue homologada. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
+enviadas, a branch da prévia nunca é enviada, e a única PR é a da release, oferecida ao fim de cada issue homologada. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
 apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
 da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR,
