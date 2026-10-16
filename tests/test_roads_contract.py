@@ -91,6 +91,27 @@ class DocumentShapeTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
+    def test_the_contract_describes_the_sprints_as_weeks_by_date(self):
+        flat = ' '.join(DOC.split())
+        for phrase in ('`laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA`', 'na ordem de `startDate`, nunca pelo texto do id',
+                       'aceita as duas formas', 'nunca as duas na mesma resposta', 'pode vir semana com `items: []`',
+                       'Semana sem mudança não ganha arquivo', 'só a semana que termina mexe',
+                       'itens de semanas futuras não recebem `move_lane` de virada', 'issue closed before its sprint',
+                       'a ordem que o scrum master arrastou', '"Acima do limite de N:"',
+                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1',
+                       'toda semana citada por uma mudança ainda sem ack', 'só quando algum item acima do limite tem entrada no arquivo',
+                       'o `from_lane_id` (de `move_lane`)'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat)
+        for gone in ('`laneId` é posicional', 'Item acima do limite fica fora da sprint', 'passam para a nova sprint atual',
+                     'a próxima e a terceira sprint existem só no RoadS', '"sprintId": "sprint-2026-01-05", "laneId": "proxima"'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, flat)
+        self.assertIn('a semana encerrada vir vazia no estado até o ack é promessa do RoadS', flat)
+        acceptance = ' '.join((ROOT / 'docs' / 'acceptance.md').read_text(encoding='utf-8').split())
+        self.assertIn('manter a semana encerrada (com `items: []`) no estado até o ack', acceptance)
+        self.assertIn('As semanas identificadas pela data (issue 39) só têm cobertura simulada', acceptance)
+
     def test_the_contract_records_what_the_service_does_with_the_project_status(self):
         flat = ' '.join(DOC.split())
         for phrase in ('Só o Status do Project conta', 'não é lido** para itens de sprint', 'Item de sprint concluído fica',

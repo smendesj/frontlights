@@ -16,7 +16,7 @@ Operations (each prints one JSON object on stdout):
                   <endpoint>/roadmap-state (required: no fallback) and GET <endpoint>/pending-changes,
                   then write the plan and a staged copy of the roadmap and of each sprint file with a
                   pending change (a sprint file that does not exist yet is staged empty). Each item of a
-                  sprint that roadmap-state shows as done (`done` true, within the sprint limit) that is
+                  sprint that roadmap-state shows as done (`done` true, past the sprint limit too) that is
                   not recorded yet joins the plan as a synthetic `completed` change.
   apply           move the staged copies into place, re-read, verify every marker, then ack
                   (unless --no-ack). A plan that holds only completions needs no ack: `not_needed`.
@@ -738,7 +738,10 @@ def state_item(raw, where, in_sprint):
 def normalise_state(payload):
     """Defensive reading of GET roadmap-state (schemaVersion 1). An unknown schema version, a
     field of the wrong type, an invalid date or a duplicate sprint refuses the whole answer:
-    nothing is guessed, and there is no fallback to the local week."""
+    nothing is guessed, and there is no fallback to the local week. Each sprint is a week; the weeks
+    come out in the order of their dates (start, then end), never in the order of the text of their
+    ids, which RoadS writes either as `sprint-YYYY-MM-DD` with a positional laneId (before its
+    migration) or as `sprint-DD-MM-YYYY` for both sprintId and laneId (after it)."""
     require(isinstance(payload, dict), 'RoadS answered roadmap-state with something that is not an object')
     version = payload.get('schemaVersion')
     require(isinstance(version, int) and not isinstance(version, bool) and version == STATE_SCHEMA_VERSION,
@@ -760,6 +763,7 @@ def normalise_state(payload):
                         'title': state_text(raw.get('title'), f'{where}.title', FIELD_LIMITS['title']),
                         'startDate': start.isoformat(), 'endDate': end.isoformat(), '_dates': (start, end),
                         'items': sorted(items, key=lambda i: i['position'])})
+    sprints.sort(key=lambda sprint: sprint['_dates'])
     groups = []
     for index, raw in enumerate(state_list(payload.get('groups'), 'groups', optional=True)):
         where = f'groups[{index}]'
@@ -1217,14 +1221,15 @@ def completion_id(item_id):
 def completion_changes(state, today, taken):
     """The sprint items roadmap-state shows as done, as synthetic `completed` changes, and how many were left
     out for lack of a title. Only the `done` flag of the state decides: never the open or closed state of the
-    issue and never a text. Groups are not read, and an item past the sprint limit is not in the sprint. One
+    issue and never a text. Groups are not read; an item past the sprint limit (overLimit) is in its sprint, so it
+    counts like the others. One
     item is one change, whatever the number of sprints that list it; every sprint that does is a target. The
     text of an item has already been through safe_string when the state was read. A change of the queue that
     already has the id of a completion is refused: the two kinds are told apart by that id."""
     found, untitled = {}, 0
     for sprint in state['sprints']:
         for item in sprint['items']:
-            if item['overLimit'] or item['done'] is not True:
+            if item['done'] is not True:
                 continue
             if not item['title'].strip():
                 untitled += 1
@@ -1274,14 +1279,29 @@ def unrecorded_completions(ctx, state, completions, roadmap_path):
     return fresh, recorded
 
 
+def unmatched_lanes(state, changes):
+    """The lanes of the queue (the origin and destination of a move_lane) and of removedPending that match no
+    week and no group of the state read by this fetch, in the order first seen. RoadS keeps in the state every
+    week a change not yet acknowledged cites (with `items: []` when it has none left, the week that ended
+    included), so such a lane is a sign that something is off; a change that reaches a sprint only through it
+    goes to the roadmap only. Only the removals of this plan count."""
+    known = {sprint['laneId'] for sprint in state['sprints']} | {group['laneId'] for group in state['groups']}
+    queued = {change['id'] for change in changes if not change['synthetic']}
+    lanes = [lane for change in changes if change['id'] in queued for lane in change['_move']]
+    lanes += [removed['laneId'] for removed in state['removedPending'] if removed['changeId'] in queued]
+    return list(dict.fromkeys(lane for lane in lanes if lane and lane not in known))
+
+
 def sprint_targets(ctx, state, changes):
     """Each sprint of the state with a pending change gets its own file. The link is the
     service's: a change belongs to a sprint when an item of that sprint lists it in
     pendingChangeIds, when removedPending puts its removal in that sprint's lane, or when a
     move_lane leaves that sprint's lane (payload.from_lane_id) or enters it (payload.lane_id) without any
-    item of that sprint listing it. The laneId is positional: it is the lane of the state read
-    by this fetch. A change reaching a sprint only through an item past the limit (overLimit) is
-    listed apart and not written into that sprint file. A completion belongs to the sprints that
+    item of that sprint listing it. A lane is matched by its exact text against the laneId of the state
+    read by this fetch: RoadS sends each answer in one shape only, positional or dated. An item
+    past the limit (overLimit) is written in its sprint file too, after the items within the limit, so
+    its changes reach that file like the others; the plan keeps the two lists apart (`items` and
+    `outOfLimit`) only for the order of the file. A completion belongs to the sprints that
     hold its item (`_sprints`) and to no other: the links above are made only for the changes of
     the queue, so a state cannot send a completion to a sprint by naming it in pendingChangeIds or
     in removedPending."""
@@ -1291,23 +1311,21 @@ def sprint_targets(ctx, state, changes):
         within = [i for i in sprint['items'] if not i['overLimit']]
         over = [i for i in sprint['items'] if i['overLimit']]
         listed = {cid for item in sprint['items'] for cid in item['pendingChangeIds']}
-        write = {cid for item in within for cid in item['pendingChangeIds'] if cid in change_ids}
+        write = {cid for cid in listed if cid in change_ids}
         write |= {r['changeId'] for r in state['removedPending']
                   if r['laneId'] and r['laneId'] == sprint['laneId'] and r['changeId'] in change_ids}
         lane = sprint['laneId']
         write |= {c['id'] for c in changes if lane and c['_move'][0] == lane != c['_move'][1]}
         write |= {c['id'] for c in changes if lane and c['_move'][1] == lane and c['id'] not in listed}
         write |= {c['id'] for c in changes if sprint['sprintId'] in c['_sprints']}
-        left_out = {cid for item in over for cid in item['pendingChangeIds'] if cid in change_ids} - write
         name = 'sprint:' + sprint['sprintId'] if write else None
         public = {key: value for key, value in sprint.items() if key != '_dates'}
         sprints.append({**public, 'items': within, 'outOfLimit': over, 'target': name})
         if name:
             start, end = sprint['_dates']
             files[name] = {'sprint': public, 'dates': (start, end), 'relative': sprint_relative(ctx, start, end),
-                           'changeIds': sorted(write), 'outOfLimitChangeIds': sorted(left_out)}
-    left_out_items = [item for sprint in sprints for item in sprint['outOfLimit'] if set(item['pendingChangeIds']) & change_ids]
-    return sprints, files, left_out_items
+                           'changeIds': sorted(write)}
+    return sprints, files
 
 
 def op_fetch(root, today, transport, since=None, discard_staged=False):
@@ -1381,10 +1399,18 @@ def _fetch(root, today, transport, since, discard_staged, result):
             message += f' {recorded} completion(s) read from roadmap-state are already recorded in the files.'
         result.update(ok=True, exitCode=0, pending=0, message=message + ''.join(notes))
         return result
-    sprints, files, left_out = sprint_targets(ctx, state, changes)
-    if left_out:
-        notes.append(f' {len(left_out)} item(s) with a pending change are outside the sprint limit (overLimit): write them in '
-                     'the roadmap only and tell the user which ones stayed out.')
+    sprints, files = sprint_targets(ctx, state, changes)
+    unmatched = unmatched_lanes(state, changes)
+    if unmatched:
+        # A lane is RoadS text: only one shaped like an id is named in the message, so no line break or prose
+        # from the service reaches the instructions; the others are only counted.
+        shaped = [lane for lane in unmatched if re.fullmatch(ID_PATTERN, lane)]
+        more, odd = len(shaped) - len(shaped[:10]), len(unmatched) - len(shaped)
+        named = ', '.join(shaped[:10] + ([f'{more} more'] if more else [])
+                          + ([f'{odd} not shown, not shaped like an id'] if odd else []))
+        notes.append(f' {len(unmatched)} lane(s) of the queue match no week or group ({named}): RoadS keeps every week a '
+                     'pending change cites, so this is not expected. Their changes reach no sprint file through that lane, '
+                     'only the roadmap and the sprint files of their other lanes; ask the user before apply.')
     resolved = {'roadmap': roadmap_path}
     for name, info in files.items():
         resolved[name] = safe_target(ctx.scrum_root, info['relative'])
@@ -1428,7 +1454,7 @@ def _fetch(root, today, transport, since, discard_staged, result):
                           startDate=info['sprint']['startDate'], endDate=info['sprint']['endDate'],
                           createsFolder=not os.path.isdir(os.path.dirname(path)),
                           template=None if texts[name] is not None else sprint_template(ctx, *info['dates']),
-                          changeIds=info['changeIds'], outOfLimitChangeIds=info['outOfLimitChangeIds'])
+                          changeIds=info['changeIds'])
         plan_targets[name] = target
     pending = [c['id'] for c in changes if not c['alreadyApplied']]
     # A completion that turned out to be marked after all (a marker in a file the first look did not cover) is recorded.
@@ -1512,11 +1538,6 @@ def _apply(root, transport, no_ack, allow_shrink, confirm_declined, result):
         invented = [i for i in staged_markers if i not in current_markers and i not in plan_ids]
         require(not invented, f'Refusing to write the {name} file: the staged copy carries a marker for {", ".join(invented)}, '
                               'which is not in this plan. Nothing was written. Copy markers from the plan only.')
-        # RoadS decides the sprint limit: a change that touches this sprint only through an item
-        # past the limit is written in the roadmap and reported, never into this sprint file.
-        over = [i for i in staged_markers if i not in current_markers and i in (target.get('outOfLimitChangeIds') or [])]
-        require(not over, f'Refusing to write the {name} file: the staged copy carries a marker for {", ".join(over)}, '
-                          'whose item is past the sprint limit (overLimit). Nothing was written. Write it in the roadmap only.')
         planned.append((name, target, path, relative, staged))
     written, backups = [], []
     try:
