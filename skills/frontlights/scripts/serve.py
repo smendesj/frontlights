@@ -1557,7 +1557,9 @@ def merge_branches(block, worktree, branches, commits):
     merged = []
     for name in branches:
         before = git_commit(worktree, 'HEAD')
-        code, _, err = git(worktree, 'merge', '--no-ff', '--no-edit', name)
+        # refs/heads/: a tag with the same name would otherwise be merged in place of the branch
+        code, _, err = git(worktree, 'merge', '--no-ff', '--no-edit', '-m',
+                           f"Merge branch '{name}' into {block['branch']}", f'refs/heads/{name}')
         if code == 0:
             merged.append({'branch': name, 'commit': commits[name]})
             continue

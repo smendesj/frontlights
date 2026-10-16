@@ -429,6 +429,14 @@ class PreviewRefreshTest(RefreshTestCase):
         self.assertEqual(status['processes'][0]['pid'], result['processes'][0]['pid'])
         self.assertNotEqual(first['processes'][0]['pid'], status['processes'][0]['pid'])
 
+    def test_refresh_merges_the_branch_even_when_a_tag_has_the_same_name(self):
+        self.git('tag', 'issue-1', 'main')  # `git merge issue-1` would take the tag (main) before the branch
+        done = self.refresh('issue-1')
+        self.assertEqual(done.returncode, 0, done_text(done))
+        self.assertTrue((self.worktree / 'issue1.txt').is_file(), 'o refresh mesclou a tag, não a branch')
+        self.assertEqual(self.rev('previa^2'), self.rev('refs/heads/issue-1'))
+        self.assertEqual(self.git('log', '-1', '--format=%s', 'previa'), "Merge branch 'issue-1' into previa")
+
     def test_refresh_leaves_the_local_main_and_the_issue_branch_where_they_were(self):
         main, issue = self.rev('main'), self.rev('issue-1')
         self.assertEqual(self.refresh('issue-1').returncode, 0, done_text(self.last))
