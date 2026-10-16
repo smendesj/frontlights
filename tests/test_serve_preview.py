@@ -896,6 +896,22 @@ class TailLinesTest(unittest.TestCase):
         self.assertEqual(serve.tail_lines(Path(self.tmp.name) / 'nao-existe.log'), [])
 
 
+class PreviewMergeCommitTest(RefreshTestCase):
+    def test_the_merge_uses_the_commit_read_by_the_check_not_the_branch_read_again(self):
+        old = self.rev('issue-1')
+        self.git('worktree', 'add', '-q', '-b', 'previa', str(self.worktree), 'main')
+        self.git('checkout', '-q', 'issue-1')  # the branch moves after the check read it
+        (self.root / 'issue1.txt').write_text('mudou depois do check\n', encoding='utf-8')
+        self.git('commit', '-q', '-am', 'depois do check')
+        self.git('checkout', '-q', 'main')
+        self.assertNotEqual(self.rev('issue-1'), old)
+        block = serve.load_preview_block(self.config, self.root)
+        merged = serve.merge_branches(block, self.worktree, ['issue-1'], {'issue-1': old})
+        self.assertEqual(merged, [{'branch': 'issue-1', 'commit': old}])
+        self.assertEqual(self.rev('previa^2'), old)
+        self.assertEqual(self.git('log', '-1', '--format=%s', 'previa'), "Merge branch 'issue-1' into previa")
+
+
 def done_text(done):
     return done.stdout + done.stderr
 

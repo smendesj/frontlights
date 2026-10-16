@@ -73,12 +73,14 @@ refused while the preview is alive (any process or log relay of the record) and 
 exist. `preview status` and `preview stop` work from the record alone, with or without the `preview` block in the
 config (the mask still comes from its `browserTest.users`). `preview status` adds `alive` and `relayAlive` per process
 (`running` needs both for every process), `log` and the last `TAIL_LINES` lines of each log (`tail`, read from at most
-the last `TAIL_BYTES` of the file), masked again on output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
+the last `TAIL_BYTES` of the file), masked again on output, and what the worktree holds (`base`, `baseCommit`,
+`merged`) when a refresh brought it up.
 `preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
 change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
 repository on `preview.branch`, or that has tracked changes or a merge in progress), then stops the preview, redoes
 `preview.branch` at the local base (`git checkout -B` inside the preview worktree, or `git worktree add --force -B`
-when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit`) and brings the processes up as
+when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit` of the commit the check read, the
+one recorded in `merged`, with the message `Merge branch '<b>' into <preview.branch>`) and brings the processes up as
 `preview start` does. A conflict is aborted (`git merge --abort`), nothing comes up and the refusal names the branch
 and the files (`conflict: true`). A process that exits before its health, or whose health never answers, is a broken
 build: everything is torn down and the refusal carries `build: "quebrado"`, the log and its last lines written by
@@ -1635,9 +1637,10 @@ def merge_branches(block, worktree, branches, commits):
     merged = []
     for name in branches:
         before = git_commit(worktree, 'HEAD')
-        # refs/heads/: a tag with the same name would otherwise be merged in place of the branch
+        # the commit check_refresh read (the one recorded in `merged`), never the branch read again: a branch that
+        # moved meanwhile, or a tag with the same name, cannot change what enters the preview
         code, _, err = git(worktree, 'merge', '--no-ff', '--no-edit', '-m',
-                           f"Merge branch '{name}' into {block['branch']}", f'refs/heads/{name}')
+                           f"Merge branch '{name}' into {block['branch']}", commits[name])
         if code == 0:
             merged.append({'branch': name, 'commit': commits[name]})
             continue
