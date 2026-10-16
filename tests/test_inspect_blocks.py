@@ -406,6 +406,40 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(field=field, timeout='ausente'), tempfile.TemporaryDirectory() as root:
                 inspect_file(with_isolated(**{field: {'argv': ['python', 'DB_SCRIPT']}}), root)
 
+    def test_a_fixed_port_of_the_preview_is_refused(self):
+        """Nunca nas portas da prévia: a porta fixa vem de `port` ou, sem ele, da porta do health."""
+        fixed = [process(port=8080, health='http://127.0.0.1:8080/health'),
+                 {'name': 'web', 'argv': ['python', 'APP_SCRIPT'], 'health': 'http://127.0.0.1:8080/'}]
+        for mine in fixed:
+            for theirs in (process(port=8080, health='http://127.0.0.1:8080/health'),
+                           {'name': 'web', 'argv': ['python', 'APP_SCRIPT'], 'health': 'http://127.0.0.1:8080/'}):
+                with self.subTest(isolated=mine, preview=theirs):
+                    preview = {'processes': [process(name='api'), theirs]}
+                    message = self.refuse(with_isolated(processes=[mine], preview=preview),
+                                          r'browserTest\.isolated\.processes')
+                    self.assertIn('8080', message)
+                    self.assertIn('preview.processes', message)
+
+    def test_a_fixed_port_of_the_browser_test_processes_is_refused(self):
+        theirs = process(port=8080, health='http://127.0.0.1:8080/health')
+        mine = {'name': 'web', 'argv': ['python', 'APP_SCRIPT'], 'health': 'http://localhost:8080/health'}
+        message = self.refuse(with_isolated(None, theirs, processes=[mine]), r'browserTest\.isolated\.processes')
+        self.assertIn('8080', message)
+        self.assertIn('browserTest.processes', message)
+
+    def test_automatic_or_distinct_ports_never_collide(self):
+        fixed = process(port=8080, health='http://127.0.0.1:8080/health')
+        configs = {'isolada automática': with_isolated(None, fixed, preview={'processes': [fixed]}),
+                   'portas fixas diferentes': with_isolated(
+                       None, fixed, preview={'processes': [fixed]},
+                       processes=[process(port=8090, health='http://127.0.0.1:8090/health')]),
+                   'prévia sem processes legíveis': with_isolated(
+                       preview={'processes': 'web'}, processes=[process(port=8080, health='http://127.0.0.1:8080/')]),
+                   'prévia que não é objeto': with_isolated(preview=['web'])}
+        for case, config in configs.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
+                inspect_file(config, root)
+
 
 if __name__ == '__main__':
     unittest.main()

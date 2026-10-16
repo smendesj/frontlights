@@ -877,8 +877,37 @@ def validate_isolated_block(config):
         if not isolated_local_url(item['health']):
             raise checks.Refused(f'{where}: o health do processo {item["name"]} declara um host que não é local; a '
                                  'instância isolada só roda na própria máquina (127.0.0.1, localhost ou ::1).')
+    preview = config.get('preview')
+    taken = {'preview.processes': fixed_ports(preview.get('processes') if isinstance(preview, dict) else None),
+             'browserTest.processes': fixed_ports(config['browserTest'].get('processes'))}
+    for port, name in fixed_ports(processes).items():
+        for other, ports in taken.items():
+            if port in ports:
+                raise checks.Refused(f'{where}: o processo {name} usa a porta fixa {port}, a mesma do processo '
+                                     f'{ports[port]} em {other}. A instância isolada nunca roda nas portas da prévia '
+                                     'nem do serve: use port "auto" (com {port} no health) ou outra porta.')
     for field in ('copyDatabase', 'dropDatabase'):
         validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
+
+
+def fixed_ports(processes):
+    """{port: process name} of the processes that do not use port "auto" (the integer `port`, or else the port of
+    the health URL). Read-only and lenient: items this block's own validator would refuse are skipped here."""
+    import serve
+    ports = {}
+    for item in processes if isinstance(processes, list) else []:
+        if not isinstance(item, dict) or serve.is_auto(item):
+            continue
+        port = item.get('port')
+        if not isinstance(port, int) or isinstance(port, bool):
+            health = item.get('health')
+            try:
+                port = serve.url_port(urllib.parse.urlsplit(health)) if isinstance(health, str) else None
+            except ValueError:
+                port = None
+        if port is not None:
+            ports.setdefault(port, item.get('name'))
+    return ports
 
 
 def validate_isolated_command(command, where):
