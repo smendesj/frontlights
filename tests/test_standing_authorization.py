@@ -38,16 +38,35 @@ class StandingAuthorizationTests(unittest.TestCase):
                 self.assertIn(phrase, text)
         self.assertNotIn('ask the concurrency question and one bounded implementation authorization', text)
 
+    def test_development_holds_the_charter(self):
+        development = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ('stage 6 opens without a question: there is no concurrency question, no stacking question and '
+                       'no implementation authorization question',
+                       "announces it in one short block, in the user's language",
+                       '`"autorização permanente (docs/security.md)"` in `approval_reference`',
+                       'an `expires_at` at most 24 hours ahead', 'Its `monitoring` block is `mode: "local"`',
+                       '`phone_connected: true` only when the user states, unprompted in this session',
+                       'The questions of the work itself (the watched run, failures, the findings batch, a new product '
+                       'decision) are still asked',
+                       'This section is the single source of what stage 6 may do on its own'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, development)
+
     def test_the_covered_operations_are_the_same_everywhere(self):
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('running migrations on the local development database',
                        "creating and removing test data through the product's own endpoints",
                        'ticking acceptance criteria with evidence',
+                       'the branch of the issue into the local main once its three gates are green'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
+        for phrase in ('running migrations on the local development database',
+                       "creating and removing test data through the product's own endpoints",
+                       'ticking acceptance criteria with evidence',
                        'the merge of the branch of the issue into the local main with its three gates green'):
-            for name, text in (('SKILL.md', skill), ('development.md', development)):
-                with self.subTest(file=name, phrase=phrase):
-                    self.assertIn(phrase, text)
+            with self.subTest(file='SKILL.md', phrase=phrase):
+                self.assertIn(phrase, skill)
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
             text = flat(*name)
             for phrase in ('rodar a migration' if name == ('README.md',) else 'migrations no banco de desenvolvimento local',
@@ -84,7 +103,8 @@ class StandingAuthorizationTests(unittest.TestCase):
                 self.assertIn(phrase, skill)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         self.assertIn('## Standing authorization and the denied operations', read('skills', 'frontlights', 'references', 'development.md'))
-        self.assertIn('A "Sim" covers that one operation, never another one, another PR or a later moment', development)
+        self.assertIn('A "Sim" covers that one operation; another operation, another PR or a later moment gets its own '
+                      'question', development)
 
     def test_the_approvals_with_their_own_stage_keep_them(self):
         self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them",
