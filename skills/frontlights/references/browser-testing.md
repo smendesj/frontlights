@@ -177,7 +177,7 @@ which processes are still up when the user chose to keep them.
 
 ```powershell
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview start --config <config> --root <main worktree>
-python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview refresh --config <config> --root <main worktree> [--base main] --branch <issue branch> [--branch <issue branch> ...]
+python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview refresh --config <config> --root <main worktree> [--base main] [--branch <issue branch> ...]
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview status --config <config> --root <main worktree>
 python "${CLAUDE_SKILL_DIR}/scripts/serve.py" preview stop --config <config> --root <main worktree>
 ```
@@ -305,7 +305,10 @@ When the user will watch:
   base, check each health, run ANTES, stop them, then bring them up from the delivered
   state for DEPOIS, and open `browserTest.isolated.baseUrl` in the disposable window
   each time; never on the ports of the preview. The session (or the driver of the run)
-  starts those processes itself, from their argv, and stops only what it started. The
+  starts those processes itself, from their argv, and stops only what it started. A
+  process with `"port": "auto"` gets a free port the session picks before starting it,
+  passed in `PORT` and in place of `{port}` in its argv, its health and the `baseUrl`,
+  as `serve` does for its own; a fixed `port` is used as declared. The
   copy is test data the run created: record it in `dados-de-teste.json` before the
   copy, and run `dropDatabase` at the cleanup of section "Test data the run creates",
   marking it removed. Without the block, the passes run on the issue's own serve as

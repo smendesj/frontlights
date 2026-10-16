@@ -91,12 +91,14 @@ class InspectWithoutBlocksTests(unittest.TestCase):
         names = ('read_config', 'load_user_secrets', 'require_maskable_user_secrets', 'require_local_declarations',
                  'command_settings', 'smoke_settings', 'optional_name')
         with tempfile.TemporaryDirectory() as root, patch.object(serve, 'load_block', forbidden), \
+                patch.object(serve, 'load_preview_block', forbidden), \
                 patch.object(frontlights.Path, 'write_text', forbidden):
             patches = [patch.object(checks, name, forbidden) for name in names]
             for item in patches:
                 item.start()
             try:
-                for config in ({'repository': None}, {'repository': None, 'browserTest': None, 'checks': None}):
+                for config in ({'repository': None},
+                               {'repository': None, 'browserTest': None, 'checks': None, 'preview': None}):
                     with self.subTest(config=config):
                         frontlights.inspect(config, root)
                         frontlights.inspect(config, root, Path(root) / 'ausente.json')
@@ -118,7 +120,7 @@ class InspectWithoutBlocksTests(unittest.TestCase):
 class InspectValidBlocksTests(unittest.TestCase):
     def test_example_config_is_accepted_and_does_not_change_the_output(self):
         with tempfile.TemporaryDirectory() as root:
-            plain = {k: v for k, v in local(EXAMPLE).items() if k not in ('browserTest', 'checks')}
+            plain = {k: v for k, v in local(EXAMPLE).items() if k not in ('browserTest', 'checks', 'preview')}
             self.assertEqual(stable(inspect_file(local(EXAMPLE), root)),
                              stable(frontlights.inspect(plain, root)))
 
@@ -302,6 +304,69 @@ class AccountsOnlyBrowserTestTests(unittest.TestCase):
         self.assertEqual(caught.exception.category, serve.USAGE)
 
 
+def preview_block(**overrides):
+    """Bloco preview válido: worktree e branch próprias, baseUrl local e um processo de porta fixa."""
+    block = {'worktree': '.claude/worktrees/previa', 'branch': 'previa', 'baseUrl': 'http://127.0.0.1:8070/',
+             'processes': [process(name='previa', argv=['python', 'APP_SCRIPT', '8070'], port=8070,
+                                   health='http://127.0.0.1:8070/health')]}
+    block.update(overrides)
+    return block
+
+
+class PreviewBlockTests(unittest.TestCase):
+    """Revisão da issue 34 (B6): o inspect valida o bloco de topo preview com as regras do `serve preview`.
+
+    Ausente ou null, nada é lido; presente, o bloco inválido é recusado com a mensagem mascarada.
+    """
+
+    def refuse(self, config, pattern):
+        return InspectRefusesInvalidBlocksTests.refuse(self, config, pattern)
+
+    def test_a_valid_block_is_accepted_and_does_not_change_the_output(self):
+        for base in (with_browser(), {'repository': None}):
+            with self.subTest(browserTest='browserTest' in base), tempfile.TemporaryDirectory() as root:
+                config = dict(copy.deepcopy(base), preview=preview_block())
+                expected = inspect_file(base, root) if 'browserTest' in base else frontlights.inspect(base, root)
+                self.assertEqual(stable(inspect_file(config, root)), stable(expected))
+
+    def test_the_preview_rules_of_the_serve_apply(self):
+        missing = preview_block()
+        missing.pop('processes')
+        cases = {'texto': 'previa', 'lista': ['previa'], 'worktree que sai da raiz': preview_block(worktree='../fora'),
+                 'worktree absoluta': preview_block(worktree='C:/fora'), 'worktree na raiz': preview_block(worktree='.'),
+                 'branch main': preview_block(branch='main'), 'branch com espaço': preview_block(branch='a b'),
+                 'baseUrl não local': preview_block(baseUrl='https://app.example.com/'),
+                 'sem processes': missing, 'processes vazios': preview_block(processes=[]),
+                 'processo sem health': preview_block(processes=[process(health=None)])}
+        for case, block in cases.items():
+            with self.subTest(case=case):
+                self.refuse(dict(with_browser(), preview=block), 'preview')
+        with self.subTest(case='sem browserTest'):
+            self.refuse({'repository': None, 'preview': preview_block(branch='main')}, r'preview\.branch')
+
+    def test_a_block_without_a_config_path_is_refused(self):
+        with tempfile.TemporaryDirectory() as root, self.assertRaisesRegex(ValueError, 'caminho do config'):
+            frontlights.inspect({'repository': None, 'preview': preview_block()}, root)
+
+    def test_the_refusal_never_shows_the_test_login_or_password(self):
+        login = 'usuario@exemplo.test'
+        named = process(name=f'{login}-{PASSWORD}', argv=f'python APP_SCRIPT {PASSWORD}')
+        message = self.refuse(dict(with_browser(), preview=preview_block(processes=[named])), 'argv')
+        self.assertNotIn(login, message)
+        self.assertNotIn(PASSWORD, message)
+
+    def test_the_example_declares_the_block_with_generic_markers(self):
+        block = EXAMPLE['preview']
+        self.assertEqual((block['worktree'], block['branch']), ('.claude/worktrees/previa', 'previa'))
+        self.assertTrue(block['baseUrl'].startswith('http://127.0.0.1:'))
+        ports = {item['port'] for item in block['processes']}
+        self.assertTrue(ports and all(isinstance(port, int) for port in ports))
+        self.assertTrue(all(item['health'].startswith('http://127.0.0.1:') for item in block['processes']))
+        others = frontlights.fixed_ports(EXAMPLE['browserTest']['processes'])
+        others.update(frontlights.fixed_ports(EXAMPLE['browserTest']['isolated']['processes']))
+        self.assertFalse(ports & set(others))
+
+
 def isolated(**overrides):
     """Bloco browserTest.isolated válido: instância própria, porta automática, banco copiado e descartado."""
     block = {'baseUrl': 'http://127.0.0.1:{port}/',
@@ -352,9 +417,12 @@ class IsolatedBlockTests(unittest.TestCase):
                 self.refuse(with_isolated(baseUrl=value), r'browserTest\.isolated\.baseUrl')
 
     def test_local_base_urls_are_accepted(self):
-        for value in ('http://localhost:{port}/', 'https://127.0.0.1:8443/app', 'http://[::1]:{port}/'):
+        fixed = [process(port=8443, health='https://127.0.0.1:8443/health')]
+        for value, processes in (('http://localhost:{port}/', None), ('https://127.0.0.1:8443/app', fixed),
+                                 ('http://[::1]:{port}/', None)):
+            overrides = {'baseUrl': value} if processes is None else {'baseUrl': value, 'processes': processes}
             with self.subTest(baseUrl=value), tempfile.TemporaryDirectory() as root:
-                inspect_file(with_isolated(baseUrl=value), root)
+                inspect_file(with_isolated(**overrides), root)
 
     def test_a_port_placeholder_in_the_base_url_needs_an_automatic_process(self):
         """Issue 34, S4 (revisão da sessão): {port} na baseUrl só tem a que porta se referir com um processo auto."""
@@ -373,7 +441,51 @@ class IsolatedBlockTests(unittest.TestCase):
         preview['baseUrl'] = 'http://127.0.0.1:8095/'
         self.refuse(with_isolated(processes=[process(port=8091, health='http://127.0.0.1:8091/health')],
                                   baseUrl='http://127.0.0.1:8091/', preview=preview),
-                    r'8091')
+                    r'browserTest\.isolated\.baseUrl.*8091.*preview\.processes')
+
+    def test_a_fixed_base_url_port_never_is_a_port_of_the_serve(self):
+        """Revisão da issue 34 (M2): a baseUrl fixa da isolada nunca é a porta de browserTest.processes nem da
+        browserTest.baseUrl, mesmo com os processos isolados em auto."""
+        serve_fixed = process(port=8080, health='http://127.0.0.1:8080/health')
+        message = self.refuse(with_isolated(None, serve_fixed, baseUrl='http://127.0.0.1:8080/'),
+                              r'browserTest\.isolated\.baseUrl.*8080.*browserTest\.processes')
+        self.assertIn('web', message)
+        config = with_isolated(processes=[process(port=8080, health='http://127.0.0.1:8080/health')],
+                               baseUrl='http://127.0.0.1:8080/')
+        config['browserTest']['baseUrl'] = 'http://127.0.0.1:8080/'
+        self.refuse(config, r'browserTest\.isolated\.baseUrl.*8080.*browserTest\.baseUrl')
+        config['browserTest']['baseUrl'] = 'http://127.0.0.1:{port}/'
+        with tempfile.TemporaryDirectory() as root:
+            inspect_file(config, root)
+
+    def test_a_fixed_base_url_port_is_the_port_of_an_isolated_process(self):
+        """Revisão da issue 34 (M2): a baseUrl fixa aponta para um processo que a sessão sobe na instância isolada."""
+        cases = {'processos auto': [process()],
+                 'processo fixo em outra porta': [process(port=8090, health='http://127.0.0.1:8090/health')]}
+        for case, processes in cases.items():
+            with self.subTest(case=case):
+                message = self.refuse(with_isolated(processes=processes, baseUrl='http://127.0.0.1:8095/'),
+                                      r'browserTest\.isolated\.baseUrl.*8095')
+                self.assertIn('browserTest.isolated.processes', message)
+        accepted = {'porta inteira': process(port=8095, health='http://127.0.0.1:8095/health'),
+                    'porta do health': {'name': 'web', 'argv': ['python', 'APP_SCRIPT'],
+                                        'health': 'http://localhost:8095/health'}}
+        for case, item in accepted.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(processes=[process(name='api'), item], baseUrl='http://127.0.0.1:8095/'),
+                             root)
+
+    def test_process_working_folders_stay_inside_the_worktree(self):
+        """Revisão da issue 34 (B7): o serve nunca sobe esses processos, então o inspect contém o cwd deles."""
+        for cwd in ('../fora', 'web/../../fora', r'web\..\..\fora', 'C:/fora', 'C:fora', '/fora', r'\fora',
+                    r'\\servidor\pasta'):
+            with self.subTest(cwd=cwd):
+                message = self.refuse(with_isolated(processes=[process(name='front', cwd=cwd)]),
+                                      r'browserTest\.isolated\.processes.*front.*cwd')
+                self.assertIn('relativo', message)
+        for cwd in ('web', 'apps/web', r'apps\web', ''):
+            with self.subTest(cwd=cwd), tempfile.TemporaryDirectory() as root:
+                inspect_file(with_isolated(processes=[process(name='front', cwd=cwd)]), root)
 
     def test_database_steps_refuse_a_working_folder(self):
         """Issue 34, S4: cwd nos passos do banco é recusado, nunca ignorado em silêncio."""
@@ -455,18 +567,24 @@ class IsolatedBlockTests(unittest.TestCase):
 
     def test_automatic_or_distinct_ports_never_collide(self):
         fixed = process(port=8080, health='http://127.0.0.1:8080/health')
-        configs = {'isolada automática': with_isolated(None, fixed, preview={'processes': [fixed]}),
+        preview = preview_block(baseUrl='http://127.0.0.1:8080/', processes=[fixed])
+        configs = {'isolada automática': with_isolated(None, fixed, preview=preview),
                    'portas fixas diferentes': with_isolated(
-                       None, fixed, preview={'processes': [fixed]},
+                       None, fixed, preview=preview,
                        processes=[process(port=8090, health='http://127.0.0.1:8090/health')],
-                       baseUrl='http://127.0.0.1:8090/'),
-                   'prévia sem processes legíveis': with_isolated(
-                       preview={'processes': 'web'}, processes=[process(port=8080, health='http://127.0.0.1:8080/')],
-                       baseUrl='http://127.0.0.1:8080/'),
-                   'prévia que não é objeto': with_isolated(preview=['web'])}
+                       baseUrl='http://127.0.0.1:8090/')}
         for case, config in configs.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
                 inspect_file(config, root)
+        # the inspect refuses these preview blocks on their own (PreviewBlockTests); the isolated rule only reads
+        # what it can and never fails on them
+        lenient = {'prévia sem processes legíveis': with_isolated(
+                       preview={'processes': 'web'}, processes=[process(port=8080, health='http://127.0.0.1:8080/')],
+                       baseUrl='http://127.0.0.1:8080/'),
+                   'prévia que não é objeto': with_isolated(preview=['web'])}
+        for case, config in lenient.items():
+            with self.subTest(case=case):
+                frontlights.validate_isolated_block(config)
 
     def test_refusals_never_show_the_test_login_or_password(self):
         """Login e senha fictícios de browserTest.users num argv (e no nome que a recusa cita) saem mascarados."""

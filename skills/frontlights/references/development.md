@@ -77,14 +77,17 @@ true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito
 never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
 not, the two commits, a conflict and its answer) in the handoff.
 
-**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block, and after the hook
-and the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an
-issue in progress as `--branch` (none at the very start), open its `baseUrl` once in a tab of Claude in Chrome
-and tell the user. From then on the preview follows the work (below, "Slices in order"); it stops only when the
-user asks, and the session that finds it already up (its record) refreshes it instead of starting another one.
-The tab belongs to the user, never to a test. The commands, the record and the log are in
-`references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the preview's branch, the
-branches merged into it and the last refresh.
+**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block, and after the hook and
+the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an issue
+in progress as `--branch`, open its `baseUrl` once in a tab of Claude in Chrome and tell the user. The list: each
+issue branch in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
+branches stay out), plus each one in the `merged` of `serve preview status`, minus each one the local main already
+holds (`git merge-base --is-ancestor <branch> main`); at the very start it may be empty, and the session never
+takes another issue's work in progress out of the preview. From then on the preview follows the work (below,
+"Slices in order"); it stops only when the user asks, and the session that finds it already up (its record)
+refreshes it instead of starting another one. The tab belongs to the user, never to a test. The commands, the
+record and the log are in `references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the
+preview's branch, the branches merged into it and the last refresh.
 
 ## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 
