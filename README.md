@@ -640,7 +640,9 @@ lá, e um item concluído fica na sprint (marcado como concluído) até a rotaç
 cartões, o Frontlights oferece sincronizar de novo. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
-`python scripts/cleanup.py plan|verify ...`, e só leem.
+`python scripts/cleanup.py plan|verify ...`, e só leem. A exceção é `python scripts/closeout.py tick --issue <n>
+--box S<k>` (ou `--line <N>`), que marca uma caixa de critério com evidência: captura o corpo, troca só aquele `[ ]`
+por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo anterior em `.frontlights/issues/<n>/`.
 
 #### Homologar na main local, lançar a release, fechar e limpar
 
