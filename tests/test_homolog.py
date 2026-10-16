@@ -313,7 +313,7 @@ class LocalMainTextTests(unittest.TestCase):
         skill = stage(6)
         for phrase in ('**The release, offered at the end of each homologated issue**', '`homolog release-plan',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       '`gh pr create --base <base> --head <release branch>`', '`templates/pr.md` when it exists',
+                       '`gh pr create --base <base> --head <release branch>`', 'the body from `templates/pr.md`',
                        '`git pull --ff-only` on the local main', 'before the merge into the local main, before a PR is opened or updated'):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
