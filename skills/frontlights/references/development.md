@@ -537,8 +537,9 @@ offers the release again with everything accumulated.
   question, as at the start of stage 6), then `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog
   release-plan --root <main worktree> --base <base>`: it reads the issue branches from the authorization records,
   lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the commits
-  `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>` (the date in São Paulo, `-2`, `-3`
-  when the name is taken). Exit code 2 says there is nothing to release, or that the local main is behind and
+  `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
+  record by `issued_at` (`claude/` when there is none; `--prefix` names it alone; `prefix` and `prefixSource` say
+  which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
   must be synced first: say so in one line. It only reads.
 - **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
   com as issues #a, #b agora?", with "Sim, lançar" first and "Agora não" second; one question per release.

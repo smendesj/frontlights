@@ -34,7 +34,9 @@ Operations (each prints one JSON object on stdout):
   release-plan  what the release would carry: the issues whose branch (the `worktrees` entries without `slice` of
          every `.frontlights/authorization*.json` under `--records`, default the root) is in the local base and
          not yet in `<remote>/<base>`, how many commits the local base is ahead of and behind the remote one, and
-         the name of the release branch, `<prefix>release-<YYYY-MM-DD>` (the date in America/Sao_Paulo, the
+         the name of the release branch, `<prefix>release-<YYYY-MM-DD>` (`--prefix` alone when given; otherwise the
+         `branch_prefix` of the record with the newest `issued_at`, a record without a valid instant ranking last, and
+         `claude/` without a valid record, issue 44; `prefix` and `prefixSource` say which; the date in America/Sao_Paulo, the
          machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
          remote-tracking branch of `--remote`, that already has the name. `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
@@ -54,7 +56,7 @@ import re
 import subprocess
 import sys
 import zoneinfo
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 GIT_TIMEOUT = 45
@@ -552,11 +554,41 @@ def release_name(root, prefix, remote):
     return name
 
 
+def instant(value):
+    """The POSIX time of an ISO-8601 `issued_at` (UTC when it carries no offset), or None when it is not one."""
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.timestamp()
+
+
+def release_prefix(prefix, records):
+    """(prefix, source): `prefix` and `argument` when one is given; otherwise the `branch_prefix` of the record with
+    the newest `issued_at` (records without a valid instant rank last, then by file name) and `records`, or
+    DEFAULT_PREFIX and `default` without a valid record (issue 44)."""
+    if prefix is not None:
+        return branch_prefix(prefix), 'argument'
+    found, _ = record_prefixes(records)
+    if not found:
+        return DEFAULT_PREFIX, 'default'
+
+    def rank(entry):
+        moment = instant(entry['issuedAt'])
+        return (moment is not None, moment if moment is not None else 0.0, entry['file'])
+
+    return max(found, key=rank)['prefix'], 'records'
+
+
 def op_release_plan(root, base, remote, prefix, records):
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
-    prefix = branch_prefix(prefix)
+    prefix, source = release_prefix(prefix, root if records is None else records)
     local_ref, remote_ref = f'refs/heads/{base}', f'refs/remotes/{remote}/{base}'
     local = rev(root, local_ref)
     require(local, f'a branch base `{base}` não existe neste repositório')
@@ -572,8 +604,8 @@ def op_release_plan(root, base, remote, prefix, records):
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
     name = release_name(root, prefix, remote)
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
-              'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'skipped': skipped,
-              'ready': False}
+              'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'prefix': prefix,
+              'prefixSource': source, 'skipped': skipped, 'ready': False}
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
                                           'antes do release-plan.')
@@ -607,7 +639,7 @@ def run(operation, root, base='main', remote='origin', install=False, config=Non
         elif operation == 'bundle':
             result = op_bundle(root, config, base, prefix, records)
         elif operation == 'release-plan':
-            result = op_release_plan(root, base, remote, DEFAULT_PREFIX if prefix is None else prefix, records)
+            result = op_release_plan(root, base, remote, prefix, records)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -648,7 +680,8 @@ def build_parser():
             command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
         else:
             command.add_argument('--remote', default='origin', help='the remote whose base the release goes to (default origin)')
-            command.add_argument('--prefix', default='claude/', help='the prefix of the release branch name (default claude/)')
+            command.add_argument('--prefix', help='the prefix of the release branch name (default: the branch_prefix '
+                                                  'of the newest authorization record, claude/ without one)')
             command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
     return parser
 

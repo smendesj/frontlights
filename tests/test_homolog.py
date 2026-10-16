@@ -321,6 +321,17 @@ class LocalMainTextTests(unittest.TestCase):
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('das branches de trabalho de todo prefixo dos registros de autorização', flat('README.md'))
 
+    def test_the_release_name_follows_the_newest_record(self):
+        """Issue 44, S2: o nome da release usa o prefixo do registro de autorização mais recente, sem `--prefix`."""
+        release = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ("the prefix of the newest authorization record by `issued_at` (`claude/` when there is none; "
+                       "`--prefix` names it alone", '`prefix` and `prefixSource` say which'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, release)
+        self.assertIn('the prefix of the newest authorization record', stage(6))
+        self.assertIn('o prefixo do registro de autorização mais recente', flat('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('o prefixo do registro de autorização mais recente', flat('README.md'))
+
     def test_the_release_replaces_the_pull_request_per_issue(self):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
@@ -975,6 +986,29 @@ class HomologReleasePlanTests(unittest.TestCase):
 
     def plan(self, *flags, script=HOMOLOG):
         return self.cli('release-plan', '--root', str(self.work), *flags, script=script)
+
+    def test_without_prefix_the_newest_record_names_the_release(self):
+        """Issue 44, S2: sem `--prefix`, o nome da release usa o `branch_prefix` do registro de `issued_at` mais novo,
+        nunca o do nome de arquivo; um registro sem `issued_at` fica atrás dos que têm."""
+        self.record(name='authorization-a.json', branch_prefix='equipe/', issued_at='2026-01-02T10:00:00+00:00')
+        self.record(name='authorization-b.json', branch_prefix='antigo/', issued_at='2026-01-01T10:00:00+00:00')
+        code, result = self.plan()
+        self.assertRegex(result['releaseBranch'], r'^equipe/release-\d{4}-\d{2}-\d{2}$')
+        self.assertEqual((result['prefix'], result['prefixSource']), ('equipe/', 'records'))
+
+    def test_without_a_valid_record_the_release_keeps_the_default(self):
+        """Issue 44, S2: sem registro válido, `claude/`, como antes."""
+        (self.work / '.frontlights' / 'authorization.json').unlink()
+        code, result = self.plan()
+        self.assertRegex(result['releaseBranch'], r'^claude/release-\d{4}-\d{2}-\d{2}$')
+        self.assertEqual((result['prefix'], result['prefixSource']), ('claude/', 'default'))
+
+    def test_an_explicit_prefix_still_names_the_release(self):
+        """Issue 44, S2: `--prefix` explícito vale sozinho."""
+        self.record(name='authorization-a.json', branch_prefix='equipe/', issued_at='2026-01-02T10:00:00+00:00')
+        code, result = self.plan('--prefix', 'rel/')
+        self.assertRegex(result['releaseBranch'], r'^rel/release-\d{4}-\d{2}-\d{2}$')
+        self.assertEqual((result['prefix'], result['prefixSource']), ('rel/', 'argument'))
 
     def test_the_release_lists_only_the_issues_still_outside_the_remote_main(self):
         self.deliver(1)
