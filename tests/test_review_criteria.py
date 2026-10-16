@@ -85,6 +85,17 @@ class ReviewerStandardTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, rounds)
 
+    def test_the_delta_leaves_out_what_the_base_brought(self):
+        # 1ª revisão, médio 1: depois do `git merge main`, o `..HEAD` cru traria o código das outras issues.
+        rounds = flat(section(self.text, 'Rounds'))
+        for phrase in ('When the base was brought into the branch between the rounds',
+                       "the delta is the issue's own change, not what the base brought",
+                       '`git range-diff <previous base>..<previous tip> <base>..HEAD`',
+                       '`git show --remerge-diff <merge commit>`',
+                       'the code the base brought belongs to the issues that delivered it'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rounds)
+
     def test_the_report_has_the_counts_and_one_block_per_finding(self):
         report = flat(section(self.text, 'The report'))
         for phrase in ('`sérios/médios/baixos: s/m/b`', 'the most severe first', '**Gravidade**', '**Onde:**',
@@ -118,6 +129,18 @@ class StopCriterionTests(unittest.TestCase):
                        'The handoff records each round: its HEAD and its counts'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.review)
+
+    def test_the_ladder_names_the_default_of_the_baixos(self):
+        # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
+        # fechada em 0 sérios e 0 médios têm o critério novo como proposta padrão, e a correção vira opção do lote.
+        self.assertIn('(the baixos of a finished review take the default of "When the review is done", below)',
+                      self.review)
+        follow_ups = flat(section(read('skills', 'frontlights', 'references', 'issues.md'), 'Follow-ups'))
+        for phrase in ('The baixos left by a review that ends at 0 sérios and 0 médios',
+                       'take destination 2 as the proposed default, with destination 1 offered in the same batch as '
+                       '"Corrigir os baixos agora"', 'every other finding takes the first destination that fits'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, follow_ups)
 
     def test_the_two_blocks_sit_before_the_gate_on_the_findings(self):
         brief = self.review.find("**The reviewer's brief.**")
@@ -158,7 +181,8 @@ class DocumentationTests(unittest.TestCase):
         for phrase in ('O revisor julga pelo padrão de `references/review.md`', 'que só o brief do revisor cita',
                        'A revisão termina na primeira rodada com 0 sérios e 0 médios',
                        'com no máximo três rodadas por issue', '"Mais uma rodada"', '"Dar destino pela escada"',
-                       'como critério novo da issue de origem', 'revê o delta desde a anterior'):
+                       'como critério novo da issue de origem', 'revê o delta desde a anterior',
+                       'sem o que a base trouxe, quando ela entrou entre as rodadas'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, protocol)
 
