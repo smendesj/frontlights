@@ -649,7 +649,8 @@ por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
 `review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
-as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
+as issues que estão na main local e ainda não em `origin/main` (e as mudanças sem issue, dos caminhos Direto e Curto,
+pela branch registrada em `worktrees` sem `issue`; o nome da release pula também os já usados por PRs mescladas), e a pergunta "Lançar a release com as issues #a, #b
 agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta

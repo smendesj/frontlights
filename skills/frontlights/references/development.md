@@ -561,10 +561,11 @@ offers the release again with everything accumulated.
   lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
-  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken. A change without issue (Direct or Short path: a `worktrees` entry of its charter with no `issue`) is listed in `direct`, and `releaseDirect` names the ones in the local main and not yet in `origin/<base>`, while the name also skips the ones merged pull requests used (their `Merge pull request #<n> from <owner>/<name>` subjects). Exit code 2 says there is nothing to release, or that the local main is behind and
   must be synced first: say so in one line. It only reads.
 - **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
-  com as issues #a, #b agora?", with "Sim, lançar" first and "Agora não" second; one question per release.
+  com as issues #a, #b agora?" (a change without issue is named by its branch: "Lançar a release com as issues #a e as
+  mudanças sergio/melhoria-x agora?"), with "Sim, lançar" first and "Agora não" second; one question per release.
 - **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
   `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
   hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues

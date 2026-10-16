@@ -39,10 +39,14 @@ Operations (each prints one JSON object on stdout):
          `branch_prefix` of the record with the newest `issued_at`, a record without a valid instant ranking last, and
          `claude/` without a valid record, issue 44; `prefix` and `prefixSource` say which; the date in America/Sao_Paulo, the
          machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
-         remote-tracking branch of `--remote`, that already has the name. `ready` is true (exit 0) when the local
-         base is ahead, not behind, and at least one issue is in
+         remote-tracking branch of `--remote`, that already has the name, or that a merged pull request named
+         (`Merge pull request #<n> from <owner>/<name>` among the last MERGE_LIMIT merges of `<remote>/<base>`: a
+         squash merge leaves no such subject). A change without issue (Direct or Short path) is a `worktrees` entry
+         with no `issue` and no `slice` whose `branch` is under the record's prefix: it is listed in `direct`, and
+         `releaseDirect` names those in the local base and not yet in `<remote>/<base>`. `ready` is true (exit 0)
+         when the local base is ahead, not behind, and at least one issue or change without issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped). It only reads Git and the records: it never fetches, never creates the branch
+         no branch of the records in them). It only reads Git and the records: it never fetches, never creates the branch
          and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
@@ -65,6 +69,8 @@ FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
 RECORD_LIMIT = 200       # authorization records release-plan and bundle read
+MERGE_LIMIT = 1000       # merges of <remote>/<base> whose subjects release-plan reads for names already used
+MERGED_PR = re.compile(r'Merge pull request #[0-9]+ from [^/\s]+/(\S+)')   # GitHub's subject of a merge
 DEFAULT_PREFIX = 'claude/'   # the branch prefix when neither --prefix nor a record names one
 RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
 RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
@@ -498,11 +504,21 @@ def issue_branches(folder):
     """({issue number: branch}, skipped) from the `worktrees` entries without `slice` of every
     `.frontlights/authorization*.json` under `folder`. An entry counts when its `issue` is a positive integer and its
     `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later record wins for the same
-    issue. A slice entry is ignored in silence; a malformed entry, record or prefix, and every record past
+    issue. A slice entry is ignored in silence, and so is an entry without issue whose branch is valid (a change of
+    the Direct or Short path, see `record_branches`); a malformed entry, record or prefix, and every record past
     RECORD_LIMIT, is skipped and counted."""
+    mapping, _, skipped = record_branches(folder)
+    return mapping, skipped
+
+
+def record_branches(folder):
+    """({issue number: branch}, [branch of a change without issue], skipped): `issue_branches`, plus the entries with
+    no `issue` (absent or null) and no `slice` whose `branch` is a plain name under the record's prefix, in the order
+    the records list them, each branch once. An entry without issue and without a valid branch is skipped and
+    counted; any other key of a record (`direct_worktree`, say) is ignored."""
     files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
-    mapping = {}
+    mapping, direct = {}, []
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
         prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
@@ -515,11 +531,16 @@ def issue_branches(folder):
                 continue   # a slice is delivered to the branch of its issue, never to the base by itself
             number = entry.get('issue') if isinstance(entry, dict) else None
             branch = entry.get('branch') if isinstance(entry, dict) else None
-            if type(number) is not int or number <= 0 or not is_plain(branch) or not branch.startswith(prefix):
+            valid = is_plain(branch) and branch.startswith(prefix)
+            if isinstance(entry, dict) and number is None and valid:
+                if branch not in direct:
+                    direct.append(branch)
+                continue
+            if type(number) is not int or number <= 0 or not valid:
                 skipped += 1
                 continue
             mapping[number] = branch
-    return mapping, skipped
+    return mapping, direct, skipped
 
 
 def ancestry(root, commit, ref):
@@ -548,12 +569,23 @@ def release_date():
     return now.strftime('%Y-%m-%d')
 
 
-def release_name(root, prefix, remote):
-    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch, and every remote-tracking branch of
-    `remote`, that already carries the name."""
+def merged_names(root, remote, base):
+    """The head branch names that GitHub's merge subjects (`Merge pull request #<n> from <owner>/<name>`) cite among
+    the last MERGE_LIMIT merges of `<remote>/<base>`; an empty set when Git cannot read them."""
+    code, out, _ = git(root, 'log', '--merges', f'-n{MERGE_LIMIT}', '--format=%s', f'refs/remotes/{remote}/{base}', '--')
+    if code != 0:
+        return set()
+    return {match.group(1) for match in map(MERGED_PR.fullmatch, out.splitlines()) if match}
+
+
+def release_name(root, prefix, remote, base='main'):
+    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch, every remote-tracking branch of
+    `remote`, and every name a merged pull request of `<remote>/<base>` cites, that already carries the name."""
     stem = f'{prefix}release-{release_date()}'
     name, counter = stem, 2
-    while rev(root, f'refs/heads/{name}') is not None or rev(root, f'refs/remotes/{remote}/{name}') is not None:
+    used = merged_names(root, remote, base)
+    while (name in used or rev(root, f'refs/heads/{name}') is not None
+           or rev(root, f'refs/remotes/{remote}/{name}') is not None):
         name = f'{stem}-{counter}'
         counter += 1
     return name
@@ -598,18 +630,27 @@ def op_release_plan(root, base, remote, prefix, records):
     local = rev(root, local_ref)
     require(local, f'a branch base `{base}` não existe neste repositório')
     remote_tip = rev(root, remote_ref)
-    mapping, skipped = issue_branches(root if records is None else records)
+    mapping, fronts, skipped = record_branches(root if records is None else records)
     issues = []
     for number in sorted(mapping):
         tip = rev(root, f'refs/heads/{mapping[number]}')
         issues.append({'issue': number, 'branch': mapping[number], 'tip': tip, 'present': tip is not None,
                        'inLocalMain': ancestry(root, tip, local_ref),
                        'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)})
+    direct = []
+    for branch in fronts:
+        tip = rev(root, f'refs/heads/{branch}')
+        direct.append({'branch': branch, 'tip': tip, 'present': tip is not None,
+                       'inLocalMain': ancestry(root, tip, local_ref),
+                       'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)})
     release = [i['issue'] for i in issues if i['present'] and i['inLocalMain'] is True and i['inRemoteMain'] is False]
+    release_direct = [d['branch'] for d in direct
+                      if d['present'] and d['inLocalMain'] is True and d['inRemoteMain'] is False]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
-    name = release_name(root, prefix, remote)
+    name = release_name(root, prefix, remote, base)
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
-              'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'prefix': prefix,
+              'behind': behind, 'issues': issues, 'release': release, 'direct': direct,
+              'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,
               'prefixSource': source, 'skipped': skipped, 'ready': False}
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
@@ -621,14 +662,18 @@ def op_release_plan(root, base, remote, prefix, records):
                                           f'`homolog sync` antes da release.')
     elif ahead == 0:
         result.update(exitCode=2, message=f'A {base} local não tem commit além de {remote}/{base}: nada a liberar.')
-    elif not release:
+    elif not release and not release_direct:
         result.update(exitCode=2, message=f'A {base} local tem {ahead} commit(s) além de {remote}/{base}, mas nenhuma '
-                                          'branch de issue das autorizações está neles; confira os registros em '
-                                          '.frontlights/ ou aponte --records para a pasta certa.')
+                                          'branch de issue nem de mudança sem issue das autorizações está neles; '
+                                          'confira os registros em .frontlights/ ou aponte --records para a pasta certa.')
     else:
-        listed = ', '.join(f'#{number}' for number in release)
+        parts = []
+        if release:
+            parts.append(f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})')
+        if release_direct:
+            parts.append(f'{len(release_direct)} mudança(s) sem issue ({", ".join(release_direct)})')
         result.update(ready=True, exitCode=0,
-                      message=f'Release pronta: {len(release)} issue(s) ({listed}) em {ahead} commit(s) da {base} local '
+                      message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
                               f'ainda fora de {remote}/{base}; a branch da release é {name}.')
     return result
 

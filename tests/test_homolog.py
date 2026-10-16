@@ -1157,6 +1157,87 @@ class HomologReleasePlanTests(unittest.TestCase):
         _, elsewhere = self.plan('--remote', 'upstream')   # another remote does not hold the name
         self.assertEqual(elsewhere['releaseBranch'], name)
 
+    def deliver_front(self, branch, merge=True):
+        """A branch of a change without issue (Direct or Short path), cut from the local main with one commit and,
+        with `merge`, merged back into it with --no-ff."""
+        self.git(self.work, 'switch', '-q', '-c', branch)
+        self.commit(self.work, branch.replace('/', '-') + '.txt', f'{branch}\n', f'work of {branch}')
+        self.git(self.work, 'switch', '-q', 'main')
+        if merge:
+            self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of {branch} into the local main', branch)
+        return branch
+
+    def test_a_change_without_issue_in_the_local_main_is_released(self):
+        """Uma frente sem issue (entrada de `worktrees` sem `issue`) na main local e fora de `origin/main` deixa a
+        release pronta, citada pela branch; ela não conta como entrada pulada."""
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'path': 'C:/x', 'branch': 'claude/melhoria-a'})
+        self.deliver_front('claude/melhoria-a')
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['ready'], result['release'], result['releaseDirect'], result['skipped']),
+                         (True, [], ['claude/melhoria-a'], 0))
+        self.assertEqual(result['direct'], [{'branch': 'claude/melhoria-a', 'tip': self.sha(self.work, 'claude/melhoria-a'),
+                                             'present': True, 'inLocalMain': True, 'inRemoteMain': False}])
+        self.assertIn('claude/melhoria-a', result['message'])
+        self.assertIn(result['releaseBranch'], result['message'])
+
+    def test_a_change_already_released_or_outside_the_local_main_is_listed_but_not_released(self):
+        self.record({'branch': 'claude/melhoria-a'}, {'issue': None, 'branch': 'claude/melhoria-b'},
+                    {'branch': 'claude/melhoria-c'})
+        self.deliver_front('claude/melhoria-a')
+        self.git(self.work, 'push', '-q', 'origin', 'main')
+        self.deliver_front('claude/melhoria-b', merge=False)
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['ready'], result['releaseDirect']), (False, []))
+        self.assertEqual({d['branch']: (d['present'], d['inLocalMain'], d['inRemoteMain']) for d in result['direct']},
+                         {'claude/melhoria-a': (True, True, True), 'claude/melhoria-b': (True, False, False),
+                          'claude/melhoria-c': (False, None, None)})
+
+    def test_issues_and_changes_without_issue_are_released_together(self):
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'branch': 'claude/melhoria-a'})
+        self.deliver(1)
+        self.deliver_front('claude/melhoria-a')
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['release'], result['releaseDirect']), ([1], ['claude/melhoria-a']))
+        self.assertIn('#1', result['message'])
+        self.assertIn('claude/melhoria-a', result['message'])
+
+    def test_other_shapes_of_a_change_without_issue_are_ignored_and_bad_ones_counted(self):
+        """Só `worktrees` vale: `direct_worktree` é ignorado sem erro; uma slice sem issue também; uma branch fora do
+        prefixo ou com nome inválido conta como pulada; a mesma branch em dois registros aparece uma vez."""
+        self.record({'branch': 'claude/melhoria-a-s1', 'slice': 'S1'}, {'branch': 'other/melhoria'},
+                    {'branch': 'bad name'}, {'path': 'C:/sem-branch'}, {'branch': 'claude/melhoria-a'},
+                    direct_worktree={'path': 'C:/x', 'branch': 'claude/melhoria-z'})
+        self.record({'branch': 'claude/melhoria-a'}, name='authorization-2.json')
+        self.deliver_front('claude/melhoria-z')
+        code, result = self.plan()
+        self.assertEqual([d['branch'] for d in result['direct']], ['claude/melhoria-a'])
+        self.assertEqual(result['skipped'], 3)
+        self.assertEqual((code, result['releaseDirect']), (2, []))
+
+    def test_a_name_used_by_a_merged_pull_request_is_never_suggested_again(self):
+        """O nome da release pula também os nomes citados em 'Merge pull request #N from dono/<nome>' no histórico
+        de `origin/main`, mesmo com a branch já apagada nos dois lados; outro formato de assunto não pesa."""
+        self.deliver(1)
+        _, first = self.plan()
+        name = first['releaseBranch']
+        for number, merged in ((45, name), (46, f'{name}-2')):
+            self.git(self.other, 'switch', '-q', '-c', 'feature')
+            self.commit(self.other, f'pr-{number}.txt', f'{number}\n', f'pull request {number}')
+            self.git(self.other, 'switch', '-q', 'main')
+            self.git(self.other, 'merge', '-q', '--no-ff', '-m', f'Merge pull request #{number} from OWNER/{merged}', 'feature')
+            self.git(self.other, 'branch', '-q', '-D', 'feature')
+        self.git(self.other, 'switch', '-q', '-c', 'side')
+        self.commit(self.other, 'side.txt', 'side\n', 'side')
+        self.git(self.other, 'switch', '-q', 'main')
+        self.git(self.other, 'merge', '-q', '--no-ff', '-m', f"Merge branch '{name}-3'", 'side')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        self.git(self.work, 'fetch', '-q', 'origin')
+        _, result = self.plan()
+        self.assertEqual(result['releaseBranch'], f'{name}-3')
+
     def test_the_help_texts_name_the_four_operations(self):
         for text in (read('skills', 'frontlights', 'scripts', 'homolog.py').split('"""')[1],
                      read('skills', 'frontlights', 'scripts', 'frontlights.py')):
