@@ -838,6 +838,14 @@ pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <wo
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
 commit, edição ou arquivo novo depois dela.
 
+`python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
+etapa 2 usa: por fonte, o status e a contagem (`count` e, no GitHub, `open`) e, por issue, só número,
+título, estado e caixas de critério (`boxes`, marcadas e total, `null` sem a seção); a carga do RoadS
+vira contagem. Sem `--summary` a saída continua a mesma, com o JSON inteiro das issues.
+`authorize --operation -` lê a operação da entrada padrão, além de um arquivo, e só a worktree da
+operação precisa existir: as outras entradas do charter (uma CA empilhada declarada antes de ser cortada)
+são conferidas pela forma, sem exigir a pasta.
+
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
 (`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
 `slices` (a segunda slice depende da

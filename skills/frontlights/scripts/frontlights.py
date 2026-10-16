@@ -582,9 +582,18 @@ def authorize(charter, operation):
             kind in charter.get('operations', []), 'operation outside bounded authorization')
     if kind in {'draft_pr', 'issue_update'}:
         raise ValueError('external write requires native permission; this plugin cannot securely scope generic tools')
-    worktree = Path(operation.get('worktree', '')).resolve(strict=True)
-    matches = [w for w in charter.get('worktrees', []) if w.get('issue') == operation['issue'] and
-               Path(w['path']).resolve(strict=True) == worktree]
+    require(nonempty(operation.get('worktree')), 'worktree required')
+    try:
+        worktree = Path(operation['worktree']).resolve(strict=True)
+    except OSError:
+        raise ValueError(f'the worktree of the operation does not exist: {operation["worktree"]}') from None
+    # Only the operation's worktree must exist: another entry of the charter (a slice stacked on another one,
+    # declared before it is cut) is validated by shape and compared without resolving it strictly.
+    entries = charter.get('worktrees', [])
+    require(isinstance(entries, list) and all(isinstance(w, dict) for w in entries), 'invalid worktree entry')
+    own = [w for w in entries if w.get('issue') == operation['issue']]
+    require(all(nonempty(w.get('path')) for w in own), 'invalid worktree entry: path required')
+    matches = [w for w in own if Path(w['path']).resolve() == worktree]
     require(len(matches) == 1, 'unapproved or ambiguous worktree')
     selected = matches[0]
     # A slice's worktree (issue 31, S2): the charter entry names the box (`slice`), and an operation
@@ -1045,7 +1054,7 @@ def validate_preview_ports(config):
             raise ValueError(checks.redact(serve.protect(message)))
 
 
-def inspect(config, root, config_path=None):
+def inspect(config, root, config_path=None, summary=False):
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
@@ -1114,6 +1123,32 @@ def inspect(config, root, config_path=None):
         result['verification_commands'] = json.loads(package.read_text(encoding='utf-8')).get('scripts', {})
     if warnings:
         result['warnings'] = warnings
+    return summarize(result) if summary else result
+
+
+def summarize(result):
+    """The `inspect --summary` output: the same keys plus `summary: true`, with the GitHub issues cut to number,
+    title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section) and counted, and
+    the RoadS payload counted instead of dumped. A source that is not `available` keeps what it says."""
+    import closeout
+    result = dict(result, summary=True, sources=dict(result['sources']))
+    github = result['sources'].get('github', {})
+    if github.get('status') == 'available':
+        issues = []
+        for issue in github['issues']:
+            boxes = closeout.criteria(issue.get('body'))
+            issues.append({'number': issue['number'], 'title': issue.get('title'), 'state': issue.get('state'),
+                           'boxes': None if boxes is None else {'checked': boxes[0], 'total': boxes[1]}})
+        result['sources']['github'] = {'status': 'available', 'source': github.get('source'), 'count': len(issues),
+                                       'open': sum(i['state'] == 'open' for i in issues), 'issues': issues}
+    roads = result['sources'].get('roads', {})
+    if roads.get('status') == 'available':
+        data = roads.get('data')
+        short = {'status': 'available', 'source': roads.get('source'),
+                 'count': len(data) if isinstance(data, list) else None}
+        if isinstance(data, dict):
+            short['keys'] = sorted(data)[:50]
+        result['sources']['roads'] = short
     return result
 
 
@@ -1182,7 +1217,7 @@ def main():
             p.add_argument('--config', help='.frontlights/config.json; enforces its project board fields')
     p = sub.add_parser('authorize')
     p.add_argument('--charter', required=True)
-    p.add_argument('--operation', required=True)
+    p.add_argument('--operation', required=True, help='the operation JSON file, or - to read it from standard input')
     p = sub.add_parser('context')
     p.add_argument('--used', type=int)
     p.add_argument('--reserve', type=int, required=True)
@@ -1190,6 +1225,8 @@ def main():
     p = sub.add_parser('inspect')
     p.add_argument('--config', required=True)
     p.add_argument('--root', default='.')
+    p.add_argument('--summary', action='store_true',
+                   help='per source the status and the count; per issue only number, title, state and boxes')
     p = sub.add_parser('evidence')
     p.add_argument('--root', default='.')
     p = sub.add_parser('review-gate')
@@ -1237,7 +1274,9 @@ def main():
         elif args.command == 'schedule':
             result = {'start': schedule(load(args.plan), args.limit)}
         elif args.command == 'authorize':
-            result = authorize(load(args.charter), load(args.operation))
+            operation = (json.loads(sys.stdin.buffer.read().decode('utf-8-sig')) if args.operation == '-'
+                         else load(args.operation))
+            result = authorize(load(args.charter), operation)
         elif args.command == 'context':
             result = {'action': context_action(args.used, args.reserve)}
             if args.pending:
@@ -1246,7 +1285,7 @@ def main():
                     # The watched run must not be the last thing a window pays for: ask it before spending more.
                     result['ask_before_continuing'] = ['teste_assistido']
         elif args.command == 'inspect':
-            result = inspect(load(args.config), args.root, args.config)
+            result = inspect(load(args.config), args.root, args.config, args.summary)
         elif args.command == 'evidence':
             result = git_evidence(args.root)
         elif args.command == 'review-gate':
