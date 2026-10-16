@@ -82,13 +82,16 @@ class WaitTests(unittest.TestCase):
     def test_the_stacking_rule_points_to_the_wait_and_the_skill_states_it_in_stage_six(self):
         self.assertIn('the family enters the local main as one', flat('skills', 'frontlights', 'references', 'development.md'))
         stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        for phrase in ('**The release, offered at the end of each homologated issue**', '"The release"',
-                       '"Lançar a release com as issues #a, #b agora?"', 'never a closing keyword',
-                       'never merge without the user\'s "Sim"', '`git pull --ff-only` on the local main',
-                       'a pull request merged into another branch or closed unmerged closes nothing',
-                       'the next homologated issue offers the release again'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, stage6)
+        self.assertIn('7. **The release** (development.md, "The release"), offered at the end of each homologated issue',
+                      stage6)
+        release = ' '.join(read('skills', 'frontlights', 'references', 'development.md')
+                           .split('## The release: from the local main to GitHub')[1].split())
+        for phrase in ('"Lançar a release com as issues #a, #b agora?"', '**No closing keyword.**',
+                       '"Mesclar a PR #<n> em <base>?"', '`git pull --ff-only origin <base>`',
+                       'A PR merged into another branch, closed without a merge, or not found is never ready',
+                       'offers the release again with everything accumulated'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, release)
 
 
 class CloseoutReferenceTests(unittest.TestCase):
@@ -203,7 +206,7 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
     def test_stage_seven_names_the_wake_the_tick_and_the_cleanup(self):
         stage7 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 7.')[1].split())
         for phrase in ("when the wait of stage 6 finds the release's pull request merged into the approved base",
-                       'Closing, the tick in a parent and the cleanup each wait for their own approval'):
+                       'Closing (with the tick in a parent, in the same approval) and the cleanup each wait'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = ' '.join(read('skills', 'frontlights', 'references', 'closeout.md').split())

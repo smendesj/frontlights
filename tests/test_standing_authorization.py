@@ -49,7 +49,7 @@ class StandingAuthorizationTests(unittest.TestCase):
                        '`phone_connected: true` only when the user states, unprompted in this session',
                        'The questions of the work itself (the watched run, failures, the findings batch, a new product '
                        'decision) are still asked',
-                       'This section is the single source of what stage 6 may do on its own'):
+                       '`approved_by`, `confirmed_by` and `monitoring.confirmed_by`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
 
@@ -80,8 +80,8 @@ class StandingAuthorizationTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase.casefold(), development.casefold())
         readme = flat('README.md')
-        for phrase in ('As operações negadas, as que mexem no GitHub, em produção ou em dado que não é de teste, viram, '
-                       'cada uma, uma pergunta própria com "Sim" e "Não" e o comando exato',
+        for phrase in ('Cada operação negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com '
+                       '"Sim" e "Não" e o comando exato',
                        '#standing-authorization-and-the-denied-operations'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
@@ -113,7 +113,7 @@ class StandingAuthorizationTests(unittest.TestCase):
                        "never `--admin`, `--auto` or `--delete-branch`", 'On "Não", the wait goes on unchanged'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
-        self.assertIn('"Mesclar a PR #<n> em <base>?"', flat('README.md'))
+        self.assertIn('ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge', flat('README.md'))
         options = re.search(r'with "([^"]+)" first and "([^"]+)" second; one question per PR', development)
         self.assertIsNotNone(options)
         for label in options.groups():
@@ -122,7 +122,7 @@ class StandingAuthorizationTests(unittest.TestCase):
 
     def test_the_grant_lives_in_the_plugin_and_native_prompts_remain(self):
         security = flat('skills', 'frontlights', 'docs', 'security.md')
-        for phrase in ('**Autorização permanente.**', 'não no `.frontlights/config.json`',
+        for phrase in ('## Autorização permanente', 'não no `.frontlights/config.json`',
                        'um repositório clonado não consiga ligá-la nem ampliá-la',
                        'os pedidos de permissão nativos do Claude Code continuam valendo'):
             with self.subTest(phrase=phrase):

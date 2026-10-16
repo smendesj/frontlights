@@ -20,8 +20,9 @@ FILES = sorted(SKILL_DIR.rglob('*.md')) + [ROOT / 'README.md', ROOT / 'CLAUDE.md
 SINGLE = {
     'into the local main by `homolog sync`': 'a lista dos merges cobertos',
     'turning on a setting, key or flag in production': 'a lista das operações negadas',
-    'Gate 1, the full suite': 'os três portões',
+    '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`': 'os três portões',
     'Lançar a release com as issues': 'a pergunta da release',
+    '"Mesclar a PR #<n> em <base>?"': 'a pergunta do merge da release',
 }
 
 # cópias em português que deram lugar a um ponteiro
@@ -29,6 +30,7 @@ GONE = {
     'chave ou flag em produção': 'a lista das negadas copiada em português',
     'na branch da prévia pelo `serve preview refresh`': 'a lista dos merges cobertos copiada em português',
     '`review-gate` `current` for it': 'os portões repetidos fora da fonte',
+    '`review-gate` em dia e `browser-gate` respondido': 'os portões repetidos em português',
 }
 
 DESCRIPTION_MAX_WORDS = 80

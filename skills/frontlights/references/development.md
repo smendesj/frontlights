@@ -4,7 +4,8 @@ Read the recorded authorization and the current GitHub issues, and from `docs/se
 "Hooks e escritas em `.git/`", "Autorização permanente", "Subagentes", "`authorize` e a main local",
 "`homolog sync` e `homolog bundle`", "Registro de autorização e `branch_prefix`", "Permissões do host e
 AFK", "Revisão e sobras" and "`serve`, `checks` e o teste no navegador"; from `docs/protocol.md`,
-"Registros" (`plan.json`), "Ponto de retomada e continuação" and "Contexto e conclusão". Stage 6 runs under
+"Desenvolvimento e release" (the format of the authorization record and of its `monitoring` block), "Registros"
+(`plan.json`), "Ponto de retomada e continuação" and "Contexto e conclusão". Stage 6 runs under
 the standing authorization (below): the session fills the run itself, announces it in one block and records
 the charter without asking. A decision the standing authorization does not cover (a new product decision, an
 operation on its denied list, a scope change) goes back to the coordinator's `AskUserQuestion`. Each external
@@ -13,9 +14,6 @@ applicable; they are advisory preflight, not sandbox enforcement.
 
 ## Standing authorization and the denied operations
 
-This section is the single source of what stage 6 may do on its own and what it asks first; `SKILL.md`,
-`docs/security.md`, `docs/protocol.md` and the README point here.
-
 The user decided, permanently and for every project, that stage 6 opens without a question: there is no
 concurrency question, no stacking question and no implementation authorization question. The session fills the
 run itself and announces it in one short block, in the user's language: the issue IDs, repository, concurrency,
@@ -23,8 +21,8 @@ the branch and the order of the slices of each issue, stacking when a family exi
 prefix, the verification argv and the stop conditions. The user may change any of it at any time, and a change
 goes back through `AskUserQuestion`.
 
-**The charter.** Record it in `.frontlights/authorization.json` with the user in `approved_by` and
-`confirmed_by`, `"autorização permanente (docs/security.md)"` in `approval_reference` and an `expires_at` at
+**The charter.** Record it in `.frontlights/authorization.json` with the user in `approved_by`,
+`confirmed_by` and `monitoring.confirmed_by`, `"autorização permanente (docs/security.md)"` in `approval_reference` and an `expires_at` at
 most 24 hours ahead. Its `monitoring` block is `mode: "local"`; `phone_connected: true` only when the user
 states, unprompted in this session, that the phone received and answered. Local files record consent but cannot
 enforce it.
@@ -493,7 +491,7 @@ the host's native approval; the branches of issues and slices stay local. The ru
 merges, and anything on the denied list runs only after the user's "Sim" to its own question ("Standing
 authorization and the denied operations", above). Park
 blocked issues with the precise pending question and continue independent ones.
-Report each issue's state, branch/PR, exact tests/results, review evidence,
+Report each issue's state, branch/PR, changes, exact tests/results, review evidence,
 the findings left unfixed with the destination of each, remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
 
