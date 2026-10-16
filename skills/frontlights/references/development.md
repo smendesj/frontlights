@@ -82,8 +82,9 @@ the sync: before the first slice, run `serve preview refresh` in the main worktr
 in progress as `--branch`, open its `baseUrl` once in a tab of Claude in Chrome and tell the user. The list: each
 issue branch in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
 branches stay out), plus each one in the `merged` of `serve preview status`, minus each one the local main already
-holds (`git merge-base --is-ancestor <branch> main`); at the very start it may be empty, and the session never
-takes another issue's work in progress out of the preview. From then on the preview follows the work (below,
+holds (`git merge-base --is-ancestor <branch> main`), and only those that exist locally (`git rev-parse --verify
+--quiet refs/heads/<branch>`); at the very start it may be empty, and the session never takes another issue's work
+in progress out of the preview. From then on the preview follows the work (below,
 "Slices in order"); it stops only when the user asks, and the session that finds it already up (its record)
 refreshes it instead of starting another one. The tab belongs to the user, never to a test. The commands, the
 record and the log are in `references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the

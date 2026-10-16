@@ -404,8 +404,8 @@ line where the preview is. It runs again after each slice is merged into the bra
 of the issues in progress, so every finished slice shows up there on reload. Those branches are the issue branches
 named in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
 branches never), plus the ones in the `merged` of `serve preview status`, minus those the local main already holds
-(`git merge-base --is-ancestor <branch> main`): the session never takes another issue's work in progress out of the
-preview. A conflict comes back as a question, and a broken build is said in one line with the log file and the
+(`git merge-base --is-ancestor <branch> main`), and only those that exist locally (`git rev-parse --verify --quiet
+refs/heads/<branch>`): the session never takes another issue's work in progress out of the preview. A conflict comes back as a question, and a broken build is said in one line with the log file and the
 error, and the slice that owns the file fixes it before the next slice starts. The preview stops only when the user
 asks (`serve preview stop`): reporting an issue, the release or a new session never stop it, and a new session
 finds it through its record. The tab is the user's: the session opens it and never drives it, it stays outside the

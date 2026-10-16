@@ -96,7 +96,8 @@ class PreviewInTheFlowTests(unittest.TestCase):
         for name, text in (('SKILL.md', skill), ('development.md', development)):
             for phrase in ('`.frontlights/authorization*.json`', 'whose issue is not closed', 'slice branches',
                            'the `merged` of `serve preview status`', '`git merge-base --is-ancestor <branch> main`',
-                           "never takes another issue's work in progress out of the preview"):
+                           "never takes another issue's work in progress out of the preview",
+                           'only those that exist locally (`git rev-parse --verify --quiet refs/heads/<branch>`)'):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
             for stale in ('none yet', 'none at the very start'):
