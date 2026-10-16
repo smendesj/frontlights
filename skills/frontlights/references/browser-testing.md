@@ -193,6 +193,16 @@ change of session (`preview status` finds the processes through it and returns t
 tail of each log). `preview start` is refused while the preview is alive: run
 `preview refresh` instead. Run `preview stop` only when the user asks.
 
+The preview uses fixed ports, so its tab stays valid across every refresh: it is
+opened once and only reloaded. No process of the `preview` block takes
+`"port": "auto"`, its `baseUrl` takes no `{port}`, and the port of that
+`baseUrl` (explicit, or 80/443 by the scheme) is the fixed port of one of its
+processes (integer `port`, or else the port of the health); anything else is
+refused as `uso`, by `serve preview` and by `inspect`. With the `preview` block
+present, `inspect` also refuses a fixed port of `browserTest.processes` or of
+`browserTest.baseUrl` that is a port of the preview: the watched run never runs on
+the ports of the preview.
+
 `preview refresh` redoes the preview branch from the local main (`git checkout -B`
 inside the preview worktree, or `git worktree add` when it is missing; never the
 local main nor the branches of the issues, which do not move), merges the branches
