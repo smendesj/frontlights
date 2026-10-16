@@ -857,6 +857,7 @@ parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o bri
 implementador trabalha pela issue. A revisão termina na primeira rodada com 0 sérios e 0 médios, com no máximo
 três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
 critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
+Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.
 
 `python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
 etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`

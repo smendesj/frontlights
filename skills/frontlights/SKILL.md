@@ -473,8 +473,8 @@ publication, closeout, cleanup, roadmap and summary) keep them.
 A family is integrated locally
 and its full suite is green before any of its PRs opens, and a review that the code has
 outgrown (`review-gate`, exit code 2) is redone before anything is reported as reviewed. The review is
-done at the first round with 0 sérios and 0 médios, three rounds at most (a recheck after the base comes in
-stays outside), and the reviewer judges by
+done at the first round with 0 sérios and 0 médios, three rounds at most (a round that only rechecks a base brought
+in after the review was done stays outside), and the reviewer judges by
 `references/review.md` (`references/development.md`, "When the review is done"). The
 authorization's `monitoring` block is `mode: "local"`;
 `phone_connected: true` only when the user states, unprompted in this session,

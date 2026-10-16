@@ -136,7 +136,19 @@ class StopCriterionTests(unittest.TestCase):
         self.assertIn('A round that only rechecks a base brought in after the review was done (`review.md`, '
                       '"Rounds") stays outside the limit.', self.review)
         stage6 = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development'))
-        self.assertIn('three rounds at most (a recheck after the base comes in stays outside)', stage6)
+        # Rodada 5, baixo 2: o parêntese leva as duas condições da regra.
+        self.assertIn('three rounds at most (a round that only rechecks a base brought in after the review was done '
+                      'stays outside)', stage6)
+        # Rodada 5, baixo 3: o defeito que a reconferência acha.
+        self.assertIn('When a recheck finds a sério or médio, its fix gets one round, and a sério or médio still open '
+                      'after it goes to the question of the limit.', self.review)
+
+    def test_the_protocol_and_the_readme_carry_the_recheck_exception(self):
+        # Rodada 5, médio 1: a exceção estava só em development.md e na SKILL.md.
+        phrase = 'Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.'
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
+            with self.subTest(file='/'.join(name)):
+                self.assertIn(phrase, flat(read(*name)))
 
     def test_the_ladder_names_the_default_of_the_baixos(self):
         # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
