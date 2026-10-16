@@ -116,8 +116,10 @@ exact-replace edit, and run `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" ti
 write and compare it with the saved copy (the compare step of the same recipe), then write it with `gh issue edit
 <parent> --repo <repo> --body-file <file>`. Capture it again and run `tick-check` against the saved copy with the
 same lines: `ok` is the verification. `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" tick --config <config>
---root <project> --issue <parent> --line <L>` runs this capture, check, write and reread for one line at a time, while
-the check that the line still cites only the sub-issue and is the line the user was shown stays the session's. A sub-issue whose close failed leaves its parent alone; a failed tick is
+--root <project> --issue <parent> --line <L>` runs this capture, check, write and reread for one line at a time when
+that line lies in the parent's acceptance-criteria section (a line outside it follows the recipe above by hand), while
+the check that the line still cites only the sub-issue and is the line the user was shown stays the session's, made
+on the `body-before` file it keeps (a difference there is shown and asked about). A sub-issue whose close failed leaves its parent alone; a failed tick is
 recorded and only the tick is retried. After the writes run `candidates` again for the parents: one whose criteria
 and children are now complete goes through the same question.
 

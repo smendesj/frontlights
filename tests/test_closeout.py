@@ -1309,7 +1309,11 @@ class ReadOnlyTests(CloseoutCase):
                    if name != 'gh_write' and re.search(r'\bgh_write\b', function_source(source, name))]
         self.assertEqual(callers, ['op_tick'])
         self.assertNotIn('os.system', source)
-        self.assertIsNone(re.search(r"open\([^)]*['\"][wa+]", source))
+        writes = re.compile(r"open\([^)]*['\"][wax+]")
+        saver = function_source(source, 'save_body')
+        self.assertIsNone(writes.search(source.replace(saver, '')), 'only save_body opens a file to write')
+        self.assertEqual(len(writes.findall(saver)), 1)
+        self.assertIn("'xb'", saver, 'and never overwrites one')
         self.assertNotIn('write_text', source)
         self.assertNotIn('write_bytes', source)
 
@@ -1794,6 +1798,48 @@ class TickTests(CloseoutCase):
             with self.subTest(body=type(body)):
                 result, gh = self.tick(FakeIssueGh(body=body))
                 self.assertEqual((result['ok'], gh.edits), (False, []))
+
+    def test_a_box_hidden_in_a_comment_on_the_same_line_is_never_the_one_ticked(self):
+        hidden = ('## Critérios de aceitação\n\n- [ ] S1. a <!-- nota\n- [ ] velho --> - [ ] S2. real\n')
+        result, gh = self.tick(FakeIssueGh(body=hidden))
+        self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'not_an_open_item', []))
+
+    def test_other_spellings_of_the_blocked_line_are_refused_too(self):
+        for blocked in ('  - **Bloqueada**: falta x\n', '  - Bloqueada : falta x\n', '  * bloqueada: falta x\n'):
+            with self.subTest(blocked=blocked):
+                body = TICK_BODY.replace('  - Seams: run()\n', '  - Seams: run()\n' + blocked)
+                result, gh = self.tick(FakeIssueGh(body=body))
+                self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'blocked_line', []))
+
+    def test_a_blocked_line_after_a_lazy_continuation_still_belongs_to_the_box(self):
+        body = TICK_BODY.replace('  - Seams: run()\n', 'continua sem recuo\n  - Bloqueada: falta x\n')
+        result, gh = self.tick(FakeIssueGh(body=body))
+        self.assertEqual((result['ok'], result['reason'], result['blockedLine'], gh.edits), (False, 'blocked_line', 9, []))
+
+    def test_a_failed_edit_and_a_body_changed_by_someone_else_is_not_called_written(self):
+        gh = FakeIssueGh(fail_edit=True)
+        real = gh.edit
+
+        def edit(argv):
+            gh.body = gh.body.replace('Intro', 'Intro de outra pessoa')
+            real(argv)
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=edit, issue='12', box='S2', line=None)
+        self.assertEqual((result['ok'], result['written'], result['verified']), (False, None, False))
+        self.assertNotIn('restoring', result['message'])
+
+    def test_a_failure_to_keep_the_reread_after_the_write_still_says_it_was_written(self):
+        real = closeout.save_body
+
+        def save(folder, kind, stamp, text):
+            if kind == 'after':
+                raise OSError('disk full')
+            return real(folder, kind, stamp, text)
+        with patch.object(closeout, 'save_body', save):
+            result, gh = self.tick()
+        self.assertEqual((result['ok'], result['written'], result['verified'], result['files']['after']),
+                         (True, True, True, None))
+        self.assertEqual(len(gh.edits), 1)
+        self.assertIn('could not be kept', result['message'])
 
     def test_the_cli_wires_the_operation(self):
         gh = FakeIssueGh()

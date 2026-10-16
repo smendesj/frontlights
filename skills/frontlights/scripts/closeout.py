@@ -27,7 +27,7 @@ Operations (each prints one JSON object on stdout):
               item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
               the end of either file are not compared (a reread through `--jq .body` or a redirect adds one).
   tick        the whole cycle of ticking one box of --issue: --box S<k> (the one item of the criteria section whose
-              text starts with `S<k>.`) or --line <N> (an item of that section with no slice label). It captures the
+              text starts with `S<k>.`) or --line <N> (any item of that section, a criterion without a slice label included). It captures the
               body with `gh issue view --json body`, keeps it as .frontlights/issues/<n>/body-before-<stamp>.md under
               --root, builds body-new-<stamp>.md with only that `[ ]` turned into `[x]`, runs the tick-check, writes
               it with `gh issue edit --body-file`, rereads it into body-after-<stamp>.md and runs the tick-check
@@ -105,6 +105,7 @@ PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
 BOX = re.compile(r'[Ss]([1-9][0-9]{0,2})')                     # --box S2
 BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
 LIST_ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]')
+BLOCKED = re.compile(r'bloqueada\W*:')                            # `Bloqueada:`, `**Bloqueada**:`, `Bloqueada :`
 
 VIEW = '''number state stateReason title url body
   parent { number repository { nameWithOwner } }
@@ -1119,17 +1120,22 @@ def find_box(body, box, line):
                           f'(lines {", ".join(str(n) for n, _ in found)}); tick the right one with --line; nothing was written.')
     number, item = found[0]
     raw = re.split(r'\r\n|\r|\n', body)[number - 1]
-    # a comment before the box hides it from the raw line: the tick could not be a one-character change there
-    if ITEM.match(raw) is None or ITEM.match(raw).group(1) != item.group(1):
+    same = ITEM.match(raw)
+    # a comment that opens or closes before the box means the raw line's first box may be another one, hidden in
+    # the comment: the tick is then refused, never placed on the wrong box
+    if (same is None or same.group(1) != item.group(1) or same.start(1) != item.start(1)
+            or '-->' in raw[:same.start(1)] or '<!--' in raw[:same.start(1)]):
         raise TickRefusal('not_an_open_item', f'The {name} (line {number}) is not a plain checklist line; nothing was written.')
     if item.group(1) == ' ':
         own = indentation(text_of(visible, number))
         for later, text, _, heading in visible:
             if later <= number or not text.strip():
                 continue
-            if heading or indentation(text) <= own:
+            # the box's sub-items run to the next heading or the next list item that is not deeper than the box;
+            # a line without a list marker is a continuation of the item (lazy or not) and does not end it
+            if heading or (LIST_ITEM.match(text) and indentation(text) <= own):
                 break
-            if LIST_ITEM.match(text) and plain(text).startswith('bloqueada:'):
+            if LIST_ITEM.match(text) and BLOCKED.match(plain(text)):
                 raise TickRefusal('blocked_line', f'The {name} (line {number}) still has its "- Bloqueada:" line (line '
                                   f'{later}): remove that line first (the write rule of the leftover), then tick; '
                                   'nothing was written.', blockedLine=later)
@@ -1212,22 +1218,33 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None):
         return {**result, 'ok': False, 'exitCode': 1, 'written': None if failure else True,
                 'message': f'{failure + "; " if failure else ""}the reread failed ({error}): capture the body again and '
                            f'run tick-check against {files["before"]} with --lines {line} before anything else.'}
-    files['after'] = str(save_body(folder, 'after', stamp, after))
     check = compare_ticks(before, after, [line])
     counts = criteria(after) or (0, 0)
     result['criteria'] = {'checked': counts[0], 'total': counts[1]}
+    try:
+        files['after'] = str(save_body(folder, 'after', stamp, after))
+        kept = ''
+    except (OSError, Refusal):
+        files['after'] = None
+        kept = ' The reread could not be kept in the records folder; capture it again before showing a difference.'
     if check['ok']:
         note = ' gh reported a failure, yet the reread shows the tick.' if failure else ''
         return {**result, 'ok': True, 'exitCode': 0, 'written': True, 'verified': True,
-                'message': f'The {name} of issue #{number} was ticked, and the reread checks.{note}'}
+                'message': f'The {name} of issue #{number} was ticked, and the reread checks.{note}{kept}'}
     if failure and body_lines(after) == body_lines(before):
         return {**result, 'ok': False, 'exitCode': 1,
-                'message': f'{failure}. GitHub still holds the saved body, so nothing changed; try again.'}
+                'message': f'{failure}. GitHub still holds the saved body, so nothing changed; try again.{kept}'}
+    if failure:
+        return {**result, 'ok': False, 'exitCode': 1, 'written': None, 'problems': check['problems'],
+                'problemCount': check['problemCount'],
+                'message': f'{failure}, and GitHub now holds a body of issue #{number} that is neither the saved one nor '
+                           f'the ticked one: someone else may have edited it. Show the difference ({files["before"]} and '
+                           f'the reread) and ask; nothing is written back.{kept}'}
     return {**result, 'ok': False, 'exitCode': 1, 'written': True, 'problems': check['problems'],
             'problemCount': check['problemCount'],
             'message': f'The reread of issue #{number} is not the saved body with just the {name} ticked: show the '
-                       f'difference ({files["before"]} and {files["after"]}) and ask; restoring the saved body is a '
-                       'write of its own, with its own approval.'}
+                       f'difference ({files["before"]} and {files["after"] or "the reread"}) and ask; restoring the saved '
+                       f'body is a write of its own, with its own approval.{kept}'}
 
 
 def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, **options):
