@@ -68,7 +68,7 @@ their language; quote the helper's English messages only when useful.
   without changing their prose: first the `items` of that entry of `plan.sprints` (within the
   limit), then, only when at least one `outOfLimit` item has an entry in the file (a change of this
   plan or an earlier entry), the line "Acima do limite de N:" (N is `plan.maxSprintItems`), written
-  once and never repeated when the file already has it, then the entries of the `outOfLimit` items,
+  once and never repeated when the file already has it (written for the first time, the line goes after every entry already in the file that is not of an `outOfLimit` item), then the entries of the `outOfLimit` items,
   each list in the order of `position`. The file holds that line at most once: when N changed, rewrite
   the N of the line already there instead of adding a second one, and when no entry of an item past
   the limit is left after it (an item moved back within the limit, say), take the line out. The entry
@@ -107,11 +107,11 @@ their language; quote the helper's English messages only when useful.
   for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint in `change.sprintTargets`. A missing entry is expected,
   and handled by the rules above, for a `move_lane` into a sprint where the item has no entry yet (its entry is written in the sprint it joined), for a
   sprint file that does not exist yet, for a `remove` (recorded in the roadmap even for an item never written) and for a
-  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint, or a `remove`, whose file has no entry for the item (its exit or removal goes into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file otherwise, out of the order of `position`; such an entry never counts for keeping that line); a `modify` with no entry in a sprint file that exists leaves that file as
+  `completed` (its line goes into a new entry), and for a `move_lane` out of a sprint, or a `remove`, whose sprint file has no entry for the item (its exit or removal goes into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file otherwise, out of the order of `position`, and it stays before that line also when the line is written later; such an entry never counts for keeping that line; in the roadmap, the removal of an item never written goes into the lane of `payload.lane_id`); a `modify` with no entry in a sprint file that exists leaves that file as
   it is and says so. Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap and when an
   `add` finds an entry of its `#N`. Ask also when any change this rule finds (a `modify`, `move_lane`, `remove`,
   `completed` or `add`) finds more than one. Ask once, listing every such change and proposing the closest candidate in
-  the item's lane (for an `add`, the entry of its `#N` wherever it is), and never open a second entry on your own (for
+  the item's lane (for an `add`, the entries of its `#N` wherever they are, the one in `item.lane` first), and never open a second entry on your own (for
   an `add`, only when the user chooses it). A row of a table and the section of the same item are one entry; a
   mention inside another entry is not. A
   `modify` that only changes `item.title` (its `payload` says the title follows the issue on GitHub) replaces the old
