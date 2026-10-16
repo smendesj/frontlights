@@ -408,7 +408,7 @@ uma verificação independente.
 O revisor julga pelo padrão de `references/review.md` (o que é defeito e em que gravidade, o que é só estilo e
 nunca vira achado, como relata), que só o brief do revisor cita. A revisão termina na primeira rodada com 0
 sérios e 0 médios, com no máximo três rodadas por issue; no limite, com um sério ou médio aberto, a pergunta é
-"Mais uma rodada" ou "Dar destino pela escada". Os baixos vão ao lote de achados como critério novo da issue de
+"Mais uma rodada" ou "Dar destino pela escada". Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite. Os baixos vão ao lote de achados como critério novo da issue de
 origem (issue de topo quando não há issue de origem com critérios, ou quando ela está fechada), com a opção de
 corrigi-los agora. Cada rodada depois da primeira revê o delta desde a anterior (sem o que a base trouxe, quando ela entrou entre as
 rodadas) e confere os achados anteriores.
