@@ -1610,6 +1610,16 @@ def check_refresh(block, root, branches, base):
         require(name not in (preview_branch, base), f'--branch {name} não pode ser a branch da prévia nem a base: '
                 'passe só as branches das issues em andamento.', category=USAGE)
     require(len(set(branches)) == len(branches), 'Cada --branch pode aparecer uma vez só.', category=USAGE)
+    worktree = Path(root).resolve() / block['worktree']
+    here = path_key(worktree)
+    for name, key, branch in issue_worktrees(root):
+        # with or without a preview record: the refresh redoes its branch and worktree from the base
+        require(branch is None or branch.casefold() != preview_branch.casefold(), f'preview.branch '
+                f'({preview_branch}) é a branch de uma worktree de issue registrada em {name}: o refresh a refaria a '
+                'partir da base. Escolha em preview.branch uma branch só da prévia.', category=USAGE)
+        require(key != here, f'preview.worktree ({block["worktree"]}) é uma worktree de issue registrada em {name}: '
+                'o refresh a refaria a partir da base. Escolha em preview.worktree uma pasta só da prévia.',
+                category=USAGE)
     code, _, _ = git(root, 'rev-parse', '--show-toplevel')
     require(code == 0, 'O --root não é uma worktree Git; o preview refresh precisa do repositório.', category=USAGE)
     base_commit = git_commit(root, f'refs/heads/{base}')
@@ -1619,9 +1629,7 @@ def check_refresh(block, root, branches, base):
         commits[name] = git_commit(root, f'refs/heads/{name}')
         require(commits[name], f'A branch {name} não existe localmente; passe em --branch só branches de issue que '
                 'existem neste repositório.', category=USAGE)
-    worktree = Path(root).resolve() / block['worktree']
     known = registered_worktrees(root)
-    here = path_key(worktree)
     elsewhere = [path for path, branch in known.items() if branch == preview_branch and path != here]
     require(not elsewhere, f'A branch da prévia ({preview_branch}) está em uso em outra worktree; o refresh só a '
             'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
@@ -1641,6 +1649,25 @@ def check_refresh(block, root, branches, base):
                 'A worktree da prévia tem alterações; ela é refeita a cada refresh, então nada se edita nela. '
                 f'Confira {block["worktree"]} e desfaça as alterações antes de um novo refresh.', category=USAGE)
     return worktree, exists, base_commit, commits
+
+
+def issue_worktrees(root):
+    """(record name, path key or None, branch or None) of each item of `worktrees` in the readable
+    `.frontlights/authorization*.json` (`authorization_records`); a relative `path` is taken from the `--root`."""
+    found = []
+    for name, data in authorization_records(root):
+        entries = data.get('worktrees')
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            path, branch, key = entry.get('path'), entry.get('branch'), None
+            if isinstance(path, str) and path.strip() and '\0' not in path:
+                try:
+                    key = path_key(Path(root).resolve() / path)
+                except (OSError, ValueError):
+                    key = None
+            found.append((name, key, branch if isinstance(branch, str) and branch else None))
+    return found
 
 
 def recorded_preview_branch(root):

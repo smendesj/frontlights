@@ -1011,6 +1011,60 @@ class PreviewRefreshGuardTest(FakeRecordMixin, RefreshTestCase):
         self.assertEqual(self.rev('previa'), own)
         self.assertFalse(self.worktree.exists())
 
+    def charter(self, path, branch='issue-1'):
+        """2nd review of issue 34 (B1): a fictitious authorization record whose `worktrees` names the worktree of
+        issue 1; entries out of the format beside it are skipped."""
+        folder = self.root / '.frontlights'
+        folder.mkdir(exist_ok=True)
+        (folder / 'authorization-teste.json').write_text(json.dumps({
+            'repository': 'OWNER/REPOSITORY', 'issue_ids': [1],
+            'worktrees': ['texto', {'issue': 2}, {'issue': 1, 'path': path, 'branch': branch}]}), encoding='utf-8')
+
+    def preview_on(self, worktree, branch):
+        self.write_config(preview=dict(self.refresh_block(), worktree=worktree, branch=branch))
+
+    def assert_refused_without_record(self, needle):
+        refs = self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads')
+        done = self.refresh()
+        self.assertEqual(done.returncode, 1, done_text(done))
+        result = self.payload(done)
+        self.assertEqual(result['category'], 'uso', result)
+        self.assertIn(needle, result['error'])
+        self.assertEqual(self.git('for-each-ref', '--format=%(refname) %(objectname)', 'refs/heads'), refs)
+        self.assertFalse(serve.preview_log_dir(self.root).exists())
+
+    def test_a_preview_on_the_worktree_and_the_branch_of_an_issue_is_refused_with_or_without_a_record(self):
+        issue = self.root / '.claude' / 'worktrees' / 'issue-1'
+        self.git('worktree', 'add', '-q', str(issue), 'issue-1')
+        self.charter(str(issue))  # absolute, as the session records it
+        self.preview_on('.claude/worktrees/issue-1', 'issue-1')
+        own = self.rev('issue-1')
+        self.assert_refused_without_record('worktree de issue')
+        self.live(branch='issue-1')
+        self.assert_refused(self.refresh(), 'worktree de issue')
+        self.assertEqual(self.rev('issue-1'), own, 'o refresh moveu a branch da issue')
+        self.assertEqual(self.git('symbolic-ref', '--short', 'HEAD', cwd=issue), 'issue-1')
+        self.assertTrue((issue / 'issue1.txt').is_file())
+
+    def test_a_preview_branch_named_by_an_issue_worktree_is_refused_even_when_the_record_names_it(self):
+        self.charter('.claude/worktrees/issue-1')
+        self.preview_on('.claude/worktrees/previa', 'issue-1')
+        own = self.rev('issue-1')
+        self.assert_refused_without_record('worktree de issue')
+        self.live(branch='issue-1')  # the record would vouch for the branch: the charter still wins
+        self.assert_refused(self.refresh(), 'worktree de issue')
+        self.assertEqual(self.rev('issue-1'), own)
+        self.assertFalse(self.worktree.exists())
+
+    def test_a_preview_worktree_named_by_an_issue_worktree_is_refused(self):
+        issue = self.root / '.claude' / 'worktrees' / 'issue-1'
+        self.git('worktree', 'add', '-q', '-b', 'previa', str(issue), 'main')
+        self.charter('.claude/worktrees/issue-1')
+        self.preview_on('.claude/worktrees/issue-1', 'previa')
+        self.assert_refused_without_record('worktree de issue')
+        self.live()
+        self.assert_refused(self.refresh(), 'worktree de issue')
+
     def test_the_first_refresh_redoes_the_branch_the_registry_names(self):
         self.branch('previa', {'proprio.txt': 'commit proprio\n'})
         self.fake_registry(self.dead(), self.dead(), 'previa')
