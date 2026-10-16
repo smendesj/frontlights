@@ -422,6 +422,22 @@ destination ladder of the Follow-ups section in `issues.md` (same PR, a new
 acceptance criterion in the source issue, top-level issue only for new scope; never a
 new sub-issue), decided as one batch.
 
+**The reviewer's brief.** The brief that dispatches the independent reviewer names `references/review.md`, the
+reviewer's standard (what a finding is, its severity, what is only style, the rounds and the report), the issue,
+its base and, from the second round on, the tip of the previous round with its findings. The standard belongs to
+the reviewer: the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out.
+
+**When the review is done.** A round is one dispatch of the reviewer on the current tip. The review of an issue is
+done at the first round that reports 0 sérios and 0 médios. The baixos still open then go to the findings batch,
+each with the proposed destination of a new acceptance criterion of the source issue (a top-level issue when there
+is no source issue with a criteria section, or it is closed; the ladder of `issues.md`), and the batch also offers
+"Corrigir os baixos agora". A sério or médio is fixed by the author, and the next round reviews that delta
+(`review.md`, "Rounds"). Three rounds per issue is the limit: when the third still reports a sério or médio, ask
+with `AskUserQuestion` "Mais uma rodada" or "Dar destino pela escada" (a new acceptance criterion of the source
+issue or a top-level issue, in the findings batch); while a sério or médio has no destination, the issue stays out
+of the local main. Baixos the user chose to fix get one more round on their delta, outside the limit. The handoff
+records each round: its HEAD and its counts.
+
 **Gate on the findings.** Before an issue is reported as reviewed or complete, and before
 the merge into the local main and before a PR is opened or updated, every open finding (review, tests, live check, any other
 verification pass) has a destination GitHub tracks, or is fixed, or is shown as not a

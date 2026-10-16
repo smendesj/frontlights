@@ -1,0 +1,187 @@
+"""Critério de parada da revisão e padrão do revisor (melhoria direta, branch `sergio/melhoria-revisao`).
+
+O revisor independente julga pelo padrão de `references/review.md` (o que é achado, em que gravidade, o que é só
+estilo e nunca vira achado, as rodadas e o relato), que só o brief do revisor cita; a revisão termina na primeira
+rodada com 0 sérios e 0 médios, com no máximo três rodadas, e os baixos vão ao lote de achados como critério novo
+da issue de origem.
+
+Seams: o texto de `references/review.md`, de `references/development.md` ("Review, checkpoints and renewal"), da
+`SKILL.md`, de `templates/handoff.md`, de `docs/protocol.md`, do README, de `docs/acceptance.md` e de
+`evals/runbook.md`. É regra da skill, não barreira: nenhum script conta as rodadas nem classifica achados.
+"""
+import re
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL = ROOT / 'skills' / 'frontlights'
+REVIEW = SKILL / 'references' / 'review.md'
+
+
+def read(*parts):
+    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
+
+
+def flat(text):
+    return ' '.join(text.split())
+
+
+def section(text, heading, level='##'):
+    match = re.search(r'(?m)^' + level + ' ' + re.escape(heading) + r'\s*$', text)
+    if not match:
+        return ''
+    rest = text[match.end():]
+    following = re.search(r'(?m)^#{1,' + str(len(level)) + '} ', rest)
+    return rest[:following.start()] if following else rest
+
+
+class ReviewerStandardTests(unittest.TestCase):
+    """O arquivo do revisor: achado, gravidades, estilo, rodadas e relato."""
+
+    def setUp(self):
+        self.text = REVIEW.read_text(encoding='utf-8') if REVIEW.is_file() else ''
+
+    def test_the_file_exists_with_its_sections_in_order(self):
+        self.assertTrue(REVIEW.is_file(), 'references/review.md não existe')
+        headings = ('## What a finding is', '## Severity', '## Style', '## Rounds', '## The report')
+        for heading in headings:
+            with self.subTest(heading=heading):
+                self.assertRegex(self.text, r'(?m)^' + re.escape(heading) + r'\s*$')
+        positions = [self.text.find(heading) for heading in headings]
+        self.assertEqual(positions, sorted(positions))
+
+    def test_a_finding_is_a_defect_with_a_failure_scenario(self):
+        finding = flat(section(self.text, 'What a finding is'))
+        for phrase in ('A finding is a defect', '**failure scenario**',
+                       'What has no failure scenario is not a finding'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, finding)
+
+    def test_three_severities_with_their_examples(self):
+        severity = flat(section(self.text, 'Severity'))
+        for phrase in ('**Sério:**', '**Médio:**', '**Baixo:**', 'data lost or corrupted',
+                       'a secret or personal data exposed', 'a regression of existing behaviour', 'tautological',
+                       'a small blast radius', 'take the higher one'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, severity)
+        self.assertLess(severity.find('**Sério:**'), severity.find('**Médio:**'))
+        self.assertLess(severity.find('**Médio:**'), severity.find('**Baixo:**'))
+
+    def test_style_never_becomes_a_finding(self):
+        style = flat(section(self.text, 'Style'))
+        for phrase in ('It stays out of the report, at every severity', 'line width', 'blank lines',
+                       'paragraph breaks', 'punctuation and parentheses', 'a synonym',
+                       'another way of writing code that behaves the same'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, style)
+        # Um verificador que o projeto roda e falha é defeito, não estilo.
+        self.assertIn('A formatter, linter or test the project runs owns its own rules', style)
+
+    def test_later_rounds_review_the_delta_and_the_earlier_findings(self):
+        rounds = flat(section(self.text, 'Rounds'))
+        for phrase in ('A round is one dispatch of the reviewer on the current tip',
+                       '`git diff <base>...HEAD`', '`git diff <previous tip>..HEAD`',
+                       'each finding of the earlier rounds', 'comes from that delta or from what it touches'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rounds)
+
+    def test_the_report_has_the_counts_and_one_block_per_finding(self):
+        report = flat(section(self.text, 'The report'))
+        for phrase in ('`sérios/médios/baixos: s/m/b`', 'the most severe first', '**Gravidade**', '**Onde:**',
+                       '**O que está errado:**', '**Cenário de falha:**', '**Evidência:**',
+                       '**Correção sugerida:**', '`corrigido`', '`aberto`',
+                       'the coordinating session reads the counts'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, report)
+        self.assertIn("Write the report in the user's language", flat(self.text))
+
+
+class StopCriterionTests(unittest.TestCase):
+    """O critério de parada e o brief do revisor, em `development.md`."""
+
+    def setUp(self):
+        self.review = flat(section(read('skills', 'frontlights', 'references', 'development.md'),
+                                   'Review, checkpoints and renewal'))
+
+    def test_the_reviewers_brief_names_the_standard_and_the_implementers_leaves_it_out(self):
+        for phrase in ("**The reviewer's brief.**", 'names `references/review.md`',
+                       'The standard belongs to the reviewer',
+                       "the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.review)
+
+    def test_the_review_is_done_at_zero_serious_and_zero_medium(self):
+        for phrase in ('**When the review is done.**', 'done at the first round that reports 0 sérios and 0 médios',
+                       'a new acceptance criterion of the source issue', '"Corrigir os baixos agora"',
+                       'Three rounds per issue is the limit', '"Mais uma rodada"', '"Dar destino pela escada"',
+                       'the issue stays out of the local main',
+                       'The handoff records each round: its HEAD and its counts'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.review)
+
+    def test_the_two_blocks_sit_before_the_gate_on_the_findings(self):
+        brief = self.review.find("**The reviewer's brief.**")
+        done = self.review.find('**When the review is done.**')
+        gate = self.review.find('**Gate on the findings.**')
+        self.assertTrue(0 <= brief < done < gate, (brief, done, gate))
+
+
+class OnlyTheReviewerReadsItTests(unittest.TestCase):
+    """Dentro da skill, o padrão do revisor só é citado onde o coordenador monta o brief e nos registros."""
+
+    def test_the_implementers_material_never_names_the_standard(self):
+        for name in ('tdd-tests.md', 'tdd-mocking.md', 'browser-testing.md', 'issue.md', 'issues.md', 'grilling.md'):
+            with self.subTest(reference=name):
+                self.assertNotIn('review.md', read('skills', 'frontlights', 'references', name))
+
+    def test_only_the_skill_development_and_the_protocol_name_it(self):
+        naming = sorted(path.relative_to(SKILL).as_posix() for path in SKILL.rglob('*.md')
+                        if path != REVIEW and 'references/review.md' in path.read_text(encoding='utf-8'))
+        self.assertTrue(set(naming) <= {'SKILL.md', 'references/development.md', 'docs/protocol.md'}, naming)
+        self.assertIn('SKILL.md', naming)
+        self.assertIn('references/development.md', naming)
+
+    def test_skill_md_lists_the_standard_and_the_stop_criterion_in_stage_6(self):
+        text = read('skills', 'frontlights', 'SKILL.md')
+        self.assertIn("`references/review.md` (the independent reviewer's standard, named only in the reviewer's "
+                      "brief)", flat(text))
+        stage6 = flat(section(text, '6. Bounded development'))
+        self.assertIn('The review is done at the first round with 0 sérios and 0 médios, three rounds at most, '
+                      'and the reviewer judges by `references/review.md`', stage6)
+
+
+class DocumentationTests(unittest.TestCase):
+    """Protocolo, README, modelo de handoff, aceitação e runbook trazem a regra."""
+
+    def test_the_protocol_says_it_in_portuguese(self):
+        protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
+        for phrase in ('O revisor julga pelo padrão de `references/review.md`', 'que só o brief do revisor cita',
+                       'A revisão termina na primeira rodada com 0 sérios e 0 médios',
+                       'com no máximo três rodadas por issue', '"Mais uma rodada"', '"Dar destino pela escada"',
+                       'como critério novo da issue de origem', 'revê o delta desde a anterior'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, protocol)
+
+    def test_the_readme_says_it_in_portuguese(self):
+        readme = flat(read('README.md'))
+        for phrase in ('A revisão independente segue o padrão de `skills/frontlights/references/review.md`',
+                       'um achado é um defeito com cenário de falha', 'largura de linha, linhas em branco',
+                       'são estilo e nunca viram achado', 'Só o brief do revisor cita esse arquivo',
+                       'A revisão termina na primeira rodada com 0 sérios e 0 médios',
+                       'com no máximo três rodadas por issue', 'critério novo da issue de origem'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, readme)
+
+    def test_the_handoff_records_each_round(self):
+        handoff = flat(read('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('and each round (its HEAD and its counts `sérios/médios/baixos`)', handoff)
+
+    def test_the_acceptance_and_the_runbook_carry_the_item(self):
+        acceptance = flat(read('docs', 'acceptance.md'))
+        self.assertRegex(acceptance, r'\| \d+\. Critério de parada da revisão e padrão do revisor \| Pendente \|')
+        self.assertIn('`tests/test_review_criteria.py`', acceptance)
+        self.assertRegex(flat(read('evals', 'runbook.md')), r'\d+\. Review stop criterion\. ')
+
+
+if __name__ == '__main__':
+    unittest.main()
