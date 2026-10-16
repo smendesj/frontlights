@@ -2,7 +2,9 @@
 Evidência com o antes e o depois, Risco do merge com a porta e o raio de impacto), um arquivo de licença no padrão
 de `references/LICENSE-tdd.md` que cita a fonte adaptada, e nenhuma palavra de fechamento.
 
-Seams: o texto de `templates/pr.md`, de `references/LICENSE-pr.md` e de `SKILL.md`. É regra da skill, não barreira:
+Seams: o texto de `templates/pr.md`, de `references/LICENSE-pr.md` e de `SKILL.md` (S1); o de
+`references/development.md` ("The release"), `SKILL.md` etapa 6, `docs/protocol.md`, `README.md`, `docs/acceptance.md`
+e `evals/` (S2: a PR da release usa o modelo, Resumo e Evidência por issue e Risco do merge consolidado). É regra da skill, não barreira:
 nenhum script monta o corpo da PR.
 """
 import re
@@ -120,6 +122,62 @@ class SkillListsTheTemplateTests(unittest.TestCase):
         header = flat(read('skills', 'frontlights', 'SKILL.md').split('## Rules that hold in every stage')[0])
         self.assertIn('`templates/pr.md`', header)
         self.assertIn("the model of the release's pull request", header)
+
+
+class ReleaseUsesTheTemplateTests(unittest.TestCase):
+    """Issue 35, S2: a PR da release usa o modelo, Resumo e Evidência por issue, Risco do merge consolidado, sem
+    palavra de fechamento, e a Evidência aponta os prints do teste assistido e os testes do checkpoint de cada issue."""
+
+    def setUp(self):
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        release = text.split('## The release: from the local main to GitHub')[1]
+        self.release = flat(re.split(r'(?m)^## ', release)[0])
+
+    def test_the_release_body_follows_the_template_without_a_condition(self):
+        self.assertIn('The body follows `templates/pr.md` (the model of the pull request)', self.release)
+        self.assertNotIn('`templates/pr.md` when it exists', self.release)
+
+    def test_summary_and_evidence_per_issue_and_one_consolidated_risk(self):
+        for phrase in ('**Resumo** and **Evidência** once per issue', 'the smallest visual that makes its point clear',
+                       '**Risco do merge** once, consolidated for the whole release',
+                       'a one-way door when a migration or deleted data is in it'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.release)
+
+    def test_the_evidence_points_to_the_records_of_each_issue(self):
+        for phrase in ("the prints of each issue's watched run", 'the tests of its checkpoints',
+                       'its three gates', 'records that already exist, never invented'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.release)
+
+    def test_no_closing_keyword_and_no_finding_in_the_body(self):
+        for phrase in ('**No closing keyword.**', 'never carries `Closes`, `Fixes`, `Resolves` or a variant of them',
+                       'the body of the pull request is never the destination of a finding'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.release)
+
+    def test_stage_six_of_the_skill_says_the_same(self):
+        stage6 = flat(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0])
+        for phrase in ('the body from `templates/pr.md`', 'Resumo and Evidência per issue, Risco do merge consolidated',
+                       'never a closing keyword'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, stage6)
+        self.assertNotIn('`templates/pr.md` when it exists', stage6)
+
+    def test_the_protocol_and_the_readme_say_the_same_in_portuguese(self):
+        protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('corpo pelo modelo `templates/pr.md`, com Resumo e Evidência por issue e o Risco do merge consolidado', protocol)
+        self.assertNotIn('`templates/pr.md` quando existir', protocol)
+        readme = flat(read('README.md'))
+        for phrase in ('abre a PR única pelo modelo `templates/pr.md`', 'Resumo (o menor visual) e Evidência (antes e depois) por issue',
+                       'Risco do merge consolidado (porta de mão única ou de mão dupla e raio de impacto)'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, readme)
+
+    def test_the_acceptance_record_and_the_rehearsals_name_the_template(self):
+        self.assertIn('S2: a PR da release usa o modelo', flat(read('docs', 'acceptance.md')))
+        self.assertIn('29. Pull request template (issue 35)', flat(read('evals', 'runbook.md')))
+        self.assertIn('`templates/pr.md`', flat(read('evals', 'merge-wait-and-cleanup.md')))
 
 
 if __name__ == '__main__':

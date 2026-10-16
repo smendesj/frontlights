@@ -483,8 +483,8 @@ Once the issue is in the local main and its bundle is written, run `homolog sync
 the branch `<branch_prefix>release-<date>`. Show the list and ask with `AskUserQuestion` "Lançar a release com as
 issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
 from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
-the body from `templates/pr.md` when it exists, one block per issue with its three gates, never a closing
-keyword), then wait for the user's merge: say so in one line, record it in the handoff, and offer the merge with
+the body from `templates/pr.md`: Resumo and Evidência per issue, Risco do merge consolidated, the three gates of
+each issue, never a closing keyword), then wait for the user's merge: say so in one line, record it in the handoff, and offer the merge with
 its own denied-operation question ("Mesclar a PR #<n> em <base>?") once the pull request is ready; never merge
 without the user's "Sim". A merge into the approved base, confirmed by `closeout.py merge-status`, is followed by
 `git pull --ff-only` on the local main (in the main worktree) and takes the session to stage 7 for the issues of
