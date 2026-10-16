@@ -897,10 +897,11 @@ class ParallelSuiteTextTests(unittest.TestCase):
                 self.assertIn(phrase, text)
         self.assertNotIn('`python -m compileall -q scripts tests`', text)
 
-    def test_the_acceptance_record_counts_every_test_module(self):
-        match = re.search(r'\*\*(\d+) testes em (\d+) módulos', flat('docs', 'acceptance.md'))
-        self.assertIsNotNone(match)
-        self.assertEqual(int(match.group(2)), len(list((ROOT / 'tests').glob('test_*.py'))))
+    def test_the_acceptance_record_leaves_the_count_to_the_discover(self):
+        # A contagem escrita à mão mudava a cada commit e dava conflito no encontro de issues paralelas.
+        text = flat('docs', 'acceptance.md')
+        self.assertIsNone(re.search(r'\d+ testes em \d+ módulos', text))
+        self.assertIn('A contagem de testes e de módulos é a que esse comando imprime no fim', text)
 
     def test_the_ci_keeps_the_discover_and_never_calls_the_runner(self):
         workflow = read('.github', 'workflows', 'tests.yml')
