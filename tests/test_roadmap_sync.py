@@ -933,12 +933,15 @@ class WeekByDateTests(RoadmapSyncTestCase):
                        'and moving it to the lane of `item.lane` and to its place by `position`) or opening another, as the user chooses',
                        'records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`',
                        'for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint',
-                       'for a `move_lane` out of a sprint, or a `remove`, whose file has no entry for the item (its exit or removal goes '
+                       'for a `move_lane` out of a sprint, or a `remove`, whose sprint file has no entry for the item (its exit or removal goes '
                        'into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file '
-                       'otherwise, out of the order of `position`; such an entry never counts for keeping that line)',
+                       'otherwise, out of the order of `position`, and it stays before that line also when the line is written later; '
+                       'such an entry never counts for keeping that line;',
+                       'the line goes after every entry already in the file that is not of an `outOfLimit` item',
+                       'in the roadmap, the removal of an item never written goes into the lane of `payload.lane_id`',
                        'recording the return when its latest record is an exit or removal',
                        'an `add` only by its `#N`: an `add` without one creates its entry',
-                       'for an `add`, the entry of its `#N` wherever it is',
+                       'for an `add`, the entries of its `#N` wherever they are, the one in `item.lane` first',
                        'or the lane and place the user chose for an `add` that reuses an entry'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, reference)
@@ -1032,7 +1035,7 @@ class OverLimitTests(RoadmapSyncTestCase):
         reference = ' '.join((root / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
         readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
         protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
-        for phrase in ('"Acima do limite de N:"', 'once and never repeated when the file already has it, then the entries of the `outOfLimit` items', 'in the order of `position`',
+        for phrase in ('"Acima do limite de N:"', 'is not of an `outOfLimit` item), then the entries of the `outOfLimit` items', 'in the order of `position`',
                        'when one of its items (past the limit too) lists the change'):
             self.assertIn(phrase, reference)
         self.assertNotIn('stay out of that sprint file', reference)
