@@ -930,12 +930,15 @@ class WeekByDateTests(RoadmapSyncTestCase):
         for phrase in ('a `move_lane` back into a week finds the entry of its item in that sprint file the same way',
                        '`add` creates an entry; an `add` whose `#N` (in the same repository) already has an entry in the roadmap or '
                        'in a sprint file of `change.sprintTargets` is not written on its own',
-                       'propose reusing that entry (recording the return and moving it to the lane of `item.lane` and to its place by '
-                       '`position`) or opening another, as the user chooses',
+                       'and moving it to the lane of `item.lane` and to its place by `position`) or opening another, as the user chooses',
                        'records the removal in the roadmap and in the file of each sprint in `change.sprintTargets`',
                        'for a `modify`, a `move_lane`, a `remove`, a `completed` and an `add`, in the file of each sprint',
-                       'for a `move_lane` out of a sprint whose file has no entry for the item (its exit goes into a new entry at the end '
-                       'of that file, out of the order of `position`)',
+                       'for a `move_lane` out of a sprint, or a `remove`, whose file has no entry for the item (its exit or removal goes '
+                       'into a new entry placed before the line "Acima do limite de N:" when the file has it, or at the end of the file '
+                       'otherwise, out of the order of `position`; such an entry never counts for keeping that line)',
+                       'recording the return when its latest record is an exit or removal',
+                       'an `add` only by its `#N`: an `add` without one creates its entry',
+                       'for an `add`, the entry of its `#N` wherever it is',
                        'or the lane and place the user chose for an `add` that reuses an entry'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, reference)
