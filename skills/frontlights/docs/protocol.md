@@ -76,7 +76,7 @@ conferência relê o GitHub. Nenhuma outra autorização cobre essa escrita.
 
 A release é oferecida ao fim de cada issue homologada (`references/development.md`, "The release"): depois de
 `homolog sync`, o `homolog release-plan` (só leitura) lista as issues que estão na main local e ainda não em
-`origin/main` e nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo); a sessão mostra a lista e pergunta "Lançar a release com as
+`origin/main` (e, em `releaseDirect`, o trabalho sem issue no mesmo estado) e nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo); a sessão mostra a lista e pergunta "Lançar a release com as
 issues #a, #b agora?" ("Sim, lançar" / "Agora não"). Com o "Sim", cortar a branch da main local, enviá-la (a única
 branch do fluxo que é enviada) e abrir a PR única (corpo pelo modelo `templates/pr.md`, com Resumo e Evidência por issue e o Risco do merge consolidado; a
 Evidência aponta os prints do teste assistido, os testes do checkpoint e os três portões de cada issue) são operações cobertas. Depois de abrir a PR da release, a sessão aguarda o merge por padrão e
@@ -168,6 +168,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
+  direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
+                                revisão, merge-local-main.json; no charter, a entrada de worktrees leva
+                                `direct` (slug listado em `direct_ids`) no lugar de `issue`
   roadmap-sync/
     approval.json    par (endereço, variável) aprovado pelo usuário
     marker.json      segredo local das marcas; nunca sai da máquina

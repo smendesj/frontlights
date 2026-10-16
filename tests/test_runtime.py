@@ -1184,6 +1184,20 @@ class AuthorizeDirectTests(unittest.TestCase):
                                   dict(self.merge, worktree=str(self.root / 's1'), branch='claude/melhoria-x-s1',
                                        slice='S1'))
 
+    def test_the_example_operation_of_direct_work_passes_against_the_example_charter(self):
+        examples = Path(frontlights.__file__).resolve().parents[1] / 'examples'
+        charter = json.loads((examples / 'authorization.json').read_text(encoding='utf-8'))
+        op = json.loads((examples / 'operation-merge-local-main-direct.json').read_text(encoding='utf-8'))
+        entry = next(w for w in charter['worktrees'] if 'direct' in w)
+        self.assertEqual((op['direct'], op['branch']), (entry['direct'], entry['branch']))
+        self.assertIn(op['direct'], charter['direct_ids'])
+        charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',
+                       expires_at='2099-01-01T00:00:00+00:00',
+                       monitoring=dict(charter['monitoring'], confirmed_by='usuário'),
+                       worktrees=[dict(entry, path=str(self.root / 'direct'))])
+        self.assertEqual(frontlights.authorize(charter, dict(op, worktree=str(self.root / 'direct')))['scope_check'],
+                         'pass')
+
     def test_the_merge_of_direct_work_through_the_command_line(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'charter.json'

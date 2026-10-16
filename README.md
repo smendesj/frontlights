@@ -650,7 +650,11 @@ Cada issue entra na **main local** do projeto, a homologação, por um merge com
 `review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main`, e a pergunta "Lançar a release com as issues #a, #b
-agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
+agora?" tem "Sim, lançar" e "Agora não". O trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o
+mesmo caminho: no registro de autorização, a entrada de `worktrees` leva `direct`, um slug próprio (minúsculas,
+dígitos e hífen, até 64 caracteres) listado em `direct_ids`, no lugar de `issue`; o `authorize` confere o merge na
+main local com esse `direct` na operação, e o `release-plan` o lista em `releaseDirect` (detalhe em `directs`). Os
+registros dele ficam em `.frontlights/direct/<branch com hífens>/`. Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o

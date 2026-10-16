@@ -526,7 +526,11 @@ When the last slice of the issue is merged into the branch of the issue, in this
    `not_needed`); `examples/operation-merge-local-main.json` shows the shape. With `scope_check: pass`, in the
    main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
    or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
-   gates to make them pass.
+   gates to make them pass. Work without an issue (the Direct path, or a Short one that publishes none) goes
+   the same way: its charter lists the slug in `direct_ids` and its `worktrees` entry carries `direct` in place
+   of `issue`, the operation names that `direct` (never `issue` too) and is kept in
+   `.frontlights/direct/<branch, slashes as dashes>/merge-local-main.json`, and the merge is `git merge --no-ff
+   <its branch>`.
 6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
    `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
    .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and the work
@@ -558,13 +562,15 @@ offers the release again with everything accumulated.
 - **Plan it.** Run `homolog sync` once more (the local main may be behind `origin/<base>`; a conflict is a
   question, as at the start of stage 6), then `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog
   release-plan --root <main worktree> --base <base>`: it reads the issue branches from the authorization records,
-  lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the commits
+  lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the work without
+  an issue in the same state (`releaseDirect`, from the entries with `direct`; `directs` has the detail), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
   `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
   must be synced first: say so in one line. It only reads.
-- **Offer it.** Show the issues of the release (number and title) and ask with `AskUserQuestion` "Lançar a release
-  com as issues #a, #b agora?", with "Sim, lançar" first and "Agora não" second; one question per release.
+- **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
+  with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
+  with "Sim, lançar" first and "Agora não" second; one question per release.
 - **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
   `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
   hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues

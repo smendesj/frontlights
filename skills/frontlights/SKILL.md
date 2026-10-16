@@ -213,7 +213,12 @@ why in one sentence:
   what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
   Do not manufacture an issue body or an issue for it, not even for the watched run: that question
-  offers to name the existing issue, never to open one.
+  offers to name the existing issue, never to open one. In a project with a remote, work without an
+  issue (Direct, or Short that publishes none) is still homologated as stage 6 says: its charter's
+  `worktrees` entry carries `direct`, a slug of its own (lower-case letters, digits and hyphens, up to
+  64 characters) listed in `direct_ids`, in place of `issue`; its records live in
+  `.frontlights/direct/<branch, slashes as dashes>/`; it enters the local main by the three gates, with
+  `direct` in the operation `authorize` checks, and `release-plan` lists it in `releaseDirect`.
 - **Short.** A bounded piece of work whose shape is clear but whose details are
   not, including work that starts from an existing issue. Grill (stage 3, with
   its mandatory solution round), show the plan in full and get it approved, implement
@@ -496,7 +501,8 @@ batch's verified branches into a local integration branch that is never pushed, 
 issue into the local main once its three gates are green (`references/development.md`, "Into the local
 main"): the full suite green at the tip of the branch of the issue, `review-gate` `current` for it and
 `browser-gate` `answered` (or `not_needed`). `frontlights.py authorize` checks that merge as
-`merge_into_local_main`, with `target` the base branch of the charter and the three `gates`; a red or
+`merge_into_local_main` (work without an issue names its `direct` in place of `issue`), with `target` the base
+branch of the charter and the three `gates`; a red or
 missing gate, a slice branch or `origin/main` as target is refused, and a red gate is a question to the
 user, never a merge. Right after each merge into the local main, `homolog bundle --root <main worktree>
 --config <config>` writes a Git bundle of the local main and of the work branches of every `branch_prefix` in the authorization
@@ -508,7 +514,8 @@ Anything else on that list waits for the user's "Sim" to its own question (above
 
 **The release, offered at the end of each homologated issue** (`references/development.md`, "The release").
 Once the issue is in the local main and its bundle is written, run `homolog sync` again and `homolog release-plan
---root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet and names
+--root <main worktree>`: it lists the issues in the local main that `origin/<base>` does not have yet (and, in
+`releaseDirect`, the work without an issue) and names
 the branch `<branch_prefix>release-<date>` (the prefix of the newest authorization record). Show the list and ask with `AskUserQuestion` "Lançar a release com as
 issues #a, #b agora?", "Sim, lançar" first and "Agora não" second. On "Sim" (covered): cut the release branch
 from the local main, push it, open the single pull request (`gh pr create --base <base> --head <release branch>`;
