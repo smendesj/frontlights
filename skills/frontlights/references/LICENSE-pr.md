@@ -1,7 +1,10 @@
-`templates/pr.md` in this skill adapts, in Portuguese and in our own words, the pull request body template of
-https://github.com/humanlayer/skills (`plugins/show-me/skills/show-me/SKILL.md`), under the license below,
-verified through the GitHub API on 2026-10-15. The three sections (summary, evidence, merge danger) and their
-guidance were rewritten for the Frontlights release; no text is copied verbatim.
+The guidance of the **Resumo** section of `templates/pr.md` in this skill (the smallest view that makes the
+point clear: pseudocode, call tree, component tree, file tree, Mermaid or `diff`, each visual beside the sentence
+it supports) adapts, in Portuguese and in our own words, the show-me skill of https://github.com/humanlayer/skills
+(`plugins/show-me/skills/show-me/SKILL.md`), under the license below, verified through the GitHub API on
+2026-10-15. The structure of the template in three sections (summary, evidence, merge danger with the door and the
+blast radius) follows a local pull request skill whose metadata credits show-me; no published source of the
+evidence and merge-danger sections was found in that repository on 2026-10-15. No text is copied verbatim.
 
 MIT License
 

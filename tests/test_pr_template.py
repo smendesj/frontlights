@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
 
 # Uma palavra de fechamento do GitHub seguida de uma referência de issue fecharia a issue no merge.
-CLOSING = re.compile(r'(?i)\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b\s*:?\s*(\S+/\S+)?#\d+')
+CLOSING = re.compile(r'(?i)\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b\s*:?\s*(\S+/\S+)?#(\d+|<[^>]+>)')
 
 
 def read(*parts):
@@ -83,8 +83,38 @@ class PullRequestTemplateTests(unittest.TestCase):
     def test_a_finding_never_has_the_body_as_destination(self):
         self.assertIn('o corpo da PR nunca é destino de um achado', self.flat)
 
+    def test_the_closing_pattern_also_catches_a_placeholder(self):
+        for sample in ('Closes #12', 'fixes: #<a>', 'Resolves OWNER/REPOSITORY#<b>'):
+            with self.subTest(sample=sample):
+                self.assertIsNotNone(CLOSING.search(sample))
+        self.assertIsNone(CLOSING.search('Issue #<a>: <título>'))
+
+    def test_a_print_is_cited_by_name_and_relative_folder_never_attached(self):
+        evidence = flat(section(self.text, 'Evidência'))
+        for phrase in ('pelo nome do arquivo e pela pasta relativa ao projeto', 'uma frase do que ele mostra',
+                       'quem revisa o abre no projeto local', 'nunca caminho absoluto', 'imagem anexada ou commitada',
+                       'login', 'dado de pessoa'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, evidence)
+
+    def test_the_door_rule_is_the_approved_one_and_the_guidance_stands_apart(self):
+        risk = section(self.text, 'Risco do merge')
+        flat_risk = flat(risk)
+        for phrase in ('A porta é de mão única quando há migration ou dado apagado', 'Nos outros casos é de mão dupla'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat_risk)
+        self.assertNotIn('outra decisão difícil de desfazer', flat_risk)
+        for line in risk.splitlines():
+            if '<opcional' in line or '<mão única' in line or '<uma palavra>' in line:
+                with self.subTest(line=line):
+                    self.assertRegex(line.strip(), r'^(\*\*[^*]+\*\* )?<[^>]+>$')
+
+    def test_the_language_is_the_users_with_the_domain_vocabulary(self):
+        self.assertIn('na língua do usuário', self.flat)
+        self.assertIn('com o vocabulário do domínio do projeto', self.flat)
+
     def test_the_template_credits_the_source_and_points_to_its_license(self):
-        for phrase in ('`references/LICENSE-pr.md`', 'adaptado'):
+        for phrase in ('`references/LICENSE-pr.md`', 'adaptada', 'show-me'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -103,7 +133,9 @@ class LicenseTests(unittest.TestCase):
 
     def test_it_names_the_source_and_what_was_adapted(self):
         for phrase in ('https://github.com/humanlayer/skills', 'plugins/show-me/skills/show-me/SKILL.md',
-                       '`templates/pr.md`', 'adapts'):
+                       '`templates/pr.md`', 'adapts', 'The guidance of the **Resumo** section',
+                       'follows a local pull request skill whose metadata credits show-me',
+                       'no published source of the evidence and merge-danger sections was found'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -112,6 +144,7 @@ class LicenseTests(unittest.TestCase):
         mit_body = tdd[tdd.index('Permission is hereby granted'):].strip()
         self.assertIn('MIT License', self.text)
         self.assertIn('Copyright (c) 2026 HumanLayer', self.text)
+        self.assertNotIn('The three sections (summary, evidence, merge danger) and their', self.flat)
         self.assertIn(flat(mit_body), self.flat)
 
 
@@ -149,6 +182,18 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
                        'its three gates', 'records that already exist, never invented'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.release)
+
+    def test_prints_door_and_language_say_the_same_as_the_template(self):
+        for phrase in ('a print is cited by its file name and its folder relative to the project',
+                       "never an absolute path, an attached or committed image, a login or a person's data",
+                       'a one-way door when a migration or deleted data is in it, a two-way door otherwise',
+                       "in the user's language, with the project's domain vocabulary"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.release)
+        runbook = flat(read('evals', 'runbook.md'))
+        self.assertIn('a one-way door when a migration or deleted data is in it, a two-way door otherwise', runbook)
+        self.assertNotIn('a one-way door only with', runbook)
+        self.assertIn('prints cited by file name and relative folder, never attached', runbook)
 
     def test_no_closing_keyword_and_no_finding_in_the_body(self):
         for phrase in ('**No closing keyword.**', 'never carries `Closes`, `Fixes`, `Resolves` or a variant of them',

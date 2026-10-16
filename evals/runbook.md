@@ -253,8 +253,9 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 29. Pull request template (issue 35). On a disposable release with two homologated issues, one of them with a
     watched run, confirm the body of the release's pull request follows `templates/pr.md`: Resumo and Evidência once
     per issue (the smallest visual; before and after from the prints of the watched run and the red-to-green test of
-    the checkpoint, with the three gates), one Risco do merge consolidated for the release (a one-way door only with a
-    migration or deleted data, and the blast radius), no `Closes`, `Fixes` or `Resolves` in the body or the commits,
+    the checkpoint, with the three gates; prints cited by file name and relative folder, never attached), one Risco do
+    merge consolidated for the release (a one-way door when a migration or deleted data is in it, a two-way door
+    otherwise, and the blast radius), no `Closes`, `Fixes` or `Resolves` in the body or the commits,
     and no finding left only in the body.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,

@@ -528,9 +528,11 @@ offers the release again with everything accumulated.
   `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed, and the
   hook lets it through), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
   #a, #b" --body-file <file>`. The body follows `templates/pr.md` (the model of the pull request), in the user's
-  language: **Resumo** and **Evidência** once per issue (what it delivers with the smallest visual that makes its
+  language, with the project's domain vocabulary: **Resumo** and **Evidência** once per issue (what it delivers with the smallest visual that makes its
   point clear; before and after, from the prints of each issue's watched run, the tests of its checkpoints, the
-  independent review and its three gates, records that already exist, never invented) and the **Risco do merge**
+  independent review and its three gates, records that already exist, never invented; a print is cited by its file
+  name and its folder relative to the project, with one sentence of what it shows, never an absolute path, an
+  attached or committed image, a login or a person's data) and the **Risco do merge**
   once, consolidated for the whole release (a one-way door when a migration or deleted data is in it, a two-way
   door otherwise, and the blast radius); it cites the issues by number, and the body of the pull request is never
   the destination of a finding (the gate on the findings, above). **No closing keyword.** A pull request opened by Frontlights never
