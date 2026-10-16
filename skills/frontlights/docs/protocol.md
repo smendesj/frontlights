@@ -403,7 +403,16 @@ A conclusão exige cobertura dos critérios de aceitação, alterações complet
 atuais, verificações específicas e abrangentes, verificação de tipos quando aplicável
 e revisão independente vinculada às mesmas evidências. Se não houver suporte à
 revisão, registre explicitamente a pendência. O relatório do autor nunca substitui
-uma verificação independente. A evidência a que a revisão ficou vinculada é salva em
+uma verificação independente.
+
+O revisor julga pelo padrão de `references/review.md` (o que é defeito e em que gravidade, o que é só estilo e
+nunca vira achado, como relata), que só o brief do revisor cita. A revisão termina na primeira rodada com 0
+sérios e 0 médios, com no máximo três rodadas por issue; no limite, com um sério ou médio aberto, a pergunta é
+"Mais uma rodada" ou "Dar destino pela escada". Os baixos vão ao lote de achados como critério novo da issue de
+origem (issue de topo quando não há issue de origem com critérios, ou quando ela está fechada), com a opção de
+corrigi-los agora. Cada rodada depois da primeira revê o delta desde a anterior e confere os achados anteriores.
+
+A evidência a que a revisão ficou vinculada é salva em
 `.frontlights/issues/<n>/review.json`, e `frontlights.py review-gate --root <worktree> --review <arquivo>`
 a compara com a atual: saída 0 (`current`) vale, saída 2 (`stale`) significa que houve commit, edição ou
 arquivo novo depois da revisão, e a issue não é relatada como revisada, nem entra na main local, nem tem PR

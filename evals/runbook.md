@@ -265,6 +265,11 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the user's request, takes it down; and that the watched run copies the development database with `copyDatabase`,
     runs ANTES and DEPOIS in sequence in the isolated instance, never on the preview's ports nor in its tab, and drops
     the copy with `dropDatabase` at the end.
+31. Review stop criterion. On a disposable issue whose first review reports one médio and two baixos of line
+    width, confirm the baixos of style never reach the report, the médio is fixed, the second round reviews only
+    the delta and the earlier finding, the review ends there with 0 sérios and 0 médios, the remaining baixos go to
+    the findings batch as new acceptance criteria of the issue with "Corrigir os baixos agora" offered, and the
+    implementer's brief never names `references/review.md`.
 
 Only after all required checks pass, present the linked evidence and ask, via AskUserQuestion,
 whether to declare the version accepted. Items the environment cannot enforce (an exact

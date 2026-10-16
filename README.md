@@ -838,6 +838,13 @@ pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <wo
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
 commit, edição ou arquivo novo depois dela.
 
+A revisão independente segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
+cenário de falha, em três gravidades (sério, médio, baixo), e largura de linha, linhas em branco, quebra de
+parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o brief do revisor cita esse arquivo; o
+implementador trabalha pela issue. A revisão termina na primeira rodada com 0 sérios e 0 médios, com no máximo
+três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
+critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
+
 O exemplo seleciona `[1, 2]`; a issue 3 depende da issue 1, e a issue 4, sub-issue da 3
 (`parent: 3`), é uma filha já publicada de uma família que já existe. As issues 1 e 3 trazem
 `slices` (a segunda slice depende da

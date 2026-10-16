@@ -22,6 +22,7 @@ before execution. The references are `references/grilling.md` (stage 3),
 `references/issue.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
 `browser-testing.md`),
+`references/review.md` (the independent reviewer's standard, named only in the reviewer's brief),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
 `references/roadmap-sync.md` (the roadmap question of stage 1, when the user
 says yes), `references/progress-report.md` (the progress question that follows it, when the user says yes, and the registration of the block's home). `references/learning.md` is read only when the user turns learning mode on in the grilling or asks for an
@@ -466,7 +467,9 @@ publication, closeout, cleanup, roadmap and summary) keep them.
 
 A family is integrated locally
 and its full suite is green before any of its PRs opens, and a review that the code has
-outgrown (`review-gate`, exit code 2) is redone before anything is reported as reviewed. The
+outgrown (`review-gate`, exit code 2) is redone before anything is reported as reviewed. The review is
+done at the first round with 0 sérios and 0 médios, three rounds at most, and the reviewer judges by
+`references/review.md` (`references/development.md`, "When the review is done"). The
 authorization's `monitoring` block is `mode: "local"`;
 `phone_connected: true` only when the user states, unprompted in this session,
 that the phone received and answered. Local files record consent but
