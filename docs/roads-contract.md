@@ -106,11 +106,16 @@ usuário.
   início). Antes da migração do RoadS (decisão de 15/10/2026, acima) o `sprintId` era `sprint-AAAA-MM-DD` e o `laneId` era posicional
   (`atual`, `proxima`, `terceira`); o Frontlights aceita as duas formas e casa cada lane pelo texto exato com o
   `laneId` do estado lido no mesmo `fetch`. As semanas são tratadas na ordem de `startDate`, nunca pelo texto do id.
-- **N semanas.** `sprints[]` traz a semana atual e todas as futuras que têm item, e pode vir semana com `items: []`;
-  semana sem mudança não ganha arquivo.
+- **N semanas.** `sprints[]` traz a semana atual (sempre, mesmo vazia), todas as futuras que têm item e toda semana
+  citada por uma mudança ainda sem ack (`lane_id` ou `from_lane_id`, inclusive a semana que a virada encerrou e a que
+  perdeu o último item), estas com `items: []` quando não têm mais item e com `startDate` e `endDate` da semana
+  (segunda a sexta); depois do ack, a semana vazia some na resposta seguinte. Por isso pode vir semana com
+  `items: []`. As semanas vazias que a tela do RoadS mostra (a do fim, para receber o próximo arraste, e os buracos)
+  nunca entram no `roadmap-state`. Semana sem mudança não ganha arquivo.
 - **Ordem e limite.** `position` segue a ordem que o scrum master arrastou no RoadS (`sort_order` normalizado), e o
   arquivo da semana segue o `position`. `overLimit` continua só informativo: o Frontlights escreve no arquivo da
-  semana os itens 1 a N, a linha "Acima do limite de N:" uma única vez e depois os demais.
+  semana as mudanças dos itens acima do limite como as dos demais, com os itens 1 a N primeiro e, só quando há
+  excedente, a linha "Acima do limite de N:" uma única vez e depois os demais.
 
 ### `GET pending-changes[?since=<instante>]`
 
@@ -129,10 +134,11 @@ parte é contrato); `move_lane` traz `lane_id` (a lane de destino) e `from_lane_
 05/10/2026, mais `title` e `reason` informativos (e pode vir `github_issue_url`). Um `move_lane` feito por uma
 pessoa e enfileirado antes dessa data pode não ter `from_lane_id`. Um `remove` chega com `item` e `itemId` nulos. O prefixo `done-` nos ids de mudança da fila é reservado ao Frontlights (as
 conclusões que ele registra); uma mudança da fila com esse prefixo faz o Frontlights recusar a busca, então o RoadS não
-deve usá-lo. Nas lanes de sprint, `lane_id` e `from_lane_id` (de
-`add`, `remove` e `move_lane`) citam `sprint-DD-MM-AAAA`; nas lanes de grupo continuam `tipo-*` e `g1..g6`, e o
-`groups[]` não muda. Uma lane que não casa com nenhuma semana nem grupo do estado lido (a da semana que a virada
-encerrou, por exemplo) não alcança arquivo de sprint: a mudança vai para o roadmap e o Frontlights avisa. O Frontlights lê de um `move_lane` o
+deve usá-lo. Nas lanes de sprint, o `lane_id` (de `add`, `remove` e `move_lane`) e o `from_lane_id` (de
+`move_lane`) citam `sprint-DD-MM-AAAA`; nas lanes de grupo continuam `tipo-*` e `g1..g6`, e o `groups[]` não muda.
+Como o RoadS mantém no estado toda semana citada por mudança sem ack, uma lane que não casa com nenhuma semana nem
+grupo do estado lido é inesperada: a mudança não alcança arquivo de sprint por essa lane, vai para o roadmap (e
+para os arquivos das outras lanes dela), e o Frontlights avisa e pergunta antes do `apply`. O Frontlights lê de um `move_lane` o
 `from_lane_id` e o `lane_id` para saber que sprints ele atinge (`from` e `to` são a grafia antiga, só usada quando a
 chave nova falta); sem eles (uma fila antiga, ou um desvio futuro), o Frontlights vê só o destino, pelo que `pendingChangeIds` de
 `roadmap-state` já diz. O `asOf` vem do servidor,

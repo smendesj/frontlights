@@ -688,10 +688,13 @@ class SafetyTests(CompletedTestCase):
         state = done_state()
         items = state['sprints'][0]['items']
         items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-00000000000f', position=4, title='Quarto item', done=False, status='open'))
-        items.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item', done=False,
-                          status='open', overLimit=True, pendingChangeIds=[DONE_E]))
+        nxt = state['sprints'][1]['items']
+        nxt.extend(dict(items[2], id=f'5a5a5a5a-0000-4000-8000-00000000002{n}', position=n + 2, title=f'Item {n}', done=False,
+                        status='open') for n in range(3))
+        nxt.append(dict(items[2], id='5a5a5a5a-0000-4000-8000-000000000010', position=5, title='Quinto item', done=False,
+                        status='open', overLimit=True, pendingChangeIds=[DONE_E]))
         result, _ = self.approve_and_fetch(NO_CHANGES, state=state)
-        self.assertEqual(result['plan']['targets'][CURRENT]['changeIds'], [DONE_E])
+        self.assertEqual(list(result['plan']['targets']), ['roadmap', CURRENT])
         self.assertEqual(result['plan']['changes'][0]['sprintTargets'], [CURRENT])
 
     def test_nothing_is_written_outside_the_scrum_root(self):
