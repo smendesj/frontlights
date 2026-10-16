@@ -17,9 +17,9 @@ das issues. Registros locais são evidências e cópias de referência, nunca ti
 duplicados. Informe divergências. Faça todas as perguntas por `AskUserQuestion`;
 não invente aprovação. Descoberta, texto da issue e publicação de issues têm aprovações
 separadas. A implementação (etapa 6) roda sob a autorização permanente, decisão do
-mantenedor para todo projeto: abre sem pergunta, e cada operação negada (merge,
-fechar issue, quadro, produção, migration registrada, branch base ou protegida) só
-roda depois do "Sim" de uma pergunta própria (`skills/frontlights/docs/security.md`).
+mantenedor para todo projeto: abre sem pergunta, e cada operação negada só roda depois do
+"Sim" de uma pergunta própria (`skills/frontlights/references/development.md`, "Standing
+authorization and the denied operations", a fonte única dessas regras).
 
 Este repositório é público. Nunca versione endpoint real, segredo, token, nome de
 organização, produto, cliente ou pessoa, caminho local de máquina, nem saída
@@ -33,11 +33,13 @@ fez `git pull`, e uma sessão nova a lê. Não há número de versão a subir; o
 da etapa 0 compara o `HEAD` do clone com o remoto, e o User-Agent enviado ao RoadS leva o
 commit.
 
-Use worktrees isoladas. A autorização comum de implementação não permite escrever
-em branches protegidas, fazer merge, implantar ou publicar versões sem o "Sim" da
-pergunta própria de cada operação. Preserve o
-GuardianS e os dados do usuário. Leia `skills/frontlights/docs/protocol.md` para execução e
-retomada, e `skills/frontlights/docs/security.md` para os limites de aplicação das permissões.
+Use worktrees isoladas. Preserve o
+GuardianS e os dados do usuário. Cada regra da skill vive num lugar só, e os outros textos apontam
+para ela: as da etapa 6 (autorização permanente, merges cobertos, negadas, três portões, release) em
+`skills/frontlights/references/development.md`; os formatos dos registros e a retomada em
+`skills/frontlights/docs/protocol.md`; os limites de aplicação das permissões em
+`skills/frontlights/docs/security.md`. Cada referência de etapa que
+precisa deles abre com as seções desses dois docs que a etapa lê.
 Execute `python -m unittest discover -s tests -v` e
 `python -m compileall -q skills/frontlights/scripts tests`.
 Antes de cada commit, rode `python tests/pre_commit.py` (segundos: `compileall` e os módulos de

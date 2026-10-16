@@ -35,16 +35,19 @@ class PreviewInTheFlowTests(unittest.TestCase):
     def test_stage_six_brings_the_preview_up_refreshes_it_and_stops_it_only_on_request(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage6 = between(skill, '## 6.', '## 7.')
-        for phrase in ('**The preview, right after the hook and the sync.**', 'a `preview` block',
-                       'before the first slice', '`serve preview refresh`', 'a tab of Claude in Chrome',
-                       'after each slice is merged into the branch of its issue',
-                       'stops only when the user asks', 'The tab is the user\'s',
-                       'outside the rule of the disposable window', 'never uses the preview nor its ports',
-                       'Without the block, nothing of this runs'):
+        for phrase in ('2. **The preview** (same section)', 'a `preview` block', 'before the first slice',
+                       'refreshed after each slice is merged into the branch of its issue'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage6)
-        self.assertLess(stage6.index('**Hook and sync'), stage6.index('**The preview, right after'))
-        self.assertLess(stage6.index('**The preview, right after'), stage6.index('**Standing authorization.**'))
+        self.assertLess(stage6.index('**Hook and sync**'), stage6.index('**The preview**'))
+        self.assertLess(stage6.index('**The preview**'), stage6.index('**Slices in order**'))
+        development = read('skills', 'frontlights', 'references', 'development.md')
+        start = between(development, '## The start of stage 6', '## Slices in order')
+        for phrase in ('`serve preview refresh`', 'a tab of Claude in Chrome', 'stops only when the user asks',
+                       'The tab belongs to the user', 'outside the rule of the disposable window',
+                       'never uses the preview nor its ports', 'without the block, nothing of this runs'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, start)
 
     def test_development_says_when_the_preview_is_refreshed(self):
         development = read('skills', 'frontlights', 'references', 'development.md')
@@ -90,10 +93,9 @@ class PreviewInTheFlowTests(unittest.TestCase):
 
     def test_the_branches_given_to_the_refresh_come_from_the_records_and_the_preview(self):
         """Revisão da issue 34 (M3): a lista de --branch vem dos registros de autorização e do que a prévia já tem."""
-        skill = between(read('skills', 'frontlights', 'SKILL.md'), '## 6.', '## 7.')
         development = between(read('skills', 'frontlights', 'references', 'development.md'),
                               '## The start of stage 6', '## Slices in order')
-        for name, text in (('SKILL.md', skill), ('development.md', development)):
+        for name, text in (('development.md', development),):
             for phrase in ('`.frontlights/authorization*.json`', 'whose issue is not closed', 'slice branches',
                            'the `merged` of `serve preview status`', '`git merge-base --is-ancestor <branch> main`',
                            "never takes another issue's work in progress out of the preview",
