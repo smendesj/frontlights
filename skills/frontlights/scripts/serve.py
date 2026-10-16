@@ -72,8 +72,8 @@ preview carry `"issue": "preview"`, so the release of an issue's reservations ne
 refused while the preview is alive (any process or log relay of the record) and when the preview worktree does not
 exist. `preview status` and `preview stop` work from the record alone, with or without the `preview` block in the
 config (the mask still comes from its `browserTest.users`). `preview status` adds `alive` and `relayAlive` per process
-(`running` needs both for every process), `log` and the last `TAIL_LINES` lines of each log (`tail`), masked again on
-output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
+(`running` needs both for every process), `log` and the last `TAIL_LINES` lines of each log (`tail`, read from at most
+the last `TAIL_BYTES` of the file), masked again on output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
 `preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
 change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
 repository on `preview.branch`, or that has tracked changes or a merge in progress), then stops the preview, redoes
@@ -134,6 +134,7 @@ REMOVE_ATTEMPTS = 40
 CONNECT_SECONDS = 0.05
 PREVIEW_ISSUE = 'preview'  # the `issue` of the preview's port reservations: never an issue number
 TAIL_LINES = 20
+TAIL_BYTES = 64 * 1024  # `tail_lines` reads at most this much from the end of a log
 RELAY_DRAIN_SECONDS = 3  # a torn-down preview process's relay gets this long to write the last lines
 GIT_SECONDS = 300  # deadline of each Git command of `preview refresh`
 DEFAULT_BASE = 'main'
@@ -926,14 +927,24 @@ def log_size(path):
 
 
 def tail_lines(path, count=TAIL_LINES, offset=0):
-    """Last `count` lines of a log from byte `offset` on (decoded with replacement); unreadable or missing: []."""
+    """Last `count` lines of a log from byte `offset` on (decoded with replacement); unreadable or missing: [].
+
+    Only the end is read: at most `TAIL_BYTES` before the end of the file (never before `offset`). When that window
+    starts in the middle of a line, the cut line is dropped (the byte before the window says whether it is).
+    """
     try:
         with open(path, 'rb') as handle:
-            handle.seek(offset)
-            text = handle.read().decode('utf-8', errors='replace')
+            size = handle.seek(0, os.SEEK_END)
+            start = max(offset, size - TAIL_BYTES, 0)
+            if start > offset:  # the window cut the file: read from the byte before it and drop up to its first
+                handle.seek(start - 1)  # newline, so a window that starts on a line keeps that line
+                data = handle.read(TAIL_BYTES + 1).partition(b'\n')[2]
+            else:
+                handle.seek(start)
+                data = handle.read(TAIL_BYTES)
     except OSError:
         return []
-    return text.splitlines()[-count:]
+    return data.decode('utf-8', errors='replace').splitlines()[-count:]
 
 
 def kill_preview(started):

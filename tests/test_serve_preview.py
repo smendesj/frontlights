@@ -830,7 +830,8 @@ class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
                                    'processes': [{'name': 'web', 'argv': [sys.executable, str(script)], 'port': 'auto',
                                                   'health': 'http://127.0.0.1:{port}/', 'timeoutSeconds': 20}]})
         seen, spy = self.recording()
-        dying = mock.patch.object(serve, 'relay_argv', lambda config, log: [sys.executable, '-c', 'raise SystemExit(3)'])
+        dying = mock.patch.object(serve, 'relay_argv',
+                                  lambda config, log: [sys.executable, '-c', 'raise SystemExit(3)'])
         with spy, dying, self.assertRaises(serve.Refusal) as caught:
             serve.preview_start(self.config, self.root)
         failure = caught.exception
@@ -841,6 +842,58 @@ class PreviewLaunchFailureTest(FakeRecordMixin, PreviewTestCase):
             self.assertTrue(wait_until(lambda: not serve.pid_alive(pid), 5), f'o pid {pid} ficou vivo')
         self.assertFalse(self.registry().exists())
         self.assertEqual(self.preview_reservations(), [])
+
+
+class TailLinesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / 'web.log'
+
+    def test_tail_reads_only_the_end_of_the_file_and_drops_the_line_cut_by_the_window(self):
+        lines = [f'linha-{number:05d}-{"x" * 88}\n'.encode() for number in range(3000)]  # 101 bytes each
+        self.path.write_bytes(b''.join(lines))
+        handles, real_open = [], open
+
+        class Spy:
+            def __init__(self, handle):
+                self.handle, self.read_bytes = handle, 0
+                handles.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *error):
+                self.handle.close()
+
+            def read(self, *size):
+                data = self.handle.read(*size)
+                self.read_bytes += len(data)
+                return data
+
+            def __getattr__(self, name):
+                return getattr(self.handle, name)
+
+        with mock.patch.object(serve, 'open', create=True, side_effect=lambda *a, **k: Spy(real_open(*a, **k))):
+            tail = serve.tail_lines(self.path, count=10000)
+        self.assertEqual(len(handles), 1)
+        self.assertLessEqual(handles[0].read_bytes, 64 * 1024 + 1, 'o tail leu o arquivo inteiro')
+        self.assertLessEqual(len(tail), 64 * 1024 // 101)
+        self.assertEqual(tail, [line.decode().rstrip('\n') for line in lines[-len(tail):]])
+
+    def test_a_window_that_starts_on_a_line_boundary_keeps_that_line(self):
+        lines = [f'{number:063d}\n'.encode() for number in range(2000)]  # 64 bytes: the window is 1024 whole lines
+        self.path.write_bytes(b''.join(lines))
+        tail = serve.tail_lines(self.path, count=5000)
+        self.assertEqual(len(tail), 1024)
+        self.assertEqual(tail[0], f'{976:063d}')
+
+    def test_the_offset_of_this_run_still_limits_the_tail(self):
+        for before in (b'antes\n' * 100, b'antes\n' * 40000):  # inside and before the 64 KB window
+            with self.subTest(size=len(before)):
+                self.path.write_bytes(before + b'depois 1\ndepois 2\n')
+                self.assertEqual(serve.tail_lines(self.path, offset=len(before)), ['depois 1', 'depois 2'])
+        self.assertEqual(serve.tail_lines(Path(self.tmp.name) / 'nao-existe.log'), [])
 
 
 def done_text(done):
