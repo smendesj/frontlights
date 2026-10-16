@@ -738,7 +738,10 @@ def state_item(raw, where, in_sprint):
 def normalise_state(payload):
     """Defensive reading of GET roadmap-state (schemaVersion 1). An unknown schema version, a
     field of the wrong type, an invalid date or a duplicate sprint refuses the whole answer:
-    nothing is guessed, and there is no fallback to the local week."""
+    nothing is guessed, and there is no fallback to the local week. Each sprint is a week; the weeks
+    come out in the order of their dates (start, then end), never in the order of the text of their
+    ids, which RoadS writes either as `sprint-YYYY-MM-DD` with a positional laneId (before its
+    migration) or as `sprint-DD-MM-YYYY` for both sprintId and laneId (after it)."""
     require(isinstance(payload, dict), 'RoadS answered roadmap-state with something that is not an object')
     version = payload.get('schemaVersion')
     require(isinstance(version, int) and not isinstance(version, bool) and version == STATE_SCHEMA_VERSION,
@@ -760,6 +763,7 @@ def normalise_state(payload):
                         'title': state_text(raw.get('title'), f'{where}.title', FIELD_LIMITS['title']),
                         'startDate': start.isoformat(), 'endDate': end.isoformat(), '_dates': (start, end),
                         'items': sorted(items, key=lambda i: i['position'])})
+    sprints.sort(key=lambda sprint: sprint['_dates'])
     groups = []
     for index, raw in enumerate(state_list(payload.get('groups'), 'groups', optional=True)):
         where = f'groups[{index}]'
@@ -1274,13 +1278,24 @@ def unrecorded_completions(ctx, state, completions, roadmap_path):
     return fresh, recorded
 
 
+def unmatched_lanes(state, changes):
+    """The lanes of the queue (the origin and destination of a move_lane) and of removedPending that match no
+    week and no group of the state read by this fetch, in the order first seen. After the week turns, the week
+    that ended is no longer in the state, so its lane is the expected case; a change that reaches a sprint only
+    through such a lane goes to the roadmap only."""
+    known = {sprint['laneId'] for sprint in state['sprints']} | {group['laneId'] for group in state['groups']}
+    lanes = [lane for change in changes if not change['synthetic'] for lane in change['_move']]
+    lanes += [removed['laneId'] for removed in state['removedPending']]
+    return list(dict.fromkeys(lane for lane in lanes if lane and lane not in known))
+
+
 def sprint_targets(ctx, state, changes):
     """Each sprint of the state with a pending change gets its own file. The link is the
     service's: a change belongs to a sprint when an item of that sprint lists it in
     pendingChangeIds, when removedPending puts its removal in that sprint's lane, or when a
     move_lane leaves that sprint's lane (payload.from_lane_id) or enters it (payload.lane_id) without any
-    item of that sprint listing it. The laneId is positional: it is the lane of the state read
-    by this fetch. A change reaching a sprint only through an item past the limit (overLimit) is
+    item of that sprint listing it. A lane is matched by its exact text against the laneId of the state
+    read by this fetch: RoadS sends each answer in one shape only, positional or dated. A change reaching a sprint only through an item past the limit (overLimit) is
     listed apart and not written into that sprint file. A completion belongs to the sprints that
     hold its item (`_sprints`) and to no other: the links above are made only for the changes of
     the queue, so a state cannot send a completion to a sprint by naming it in pendingChangeIds or
@@ -1382,6 +1397,12 @@ def _fetch(root, today, transport, since, discard_staged, result):
         result.update(ok=True, exitCode=0, pending=0, message=message + ''.join(notes))
         return result
     sprints, files, left_out = sprint_targets(ctx, state, changes)
+    unmatched = unmatched_lanes(state, changes)
+    if unmatched:
+        named = ', '.join(unmatched[:10]) + (f' and {len(unmatched) - 10} more' if len(unmatched) > 10 else '')
+        notes.append(f' {len(unmatched)} lane(s) of the queue match no week or group ({named}): their changes reach '
+                     'no sprint file through that lane and go to the roadmap. A week that already ended (the week turned) is '
+                     'expected; tell the user about any other lane before apply.')
     if left_out:
         notes.append(f' {len(left_out)} item(s) with a pending change are outside the sprint limit (overLimit): write them in '
                      'the roadmap only and tell the user which ones stayed out.')

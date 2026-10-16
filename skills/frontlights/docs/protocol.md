@@ -228,7 +228,10 @@ esgotado ou resposta cortada, não interrompe o `fetch`: o resultado a relata (`
 (endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
 anos 2000 a 2100), o `fetch` é recusado sem alternativa automática. Cada sprint com mudança recebe o
 seu `SPRINT_*.md`, montado com as datas do RoadS; um `move_lane` alcança a sprint de origem e a
-de destino (o `laneId` vale a lane do estado lido nesse `fetch`). Pasta e arquivo novos só são
+de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), nunca do texto do id, e a lane
+casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posicional antiga (`atual`, `proxima`,
+`terceira`) ou na forma `sprint-DD-MM-AAAA`; uma lane sem semana nem grupo no estado lido, como a da semana que a
+virada encerrou, não alcança arquivo de sprint, e o `fetch` a avisa. Pasta e arquivo novos só são
 criados dentro do
 `scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. Itens com
 `overLimit` ficam fora da sprint e são avisados; `snapshotStale` indica cópia do quadro com mais de
