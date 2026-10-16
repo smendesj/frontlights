@@ -223,17 +223,23 @@ class GateTests(unittest.TestCase):
 class SkillAndDevelopmentTests(unittest.TestCase):
     def test_stage_six_makes_the_gate_a_condition_of_the_report_and_of_the_pr(self):
         stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        for phrase in ('Before an issue is reported as reviewed or complete, and before a PR is opened or updated, every open finding has its destination',
-                       'a new acceptance criterion of the source issue', "or dropped by the user's explicit answer",
-                       '"Cited in the PR" is never a destination',
-                       'an issue is not reported as reviewed or complete while one has none',
-                       'the findings left unfixed with the destination of each'):
+        for phrase in ('every open finding with its destination (the gate of the Follow-ups section of '
+                       '`references/issues.md`)', 'the findings left unfixed with the destination of each'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage6)
+        development = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split())
+        for phrase in ('Before an issue is reported as reviewed or complete, and before the merge into the local main '
+                       'and before a PR is opened or updated, every open finding',
+                       'an acceptance criterion of the source issue', "is dropped by the user's explicit answer",
+                       '"cited in the PR" does not pass the gate'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
 
     def test_stage_five_sends_unfixed_findings_to_a_tracked_destination(self):
         stage5 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 5.')[1].split('## 6.')[0].split())
-        self.assertIn('never as a note in the PR body', stage5)
+        self.assertIn('the Follow-ups ladder of the same file for findings', stage5)
+        self.assertIn('the PR body is never a destination',
+                      ' '.join(read('skills', 'frontlights', 'references', 'issues.md').split()))
 
     def test_development_has_the_gate_and_still_ticks_only_with_evidence(self):
         text = flat('skills', 'frontlights', 'references', 'development.md')

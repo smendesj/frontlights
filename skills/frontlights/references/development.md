@@ -102,8 +102,8 @@ true` and `files`: the session asks with `AskUserQuestion` ("Resolver o conflito
 never uses `--force`, `reset` or `rebase`, and runs again before the release. Record the result (advanced or
 not, the two commits, a conflict and its answer) in the handoff.
 
-**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block, and after the hook and
-the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an issue
+**The preview.** Only in a project whose `.frontlights/config.json` has a `preview` block (without the block, nothing
+of this runs, said in one line), and after the hook and the sync: before the first slice, run `serve preview refresh` in the main worktree with every branch of an issue
 in progress as `--branch`, open its `baseUrl` once in a tab of Claude in Chrome and tell the user. The list: each
 issue branch in the `worktrees` of the `.frontlights/authorization*.json` records whose issue is not closed (slice
 branches stay out), plus each one in the `merged` of `serve preview status`, minus each one the local main already
@@ -111,7 +111,8 @@ holds (`git merge-base --is-ancestor <branch> main`), and only those that exist 
 --quiet refs/heads/<branch>`); at the very start it may be empty, and the session never takes another issue's work
 in progress out of the preview. From then on the preview follows the work (below,
 "Slices in order"); it stops only when the user asks, and the session that finds it already up (its record)
-refreshes it instead of starting another one. The tab belongs to the user, never to a test. The commands, the
+refreshes it instead of starting another one. The tab belongs to the user, never to a test: the session opens it once and leaves it
+to the user, outside the rule of the disposable window, and the watched run never uses the preview nor its ports. The commands, the
 record and the log are in `references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the
 preview's branch, the branches merged into it and the last refresh.
 
@@ -530,7 +531,7 @@ When the last slice of the issue is merged into the branch of the issue, in this
    gates to make them pass.
 6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
    `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
-   .frontlights/config.json` (covered): it writes `<project>-<date>-<time>.bundle`, the local main and the work
+   .frontlights/config.json` (covered; the only write the run makes outside the project, and only into that folder): it writes `<project>-<date>-<time>.bundle`, the local main and the work
    branches of every `branch_prefix` in the authorization records (`.frontlights/authorization*.json`; `claude/`
    when there is none; `--prefix` names one prefix alone), into the folder named by `homolog.backupDir` in `.frontlights/config.json`
    (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,

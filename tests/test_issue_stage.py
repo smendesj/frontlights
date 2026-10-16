@@ -50,7 +50,7 @@ class IssueStageTests(unittest.TestCase):
                        'goes back there instead of being invented or asked here',
                        'The only question of this stage is the seams', 'ideally one',
                        'approval of its exact revision', 'field-by-field trace',
-                       'This approval does not authorize live issue writes'):
+                       'This approval covers the text; the GitHub write is the approval of stage 5'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertIn('`references/issue.md` (stage 4)', skill)

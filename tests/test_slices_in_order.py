@@ -110,10 +110,15 @@ class SlicesInOrderTextTests(unittest.TestCase):
     def test_stage_6_works_the_slices_in_order_on_one_branch_merged_into_the_local_main(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         body = flat(section(skill, '6. Bounded development') or '')
-        for phrase in ('one issue branch, cut from the local main', 'its own worktree and branch', 'its slices are worked in dependency order',
-                       'a family that already exists', 'the order of the slices'):
+        for phrase in ('one issue branch, cut from the local main', 'one worktree per slice',
+                       '(development.md, "Slices in order")'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
+        development = flat(read('skills', 'frontlights', 'references', 'development.md'))
+        for phrase in ('gets its own worktree and branch', 'the slices are worked in dependency order',
+                       'a family that already exists', 'the order of the slices'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
         self.assertNotIn('Choose the highest safe parallelism; when a sub-issue', body)
         self.assertNotIn('one branch, one worktree and one PR', body)
 
@@ -135,11 +140,12 @@ class SlicesInOrderTextTests(unittest.TestCase):
         worktree; a CA que depende de outra ainda aberta é empilhada na branch dela (`base` no charter, `--stacked`
         no browser-gate); o cleanup oferece a branch de CA já na branch da issue; o teste assistido é um por issue."""
         skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
-        for phrase in ('stacked on the branch of the slice it depends on', 'one per issue, never one per slice'):
-            with self.subTest(where='SKILL.md', phrase=phrase):
-                self.assertIn(phrase, skill)
+        self.assertIn('one per issue, when the last slice that changes the screen closes its loop', skill)
+        self.assertIn('There is one watched run per issue, never one per slice',
+                      flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
         body = flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Slices in order') or '')
         for phrase in ('no `Depende de` between them and no file in common', '`"base": "<slice-branch>"`', '`--stacked`',
+                       "is cut from that slice's branch instead (stacked",
                        'merged into the branch of the issue after the slice it depends on'):
             with self.subTest(where='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
@@ -154,8 +160,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         merge da CA pronta na branch da issue entre os merges cobertos, nos quatro documentos, no handoff e no
         exemplo de autorização."""
         skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
-        for phrase in ('cut from the branch of the issue', 'merged into the branch of the issue',
-                       "of a slice's branch into the branch of its own issue"):
+        for phrase in ('merged into the branch of the issue when its TDD loop closes',):
             with self.subTest(where='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         development = read('skills', 'frontlights', 'references', 'development.md')

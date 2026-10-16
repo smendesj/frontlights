@@ -203,11 +203,13 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
     def test_stage_seven_names_the_wake_the_tick_and_the_cleanup(self):
         stage7 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 7.')[1].split())
         for phrase in ("when the wait of stage 6 finds the release's pull request merged into the approved base",
-                       "adds for a closed sub-issue the tick of the parent's item that cites it",
-                       'asks separately whether to remove the worktrees and branches the work created',
-                       '`scripts/cleanup.py`, its own approval'):
+                       'Closing, the tick in a parent and the cleanup each wait for their own approval'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
+        closeout = ' '.join(read('skills', 'frontlights', 'references', 'closeout.md').split())
+        for phrase in ('**The tick in a parent.**', 'scripts/cleanup.py', 'with **its own approval**'):
+            with self.subTest(file='closeout.md', phrase=phrase):
+                self.assertIn(phrase, closeout)
 
     def test_the_handoff_template_has_the_wait_and_the_closing_and_cleanup_lines(self):
         text = flat('skills', 'frontlights', 'templates', 'handoff.md')
