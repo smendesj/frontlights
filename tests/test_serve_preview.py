@@ -754,6 +754,25 @@ class PreviewConfigRefusalTest(PreviewTestCase):
         self.assertEqual(error.process, 'api')
         self.assertIn('"auto"', str(error))
 
+    def test_a_port_placeholder_in_a_fixed_process_is_refused_naming_it(self):
+        """4th review of issue 34: a fixed-port process never receives {port}, so a {port} left in its argv or cwd is
+        refused before anything runs, and the refusal of "auto" says to replace it with the fixed port."""
+        port = free_port()
+        cases = {'argv': dict(self.fixed('web', port), argv=[sys.executable, str(self.script), '{port}', MARKER]),
+                 'cwd': dict(self.fixed('web', port), cwd='app-{port}')}
+        for where, item in cases.items():
+            with self.subTest(where=where):
+                error = self.refused(self.block(baseUrl=f'http://127.0.0.1:{port}/', processes=[item]),
+                                     'preview.processes')
+                self.assertEqual(error.process, 'web')
+                self.assertIn('{port}', str(error))
+                self.assertIn(where, str(error))
+        auto = {'name': 'api', 'argv': [sys.executable, str(self.script), '{port}', MARKER], 'port': 'auto',
+                'health': 'http://127.0.0.1:{port}/'}
+        error = self.refused(self.block(baseUrl=f'http://127.0.0.1:{port}/', processes=[self.fixed('web', port), auto]),
+                             'preview.processes')
+        self.assertIn('troque {port} no argv pela porta fixa', str(error))
+
     def test_a_base_url_on_a_port_that_no_process_uses_is_refused(self):
         port = free_port()
         other = port + 1 if port < 65535 else port - 1

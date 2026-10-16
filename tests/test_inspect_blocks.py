@@ -341,7 +341,11 @@ class PreviewBlockTests(unittest.TestCase):
                  # 3rd review of issue 34 (M): fixed ports, the tab is only reloaded
                  'baseUrl com {port}': preview_block(baseUrl='http://127.0.0.1:{port}/'),
                  'processo auto': preview_block(processes=preview_block()['processes'] + [process(name='api')]),
-                 'baseUrl sem processo na porta': preview_block(baseUrl='http://127.0.0.1:8071/')}
+                 'baseUrl sem processo na porta': preview_block(baseUrl='http://127.0.0.1:8071/'),
+                 # 4th review of issue 34: a fixed process never receives {port}
+                 'processo fixo com {port} no argv': preview_block(processes=[process(
+                     name='previa', argv=['python', 'APP_SCRIPT', '{port}'], port=8070,
+                     health='http://127.0.0.1:8070/health')])}
         for case, block in cases.items():
             with self.subTest(case=case):
                 self.refuse(dict(with_browser(), preview=block), 'preview')
@@ -644,7 +648,7 @@ class IsolatedBlockTests(unittest.TestCase):
         self.assertIn('browserTest.processes', message)
 
     def test_automatic_or_distinct_ports_never_collide(self):
-        fixed = process(port=8080, health='http://127.0.0.1:8080/health')
+        fixed = process(argv=['python', 'APP_SCRIPT', '8080'], port=8080, health='http://127.0.0.1:8080/health')
         preview = preview_block(baseUrl='http://127.0.0.1:8080/', processes=[fixed])
         # the serve process of the assisted test never shares the preview port either (3rd review of issue 34, B)
         serve_fixed = process(port=8081, health='http://127.0.0.1:8081/health')

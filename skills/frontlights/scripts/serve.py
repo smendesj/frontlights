@@ -406,8 +406,14 @@ def load_preview_block(config_file, root, need_processes=True):
     for item in processes:
         require(not is_auto(item), f'O processo {item["name"]} de preview.processes usa port "{PORT_AUTO}", mas a '
                 'prévia usa portas fixas: ela abre uma vez numa aba e só é recarregada a cada refresh, então a porta '
-                'não pode mudar. Use port inteiro (ou a porta do health) e a mesma porta na preview.baseUrl.',
-                item['name'], USAGE)
+                'não pode mudar. Use port inteiro (ou a porta do health) e a mesma porta na preview.baseUrl, e '
+                'troque {port} no argv pela porta fixa.', item['name'], USAGE)
+        # a fixed process never gets {port} filled in: a leftover placeholder would reach the program as text, the
+        # health would fail and the refresh would blame a slice for a configuration error
+        for where, values in (('argv', item['argv']), ('cwd', [item.get('cwd') or ''])):
+            require(not any('{port}' in value for value in values),
+                    f'O processo {item["name"]} de preview.processes tem {{port}} no {where}, mas a prévia usa portas '
+                    'fixas e nunca o substitui: escreva a porta fixa no lugar.', item['name'], USAGE)
         host = urllib.parse.urlsplit(item['health']).hostname  # parsed by validate_processes
         require(host in LOCAL_HOSTS, f'O health do processo {item["name"]} precisa ficar em host local (127.0.0.1, '
                 'localhost ou ::1), como a preview.baseUrl.', item['name'], USAGE)
