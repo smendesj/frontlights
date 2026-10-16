@@ -640,7 +640,9 @@ lá, e um item concluído fica na sprint (marcado como concluído) até a rotaç
 cartões, o Frontlights oferece sincronizar de novo. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
-`python scripts/cleanup.py plan|verify ...`, e só leem.
+`python scripts/cleanup.py plan|verify ...`, e só leem. A exceção é `python scripts/closeout.py tick --issue <n>
+--box S<k>` (ou `--line <N>`), que marca uma caixa de critério com evidência: captura o corpo, troca só aquele `[ ]`
+por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo anterior em `.frontlights/issues/<n>/`.
 
 #### Homologar na main local, lançar a release, fechar e limpar
 
@@ -845,6 +847,14 @@ Uma sub-issue de uma issue já publicada que não está no plano leva `parent_ex
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
 commit, edição ou arquivo novo depois dela.
+
+A revisão independente segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
+cenário de falha, em três gravidades (sério, médio, baixo), e largura de linha, linhas em branco, quebra de
+parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o brief do revisor cita esse arquivo; o
+implementador trabalha pela issue. A revisão termina na primeira rodada com 0 sérios e 0 médios, com no máximo
+três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
+critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
+Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.
 
 `python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
 etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`

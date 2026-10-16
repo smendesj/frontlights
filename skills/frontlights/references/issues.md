@@ -341,6 +341,10 @@ by the first of the three destinations that fits:
    it cites the issues it crosses in its body and, when one of them must land first,
    depends on it (`--blocked-by`).
 
+The baixos left by a review that ends at 0 sérios and 0 médios (`development.md`, "When the review is done") take
+destination 2 as the proposed default, with destination 1 offered in the same batch as "Corrigir os baixos agora";
+every other finding takes the first destination that fits.
+
 Never a new sub-issue: the destination of a finding is a criterion of its source issue or
 a top-level issue, and a family that already exists is never grown. Every finding that is
 not fixed in the PR leaves with a destination GitHub tracks (destination 2 or 3); text in

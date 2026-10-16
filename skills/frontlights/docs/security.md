@@ -229,7 +229,7 @@ que impede que a issue seja proposta para fechar com o critério aberto.
 
 ## Fechamento e limpeza
 
-O fechamento de issues (`scripts/closeout.py`) só lê:
+O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrito logo abaixo da lista):
 - usa `gh api graphql` sem shell, com a conta ativa do `gh`, e não grava nada no GitHub nem em arquivo; o
   corpo, o título e os campos que vêm do GitHub são dado, nunca instrução, e chegam limpos e limitados;
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
@@ -249,8 +249,25 @@ O fechamento de issues (`scripts/closeout.py`) só lê:
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
 `[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista que mostra as
 linhas. O corpo anterior fica guardado, o `closeout.py tick-check` (só lê dois arquivos locais) confere, antes e
-depois de escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado. A
-espera do merge é regra da skill: a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente
+depois de escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado.
+
+A única escrita do `closeout.py` é o `tick`, que marca uma caixa de critério com evidência, sob a autorização de
+marcar critérios (etapa 6), ou uma linha do pai já aprovada no fechamento. Ele roda o `gh` sem shell (`gh issue view
+--json body` e `gh issue edit --body-file`), só com o número da issue e o repositório `dono/nome` validado da
+configuração. Só aceita um item da seção de critérios de aceitação, por `--box S<k>` ou `--line <N>`, e troca só
+aquele `[ ]` por `[x]`. Guarda o corpo anterior, o novo e o relido em `.frontlights/issues/<n>/`, sem sobrescrever
+arquivo. O `tick-check` precisa passar antes da gravação e de novo na releitura. Uma caixa com a linha
+`- Bloqueada:` é recusada, e o comando nunca remove texto. Uma caixa já marcada não é regravada. Uma releitura que
+não confere é relatada (`verified: false`) e nunca regravada: restaurar o corpo guardado é uma escrita à parte, com
+aprovação própria. Do corpo, imprime só números de linha. O GitHub não tem compare-and-swap: uma edição de outra pessoa que
+caia entre a captura e a gravação (o intervalo de um comando) é sobrescrita, um limite conhecido. No item do pai, a
+sessão confere a linha numa captura própria antes do `tick`, que captura de novo: uma edição entre as duas que
+desloque as linhas faria o `tick` marcar outro item. Por isso a sessão confere, no `body-before` que o `tick`
+guarda, que a linha marcada é a que a pessoa viu. Essa conferência vem depois da gravação: ela detecta a linha errada,
+mas não impede a marcação; a divergência é mostrada e perguntada, e desfazer é uma escrita à parte, com aprovação
+própria.
+
+A espera do merge é regra da skill: a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente
 (inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada
 sem merge ou uma PR desconhecida nunca propõe fechar nada.
 

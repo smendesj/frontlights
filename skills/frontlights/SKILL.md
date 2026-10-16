@@ -22,6 +22,7 @@ references are `references/grilling.md` (stage 3),
 `references/issue.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
 `browser-testing.md`),
+`references/review.md` (the independent reviewer's standard, named only in the reviewer's brief),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
 `references/roadmap-sync.md` (the roadmap question of stage 1, when the user
 says yes), `references/progress-report.md` (the progress question that follows it, when the user says yes, and the registration of the block's home). `references/learning.md` is read only when the user turns learning mode on in the grilling or asks for an
@@ -396,7 +397,10 @@ goes, in this order:
    unanswered, it is the `teste_assistido` pending of the checkpoint.
 5. **Review and findings** (development.md, "Review, checkpoints and renewal"): the independent
    review of the whole diff, and every open finding with its destination (the gate of the
-   Follow-ups section of `references/issues.md`).
+   Follow-ups section of `references/issues.md`). The review is done at the first round with 0 sérios
+   and 0 médios, three rounds at most (a round that only rechecks a base brought in after the review was
+   done stays outside), and the reviewer judges by `references/review.md` (development.md, "When the
+   review is done").
 6. **Into the local main** (development.md, "Into the local main"): the merge of the branch of the
    issue once its three gates are green, then the bundle.
 7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
