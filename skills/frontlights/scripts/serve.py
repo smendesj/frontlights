@@ -58,7 +58,7 @@ The variable name is the process name upper-cased with non-alphanumerics as `_`,
 Processes with a fixed port or without `port` do not receive the variable, so their names may collide.
 The start output says whether the reservations are shared (`reservas_compartilhadas`).
 
-Preview (issue 34): `preview start|status|stop` is the long-running mode, one per project, read from the top-level
+Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the top-level
 `preview` block of the config (`worktree` relative to --root, `branch`, `baseUrl` on a local host, `processes` with
 the same rules as `browserTest.processes`). Its processes run in the preview worktree, with their stdout and stderr
 relayed line by line by `relay --config <config> --log <file>` (a second process spawned by `preview start`, which
@@ -66,9 +66,20 @@ loads the secrets of `browserTest.users` from the config itself and masks them) 
 `<root>/.frontlights/preview/log/<name>.log`. The record lives in `<root>/.frontlights/preview/registry.json` under
 its own lock (`<root>/.frontlights/preview/.lock`), so `stop --issue <n>` never touches it, and a new session finds
 the processes through it. Port reservations of the preview carry `"issue": "preview"`, so the release of an issue's
-reservations never frees them. `preview start` is refused while the preview is alive (`preview refresh`, the next
-slice, recreates it) and when the preview worktree does not exist. `preview status` adds `alive`, `log` and the last
-`TAIL_LINES` lines of each log (`tail`), masked again on output.
+reservations never frees them. `preview start` is refused while the preview is alive and when the preview worktree
+does not exist. `preview status` adds `alive`, `log` and the last `TAIL_LINES` lines of each log (`tail`), masked
+again on output, and what the worktree holds (`base`, `baseCommit`, `merged`) when a refresh brought it up.
+`preview refresh [--base main] [--branch <b> ...]` (under the same lock) first refuses as `uso` whatever needs no
+change (a branch that is not a plain local name or does not exist, a preview worktree that is not a worktree of this
+repository on `preview.branch`, or that has tracked changes or a merge in progress), then stops the preview, redoes
+`preview.branch` at the local base (`git checkout -B` inside the preview worktree, or `git worktree add --force -B`
+when it is missing), merges each `--branch` in order (`git merge --no-ff --no-edit`) and brings the processes up as
+`preview start` does. A conflict is aborted (`git merge --abort`), nothing comes up and the refusal names the branch
+and the files (`conflict: true`). A process that exits before its health, or whose health never answers, is a broken
+build: everything is torn down and the refusal carries `build: "quebrado"`, the log and its last lines written by
+this run (`tail`). Git runs from an argv list without a shell and without prompts, with a deadline; the refresh never
+pushes, rebases or forces a merge, and writes no branch but `preview.branch` (the local main and the issue branches
+never move). The preview branch is never pushed.
 
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and
 names the failing process, classified as an infrastructure failure).
@@ -116,6 +127,9 @@ REMOVE_ATTEMPTS = 40
 CONNECT_SECONDS = 0.05
 PREVIEW_ISSUE = 'preview'  # the `issue` of the preview's port reservations: never an issue number
 TAIL_LINES = 20
+RELAY_DRAIN_SECONDS = 3  # a torn-down preview process's relay gets this long to write the last lines
+GIT_SECONDS = 300  # deadline of each Git command of `preview refresh`
+DEFAULT_BASE = 'main'
 BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
 
@@ -694,9 +708,11 @@ def preview_log_dir(root):
     return preview_dir(root) / 'log'
 
 
-def write_preview_registry(root, block, entries, started_at):
+def write_preview_registry(root, block, entries, started_at, contents=None):
+    """`contents` ({base, baseCommit, merged}, from `preview refresh`) says what the preview worktree holds."""
     write_json_atomic({'root': str(Path(root).resolve()), 'worktree': block['worktree'], 'branch': block['branch'],
-                       'baseUrl': block['baseUrl'], 'startedAt': started_at, 'processes': entries},
+                       'baseUrl': block['baseUrl'], **(contents or {}), 'startedAt': started_at,
+                       'processes': entries},
                       preview_registry_path(root))
 
 
@@ -763,12 +779,24 @@ def preview_start_locked(block, config_file, root):
                 'A prévia já está no ar; rode `preview refresh` para refazê-la ou `preview stop` para derrubá-la.',
                 category=USAGE)
     worktree = (Path(root).resolve() / block['worktree'])
-    require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; `preview refresh` a cria.',
-            category=USAGE)
+    require(worktree.is_dir(), f'A worktree da prévia ({block["worktree"]}) não existe; rode `preview refresh` para '
+            'criá-la.', category=USAGE)
+    return launch_preview(block, config_file, root)
+
+
+def launch_preview(block, config_file, root, contents=None):
+    """Bring the preview's processes up in its worktree (shared by `preview start` and `preview refresh`).
+
+    Each process gets its relay and log; the record is written after every spawn. A process that exits before it is
+    healthy, or whose health never answers, is a broken build: everything that came up is torn down (each process
+    before its relay, which is given `RELAY_DRAIN_SECONDS` to write the last lines) and the refusal carries
+    `build: "quebrado"`, the log (`log`) and its last `TAIL_LINES` lines written by this run (`tail`).
+    """
+    worktree = Path(root).resolve() / block['worktree']
     processes = block['processes']
     cwds = [process_cwd(worktree, item, 'da prévia') for item in processes]  # refused before anything is reserved
     log_dir = preview_log_dir(root)
-    started, started_at = [], now_iso()
+    started, started_at, broken = [], now_iso(), None
     try:
         with io_guard('criar a pasta de log da prévia'):
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -783,6 +811,7 @@ def preview_start_locked(block, config_file, root):
             if env:
                 mark_spawning(root, port)
             log_file = log_dir / log_file_name(item['name'])
+            offset = log_size(log_file)  # the tail of a broken build shows only what this run wrote
             try:
                 child = spawn(item['argv'], cwd, env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             except (OSError, ValueError):  # ValueError: e.g. a NUL character in argv
@@ -793,7 +822,7 @@ def preview_start_locked(block, config_file, root):
                             'log': relative(Path(root), log_file)})
             if env:
                 attach_child(root, port, started[-1])
-            write_preview_registry(root, block, started, started_at)  # a crash from here on leaves something to stop
+            write_preview_registry(root, block, started, started_at, contents)  # from here on stop has something
             try:
                 relay_child = spawn(relay_argv(config_file, log_file), Path(root).resolve(), stdin=child.stdout)
             except (OSError, ValueError):
@@ -802,38 +831,69 @@ def preview_start_locked(block, config_file, root):
                 child.stdout.close()  # only the relay keeps the read end: it sees EOF when the process dies
             started[-1].update(relayPid=relay_child.pid,
                                relayIdentity=process_identity(relay_child.pid) or UNKNOWN_IDENTITY)
-            write_preview_registry(root, block, started, started_at)
-            wait_healthy(child, item, relay_child)
+            write_preview_registry(root, block, started, started_at, contents)
+            try:
+                wait_healthy(child, item, relay_child)
+            except Refusal:
+                broken = (log_file, offset)
+                raise
     except BaseException as failure:
-        left = kill_started(preview_kill_list(started))
+        left = kill_preview(started)
         left_names = {entry['pid'] for entry in left}
         kept = [entry for entry in started if entry['pid'] in left_names or entry.get('relayPid') in left_names]
         try:
-            if kept:
-                write_preview_registry(root, block, kept, started_at)  # keep only what survived, so stop can retry
+            if kept:  # keep only what survived, so stop can retry
+                write_preview_registry(root, block, kept, started_at, contents)
             else:
                 preview_registry_path(root).unlink(missing_ok=True)
         except (OSError, Refusal):  # best effort: the original failure is what the user must see
             pass
         release_ports(root, PREVIEW_ISSUE, keep=[entry['port'] for entry in kept])
+        if broken and isinstance(failure, Refusal):  # read after the teardown, so the relay wrote the last lines
+            failure.extra = dict(failure.extra, build='quebrado', log=relative(Path(root), broken[0]),
+                                 tail=tail_lines(broken[0], offset=broken[1]))
         if left and isinstance(failure, Refusal):
             names = ', '.join(f'{entry["name"]} (pid {entry["pid"]})' for entry in left)
             raise Refusal(f'{failure} Não foi possível derrubar: {names}; rode preview stop para tentar de novo.',
                           failure.process, failure.category,
-                          {'left': [{'name': entry['name'], 'pid': entry['pid']} for entry in left]})
+                          dict(failure.extra, left=[{'name': entry['name'], 'pid': entry['pid']} for entry in left]))
         raise
     return {'ok': True, 'worktree': block['worktree'], 'branch': block['branch'], 'baseUrl': block['baseUrl'],
             'processes': started, 'log': relative(Path(root), log_dir),
             'reservas_compartilhadas': ports_location(root)[1]}
 
 
-def tail_lines(path, count=TAIL_LINES):
-    """Last `count` lines of a log (decoded with replacement); an unreadable or missing file gives []."""
+def log_size(path):
     try:
-        text = Path(path).read_bytes().decode('utf-8', errors='replace')
+        return Path(path).stat().st_size
+    except OSError:
+        return 0
+
+
+def tail_lines(path, count=TAIL_LINES, offset=0):
+    """Last `count` lines of a log from byte `offset` on (decoded with replacement); unreadable or missing: []."""
+    try:
+        with open(path, 'rb') as handle:
+            handle.seek(offset)
+            text = handle.read().decode('utf-8', errors='replace')
     except OSError:
         return []
     return text.splitlines()[-count:]
+
+
+def kill_preview(started):
+    """Tear down what a preview launch brought up, last first: each process tree, then its relay, which is first
+    given `RELAY_DRAIN_SECONDS` to reach EOF and write the process's last lines. Returns the {name, pid, identity}
+    items whose root is still alive."""
+    left = []
+    for entry in reversed(started):
+        for item in preview_kill_list([entry]):
+            if item['pid'] == entry.get('relayPid'):
+                deadline = time.monotonic() + RELAY_DRAIN_SECONDS
+                while pid_alive(item['pid']) and time.monotonic() < deadline:
+                    time.sleep(POLL_SECONDS / 4)
+            left += kill_started([item])
+    return left
 
 
 def preview_status(config_file, root):
@@ -844,7 +904,9 @@ def preview_status(config_file, root):
                       tail=tail_lines(Path(root) / entry['log']) if isinstance(entry.get('log'), str) else [])
                  for entry in record['processes']]
     return {'ok': True, 'running': all(entry['alive'] for entry in processes), 'worktree': record.get('worktree'),
-            'branch': record.get('branch'), 'baseUrl': record.get('baseUrl'), 'processes': processes}
+            'branch': record.get('branch'), 'baseUrl': record.get('baseUrl'),
+            **{key: record[key] for key in ('base', 'baseCommit', 'merged') if key in record},
+            'processes': processes}
 
 
 def preview_kill_list(entries):
@@ -1382,26 +1444,198 @@ def preview_stop(config_file, root):
         release_lock(lock)
 
 
-def preview(action, config_file, root):
-    require(action is not None, 'preview precisa da ação: preview start, preview status ou preview stop.',
+# ---------------------------------------------------------------- preview refresh (issue 34, slice 2)
+
+def git(cwd, *args, timeout=GIT_SECONDS):
+    """(exit code, stdout, stderr) of `git -C <cwd> ...`: an argv list found by shutil.which, never a shell, no
+    prompts, with a deadline."""
+    executable = shutil.which('git')
+    require(executable, 'O git não foi encontrado no PATH; o preview refresh precisa dele.')
+    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_MERGE_AUTOEDIT='no')
+    try:
+        done = subprocess.run([executable, '-C', str(cwd), *args], capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal(f'O git não respondeu a `git {args[0]}` (ausente, ou além do prazo de {timeout} s).')
+    return done.returncode, done.stdout, done.stderr
+
+
+def git_text(text):
+    """Git's own text as one line of at most 200 characters (main masks it on output)."""
+    return ' '.join(text.split())[:200] or 'sem detalhe'
+
+
+def plain_branch(value):
+    return isinstance(value, str) and bool(BRANCH_NAME.fullmatch(value)) and '..' not in value \
+        and not value.endswith('.lock')
+
+
+def git_commit(cwd, ref):
+    """The commit `ref` names in the repository of `cwd`, or None."""
+    code, out, _ = git(cwd, 'rev-parse', '--verify', '--quiet', f'{ref}^{{commit}}')
+    return out.strip() if code == 0 and re.fullmatch(r'[0-9a-f]{40,64}', out.strip()) else None
+
+
+def path_key(path):
+    return os.path.normcase(str(Path(path).resolve()))
+
+
+def registered_worktrees(root):
+    """{path key: branch name or None} of every worktree Git knows in the repository of `root`."""
+    code, out, err = git(root, 'worktree', 'list', '--porcelain')
+    require(code == 0, f'O git não listou as worktrees do repositório: {git_text(err)}')
+    found, current = {}, None
+    for line in out.splitlines():
+        if line.startswith('worktree '):
+            current = path_key(line[len('worktree '):])
+            found[current] = None
+        elif line.startswith('branch refs/heads/') and current is not None:
+            found[current] = line[len('branch refs/heads/'):]
+    return found
+
+
+def tracked_changes(worktree):
+    code, out, err = git(worktree, 'status', '--porcelain', '--untracked-files=no')
+    require(code == 0, f'O git não leu o estado da worktree da prévia: {git_text(err)}')
+    return [line for line in out.splitlines() if line.strip()]
+
+
+def check_refresh(block, root, branches, base):
+    """Every refusal of `preview refresh` that needs no change: run before the preview is stopped, so a refused
+    refresh leaves the preview as it was. Returns (worktree path, exists, base commit, {branch: commit})."""
+    preview_branch = block['branch']
+    require(plain_branch(base), '--base precisa ser um nome simples de branch local (por exemplo main).',
             category=USAGE)
+    require(base != preview_branch, f'A base não pode ser a própria branch da prévia ({preview_branch}).',
+            category=USAGE)
+    for name in branches:
+        require(plain_branch(name), f'--branch {name} não é um nome simples de branch local.', category=USAGE)
+        require(name not in (preview_branch, base), f'--branch {name} não pode ser a branch da prévia nem a base: '
+                'passe só as branches das issues em andamento.', category=USAGE)
+    require(len(set(branches)) == len(branches), 'Cada --branch pode aparecer uma vez só.', category=USAGE)
+    code, _, _ = git(root, 'rev-parse', '--show-toplevel')
+    require(code == 0, 'O --root não é uma worktree Git; o preview refresh precisa do repositório.', category=USAGE)
+    base_commit = git_commit(root, f'refs/heads/{base}')
+    require(base_commit, f'A branch base {base} não existe localmente.', category=USAGE)
+    commits = {}
+    for name in branches:
+        commits[name] = git_commit(root, f'refs/heads/{name}')
+        require(commits[name], f'A branch {name} não existe localmente; passe em --branch só branches de issue que '
+                'existem neste repositório.', category=USAGE)
+    worktree = Path(root).resolve() / block['worktree']
+    known = registered_worktrees(root)
+    here = path_key(worktree)
+    elsewhere = [path for path, branch in known.items() if branch == preview_branch and path != here]
+    require(not elsewhere, f'A branch da prévia ({preview_branch}) está em uso em outra worktree; o refresh só a '
+            'refaz na worktree da prévia. Confira preview.branch no config.', category=USAGE)
+    exists = worktree.exists()
+    if exists:
+        require(worktree.is_dir() and here in known, f'{block["worktree"]} existe, mas não é uma worktree deste '
+                'repositório; o refresh não toca nela. Confira preview.worktree no config.', category=USAGE)
+        require(known[here] == preview_branch, f'A worktree da prévia ({block["worktree"]}) não está na branch '
+                f'{preview_branch}; o refresh não toca nela. Confira preview.branch no config.', category=USAGE)
+        require(not tracked_changes(worktree) and git_commit(worktree, 'MERGE_HEAD') is None,
+                'A worktree da prévia tem alterações; ela é refeita a cada refresh, então nada se edita nela. '
+                f'Confira {block["worktree"]} e desfaça as alterações antes de um novo refresh.', category=USAGE)
+    return worktree, exists, base_commit, commits
+
+
+def recreate_preview_worktree(block, root, worktree, exists, base_commit):
+    """The preview branch is reset to the base commit inside the preview worktree (`checkout -B`), or the worktree is
+    added on it; the local main and the issue branches are never written."""
+    if exists:
+        code, _, err = git(worktree, 'checkout', '-q', '-B', block['branch'], base_commit)
+    else:
+        with io_guard('criar a pasta da worktree da prévia'):
+            worktree.parent.mkdir(parents=True, exist_ok=True)
+        code, _, err = git(root, 'worktree', 'add', '-q', '--force', '-B', block['branch'], str(worktree), base_commit)
+    require(code == 0, f'O git não refez a worktree da prévia na base: {git_text(err)}')
+
+
+def merge_branches(block, worktree, branches, commits):
+    """Merge each issue branch, in order, into the preview branch; a conflict is aborted and refused."""
+    merged = []
+    for name in branches:
+        before = git_commit(worktree, 'HEAD')
+        code, _, err = git(worktree, 'merge', '--no-ff', '--no-edit', name)
+        if code == 0:
+            merged.append({'branch': name, 'commit': commits[name]})
+            continue
+        _, unmerged, _ = git(worktree, 'diff', '--name-only', '--diff-filter=U')
+        files = sorted(line.strip() for line in unmerged.splitlines() if line.strip())
+        conflicted = bool(files) or git_commit(worktree, 'MERGE_HEAD') is not None
+        if conflicted:
+            git(worktree, 'merge', '--abort')
+        require(not tracked_changes(worktree) and git_commit(worktree, 'MERGE_HEAD') is None
+                and git_commit(worktree, 'HEAD') == before,
+                f'O merge de {name} na branch da prévia falhou e a worktree da prévia não voltou limpa a '
+                f'{(before or "?")[:7]}; confira {block["worktree"]} à mão.')
+        if not conflicted:
+            raise Refusal(f'O git não mesclou {name} na branch da prévia: {git_text(err)}. A prévia ficou fora do ar.',
+                          extra={'branch': name, 'merged': merged})
+        raise Refusal(f'O merge de {name} na branch da prévia ({block["branch"]}) tem conflito em: '
+                      f'{", ".join(files) or "(arquivos não listados pelo git)"}. O merge foi desfeito, a worktree da '
+                      'prévia ficou limpa e a prévia não foi subida de novo: pergunte ao usuário como seguir.',
+                      extra={'conflict': True, 'branch': name, 'files': files, 'merged': merged})
+    return merged
+
+
+def preview_refresh(config_file, root, branches, base):
+    block = load_preview_block(config_file, root)
+    lock = acquire_lock_file(root, preview_lock_path(root), 'da prévia')
+    try:
+        return preview_refresh_locked(block, config_file, root, branches, base)
+    finally:
+        release_lock(lock)
+
+
+def preview_refresh_locked(block, config_file, root, branches, base):
+    """Stop the preview, redo its branch from the local base, merge the issue branches in progress and bring it up.
+
+    Git runs as argv lists without a shell; it never pushes, never rebases, never forces a merge and writes no branch
+    but `preview.branch`. A conflict is aborted (nothing comes up); a broken build is torn down and refused with its
+    log (`launch_preview`).
+    """
+    worktree, exists, base_commit, commits = check_refresh(block, root, branches, base)
+    stopped = []
+    if preview_registry_path(root).is_file():
+        record = read_preview_registry(root)
+        stopped = stop_entries(root, preview_kill_list(record['processes']), preview_registry_path(root),
+                               lambda: release_ports(root, PREVIEW_ISSUE), 'preview refresh')['processes']
+    recreate_preview_worktree(block, root, worktree, exists, base_commit)
+    merged = merge_branches(block, worktree, branches, commits)
+    contents = {'base': base, 'baseCommit': base_commit, 'merged': merged}
+    result = launch_preview(block, config_file, root, contents)
+    return dict(result, **contents, stopped=stopped)
+
+
+def preview(action, config_file, root, branches=None, base=None):
+    require(action is not None, 'preview precisa da ação: preview start, preview refresh, preview status ou '
+            'preview stop.', category=USAGE)
+    require(action == 'refresh' or (branches is None and base is None),
+            '--branch e --base só valem para preview refresh.', category=USAGE)
     if action == 'start':
         return preview_start(config_file, root)
+    if action == 'refresh':
+        return preview_refresh(config_file, root, branches or [], base or DEFAULT_BASE)
     if action == 'status':
         return preview_status(config_file, root)
     return preview_stop(config_file, root)
 
 
-def run(operation, config_file, root, issue, action=None, log=None):
+def run(operation, config_file, root, issue, action=None, log=None, branches=None, base=None):
     """Dispatch one operation; the flags each one needs are refused as `uso` when missing (argparse only
     requires --config, shared by all)."""
+    if operation != 'preview':
+        require(branches is None and base is None, '--branch e --base só valem para preview refresh.',
+                category=USAGE)
     if operation == 'relay':
         require(log, 'relay precisa de --log <arquivo>.', category=USAGE)
         return relay(config_file, log)
     require(root, f'{operation} precisa de --root <worktree>.', category=USAGE)
     require(log is None, '--log só vale para relay.', category=USAGE)
     if operation == 'preview':
-        return preview(action, config_file, root)
+        return preview(action, config_file, root, branches, base)
     require(action is None, f'{operation} não aceita uma ação depois do nome; a ação é só de preview.',
             category=USAGE)
     require(issue is not None, f'{operation} precisa de --issue <n>.', category=USAGE)
@@ -1415,17 +1649,21 @@ def run(operation, config_file, root, issue, action=None, log=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
-    parser.add_argument('action', nargs='?', choices=('start', 'status', 'stop'),
-                        help='só para preview: start, status ou stop')
+    parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),
+                        help='só para preview: start, refresh, status ou stop')
     parser.add_argument('--config', required=True)
     parser.add_argument('--root', help='worktree da issue (start, stop, status) ou worktree principal (preview)')
     parser.add_argument('--issue', type=int, help='número da issue (start, stop, status)')
     parser.add_argument('--log', help='só para relay: arquivo de log a acrescentar')
+    parser.add_argument('--branch', action='append', help='só para preview refresh: branch de issue em andamento a '
+                        'mesclar na branch da prévia (repetível, na ordem dada)')
+    parser.add_argument('--base', help=f'só para preview refresh: branch base local (padrão {DEFAULT_BASE})')
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
     try:
-        result = run(args.operation, args.config, args.root, args.issue, args.action, args.log)
+        result = run(args.operation, args.config, args.root, args.issue, args.action, args.log, args.branch,
+                     args.base)
         code = 0
     except (Refusal, OSError) as failure:
         # the safety net: an I/O error that escaped every specific handler is still a refusal with JSON
