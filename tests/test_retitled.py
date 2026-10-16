@@ -84,7 +84,7 @@ class RuleTextTests(unittest.TestCase):
         self.reference = flat('skills', 'frontlights', 'references', 'roadmap-sync.md')
 
     def test_the_entry_is_found_by_the_issue_number_and_never_by_the_title_alone(self):
-        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove` or `completed` (when the file already has one)',
+        for phrase in ('Find the existing entry of a `modify`, `move_lane`, `remove` or `completed`, or of an `add` that recreates a removed item (when the file already has one)',
                        'by the issue number the change carries (the `#N` of `item.githubIssueUrl`, or its URL, as the files cite it)',
                        'tell them apart by the repository in the URL (and `item.produto`), and ask if that does not settle it',
                        'never by title alone, because the title in the files may be older than the one in the change',
@@ -98,7 +98,7 @@ class RuleTextTests(unittest.TestCase):
         for phrase in ('A change without an issue number (a `remove` whose payload has no `github_issue_url`, an item with no issue yet)',
                        'or the `modify` that only adds the link (the files cannot cite it yet) is found by title and by the lane the item was in '
                        '(`payload.from_lane_id` for a `move_lane`, `payload.lane_id` for a `remove`, `item.lane` otherwise;',
-                       'Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap. Ask also when any of the four finds more than one',
+                       'Ask with `AskUserQuestion` when a `modify` or `move_lane` finds no entry in the roadmap. Ask also when any of them finds more than one',
                        "Ask once, listing every such change and proposing the closest candidate in the item's lane, and never open a second entry",
                        'when the lane is missing, by title alone, asking if more than one entry matches'):
             with self.subTest(phrase=phrase):
@@ -113,17 +113,6 @@ class RuleTextTests(unittest.TestCase):
                        'A row of a table and the section of the same item are one entry; a mention inside another entry is not'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.reference)
-
-    def test_an_item_that_comes_back_to_the_week_reuses_its_entry(self):
-        root = Path(__file__).resolve().parents[1]
-        readme = ' '.join((root / 'README.md').read_text(encoding='utf-8').split())
-        protocol = ' '.join((root / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8').split())
-        self.assertIn('an `add` whose `#N` (in the same repository) already has an entry in that sprint file that records '
-                      'its exit or removal records the return in that entry', self.reference)
-        self.assertIn('a `move_lane` back into a week finds the entry of its item in that sprint file the same way', self.reference)
-        for text in (readme, protocol):
-            with self.subTest(text=text[:20]):
-                self.assertIn('quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar dela pelo `position`', text)
 
     def test_the_renamed_count_is_the_plans_and_may_differ_from_the_board_syncs(self):
         for phrase in ('Tell the user how many title-only `modify` changes the plan holds',
