@@ -440,6 +440,28 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as root:
                 inspect_file(config, root)
 
+    def test_refusals_never_show_the_test_login_or_password(self):
+        """Login e senha fictícios de browserTest.users num argv (e no nome que a recusa cita) saem mascarados."""
+        login = 'usuario@exemplo.test'
+        secret = ['--login', login, '--password', PASSWORD]
+        named = {'name': f'{login}-{PASSWORD}', 'argv': ['python', 'APP_SCRIPT'] + secret,
+                 'health': 'http://127.0.0.1:8080/health'}
+        cases = {'dropDatabase com shell': (with_isolated(dropDatabase={'argv': ['sh', '-c', ' '.join(secret)]}),
+                                            r'dropDatabase\.argv'),
+                 'copyDatabase com timeout inválido': (
+                     with_isolated(copyDatabase={'argv': ['python', 'COPY_DB_SCRIPT'] + secret, 'timeoutSeconds': 0}),
+                     r'copyDatabase\.timeoutSeconds'),
+                 'processo com health não local': (
+                     with_isolated(processes=[dict(named, health='http://10.0.0.5:8080/health')]), 'não é local'),
+                 'processo na porta da prévia': (
+                     with_isolated(processes=[named], preview={'processes': [dict(named, argv=['python', 'X'])]}),
+                     'preview.processes')}
+        for case, (config, pattern) in cases.items():
+            with self.subTest(case=case):
+                message = self.refuse(config, pattern)
+                self.assertNotIn(login, message)
+                self.assertNotIn(PASSWORD, message)
+
 
 if __name__ == '__main__':
     unittest.main()
