@@ -118,7 +118,9 @@ worktree) and, when its loop closes with evidence (the affected test modules gre
 measured commands), the slice branch is merged into the branch of the issue (`git merge --no-ff
 <branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below)
 and then comes the tick of its box: capture the body, tick that line only, run
-`closeout.py tick-check` before and after the write, and leave a short comment on the issue with
+`closeout.py tick-check` before and after the write (`closeout.py tick --config <config> --root <project>
+--issue <n> --box S<k>` does this whole cycle in one command and keeps the previous body in
+`.frontlights/issues/<n>/`), and leave a short comment on the issue with
 the commit and the commands; then `serve preview refresh` with the branches of the issues in progress, in a
 project with a preview ("The start of stage 6"), so the slice reaches the user's tab; a conflict is a question
 and a broken build goes back to the slice that owns the file before the next one starts. The session may end in the middle of an issue: the handoff names
