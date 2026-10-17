@@ -63,7 +63,8 @@ O comando `authorize` verifica uma operação estruturada em relação à autori
 registrada: repositório, issue, branch e worktree exatos, validade, monitoramento,
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
-qualquer merge que não seja o da branch da issue na main local com os três portões verdes
+qualquer merge que não seja o da branch da issue (ou do trabalho sem issue, pelo seu `direct`) na main local com
+os três portões verdes
 (`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
 suportados. Sempre retorna `permission_granted: false`. Mesmo a PR da release e as
 atualizações de issues autorizadas continuam sujeitas à aprovação nativa do ambiente, pois o Frontlights
@@ -75,7 +76,8 @@ permissões humanas e nativas vigentes.
 homologação: acumula as issues que passaram nos três portões, e a issue fecha só com a release que a leva
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
-remota), só da worktree da issue (nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
+remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
+nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
 current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê

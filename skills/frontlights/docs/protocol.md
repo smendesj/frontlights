@@ -134,6 +134,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
+  direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
+                                revisão, merge-local-main.json; no charter, a entrada de worktrees leva
+                                `direct` (slug listado em `direct_ids`) no lugar de `issue`
   roadmap-sync/
     approval.json    par (endereço, variável) aprovado pelo usuário
     marker.json      segredo local das marcas; nunca sai da máquina

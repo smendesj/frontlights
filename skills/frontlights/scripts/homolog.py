@@ -42,8 +42,9 @@ Operations (each prints one JSON object on stdout):
          remote-tracking branch of `--remote`, that already has the name. `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped). It only reads Git and the records: it never fetches, never creates the branch
-         and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
+         no issue branch mapped). Work without an issue (an entry with a `direct` slug instead of `issue`) goes
+         the same way, in `directs` and `releaseDirect`, and makes the release ready too. It only reads Git and the
+         records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
 session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
@@ -75,6 +76,7 @@ MARKER_LINES = 3         # the marker sits among the first lines of the hook
 MARKER = '# frontlights pre-push hook v1 (homolog hook)'
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]*')   # a plain branch or remote name: safe inside the hook's quotes
 OID = re.compile(r'[0-9a-f]{40,64}')
+DIRECT = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')   # the slug of work without an issue (frontlights.DIRECT_RULE)
 HOOK = '''#!/bin/sh
 {marker}
 # The local {base} is the homologation bench of the project: it is never pushed. The release leaves by a branch
@@ -495,14 +497,22 @@ def record_prefixes(folder):
 
 
 def issue_branches(folder):
-    """({issue number: branch}, skipped) from the `worktrees` entries without `slice` of every
-    `.frontlights/authorization*.json` under `folder`. An entry counts when its `issue` is a positive integer and its
-    `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later record wins for the same
-    issue. A slice entry is ignored in silence; a malformed entry, record or prefix, and every record past
-    RECORD_LIMIT, is skipped and counted."""
+    """({issue number: branch}, skipped): the issue side of `work_branches`, for the readers that only follow
+    issues (closeout)."""
+    issues, _, skipped = work_branches(folder)
+    return issues, skipped
+
+
+def work_branches(folder):
+    """({issue number: branch}, {direct slug: branch}, skipped) from the `worktrees` entries without `slice` of every
+    `.frontlights/authorization*.json` under `folder`. An entry counts when it names either a positive integer
+    `issue` or a `direct` slug (work without an issue: lower-case letters, digits and hyphens, up to 64 characters),
+    never both, and its `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later
+    record wins for the same issue or slug. A slice entry is ignored in silence; a malformed entry, record or
+    prefix, and every record past RECORD_LIMIT, is skipped and counted."""
     files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
-    mapping = {}
+    issues, directs = {}, {}
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
         prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
@@ -514,12 +524,17 @@ def issue_branches(folder):
             if isinstance(entry, dict) and isinstance(entry.get('slice'), str) and entry['slice'].strip():
                 continue   # a slice is delivered to the branch of its issue, never to the base by itself
             number = entry.get('issue') if isinstance(entry, dict) else None
+            direct = entry.get('direct') if isinstance(entry, dict) else None
             branch = entry.get('branch') if isinstance(entry, dict) else None
-            if type(number) is not int or number <= 0 or not is_plain(branch) or not branch.startswith(prefix):
+            if not is_plain(branch) or not branch.startswith(prefix):
                 skipped += 1
-                continue
-            mapping[number] = branch
-    return mapping, skipped
+            elif direct is None and type(number) is int and number > 0:
+                issues[number] = branch
+            elif number is None and isinstance(direct, str) and DIRECT.fullmatch(direct):
+                directs[direct] = branch
+            else:
+                skipped += 1
+    return issues, directs, skipped
 
 
 def ancestry(root, commit, ref):
@@ -598,18 +613,26 @@ def op_release_plan(root, base, remote, prefix, records):
     local = rev(root, local_ref)
     require(local, f'a branch base `{base}` não existe neste repositório')
     remote_tip = rev(root, remote_ref)
-    mapping, skipped = issue_branches(root if records is None else records)
-    issues = []
-    for number in sorted(mapping):
-        tip = rev(root, f'refs/heads/{mapping[number]}')
-        issues.append({'issue': number, 'branch': mapping[number], 'tip': tip, 'present': tip is not None,
-                       'inLocalMain': ancestry(root, tip, local_ref),
-                       'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)})
-    release = [i['issue'] for i in issues if i['present'] and i['inLocalMain'] is True and i['inRemoteMain'] is False]
+    mapping, direct_mapping, skipped = work_branches(root if records is None else records)
+
+    def located(key, value, branch):
+        tip = rev(root, f'refs/heads/{branch}')
+        return {key: value, 'branch': branch, 'tip': tip, 'present': tip is not None,
+                'inLocalMain': ancestry(root, tip, local_ref),
+                'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)}
+
+    def pending(item):
+        return item['present'] and item['inLocalMain'] is True and item['inRemoteMain'] is False
+
+    issues = [located('issue', number, mapping[number]) for number in sorted(mapping)]
+    directs = [located('direct', slug, direct_mapping[slug]) for slug in sorted(direct_mapping)]
+    release = [i['issue'] for i in issues if pending(i)]
+    release_direct = [d['direct'] for d in directs if pending(d)]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
     name = release_name(root, prefix, remote)
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
-              'behind': behind, 'issues': issues, 'release': release, 'releaseBranch': name, 'prefix': prefix,
+              'behind': behind, 'issues': issues, 'release': release, 'directs': directs,
+              'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,
               'prefixSource': source, 'skipped': skipped, 'ready': False}
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
@@ -621,14 +644,16 @@ def op_release_plan(root, base, remote, prefix, records):
                                           f'`homolog sync` antes da release.')
     elif ahead == 0:
         result.update(exitCode=2, message=f'A {base} local não tem commit além de {remote}/{base}: nada a liberar.')
-    elif not release:
+    elif not release and not release_direct:
         result.update(exitCode=2, message=f'A {base} local tem {ahead} commit(s) além de {remote}/{base}, mas nenhuma '
                                           'branch de issue das autorizações está neles; confira os registros em '
                                           '.frontlights/ ou aponte --records para a pasta certa.')
     else:
-        listed = ', '.join(f'#{number}' for number in release)
+        parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
+        if release_direct:
+            parts.append(f'{len(release_direct)} trabalho(s) sem issue ({", ".join(release_direct)})')
         result.update(ready=True, exitCode=0,
-                      message=f'Release pronta: {len(release)} issue(s) ({listed}) em {ahead} commit(s) da {base} local '
+                      message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
                               f'ainda fora de {remote}/{base}; a branch da release é {name}.')
     return result
 

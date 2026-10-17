@@ -1007,6 +1007,67 @@ class HomologReleasePlanTests(unittest.TestCase):
     def plan(self, *flags, script=HOMOLOG):
         return self.cli('release-plan', '--root', str(self.work), *flags, script=script)
 
+    def deliver_direct(self, slug):
+        """A branch of work without an issue, cut from the local main with one commit, merged back with --no-ff."""
+        branch = f'claude/{slug}'
+        self.git(self.work, 'switch', '-q', '-c', branch)
+        self.commit(self.work, f'{slug}.txt', f'{slug}\n', f'work {slug}')
+        self.git(self.work, 'switch', '-q', 'main')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of {slug} into the local main', branch)
+        return branch
+
+    def test_work_without_an_issue_makes_a_release_of_its_own(self):
+        """Trabalho sem issue: a entrada com `direct` entra na release como `releaseDirect`, com a branch nomeada,
+        e a lista das issues não muda."""
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'direct': 'melhoria-x', 'branch': 'claude/melhoria-x'},
+                    {'direct': 'melhoria-x', 'branch': 'claude/melhoria-x-s1', 'slice': 'S1'})
+        self.deliver_direct('melhoria-x')
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['ready'], result['release'], result['releaseDirect'], result['skipped']),
+                         (True, [], ['melhoria-x'], 0))
+        self.assertEqual(result['directs'], [{'direct': 'melhoria-x', 'branch': 'claude/melhoria-x',
+                                              'tip': self.sha(self.work, 'claude/melhoria-x'), 'present': True,
+                                              'inLocalMain': True, 'inRemoteMain': False}])
+        self.assertEqual([i['issue'] for i in result['issues']], [1])
+        self.assertIn('melhoria-x', result['message'])
+        self.assertIn(result['releaseBranch'], result['message'])
+
+    def test_issues_and_work_without_an_issue_go_together(self):
+        self.record({'issue': 2, 'branch': 'claude/issue-2'}, {'direct': 'melhoria-x', 'branch': 'claude/melhoria-x'},
+                    {'direct': 'melhoria-y', 'branch': 'claude/melhoria-y'})
+        self.deliver_direct('melhoria-y')
+        self.git(self.work, 'push', '-q', 'origin', 'main')   # melhoria-y is already in the remote main
+        self.deliver(2)
+        self.deliver_direct('melhoria-x')
+        code, result = self.plan()
+        self.assertEqual(code, 0, result)
+        self.assertEqual((result['release'], result['releaseDirect']), ([2], ['melhoria-x']))
+        self.assertEqual({d['direct']: d['inRemoteMain'] for d in result['directs']},
+                         {'melhoria-x': False, 'melhoria-y': True})
+        self.assertIn('#2', result['message'])
+        self.assertIn('melhoria-x', result['message'])
+        self.assertNotIn('melhoria-y', result['message'])
+
+    def test_a_malformed_direct_entry_is_counted_and_an_old_entry_without_a_key_still_is(self):
+        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'direct': 'Melhoria X', 'branch': 'claude/melhoria-x'},
+                    {'direct': 'melhoria-z', 'branch': 'outro/melhoria-z'},
+                    {'issue': 3, 'direct': 'melhoria-w', 'branch': 'claude/melhoria-w'},
+                    {'branch': 'claude/sem-chave'}, {'issue': None, 'branch': 'claude/issue-nula'})
+        code, result = self.plan()
+        self.assertEqual((result['directs'], result['releaseDirect']), ([], []))
+        self.assertEqual([i['issue'] for i in result['issues']], [1])
+        self.assertEqual(result['skipped'], 5)
+
+    def test_without_issue_nor_direct_in_the_main_the_question_is_the_same(self):
+        self.record({'direct': 'melhoria-x', 'branch': 'claude/melhoria-x'})
+        self.commit(self.work, 'solto.txt', 'x\n', 'commit sem branch registrada')
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertEqual((result['ready'], result['release'], result['releaseDirect']), (False, [], []))
+        self.assertEqual([(d['direct'], d['present']) for d in result['directs']], [('melhoria-x', False)])
+        self.assertIn('nenhuma branch de issue', result['message'])
+
     def test_without_prefix_the_newest_record_names_the_release(self):
         """Issue 44, S2: sem `--prefix`, o nome da release usa o `branch_prefix` do registro de `issued_at` mais novo,
         nunca o do nome de arquivo; um registro sem `issued_at` fica atrás dos que têm."""
