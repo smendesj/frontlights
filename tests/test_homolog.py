@@ -1216,6 +1216,27 @@ class HomologReleasePlanTests(unittest.TestCase):
         _, elsewhere = self.plan('--remote', 'upstream')   # another remote does not hold the name
         self.assertEqual(elsewhere['releaseBranch'], name)
 
+    def test_a_name_used_by_a_merged_pull_request_is_never_suggested_again(self):
+        """O nome da release pula também os nomes citados em 'Merge pull request #N from dono/<nome>' no histórico
+        de `origin/main`, mesmo com a branch já apagada nos dois lados; outro formato de assunto não pesa."""
+        self.deliver(1)
+        _, first = self.plan()
+        name = first['releaseBranch']
+        for number, merged in ((45, name), (46, f'{name}-2')):
+            self.git(self.other, 'switch', '-q', '-c', 'feature')
+            self.commit(self.other, f'pr-{number}.txt', f'{number}\n', f'pull request {number}')
+            self.git(self.other, 'switch', '-q', 'main')
+            self.git(self.other, 'merge', '-q', '--no-ff', '-m', f'Merge pull request #{number} from OWNER/{merged}', 'feature')
+            self.git(self.other, 'branch', '-q', '-D', 'feature')
+        self.git(self.other, 'switch', '-q', '-c', 'side')
+        self.commit(self.other, 'side.txt', 'side\n', 'side')
+        self.git(self.other, 'switch', '-q', 'main')
+        self.git(self.other, 'merge', '-q', '--no-ff', '-m', f"Merge branch '{name}-3'", 'side')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        self.git(self.work, 'fetch', '-q', 'origin')
+        _, result = self.plan()
+        self.assertEqual(result['releaseBranch'], f'{name}-3')
+
     def test_the_help_texts_name_the_four_operations(self):
         for text in (read('skills', 'frontlights', 'scripts', 'homolog.py').split('"""')[1],
                      read('skills', 'frontlights', 'scripts', 'frontlights.py')):

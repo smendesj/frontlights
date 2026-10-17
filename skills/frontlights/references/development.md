@@ -595,7 +595,7 @@ offers the release again with everything accumulated.
   an issue in the same state (`releaseDirect`, from the entries with `direct`; `directs` has the detail), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
-  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken. Exit code 2 says there is nothing to release, or that the local main is behind and
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, or that the local main is behind and
   must be synced first: say so in one line. It only reads.
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),

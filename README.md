@@ -650,7 +650,8 @@ Cada issue entra na **main local** do projeto, a homologação, por um merge com
 revisão em dia e teste assistido respondido; o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
-as issues que estão na main local e ainda não em `origin/main`, e ele pergunta se lança a release com elas agora (o
+as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula também os já
+usados por PRs mescladas), e ele pergunta se lança a release com elas agora (o
 passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). O
 trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o mesmo caminho, com o campo `direct` no
