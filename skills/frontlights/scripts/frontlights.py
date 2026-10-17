@@ -366,6 +366,9 @@ SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 
 # are the words the tools print: the full suite, `review-gate` (`current`) and `browser-gate` (`answered`,
 # or `not_needed` when nothing on the screen changed). The remote main (`origin/main`) is never a target.
 LOCAL_MAIN_GATES = {'full_suite': ('green',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
+# Work without an issue (the Direct path, or a Short one that publishes no issue) is named by a slug of its own: the
+# `direct` of its `worktrees` entries, listed in the charter's `direct_ids`, takes the place of `issue`.
+DIRECT_RULE = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')
 
 
 def slices_of(issue):
@@ -575,8 +578,18 @@ def authorize(charter, operation):
         require(monitor.get('phone_connected') is True, 'physical phone not confirmed')
     require('repository' in operation and operation['repository'] == charter['repository'],
             'unapproved repository')
-    require(number(operation.get('issue')) and operation['issue'] in charter.get('issue_ids', []),
-            'unapproved issue')
+    if 'direct' in operation:
+        require('issue' not in operation, 'an operation names an issue or a direct, never both')
+        direct = operation['direct']
+        require(isinstance(direct, str) and DIRECT_RULE.fullmatch(direct),
+                f'invalid direct {direct!r}: a slug of lower-case letters, digits and hyphens, up to 64 characters')
+        approved = charter.get('direct_ids', [])
+        require(isinstance(approved, list) and direct in approved, 'unapproved direct')
+        key, value = 'direct', direct
+    else:
+        require(number(operation.get('issue')) and operation['issue'] in charter.get('issue_ids', []),
+                'unapproved issue')
+        key, value = 'issue', operation['issue']
     kind = operation.get('kind')
     require(kind in {'edit', 'test', 'checkpoint', 'draft_pr', 'issue_update', 'merge_into_local_main'} and
             kind in charter.get('operations', []), 'operation outside bounded authorization')
@@ -591,7 +604,9 @@ def authorize(charter, operation):
     # declared before it is cut) is validated by shape and compared without resolving it strictly.
     entries = charter.get('worktrees', [])
     require(isinstance(entries, list) and all(isinstance(w, dict) for w in entries), 'invalid worktree entry')
-    own = [w for w in entries if w.get('issue') == operation['issue']]
+    own = [w for w in entries if w.get(key) == value]
+    require(all(w.get('issue') is None or w.get('direct') is None for w in own),
+            'invalid worktree entry: issue and direct are exclusive')
     require(all(nonempty(w.get('path')) for w in own), 'invalid worktree entry: path required')
     matches = [w for w in own if Path(w['path']).resolve() == worktree]
     require(len(matches) == 1, 'unapproved or ambiguous worktree')

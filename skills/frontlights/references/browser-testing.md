@@ -1,5 +1,8 @@
 # Browser, checks and cross-account testing
 
+On entering, read `docs/security.md`, "`serve`, `checks` e o teste no navegador", and `docs/protocol.md`,
+"Teste no navegador".
+
 Read this in stage 6 whenever anything the session delivers changes what the user
 sees: the plan has the section `## Navegador e testes ligados` (`templates/issue.md`)
 with `Toca o frontend: sim`, or `browser-gate` (below) finds a visible change in the

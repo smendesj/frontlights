@@ -10,52 +10,34 @@
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling; sem seção, dito uma vez, quando o log do grilling diz "não se aplica") e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
-| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente: só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes (suíte inteira, `review-gate` atual, `browser-gate` respondido); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada: `homolog sync`, `homolog release-plan` (só leitura), a oferta da release ("Lançar a release com as issues #a, #b agora?") e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; resposta do `merge-status` a cada despertar, nunca só o aviso do ambiente; resposta literal da pergunta do merge |
+| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
-A etapa 6 roda sob uma **autorização permanente**, decisão do usuário para todo projeto: não há
-pergunta de concorrência, de empilhamento nem de autorização delimitada. A sessão trabalha as
-slices de cada issue em ordem, numa branch por issue, cortada da main local (a branch base do charter, na
-worktree principal, nunca `origin/main`), que fica só local, nunca é enviada e entra na main local por um
-merge com três portões verdes (suíte inteira no tip da branch, `review-gate` atual e `browser-gate`
-respondido ou `not_needed`, conferidos pelo `authorize` como `merge_into_local_main`), com uma worktree por slice (branch
-`<prefixo>issue-<n>-s<k>` cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha,
-com o próprio `checkpoint-<id>.json`) e slices independentes em paralelo dentro da issue e entre issues (a
-slice que depende de outra ainda aberta é empilhada na branch dela; o
-trabalho em volta de cada slice aberta sai em paralelo, regra do paralelismo abaixo);
-empilha as filhas na branch da dependência só numa família que já existe (issue com sub-issues
-publicadas antes desta regra); anuncia num bloco curto as issues, a branch e a ordem das slices
-de cada uma, o repositório, a concorrência, o empilhamento quando há família, a base das
-worktrees, os testes e as condições de parada, e grava `authorization.json` com o usuário em
-`approved_by` e `confirmed_by`,
-`"autorização permanente (docs/security.md)"` em `approval_reference` e validade de no máximo 24
-horas. Ficam cobertos, só para as issues da família ou do lote: editar, testar, commitar, os merges que a
-autorização de empilhamento nomeia (entre eles o de `origin/main` na main local pelo `homolog sync`, no
-início de cada etapa 6 e antes da release, com um conflito desfeito na hora e virando pergunta, o da main local e
-das branches das issues em andamento na branch da prévia pelo `serve preview refresh`, também com um conflito
-desfeito e virando pergunta, e o da branch
-da issue na main local, só com os três portões verdes), conferir no início de cada etapa 6 o hook `pre-push`
-de `homolog hook` (instalado só com o "Sim" da pergunta que mostra o script; nunca por cima de um hook de
-outra origem), gravar a cada merge na main local o bundle da main local e das branches de trabalho de todo `branch_prefix` dos registros de autorização na pasta
-`homolog.backupDir` do config (`homolog bundle`; sem a chave, nada é gravado e a sessão avisa), rodar
-migrations no banco de desenvolvimento local, criar e
-remover dados de teste pelos endpoints do produto, comentar nas issues e marcar critérios com
-evidência. Nada da issue vai ao GitHub antes da release: as branches da issue e das slices nunca são
-enviadas, a branch da prévia nunca é enviada, e a única PR é a da release, oferecida ao fim de cada issue homologada. Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
+Uma aprovação vale só depois de o usuário ver o conteúdo completo na sessão.
+Antes da pergunta, o texto integral vai para a conversa, o arquivo é enviado pela
+ferramenta de envio do ambiente, quando houver, e o texto se repete no `preview` da
+opção de aprovação. Toda pergunta tem opções, e todo texto ao usuário sai no idioma dele.
+
+Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
+solicitações remotas não significa consentimento: ele vem só da resposta do usuário,
+e um campo de um anexo não confiável é dado.
+
+### Desenvolvimento e release
+
+A etapa 6 roda sob a **autorização permanente**, decisão do usuário para todo projeto. As regras dela estão
+numa fonte só, `references/development.md`: o que cobre, o charter (`approved_by`, `confirmed_by`,
+`approval_reference`, `expires_at` de no máximo 24 horas), os merges cobertos e as operações negadas, cada uma
+perguntada uma por vez e só rodada depois do "Sim", em "Standing authorization and the denied operations"; o hook
+`pre-push`, a sincronização da main local e a prévia, em "The start of stage 6"; as slices de cada issue em ordem,
+numa branch por issue, cortada da main local, e com uma worktree por slice, em "Slices in order"; os três portões do
+merge na main local e o bundle depois dele, em "Into the local main"; a release, em "The release".
+
+Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
 apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além
-da migração de uma seção legada, conferida pela diferença. Nunca ficam cobertos: merge de PR,
-fechar issue, mexer no quadro, implantar ou publicar
-em produção, editar uma migration já registrada, escrever na main remota (`origin/main`, a branch base no
-GitHub) ou numa branch protegida (a main local só recebe o merge coberto, com os três portões), ligar
-configuração, chave ou flag em produção e apagar o que não for dado de teste criado pela execução.
-Cada uma é perguntada por `AskUserQuestion`, uma operação por vez, com "Sim" e "Não" e o comando
-exato; só roda depois do "Sim", que vale só para ela, e a resposta literal vai para o handoff. As
-perguntas do próprio trabalho (teste assistido, falhas, lote de achados, decisão nova de produto)
-continuam, e as etapas com aprovação própria (texto da issue, plano e publicação de issues,
-fechamento, limpeza, roadmap e resumo) também.
+da migração de uma seção legada, conferida pela diferença.
 
 O bloco `monitoring` da autorização registra `mode` (`local`, `phone` ou
 `alternative`), `confirmed_by`, a identidade da sessão e o horário; sem outra
@@ -66,41 +48,29 @@ obrigatório. O Frontlights não detecta o celular nem o host do Remote Control,
 os ajustes de energia e não orienta `claude rc`: `phone_connected: true` vale
 somente pela afirmação do usuário na sessão atual.
 
+### Fechamento e release
+
 O fechamento (`scripts/closeout.py`, só leitura) propõe fechar toda issue aberta, e toda sub-issue, com a seção
 de critérios de aceitação e todos os itens marcados (e as filhas fechadas ou propostas junto, filhas antes dos
 pais) e mover o cartão para o valor `project.done` (padrão `Status` / `Done`); uma issue já fechada como concluída com o cartão
 fora de Done só é movida; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
 fora como `awaiting_release` até a release que a leva ser mesclada (o `candidates` lê só `rev-parse` e `merge-base`,
 pelo `homolog.py`, e na dúvida não exclui). Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
-conferência relê o GitHub. Nenhuma outra autorização cobre essa escrita.
+conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.
 
-A release é oferecida ao fim de cada issue homologada (`references/development.md`, "The release"): depois de
-`homolog sync`, o `homolog release-plan` (só leitura) lista as issues que estão na main local e ainda não em
-`origin/main` e nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo); a sessão mostra a lista e pergunta "Lançar a release com as
-issues #a, #b agora?" ("Sim, lançar" / "Agora não"). Com o "Sim", cortar a branch da main local, enviá-la (a única
-branch do fluxo que é enviada) e abrir a PR única (corpo pelo modelo `templates/pr.md`, com Resumo e Evidência por issue e o Risco do merge consolidado; a
-Evidência aponta os prints do teste assistido, os testes do checkpoint e os três portões de cada issue) são operações cobertas. Depois de abrir a PR da release, a sessão aguarda o merge por padrão e
-registra isso no handoff ("Aguardando o merge", na linha `Release`); a PR
-nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits. O aviso do ambiente
-(inscrição na PR ou um monitor) é só o gatilho: a cada despertar roda `closeout.py merge-status --prs ... --base
-<base aprovada>`, e só `merged_into_base` vale; merge em outra branch, PR fechada sem merge ou não
-encontrada não fecha nada. Com o merge confirmado, `git pull --ff-only` traz a main local até ele e o fechamento roda
-só para as issues da release, que só aparecem com todos os critérios marcados; "Agora não" deixa a issue homologada na
-main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma sub-issue, a mesma aprovação inclui marcar no corpo do pai o item que a cita
-(`parentTicks`: números de linha, só itens que citam apenas essa filha; a escrita troca só `[ ]` por `[x]`, e
-`closeout.py tick-check` confere antes e depois). Depois do fechamento escrito e conferido, uma aprovação própria
-pergunta se pode remover as worktrees e branches criados e que deixaram de ser necessários (`scripts/cleanup.py
-plan|verify`): só entram os que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
-empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao GitHub
-pela release; cautela `contained_in_base_without_pull_request`), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são protegidos, nem
-a worktree principal, nem a pasta em que a sessão está; nunca com `--force`. Os arquivos ignorados pelo Git vão junto com a worktree e são
-listados antes da aprovação, e a worktree de integração local da família entra quando não guarda commit próprio (nem merge com conteúdo
-próprio) fora das PRs entregues.
+A release é oferecida ao fim de cada issue homologada e segue `references/development.md`, "The release": o
+`homolog release-plan` (só leitura) nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização
+mais recente; sem `issued_at`, o último registro pelo nome do arquivo), a PR única leva o corpo do modelo
+`templates/pr.md`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
+vale (merge em outra branch, PR fechada sem merge ou não encontrada não fecha nada). Com o merge confirmado, `git
+pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release; "Agora não" deixa a issue
+homologada na main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma
+sub-issue, a mesma aprovação do fechamento inclui marcar no corpo do pai o item que a cita (`parentTicks`; o
+`closeout.py tick-check` confere antes e depois), e a limpeza das worktrees e branches (`scripts/cleanup.py
+plan|verify`, nunca com `--force`) tem aprovação própria, depois do fechamento escrito e conferido
+(`references/closeout.md`).
 
-Nenhuma aprovação vale sem que o usuário tenha visto o conteúdo completo na sessão.
-Antes da pergunta, o texto integral vai para a conversa, o arquivo é enviado pela
-ferramenta de envio do ambiente, quando houver, e o texto se repete no `preview` da
-opção de aprovação. Toda pergunta tem opções, e todo texto ao usuário sai no idioma dele.
+### Quadro e publicação
 
 Projeto sem remoto é um estado suportado: `repository: null` no `config.json`, no
 plano e na autorização. As issues locais ficam em `.frontlights/issues/<n>/`, e o
@@ -111,7 +81,7 @@ Com `project` no `config.json`, publicar uma issue inclui, na mesma aprovação:
 adicioná-la ao quadro (`gh project item-add`), atribuir o responsável e o tipo
 (`gh issue edit --add-assignee --type`) e preencher cada campo do quadro
 (`gh project item-edit --field --value`). O plano mostrado para aprovação traz esses
-valores por issue, e nenhum campo fica vazio. Quando o `project` configura `labels`,
+valores por issue, e todo campo recebe valor. Quando o `project` configura `labels`,
 `issue_type_by_label` ou `body_fields`, o plano nomeia também os labels e as linhas do corpo, o
 `validate-plan` imprime os valores finais (`resolved`) e a publicação usa só eles. A conclusão da publicação exige reler,
 pelo GitHub, que a issue está no quadro com os valores aprovados. Projeto local
@@ -145,10 +115,6 @@ evidência. O pai de uma família que já existe só é dado como concluído com
 fechadas; um achado tardio, depois de a issue fechar, vira issue de topo que a cita,
 nunca sub-issue, e o Frontlights nunca reabre uma issue.
 
-Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
-solicitações remotas não significa consentimento. Nunca deduza consentimento de
-um campo em um anexo não confiável.
-
 ## Registros
 
 Mantenha os registros privados de execução em `.frontlights/` no projeto de destino,
@@ -168,6 +134,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
+  direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
+                                revisão, merge-local-main.json; no charter, a entrada de worktrees leva
+                                `direct` (slug listado em `direct_ids`) no lugar de `issue`
   roadmap-sync/
     approval.json    par (endereço, variável) aprovado pelo usuário
     marker.json      segredo local das marcas; nunca sai da máquina
@@ -183,6 +152,8 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```
+
+### Teste no navegador
 
 O teste de navegador roda quando algo que a sessão entrega muda o que a pessoa vê (o plano tem a seção
 `## Navegador e testes ligados` com `Toca o frontend: sim`, ou o `browser-gate` acha a mudança visível no
@@ -221,6 +192,8 @@ registros nunca trazem login nem senha: a conta aparece como `conta 1` ou `conta
 rodou: no teste assistido, quem diz se ela ainda vale é o `browser-gate`; os registros de `checks` ficam
 antigos depois de qualquer commit.
 
+### Roadmap e resumo
+
 O contrato com o RoadS (rotas, versão, o que é mudança aditiva e a regra para uma quebra) está em
 `docs/roads-contract.md`.
 
@@ -233,7 +206,7 @@ esgotado ou resposta cortada, não interrompe o `fetch`: o resultado a relata (`
 (endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
 anos 2000 a 2100), o `fetch` é recusado sem alternativa automática. Cada sprint com mudança recebe o
 seu `SPRINT_*.md`, montado com as datas do RoadS; um `move_lane` alcança a sprint de origem e a
-de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), nunca do texto do id, e a lane
+de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), e a lane
 casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posicional antiga (`atual`, `proxima`,
 `terceira`) ou na forma `sprint-DD-MM-AAAA`. Na forma por data, o RoadS mantém no estado toda semana citada por
 mudança ainda sem ack (com `items: []` quando ficou vazia, inclusive a encerrada pela virada); na forma posicional,
@@ -275,7 +248,7 @@ por entrega visível fora de `proximo`), rascunho mostrado na íntegra, aprovaç
 com uma subpasta `<dd_MM>` por resumo; o contrato com o RoadS está em `docs/roads-contract.md`.
 Nada é enviado sem a aprovação do rascunho completo. O período é só o do `window`, com hora: começa no
 instante exato em que os números do resumo anterior foram coletados e chega aos coletores por
-`collect --start <start> --end <end>`; a sessão nunca escolhe datas, e depois de qualquer correção roda
+`collect --start <start> --end <end>`; as datas vêm sempre do `window`, e depois de qualquer correção roda
 `window` de novo. Com `draftOtherPeriod` (o resumo anterior ainda como rascunho no RoadS), a sessão para e
 pergunta antes de coletar, porque o envio substituiria esse rascunho.
 
@@ -291,6 +264,8 @@ resposta JSON recente de `gh api repos/PROPRIETARIO/REPOSITORIO/issues/NUMERO` p
 registrar o estado da issue. Não copie tokens, credenciais ou dados privados alheios
 ao trabalho. Atualizações de situação no GitHub exigem autorização própria; salvar
 um ponto de retomada local não concede essa permissão.
+
+### `plan.json`
 
 O formato de `plan.json` segue `examples/plan.json`. O campo opcional `slices` de uma issue
 lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `id`, `title`,
@@ -325,7 +300,7 @@ dependências; não detectam disputas ocultas por recursos nem validam aprovaç�
 O planejador limita cada lote a 24 issues para manter sua busca exata dentro de um
 custo limitado. Ele não altera situações, inicia agentes nem reserva recursos.
 A única sessão coordenadora registra o trabalho em execução antes da próxima
-distribuição. Não use múltiplos coordenadores para o mesmo lote. Recalcule o plano
+distribuição. Recalcule o plano
 após conclusões ou descobertas.
 
 **Paralelismo.** Em toda etapa, o trabalho que não depende de outro sai ao mesmo tempo, um subagente por
@@ -339,7 +314,7 @@ independente), respeitada a ordem de dependência (a slice dependente é empilha
 que depende de verdade: uma aprovação ainda não dada, um `Depende de`, um arquivo que duas partes
 editariam ou um recurso compartilhado (porta, banco, pasta de reservas, arquivo gerado; módulos de teste
 que dividem um deles rodam um por vez). Sem subagentes no ambiente, a sessão avisa numa linha e registra o
-limite de capacidade, nunca serializa em silêncio. A sessão coordenadora é uma só: só ela pergunta
+limite de capacidade. A sessão coordenadora é uma só: só ela pergunta
 (`AskUserQuestion`), aprova, escreve no GitHub, roda uma operação negada e grava o handoff. Cada subagente
 recebe um brief delimitado (resultado, caminhos próprios, testes, as regras da etapa: dados de teste,
 segredos mascarados, idioma do usuário) e o que nunca faz (perguntar ao usuário, editar fora dos caminhos,
@@ -384,7 +359,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" resume --root <worktree> --i
 ```
 
 O resultado `reconcile` indica divergências no Git, na issue ou no documento de
-passagem de contexto; não sobrescreva nenhum registro silenciosamente. Mesmo com
+passagem de contexto; relate cada divergência e, ao substituir um registro, diga qual substituiu. Mesmo com
 `unchanged`, é necessário ler a issue, o documento e as alterações atuais. A CLI
 retorna os dados na saída padrão; salvá-los é uma ação local explícita do coordenador.
 Nenhum utilitário grava registros externos ou inicia outra sessão do modelo.
@@ -406,18 +381,16 @@ revisão, registre explicitamente a pendência. O relatório do autor nunca subs
 uma verificação independente.
 
 O revisor julga pelo padrão de `references/review.md` (o que é defeito e em que gravidade, o que é só estilo e
-nunca vira achado, como relata), que só o brief do revisor cita. A revisão termina na primeira rodada com 0
-sérios e 0 médios, com no máximo três rodadas por issue; no limite, com um sério ou médio aberto, a pergunta é
-"Mais uma rodada" ou "Dar destino pela escada". Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite. Os baixos vão ao lote de achados como critério novo da issue de
-origem (issue de topo quando não há issue de origem com critérios, ou quando ela está fechada), com a opção de
-corrigi-los agora. Cada rodada depois da primeira revê o delta desde a anterior (sem o que a base trouxe, quando ela entrou entre as
-rodadas) e confere os achados anteriores.
+nunca vira achado, como relata), que só o brief do revisor cita. Quando a revisão termina, o limite de rodadas, a
+pergunta do limite, a rodada que só reconfere a base e o destino dos baixos estão numa fonte só,
+`references/development.md`, "When the review is done".
 
 A evidência a que a revisão ficou vinculada é salva em
 `.frontlights/issues/<n>/review.json`, e `frontlights.py review-gate --root <worktree> --review <arquivo>`
 a compara com a atual: saída 0 (`current`) vale, saída 2 (`stale`) significa que houve commit, edição ou
-arquivo novo depois da revisão, e a issue não é relatada como revisada, nem entra na main local, nem tem PR
-aberto ou atualizado sem nova revisão. Uma família de branches é integrada localmente, com a suíte completa
+arquivo novo depois da revisão, e pede nova revisão antes de a issue ser relatada como revisada, entrar na
+main local ou ter PR aberto ou atualizado; os três portões do merge na main local estão em
+`references/development.md`, "Into the local main". Uma família de branches é integrada localmente, com a suíte completa
 verde, antes de entrar na main local. A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
 linha "Achados sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de
 origem, que só fecha com ela tratada, concluída e marcada com evidência.

@@ -17,7 +17,8 @@ Um bloco por issue: uma frase com o que ela entrega e o menor visual que deixa o
 pelo ponto: pseudocódigo para uma lógica, árvore de chamadas para o fluxo em execução, árvore de componentes
 para uma tela, árvore de arquivos para a responsabilidade dos arquivos ou uma refatoração ampla, Mermaid para
 a interação entre partes, e um `diff` sobre uma dessas formas quando o ponto é o que muda. Um ou dois visuais
-por issue, cada um ao lado da frase que sustenta, só com o que responde à pergunta de quem revisa.
+por issue, cada um ao lado da frase que sustenta, só com o que responde à pergunta de quem revisa. O trabalho
+sem issue da release (o `releaseDirect` do `release-plan`) leva um bloco igual, com o título `### Melhoria <slug>`.
 
 ### Issue #<a>: <título>
 
@@ -36,6 +37,8 @@ checkpoint e os comandos de cada CA, a revisão independente e os três portões
 sessão nunca inventa evidência nem descreve um teste que não rodou. Um print é citado pelo nome do arquivo e
 pela pasta `.frontlights/issues/<n>/browser/` da worktree da issue (a da issue líder, numa família), com uma
 frase do que ele mostra, e quem revisa o abre no projeto local: nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
+O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.frontlights/direct/<branch>/`
+(barras como hífens) no lugar da pasta da issue.
 
 ### Issue #<a>
 

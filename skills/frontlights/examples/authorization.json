@@ -1,6 +1,7 @@
 {
   "repository": "OWNER/REPOSITORY",
   "issue_ids": [1, 2],
+  "direct_ids": ["melhoria-x"],
   "concurrency": 2,
   "approved_by": "",
   "approval_reference": "",
@@ -13,7 +14,8 @@
   "worktrees": [
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-1", "ownership": ["src", "tests", "docs/evidence"]},
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_SLICE_WORKTREE_PATH", "branch": "claude/issue-1-s2", "slice": "S2", "ownership": ["src/edit", "tests/edit"]},
-    {"issue": 2, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-2", "base": "claude/issue-1", "ownership": ["src/edit", "tests/edit"]}
+    {"issue": 2, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-2", "base": "claude/issue-1", "ownership": ["src/edit", "tests/edit"]},
+    {"direct": "melhoria-x", "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/melhoria-x", "ownership": ["docs"]}
   ],
   "verification_commands": [["python", "-m", "unittest"]],
   "stop_conditions": ["New product decision", "Missing credentials or native permission", "External write", "Changed acceptance criteria", "Expired authorization", "Unknown context usage"]

@@ -50,7 +50,7 @@ class IssueStageTests(unittest.TestCase):
                        'goes back there instead of being invented or asked here',
                        'The only question of this stage is the seams', 'ideally one',
                        'approval of its exact revision', 'field-by-field trace',
-                       'This approval does not authorize live issue writes'):
+                       'This approval covers the text; the GitHub write is the approval of stage 5'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertIn('`references/issue.md` (stage 4)', skill)
@@ -121,7 +121,8 @@ class IssueStageTests(unittest.TestCase):
         self.assertIn('| Issue |', protocol)
         self.assertIn('sem nova entrevista', protocol)
         self.assertRegex(protocol, r'(?m)^  issue\.md')
-        self.assertIn('texto da issue, plano e publicação de issues, fechamento', flat(protocol))
+        self.assertIn("(the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary)",
+                      flat(read('skills', 'frontlights', 'references', 'development.md')))
 
 
 if __name__ == '__main__':

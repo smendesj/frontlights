@@ -1,5 +1,8 @@
 # Vertical issue planning
 
+On entering, read `docs/security.md`, "Revisão e sobras", and `docs/protocol.md`, "Quadro e publicação" and
+"`plan.json`".
+
 Read the approved issue body (stage 4) and current GitHub issues/board. Reuse an existing
 matching issue when its acceptance scope fits; never create a duplicate local task.
 Use `templates/issue.md` and `examples/plan.json`. Before publication, temporary

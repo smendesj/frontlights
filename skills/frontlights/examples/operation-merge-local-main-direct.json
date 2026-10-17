@@ -1,0 +1,13 @@
+{
+  "repository": "OWNER/REPOSITORY",
+  "direct": "melhoria-x",
+  "kind": "merge_into_local_main",
+  "worktree": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH",
+  "branch": "claude/melhoria-x",
+  "target": "main",
+  "gates": {
+    "full_suite": "green",
+    "review_gate": "current",
+    "browser_gate": "not_needed"
+  }
+}

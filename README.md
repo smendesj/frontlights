@@ -647,20 +647,23 @@ por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo 
 #### Homologar na main local, lançar a release, fechar e limpar
 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
-`review-gate` em dia e `browser-gate` respondido), e um bundle da main local e das branches vai para a pasta de
+revisão em dia e teste assistido respondido; o passo a passo está em
+[`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
-as issues que estão na main local e ainda não em `origin/main` (e as mudanças sem issue, dos caminhos Direto e Curto,
-pela branch registrada em `worktrees` sem `issue`; o nome da release pula também os já usados por PRs mescladas), e a pergunta "Lançar a release com as issues #a, #b
-agora?" tem "Sim, lançar" e "Agora não". Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
+as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula também os já
+usados por PRs mescladas), e ele pergunta se lança a release com elas agora (o
+passo a passo está em
+[`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). O
+trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o mesmo caminho, com o campo `direct` no
+registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente; sem `issued_at`, o último registro pelo nome do arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
 independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
-nenhum achado sem destino), ele pergunta "Mesclar a PR #<n> em <base>?", com "Sim, mesclar" e "Não, aguardar o
-merge"; só com o "Sim" roda `gh pr ready` e `gh pr merge --merge` (merge com commit, nunca `--admin`, `--auto` nem
-`--delete-branch`), e com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
+nenhum achado sem destino), ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge (com commit de merge), e
+com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
 fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
 issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
@@ -703,30 +706,24 @@ merge na main local com três portões verdes e bundle de backup → oferta da r
 espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
-Frontlights trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local (nunca de
-`origin/main`), que fica só local, nunca é enviada e entra na main local por um merge com três portões verdes
-(suíte inteira, `review-gate` em dia e `browser-gate` respondido), cada CA na própria
-worktree (branch cortada da branch da issue e devolvida a ela por merge quando o ciclo fecha), com CAs independentes
-em paralelo dentro da issue e entre issues, anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a
-concorrência, o empilhamento (só numa família que já existe), a base das worktrees e os testes,
-e começa; antes, no início de cada etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado
-só com o seu "Sim" a uma pergunta que mostra o script) e traz `origin/main` para a main local (`homolog sync`;
-um conflito é desfeito e vira pergunta). Cada slice
-é um ciclo de TDD, um ponto de retomada (`checkpoint --slice`) e uma caixa marcada com evidência; uma
-sessão nova retoma pela primeira caixa aberta. Ficam autorizados, só para as issues da família ou
-do lote: editar, testar,
-commitar, mesclar a branch da issue na main local com os três portões verdes, mesclar a main local e as
-branches das issues em andamento na branch da prévia pelo `serve preview refresh` (um conflito é desfeito e vira
-pergunta; a branch da prévia nunca é enviada), rodar a migration no banco de
-desenvolvimento local, criar e remover dados de teste pelos endpoints do produto e comentar ou
-marcar critérios nas issues; nada da issue vai ao GitHub antes da release, cuja PR é a única PR do
-fluxo. Merge de PR, fechar issue, mexer no quadro, publicar em produção, editar
-migration já registrada, escrever na main remota (`origin/main`) ou numa branch protegida, ligar configuração, chave ou flag em
-produção e apagar o que não for dado de teste viram, cada um, uma pergunta própria com "Sim" e
-"Não" e o comando exato; só o "Sim" libera aquela operação. As perguntas do próprio trabalho (teste
-assistido, falhas, achados, decisão nova) continuam, assim como as aprovações do texto da issue,
-do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de permissão do
-próprio Claude Code não são do Frontlights e continuam valendo.
+Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
+empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Antes, no início de cada
+etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado só com o seu "Sim" a uma pergunta que
+mostra o script) e traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
+Ele trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local, cada CA na própria
+worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é um ciclo de TDD, um ponto
+de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
+aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
+commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
+produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com os
+três portões verdes; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
+negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
+só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
+merges cobertos e das operações negadas fica num lugar só, em
+[`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
+As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
+aprovações do texto da issue, do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de
+permissão do próprio Claude Code não são do Frontlights e continuam valendo.
 
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
 não depende de outra coisa, com tantos subagentes quantas forem as partes: as leituras do início da
@@ -857,10 +854,10 @@ commit, edição ou arquivo novo depois dela.
 A revisão independente segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
 cenário de falha, em três gravidades (sério, médio, baixo), e largura de linha, linhas em branco, quebra de
 parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o brief do revisor cita esse arquivo; o
-implementador trabalha pela issue. A revisão termina na primeira rodada com 0 sérios e 0 médios, com no máximo
-três rodadas por issue (no limite, a pergunta é "Mais uma rodada" ou "Dar destino pela escada"); os baixos viram
-critério novo da issue de origem no lote de achados, ou são corrigidos na hora, se você escolher.
-Uma rodada que só reconfere a base trazida depois de a revisão terminar fica fora do limite.
+implementador trabalha pela issue. A revisão termina na primeira rodada sem achado sério nem médio; o limite de
+rodadas e o destino dos baixos estão em
+[`references/development.md`](skills/frontlights/references/development.md#review-checkpoints-and-renewal)
+("When the review is done").
 
 `python scripts/frontlights.py inspect --config <config> --root <projeto> --summary` é o modo que a
 etapa 2 usa: por issue, só número, título, estado e caixas de critério (`boxes`, marcadas e total, `null`
