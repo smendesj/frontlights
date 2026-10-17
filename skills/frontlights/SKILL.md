@@ -221,7 +221,8 @@ why in one sentence:
   what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
   A Direct change runs without an issue body or an issue; the watched-run question offers only to
-  name an existing issue.
+  name an existing issue. In a project with a remote it is still homologated on the local main
+  (`references/development.md`, "Work without an issue").
 - **Short.** A bounded piece of work whose shape is clear but whose details are
   not, including work that starts from an existing issue. Grill (stage 3, with
   its mandatory solution round), show the plan in full and get it approved, implement

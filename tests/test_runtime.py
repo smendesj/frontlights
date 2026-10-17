@@ -1089,5 +1089,129 @@ class AuthorizeStdinTests(unittest.TestCase):
         self.assertIn('error', json.loads(run.stderr))
 
 
+# Trabalho sem issue (caminho Direto, ou Curto sem publicar issue): a entrada de `worktrees` leva `direct`, um slug
+# listado em `direct_ids`, e a operação nomeia o mesmo `direct` no lugar de `issue`; as outras regras são as da issue.
+def direct_charter(root, *extra, **overrides):
+    data = dict(repository='example/project', issue_ids=[1], direct_ids=['melhoria-x'], concurrency=1,
+                approved_by='human', approval_reference='session:turn-12',
+                expires_at='2099-01-01T00:00:00+00:00',
+                monitoring={'mode': 'local', 'confirmed_by': 'human'},
+                operations=['edit', 'test', 'merge_into_local_main'], base={'branch': 'main'},
+                worktrees=[{'direct': 'melhoria-x', 'path': str(root / 'direct'), 'branch': 'claude/melhoria-x',
+                            'ownership': ['src']},
+                           {'issue': 1, 'path': str(root / 'issue'), 'branch': 'claude/issue-1', 'ownership': ['src']},
+                           *extra],
+                verification_commands=[['python', '-m', 'unittest']],
+                stop_conditions=['New product decision'])
+    data.update(overrides)
+    return data
+
+
+class AuthorizeDirectTests(unittest.TestCase):
+    GATES = {'full_suite': 'green', 'review_gate': 'current', 'browser_gate': 'not_needed'}
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        for name in ('direct', 'issue'):
+            (self.root / name / 'src').mkdir(parents=True)
+        self.op = dict(repository='example/project', direct='melhoria-x', kind='edit', branch='claude/melhoria-x',
+                       worktree=str(self.root / 'direct'), path=str(self.root / 'direct' / 'src' / 'app.py'))
+        self.merge = dict(self.op, kind='merge_into_local_main', target='main', gates=self.GATES)
+        del self.merge['path']
+
+    def test_an_edit_and_the_merge_into_the_local_main_pass_for_work_without_an_issue(self):
+        self.assertEqual(frontlights.authorize(direct_charter(self.root), self.op)['scope_check'], 'pass')
+        self.assertEqual(frontlights.authorize(direct_charter(self.root), self.merge)['scope_check'], 'pass')
+
+    def test_the_gates_and_the_target_still_hold(self):
+        with self.assertRaisesRegex(ValueError, 'gate review_gate is not green'):
+            frontlights.authorize(direct_charter(self.root), dict(self.merge, gates=dict(self.GATES, review_gate='stale')))
+        with self.assertRaisesRegex(ValueError, 'remote main'):
+            frontlights.authorize(direct_charter(self.root), dict(self.merge, target='origin/main'))
+
+    def test_a_direct_outside_the_charter_is_unapproved(self):
+        with self.assertRaisesRegex(ValueError, 'unapproved direct'):
+            frontlights.authorize(direct_charter(self.root), dict(self.op, direct='outra-coisa'))
+        with self.assertRaisesRegex(ValueError, 'unapproved direct'):
+            frontlights.authorize(direct_charter(self.root, direct_ids=[]), self.op)
+
+    def test_the_operation_names_an_issue_or_a_direct_never_both_nor_neither(self):
+        with self.assertRaisesRegex(ValueError, 'an issue or a direct, never both'):
+            frontlights.authorize(direct_charter(self.root), dict(self.op, issue=1))
+        neither = dict(self.op)
+        del neither['direct']
+        with self.assertRaisesRegex(ValueError, 'unapproved issue'):
+            frontlights.authorize(direct_charter(self.root), neither)
+
+    def test_a_malformed_slug_is_refused(self):
+        for slug in ('Melhoria-X', '', '-x', 'a' * 65, 'com espaco', 1):
+            with self.subTest(slug=slug), self.assertRaisesRegex(ValueError, 'direct'):
+                frontlights.authorize(direct_charter(self.root, direct_ids=[slug]), dict(self.op, direct=slug))
+
+    def test_the_direct_and_the_issue_never_share_an_entry(self):
+        both = {'issue': 1, 'direct': 'melhoria-x', 'path': str(self.root / 'direct'), 'branch': 'claude/melhoria-x',
+                'ownership': ['src']}
+        with self.assertRaisesRegex(ValueError, 'worktree entry'):
+            frontlights.authorize(direct_charter(self.root, both), self.op)
+        # the worktree of the issue is never the worktree of the direct work, and the reverse
+        with self.assertRaisesRegex(ValueError, 'unapproved or ambiguous worktree'):
+            frontlights.authorize(direct_charter(self.root), dict(self.op, worktree=str(self.root / 'issue'),
+                                                                  path=str(self.root / 'issue' / 'src' / 'a.py')))
+        issue_op = dict(repository='example/project', issue=1, kind='edit', branch='claude/issue-1',
+                        worktree=str(self.root / 'direct'), path=str(self.root / 'direct' / 'src' / 'a.py'))
+        with self.assertRaisesRegex(ValueError, 'unapproved or ambiguous worktree'):
+            frontlights.authorize(direct_charter(self.root), issue_op)
+
+    def test_an_issue_operation_is_unchanged_by_direct_entries(self):
+        issue_op = dict(repository='example/project', issue=1, kind='edit', branch='claude/issue-1',
+                        worktree=str(self.root / 'issue'), path=str(self.root / 'issue' / 'src' / 'a.py'))
+        self.assertEqual(frontlights.authorize(direct_charter(self.root), issue_op)['scope_check'], 'pass')
+
+    def test_a_slice_of_direct_work_follows_the_slice_rules(self):
+        (self.root / 's1' / 'src').mkdir(parents=True)
+        entry = {'direct': 'melhoria-x', 'path': str(self.root / 's1'), 'branch': 'claude/melhoria-x-s1', 'slice': 'S1',
+                 'ownership': ['src']}
+        op = dict(self.op, worktree=str(self.root / 's1'), branch='claude/melhoria-x-s1',
+                  path=str(self.root / 's1' / 'src' / 'a.py'))
+        self.assertEqual(frontlights.authorize(direct_charter(self.root, entry), dict(op, slice='S1'))['scope_check'],
+                         'pass')
+        with self.assertRaisesRegex(ValueError, 'slice'):
+            frontlights.authorize(direct_charter(self.root, entry), op)
+        with self.assertRaisesRegex(ValueError, 'never a slice branch'):
+            frontlights.authorize(direct_charter(self.root, entry),
+                                  dict(self.merge, worktree=str(self.root / 's1'), branch='claude/melhoria-x-s1',
+                                       slice='S1'))
+
+    def test_the_example_operation_of_direct_work_passes_against_the_example_charter(self):
+        examples = Path(frontlights.__file__).resolve().parents[1] / 'examples'
+        charter = json.loads((examples / 'authorization.json').read_text(encoding='utf-8'))
+        op = json.loads((examples / 'operation-merge-local-main-direct.json').read_text(encoding='utf-8'))
+        entry = next(w for w in charter['worktrees'] if 'direct' in w)
+        self.assertEqual((op['direct'], op['branch']), (entry['direct'], entry['branch']))
+        self.assertIn(op['direct'], charter['direct_ids'])
+        charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',
+                       expires_at='2099-01-01T00:00:00+00:00',
+                       monitoring=dict(charter['monitoring'], confirmed_by='usuário'),
+                       worktrees=[dict(entry, path=str(self.root / 'direct'))])
+        self.assertEqual(frontlights.authorize(charter, dict(op, worktree=str(self.root / 'direct')))['scope_check'],
+                         'pass')
+
+    def test_the_slug_rule_is_the_same_in_authorize_and_in_the_release_plan(self):
+        import homolog
+        self.assertEqual(frontlights.DIRECT_RULE.pattern, homolog.DIRECT.pattern)
+
+    def test_the_merge_of_direct_work_through_the_command_line(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'charter.json'
+            path.write_text(json.dumps(direct_charter(self.root)), encoding='utf-8')
+            run = subprocess.run([sys.executable, str(SUMMARY_SCRIPT), 'authorize', '--charter', str(path),
+                                  '--operation', '-'], input=json.dumps(self.merge), capture_output=True, text=True,
+                                 encoding='utf-8')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(json.loads(run.stdout)['scope_check'], 'pass')
+
+
 if __name__ == '__main__':
     unittest.main()
