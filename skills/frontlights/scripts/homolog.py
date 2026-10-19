@@ -595,9 +595,18 @@ def work_branches(folder):
 
 def issue_worktrees(folder):
     """{issue number: the `path` of its worktree} from the same entries as `work_branches` (a later record wins);
-    an entry without a non-empty `path` names no worktree (issue 57, S4)."""
+    an entry without a non-empty `path` names no worktree (issue 57, S4). The entry of the branch of the issue
+    (`<prefix>issue-<n>`) wins over a later one of the same issue (a review fix's own worktree), because the impact
+    record of the issue is written in the worktree of its branch."""
     entries, _ = work_entries(folder)
-    return {entry['issue']: entry['path'] for entry in entries if 'issue' in entry and entry['path']}
+    places = {}
+    for entry in entries:
+        if 'issue' not in entry or not entry['path']:
+            continue
+        own = entry['branch'].rsplit('/', 1)[-1] == f'issue-{entry["issue"]}'
+        if own or not places.get(entry['issue'], (None, False))[1]:
+            places[entry['issue']] = (entry['path'], own)
+    return {number: path for number, (path, _) in places.items()}
 
 
 def work_entries(folder):
