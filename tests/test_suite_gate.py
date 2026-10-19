@@ -151,6 +151,51 @@ class SuiteRunTests(SuiteTestCase):
         self.assertIsNone(saved['exitCode'])
         self.assertLess(saved['seconds'], 20)
 
+    def test_timeout_seconds_overrides_the_timeout_of_the_config(self):
+        """Revisão da issue 52, M4: `--timeout-seconds` vale no lugar do `timeoutSeconds` do config: menor que a
+        duração da suíte, ela é interrompida; o config dava 60 s, que bastariam."""
+        code, result = self.suite(self.config({'full': ('--dorme',)}, timeout=60), 'full', '--timeout-seconds', '1')
+        self.assertEqual((code, result.get('state')), (1, 'red'), result)
+        saved = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertTrue(saved['timedOut'])
+        self.assertLess(saved['seconds'], 20)
+        self.assertIn('1 s', result['message'])
+
+    def test_timeout_seconds_larger_than_the_suite_lets_it_pass_even_with_an_argv(self):
+        """M4: com `--argv` e o config dando 1 s, `--timeout-seconds 60` deixa terminar uma suíte de 3 s."""
+        slow = self.base / 'slow_suite.py'
+        slow.write_text('import time\ntime.sleep(3)\n', encoding='utf-8')
+        given = json.dumps([sys.executable, str(slow)])
+        config = self.config({'full': ('--dorme',)}, timeout=1)
+        code, result = self.suite(config, 'full', '--argv', given, '--timeout-seconds', '60')
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertFalse(json.loads(self.record.read_text(encoding='utf-8'))['timedOut'])
+
+    def test_the_full_suite_without_a_configured_timeout_gets_an_hour(self):
+        """M4: a suíte inteira sem `timeoutSeconds` no config (pelo `--argv`, ou declarada sem prazo) tem 3600 s,
+        não os 600 s de `checks`, que mataram a suíte inteira real; a de impacto mantém o padrão de `checks`."""
+        sys.path.insert(0, str(HOMOLOG.parent))
+        self.addCleanup(sys.path.remove, str(HOMOLOG.parent))
+        import checks
+        import homolog
+        argv = json.dumps(self.argv())
+        bare = {'repository': None, 'homolog': {'backupDir': None}}
+        declared = {'repository': None, 'homolog': {'suites': {'full': {'argv': self.argv()},
+                                                               'impact': {'argv': self.argv()}}}}
+        self.assertEqual(homolog.suite_run_settings(bare, 'full', argv)[0]['timeout'], 3600)
+        self.assertEqual(homolog.suite_run_settings(declared, 'full', None)[0]['timeout'], 3600)
+        self.assertEqual(homolog.suite_run_settings(declared, 'full', argv)[0]['timeout'], 3600)
+        self.assertEqual(homolog.suite_run_settings(declared, 'impact', None)[0]['timeout'], checks.DEFAULT_TIMEOUT)
+        self.assertEqual(homolog.suite_run_settings(bare, 'full', argv, '120')[0]['timeout'], 120)
+
+    def test_a_non_positive_timeout_seconds_is_refused_and_nothing_runs(self):
+        for value in ('0', '-5', 'dez', '1.5'):
+            with self.subTest(value=value):
+                code, result = self.suite(self.config({'full': ()}), 'full', f'--timeout-seconds={value}')
+                self.assertEqual(code, 1, result)
+                self.assertIn('--timeout-seconds precisa ser um inteiro positivo', result['message'])
+                self.assertFalse(self.record.exists())
+
     def test_a_full_argv_given_once_runs_without_the_config_and_is_recorded_as_argument(self):
         given = json.dumps(self.argv('--uma-vez'))
         code, result = self.suite(self.config(), 'full', '--argv', given)

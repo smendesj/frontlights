@@ -185,7 +185,9 @@ while the watched run was in progress (`--concurrent`) is run once more, alone, 
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
 (the argv proposed from `inspect` and `checks.regression`, written to `homolog.suites`) or "Rodar a suíte inteira
-desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>'`, which the gate then reads). The whole suite
+desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>`, which the
+gate then reads; `N` sized to the suite, since a run past it is killed: without it and without
+`homolog.suites.full.timeoutSeconds` the run gets 3600 s). The whole suite
 runs at the release ("The release"), with or without CI in the project, through
 `python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
 `discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
@@ -620,7 +622,8 @@ offers the release again with everything accumulated.
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
   again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
-  of the full suite, asked like the `unconfigured` question of "Which tests run when".
+  of the full suite, asked like the `unconfigured` question of "Which tests run when", and `--timeout-seconds <N>`
+  sized to that suite (3600 s without it).
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.

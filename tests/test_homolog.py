@@ -385,7 +385,8 @@ class LocalMainTextTests(unittest.TestCase):
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
                        'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
-                       '`fullSuite` must be `current`', '(`fullSuite: current`)'):
+                       '`fullSuite` must be `current`', '(`fullSuite: current`)',
+                       'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
