@@ -20,10 +20,11 @@ FILES = sorted(SKILL_DIR.rglob('*.md')) + [ROOT / 'README.md', ROOT / 'CLAUDE.md
 SINGLE = {
     'into the local main by `homolog sync`': 'a lista dos merges cobertos',
     'turning on a setting, key or flag in production': 'a lista das operações negadas',
-    '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`': 'os três portões',
+    '`{"suite_gate": "current", "review_gate": "current", "browser_gate": "answered"}`': 'os três portões',
     'Lançar a release com as issues': 'a pergunta da release',
     '"Mesclar a PR #<n> em <base>?"': 'a pergunta do merge da release',
     '"Dar destino pela escada"': 'a pergunta do limite de rodadas da revisão',
+    '**Run the whole suite on the local main.**': 'a suíte inteira da release na main local (issue 52, S3)',
 }
 
 # cópias em português que deram lugar a um ponteiro
@@ -32,6 +33,8 @@ GONE = {
     'na branch da prévia pelo `serve preview refresh`': 'a lista dos merges cobertos copiada em português',
     '`review-gate` `current` for it': 'os portões repetidos fora da fonte',
     '`review-gate` em dia e `browser-gate` respondido': 'os portões repetidos em português',
+    '"full_suite": "green"': 'o portão da suíte inteira, que virou suite_gate (issue 52)',
+    'full_suite: green': 'o portão da suíte inteira copiado em português (issue 52)',
 }
 
 DESCRIPTION_MAX_WORDS = 80

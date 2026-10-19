@@ -160,7 +160,8 @@ the slice in progress with its worktree, and the slices already ticked, and a fr
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
 `SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
 run stays one per issue, when the last slice that changes the screen closes its loop; the independent review stays one
-per issue, of the whole diff, before the merge into the local main, and the full suite runs once there. The stacked wave
+per issue, of the whole diff, before the merge into the local main, and the impact suite runs once per issue beside the
+watched run or the review ("Which tests run when"). The stacked wave
 and the family integration below (children merged into the parent's branch, and the family entering
 the local main as one) apply only to a family that already exists (an issue with
 sub-issues published before this rule); a slice stacked on another slice uses only the branch cut,
@@ -175,11 +176,21 @@ modules that start real processes and ports (`tests.test_serve_ports`,
 `tests.test_checks_integration` and `tests.test_serve_preview`), each one reported as skipped with a reason that names the
 variable; any other value, or no variable, runs everything. The runner runs the safe modules in
 parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
-the JSON of the run as evidence. Before the independent review and before the merge into the local main, run the whole
-suite without the variable, once, through `python -m unittest discover -s tests -v`, with or
-without CI in the project: the runner does not make the whole suite faster than `discover`, a
-project without CI has no other net, and the CI of this repository runs the same `discover` and
-never sets the variable either.
+the JSON of the run as evidence. Per issue, the gate is the project's impact suite: `homolog.suites.impact` in
+`.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), run by
+`homolog suite --mode impact --base <base>` at the tip of the branch of the issue, in the background, started together with the
+watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
+watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
+while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
+`current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
+its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
+(the argv proposed from `inspect` and `checks.regression`, written to `homolog.suites`) or "Rodar a suíte inteira
+desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>`, which the
+gate then reads; `N` sized to the suite, since a run past it is killed: without it and without
+`homolog.suites.full.timeoutSeconds` the run gets 3600 s). The whole suite
+runs at the release ("The release"), with or without CI in the project, through
+`python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
+`discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
@@ -304,7 +315,7 @@ question says so.
   resolved in that merge commit, keeping the sibling's own changes on top of what the parent already has,
   and shown to the reviewer.
 - The family enters the local main through the parent's branch, with every verified child merged into
-  it, by the three gates of "Into the local main": the full suite at the parent's tip, a review current
+  it, by the three gates of "Into the local main": the impact suite `current` at the parent's tip, a review current
   for each branch and the watched run answered for the family. A child not verified yet keeps the family
   out: it is parked with its question and the parent waits, unless the user chooses to let the parent go
   alone (then the child starts over from the local main once the parent is in it, as in "Esperar o merge
@@ -319,7 +330,7 @@ can assert the very behavior another child changes on purpose, and a clean Git m
 does not make a green suite. Before a family with more than one branch enters the local
 main, integrate it locally: an integration worktree from the parent's branch that
 merges every verified child branch (local only: never pushed, never a PR), then run
-the full relevant suite and the type checks. The watched browser run already happened, once
+the impact suite and the type checks. The watched browser run already happened, once
 for the batch and before the reviews; `browser-gate` says whether its record still covers this
 code, and `stale` asks again. When a local integration worktree already served that run, this
 integration is the same one: reuse it and redo it after a fix. Findings follow the destination ladder; a fix goes to the branch that owns
@@ -446,7 +457,9 @@ evidence --root <worktree>` hashes/HEAD and save that output with the review res
 the merge into the local main, before opening or updating a PR and after every commit: exit code 0 means the review still
 covers the code, exit code 2 means it is stale. Any commit, edit or new file after the
 review makes it stale (bringing a base into the branch included), whatever its size:
-rerun the suite, take new evidence and have the independent reviewer look again. A
+take new evidence and have the independent reviewer look again, with the impact suite rerun on the new tip
+beside that review round, not before it ("Into the local main"); `homolog suite-gate` must answer `current`
+again before the merge. A
 stale review is never reported as reviewed. If no
 independent reviewer is available, report "implemented, awaiting independent
 review", not completed. Do not manufacture reviewer identities or approvals.
@@ -487,7 +500,7 @@ closing keyword, in its body and in the commit messages, while such a criterion 
 
 Refactoring happens here. The reviewer may recommend refactors of the green code;
 the author applies them without changing behavior or adding tests at new seams,
-reruns the full relevant suite and type checks, and records fresh evidence. The
+reruns the impact suite and type checks, and records fresh evidence. The
 new hashes invalidate the earlier review, so the independent reviewer reviews
 again before the issue can be reported as reviewed.
 
@@ -532,16 +545,20 @@ GitHub before the release. The remote main (`origin/main`) is never written outs
 request, and `authorize` tells the two apart: the local main is the only target of the covered merge
 below, and a target with a slash (`origin/main`, `upstream/main`) is refused as the remote main.
 
-When the last slice of the issue is merged into the branch of the issue, in this order:
+When the last slice of the issue is merged into the branch of the issue, step 1 comes first; then the three gates run
+at the same time on that tip (the suite beside the watched run or the review; with a screen the review waits for the
+watched run); then the check and the merge:
 
 1. **Bring the local main in first.** In the issue's worktree, `git merge main` (one of the covered merges,
    a base into the issue's own branch), so the tip of the branch already contains the local main and the
    merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
    shown to the reviewer as part of the diff.
-2. **Gate 1, the full suite.** Run the whole suite at that tip (`python -m unittest discover -s tests -v` in
-   this repository, the project's equivalent elsewhere; never the fast suite), and record the command, the
-   count and the exit code in the handoff. Red means the issue is not homologated: the failure goes back
-   to its slice's loop, or to the user as a question.
+2. **Gate 1, the impact suite.** The impact suite run at that tip ("Which tests run when") is judged by
+   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`, which answers
+   `current` (exit code 0); record the command, the count and the exit code in the handoff (and the rerun alone
+   after `--concurrent`, if there was one). Red means the issue is not homologated: the failure goes back to its
+   slice's loop, or to the user as a question; `unconfigured` is the question of "Which tests run when"; never
+   the fast suite. The whole suite waits for the release.
 3. **Gate 2, the review.** The independent review of the whole diff (Review, checkpoints and renewal, above)
    is bound to that tip, and `frontlights.py review-gate --root <issue-worktree> --review <review.json>`
    answers `current` (exit code 0). `stale` means a review again, never the merge.
@@ -551,8 +568,9 @@ When the last slice of the issue is merged into the branch of the issue, in this
 5. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
    authorize --charter .frontlights/authorization.json --operation .frontlights/issues/<n>/merge-local-main.json`,
    with `kind` `merge_into_local_main`, the issue's worktree and branch, `target` the base branch of the
-   charter and `gates` `{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}` (or
-   `not_needed`); `examples/operation-merge-local-main.json` shows the shape. With `scope_check: pass`, in the
+   charter and `gates` `{"suite_gate": "current", "review_gate": "current", "browser_gate": "answered"}` (or
+   `not_needed`); `examples/operation-merge-local-main.json` shows the shape, and an operation that still carries
+   `full_suite` is refused, naming `suite_gate`. With `scope_check: pass`, in the
    main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
    or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
    gates to make them pass. Work without an issue (the Direct path, or a Short one that publishes none) goes
@@ -595,8 +613,18 @@ offers the release again with everything accumulated.
   an issue in the same state (`releaseDirect`, from the entries with `direct`; `directs` has the detail), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
-  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, or that the local main is behind and
-  must be synced first: say so in one line. It only reads.
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
+  must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
+  `current`: say so in one line. It only reads.
+- **Run the whole suite on the local main.** In the main worktree, on the local main, run
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`
+  on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
+  runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
+  false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
+  by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
+  again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
+  of the full suite, asked like the `unconfigured` question of "Which tests run when", and `--timeout-seconds <N>`
+  sized to that suite (3600 s without it).
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.
@@ -622,7 +650,12 @@ offers the release again with everything accumulated.
   and what happens at the merge. In the handoff (the `Release` line): the pull request number with its issues,
   head and base branch, the approved base, and when the wait began.
 - **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
-  issue in it are recorded, the pull request has no conflict with the base and no finding lacks a destination.
+  issue in it are recorded, the whole suite of the release is green at the tip the release branch was cut from
+  (`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite-gate --release --head <head of the pull request> --base <base> --root <main worktree> --config .frontlights/config.json`
+  answers `current`, from the per-tip record `release/suite-<sha>.json` in the main worktree's
+  `.frontlights/release/`), the pull request has no conflict with the base and no finding lacks
+  a destination. Another issue entering the local main, or the suite run for a later release, does not make the
+  pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
   merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its
