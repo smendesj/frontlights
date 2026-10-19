@@ -1069,7 +1069,7 @@ def release_suite(root, base):
     if judged['status'] == 'missing' and 'mode' not in judged:
         judged['message'] = f'não há registro da suíte inteira em {path}'
     judged.pop('exitCode')
-    return judged
+    return adopted(judged, read_suite_record(path) or {})
 
 
 def tip_changes(root, head, evidence):
@@ -1086,6 +1086,17 @@ def tip_changes(root, head, evidence):
     if extra:
         return f'arquivo(s) não commitado(s) ({", ".join(extra[:10])}{", ..." if len(extra) > 10 else ""})'
     return None
+
+
+def adopted(result, record):
+    """`result` with the `adoptedFrom` of an adopted record and, when it is current, the tip it was adopted from in
+    its message (issue 54)."""
+    origin = record.get('adoptedFrom')
+    if isinstance(origin, dict):
+        result['adoptedFrom'] = origin
+        if result.get('status') == 'current':
+            result['message'] += f', adotada da ponta {str(origin.get("head"))[:7]}'
+    return result
 
 
 def judge_tip(root, head):
@@ -1112,7 +1123,7 @@ def judge_tip(root, head):
         result.update(status='red', exitCode=2, message=f'a suíte inteira falhou na ponta {head[:7]}')
     else:
         result.update(status='current', exitCode=0, message=f'a suíte inteira passou na ponta {head[:7]}')
-    return result
+    return adopted(result, record)
 
 
 def full_sha(value):

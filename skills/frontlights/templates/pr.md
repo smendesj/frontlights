@@ -48,7 +48,8 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
   atual>; teste assistido <resposta do usuário, ou `not_needed`>.
 
 **Suíte inteira da release:** <comando, contagem, saída> na ponta da main local `<sha curto>`, de onde a branch da
-release foi cortada.
+release foi cortada. Quando ela foi adotada (`homolog suite --release --from`), diga "adotada da ponta `<sha curto da
+origem>`" e cite <comando, contagem, saída e tempo da execução original>.
 
 ## Risco do merge
 
