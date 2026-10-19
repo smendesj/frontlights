@@ -3,7 +3,29 @@
   "project": null,
   "roads": null,
   "homolog": {
-    "backupDir": null
+    "backupDir": null,
+    "suites": {
+      "impact": {
+        "argv": [
+          "python",
+          "tests/suite.py",
+          "--impact",
+          "{base}"
+        ],
+        "timeoutSeconds": 2400
+      },
+      "full": {
+        "argv": [
+          "python",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "timeoutSeconds": 3600
+      }
+    }
   },
   "roadmapSync": {
     "enabled": false,

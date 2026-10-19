@@ -11,7 +11,7 @@
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling; sem seção, dito uma vez, quando o log do grilling diz "não se aplica") e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo, a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
@@ -150,6 +150,18 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   preview/log/<nome>.log  log mascarado de cada processo da prévia
   preview/branch.json    nome da branch da prévia, que o `preview stop` não apaga (o primeiro refresh reconhece a branch como da prévia)
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
+  issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa): mode, source (config ou
+                         argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
+                         seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
+                         compara com a ponta (current, stale, red, missing ou unconfigured)
+  issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
+  release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
+                         principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
+                         `references/development.md`, "The release")
+  release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa
+                         ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
+                         e a PR da release fica pronta por ela (`references/development.md`, "The release")
+  release/suite-full-<data-hora>.log  saída mascarada de cada execução dela
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```
 
@@ -329,9 +341,9 @@ módulos de portas e da prévia do `serve` e de integração do `checks`, cada u
 cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
-Fica para o fim, antes da revisão independente e do merge na main local, a suíte inteira sem a variável, uma vez, pelo
-`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
-obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede; a CI do GitHub deste
+Por issue, o portão é a suíte por impacto do projeto (`references/development.md`, "Which tests run when"); a
+suíte inteira sem a variável roda na release, uma vez, pelo `python -m unittest discover -s tests -v` (o runner
+não a deixa mais rápida do que o `discover`), obrigatória com ou sem CI no projeto; a CI do GitHub deste
 repositório roda o mesmo `discover` e não define a variável.
 
 ## Ponto de retomada e continuação

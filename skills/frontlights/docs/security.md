@@ -77,8 +77,8 @@ homologação: acumula as issues que passaram nos três portões, e a issue fech
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
 remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
-nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
-current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
+nunca de uma slice) e com os três `gates` de "Into the local main" (`references/development.md`); um valor fora
+deles, ou a chave antiga `full_suite`, nomeia o portão na recusa.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
@@ -97,7 +97,8 @@ rede do utilitário, para o remoto já configurado no repositório, com as crede
 **Backup da main local (`homolog bundle`).** A cada merge na main local, a sessão grava um bundle Git da main
 local e das branches de trabalho de todo `branch_prefix` dos registros de autorização na pasta da chave `homolog.backupDir` do `.frontlights/config.json` do
 projeto, a única gravação da execução fora do projeto. A chave é um caminho absoluto do usuário (o `inspect`
-recusa caminho relativo, `..`, `~`, marcador `{}` e qualquer outra chave dentro de `homolog`), a pasta precisa
+recusa caminho relativo, `..`, `~`, marcador `{}` e, dentro de `homolog`, qualquer chave além de `backupDir` e
+`suites`), a pasta precisa
 existir (o utilitário nunca a cria), nenhuma junção, link simbólico ou outro ponto de reparse pode estar no
 caminho (o marcador de nuvem do OneDrive é aceito, como no `scrumRoot`), só um arquivo novo é escrito por
 chamada (nunca se sobrescreve nem se apaga um bundle), o arquivo é conferido por `git bundle verify` antes de
@@ -363,8 +364,9 @@ Os testes usam transporte e datas simulados e não homologam o RoadS real.
 
 ## `serve`, `checks` e o teste no navegador
 
-O teste de navegador (`scripts/serve.py`) e as verificações (`scripts/checks.py`) também
-executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `checks`):
+O teste de navegador (`scripts/serve.py`), as verificações (`scripts/checks.py`) e as suítes da
+homologação (`homolog suite`) também executam comandos lidos do `.frontlights/config.json` (blocos
+`browserTest`, `checks` e `homolog.suites`; no `homolog suite`, também o `--argv` que a sessão passa):
 
 - **Comandos sem shell:** cada `argv` é uma lista executada diretamente. Nos `argv` de
   `checks`, o `scripts/checks.py` aplica um filtro de shell embutido (cmd, sh, powershell, `.bat`,
@@ -373,7 +375,9 @@ executam comandos lidos do `.frontlights/config.json` (blocos `browserTest` e `c
   `npm test` ou outro executável fazem por dentro e não reconhece shells renomeados nem wrappers
   e interpretadores fora da lista. O `scripts/serve.py` executa `browserTest.processes` também
   sem shell (lista de argumentos), mas sem esse filtro: só recusa metacaracteres de shell no argv
-  quando o executável é `.cmd` ou `.bat`, que o Windows roda pelo `cmd.exe`.
+  quando o executável é `.cmd` ou `.bat`, que o Windows roda pelo `cmd.exe`. O `homolog suite`
+  aplica ao argv de `homolog.suites` e ao `--argv` o mesmo filtro de shell do `checks`, roda sem
+  shell e, no prazo, mata a árvore inteira de processos.
 - **Hosts locais:** o `serve` não confere o host do `health` (exige só http ou https, nome de
   host, porta válida e nenhum `@` na URL) e, no `start`, consulta um `health` não local até o
   prazo. Quem recusa host fora de `127.0.0.1`, `localhost` ou `::1` antes de qualquer requisição

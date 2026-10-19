@@ -1,4 +1,4 @@
-"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1, S2 e S3).
+"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1, S2 e S3; `--impact` da issue 52, S4).
 
 Roda cada módulo `test_*.py` da pasta como um processo filho (`python -m unittest discover -s <pasta> -p <arquivo>`,
 o mesmo modo da suíte inteira, que respeita o `load_tests` da suíte rápida): os módulos sensíveis da lista SERIAL
@@ -20,8 +20,19 @@ com 0xC000013A antes de a thread principal reagir: esse código conta como inter
 variável, trabalhadores e, por módulo, fila, tempo, contagens, resultado e o comando para rodá-lo sozinho. Numa
 interrupção, o relatório sai com `result: "interrupted"` e só os módulos que terminaram antes dela.
 
+`--impact <base>` é a suíte por impacto (issue 52, S4): roda a suíte rápida como sempre, com
+`FRONTLIGHTS_SUITE=rapida` (todos os módulos; os pesados da lista HEAVY se relatam pulados pelo `load_tests`), e,
+SEM a variável, cada pesado que o diff toca. Os mudados são o diff commitado `<base>...HEAD` MAIS a árvore de
+trabalho (no índice, fora dele e não rastreados), para que uma edição sem commit não fique de fora. "Toca" é a
+seleção do `tests/pre_commit.py` (`selected`): o módulo mudou, cita o nome de um arquivo mudado ou importa um script
+mudado; escolhido só em algumas classes, o pesado roda inteiro, o que é mais simples e seguro. Uma mudança no
+`tests/suite.py` ou no `tests/pre_commit.py` escolhe todos. Os pesados escolhidos rodam na fila serial (fila
+`impacto`), um por vez, cada um logo antes da rodada rápida dele. O relatório ganha `mode: "impact"`, `base`,
+`base_commit`, `changed` e `impact` (por pesado: `name`, `selected`, `reason`), depois das chaves de sempre; o
+`--list` mostra o plano com os pesados que rodariam. Base que o Git não resolve: sai com 2 sem rodar nada.
+
 Uso: python tests/suite.py [--tests-dir PASTA] [--serial a,b,c] [--workers N] [--module-timeout S]
-                           [--report ARQUIVO] [--list]
+                           [--report ARQUIVO] [--list] [--impact BASE]
 """
 import argparse
 import json
@@ -55,6 +66,13 @@ SERIAL = (
     ('test_browser_app_example', 'Chromium quando o Playwright existe'),
     ('test_checks', 'asserções de 14 s e 20 s com prazos reais de 1 s; por último, para não disputar CPU'),
 )
+
+# Os módulos pesados: os que o `load_tests` pula com FRONTLIGHTS_SUITE=rapida. No `--impact`, cada um que o diff
+# toca roda de novo, sem a variável, na fila serial.
+HEAVY = ('test_serve_ports', 'test_checks_integration', 'test_serve_preview')
+# Os arquivos da pasta dos testes cuja mudança escolhe todos os pesados no `--impact`: o runner e a seleção.
+RUNNER_FILES = ('suite.py', 'pre_commit.py')
+IMPACT = 'impacto'  # a fila dos pesados que rodam sem a variável no `--impact`
 
 ANSI = re.compile(r'\x1b\[[0-9;]*m')  # 3.13+ colore a saída do unittest com FORCE_COLOR ou PYTHON_COLORS
 RAN_LINE = re.compile(r'^Ran (\d+) tests? in [\d.]+s$')
@@ -111,23 +129,42 @@ def parse(argv):
     parser.add_argument('--report', type=report_path, default=None,
                         help='grava a rodada em JSON neste arquivo, como evidência (a pasta precisa existir)')
     parser.add_argument('--list', action='store_true', help='só lista os módulos e a ordem, sem rodar nada')
+    parser.add_argument('--impact', metavar='BASE', default=None,
+                        help='suíte por impacto: a rápida inteira (FRONTLIGHTS_SUITE=rapida) e, sem a variável, os '
+                             'módulos pesados que o diff BASE...HEAD mais a árvore de trabalho toca')
     return parser.parse_args(argv)
 
 
 # --- plano --------------------------------------------------------------------------------------------------
 
 class Plan:
-    """Os módulos que rodariam: a fila serial na ordem dada e o pool em ordem alfabética."""
+    """Os módulos que rodariam: a fila serial na ordem dada e o pool em ordem alfabética. No `--impact`, `impact`
+    traz a escolha de cada pesado (Impact) e a fila serial leva, logo antes da rodada rápida de cada pesado
+    escolhido, a rodada dele sem a variável (fila `impacto`): o primeiro da fila roda sozinho, como na suíte
+    inteira. Um pesado escolhido fora da lista serial vai para o fim da fila."""
 
-    def __init__(self, tests_dir, shown_dir, serial, pool, workers):
+    def __init__(self, tests_dir, shown_dir, serial, pool, workers, impact=None):
         self.tests_dir = tests_dir
         self.shown_dir = shown_dir
         self.serial = serial
         self.pool = pool
         self.workers = workers
+        self.impact = impact
+
+    def chosen(self):
+        return [item['name'] for item in self.impact.records if item['selected']] if self.impact else []
+
+    def queue(self):
+        chosen = self.chosen()
+        entries = []
+        for name in self.serial:
+            if name in chosen:
+                entries.append((name, IMPACT))
+            entries.append((name, 'serial'))
+        return entries + [(name, IMPACT) for name in chosen if name not in self.serial]
 
     def entries(self):
-        return [(name, 'serial') for name in self.serial] + [(name, 'pool') for name in self.pool]
+        return self.queue() + [(name, 'pool') for name in self.pool]
 
 
 def serial_names(text):
@@ -163,7 +200,85 @@ def plan(options):
 
 def print_list(current):
     for order, (name, kind) in enumerate(current.entries(), start=1):
-        print(f'{order:>3}  {kind:<6}  {name}')
+        print(f'{order:>3}  {kind:<7}  {name}')
+    if current.impact is not None:
+        print()
+        print_impact(current.impact)
+
+
+# --- suíte por impacto (--impact) ---------------------------------------------------------------------------
+
+class ImpactError(Exception):
+    pass
+
+
+class Impact:
+    """A escolha dos pesados no `--impact`: a base pedida e o commit dela, os arquivos mudados e, por pesado, se
+    roda sem a variável e por quê."""
+
+    def __init__(self, base, base_commit, changed, records):
+        self.base = base
+        self.base_commit = base_commit
+        self.changed = changed
+        self.records = records
+
+
+def impact_selection(tests_dir, base):
+    """Os pesados que o diff toca. Mudados: o diff commitado `git diff --name-only --no-renames <base>...HEAD`
+    (desde o ponto em que o HEAD saiu da base) MAIS a árvore de trabalho (no índice, fora dele e não rastreados,
+    como o `tests/pre_commit.py` lista), para que uma edição ainda sem commit não fique de fora. "Toca" é a seleção
+    do `tests/pre_commit.py` (`selected`): o módulo mudou, ou cita o nome de um arquivo mudado, ou importa um script
+    mudado. Escolhido só em algumas classes, o pesado roda inteiro (mais simples, e seguro). Uma mudança no runner
+    ou na seleção (RUNNER_FILES, na pasta dos testes) escolhe todos. Levanta ImpactError quando o Git não resolve a
+    base ou falha."""
+    import pre_commit  # tardio: o pre_commit importa este módulo
+    failures = (pre_commit.GitError, OSError, subprocess.SubprocessError)
+    try:
+        root = Path(pre_commit.git(tests_dir, 'rev-parse', '--show-toplevel').strip()).resolve()
+    except failures as error:
+        raise ImpactError(f'--impact: a pasta {tests_dir} não está num repositório Git ({error}). '
+                          'Nada foi rodado.') from error
+    try:
+        base_commit = pre_commit.git(root, 'rev-parse', '--verify', '--quiet', f'{base}^{{commit}}').strip()
+    except failures as error:
+        raise ImpactError(f'--impact: o Git não resolve a base {base!r} em {root}. Nada foi rodado.') from error
+    try:
+        committed = [path for path in pre_commit.git(root, 'diff', '--name-only', '--no-renames', '-z',
+                                                     f'{base_commit}...HEAD').split('\0') if path]
+        working = pre_commit.changed_files(root)
+    except failures as error:
+        raise ImpactError(f'--impact: o Git falhou ao comparar {base!r} com o HEAD ({error}). '
+                          'Nada foi rodado.') from error
+    changed = sorted(set(committed) | set(working))
+    chosen = dict(pre_commit.selected(tests_dir, changed))
+    runner = {(tests_dir / name).resolve() for name in RUNNER_FILES}
+    runner_changed = [path for path in changed if (root / path).resolve() in runner]
+    names = {Path(path).name for path in changed}
+    records = []
+    for name in HEAVY:
+        module = tests_dir / f'{name}.py'
+        if not module.is_file():
+            selected, reason = False, 'o módulo não existe na pasta'
+        elif runner_changed:
+            selected, reason = True, f'o runner ou a seleção mudou ({", ".join(runner_changed)})'
+        elif name not in chosen:
+            selected, reason = False, 'o diff não toca o que ele testa'
+        elif module.name in names:
+            selected, reason = True, 'o módulo mudou'
+        else:
+            source = module.read_text(encoding='utf-8', errors='replace')
+            cited = [path for path in changed
+                     if Path(path).name in source or (path.endswith('.py') and Path(path).stem in source)]
+            selected, reason = True, f'cita ou importa um arquivo mudado ({", ".join(cited)})'
+        records.append({'name': name, 'selected': selected, 'reason': reason})
+    return Impact(base, base_commit, changed, records)
+
+
+def print_impact(impact):
+    print(f'Impacto: base {impact.base} ({impact.base_commit[:12]}), {len(impact.changed)} arquivo(s) mudado(s)')
+    for item in impact.records:
+        verdict = 'roda sem a variável' if item['selected'] else 'fica de fora'
+        print(f'  {item["name"]}: {verdict} ({item["reason"]})')
 
 
 # --- um módulo por processo filho ---------------------------------------------------------------------------
@@ -304,21 +419,23 @@ class Reader(threading.Thread):
             pass
 
 
-def run_module(current, name, kind, root, timeout, live, stopping, command=None):
+def run_module(current, name, kind, root, timeout, live, stopping, command=None, env=None):
     """Roda um módulo como processo filho e devolve o Outcome, ou None quando a rodada foi interrompida. O filho
     roda em grupo próprio, que o livra só do Ctrl+C do console: o Ctrl+Break do teclado chega a todos os processos
     do console, e o filho morre com 0xC000013A (STATUS_CONTROL_C_EXIT) antes de a thread principal reagir; esse
     código liga `stopping` e conta como interrupção, não como erro do módulo. Passado o prazo, mata a árvore e
     guarda a saída parcial; se a árvore não morrer, é erro de infraestrutura. `live` é o registro dos filhos vivos,
     para o abort; `stopping` encerra a espera quando a suíte foi interrompida. `command` troca o comando padrão
-    (`command_for`), como o `tests/pre_commit.py` faz para rodar só algumas classes com `-k`."""
+    (`command_for`), como o `tests/pre_commit.py` faz para rodar só algumas classes com `-k`; `env` troca o
+    ambiente dos filhos (o padrão é o deste processo), como o `--impact` faz para rodar os pesados sem a variável."""
     started = time.monotonic()
-    process = subprocess.Popen(command or command_for(current.tests_dir, name), cwd=str(root), env=dict(os.environ),
+    process = subprocess.Popen(command or command_for(current.tests_dir, name), cwd=str(root),
+                               env=dict(os.environ) if env is None else env,
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
     reader = Reader(process.stdout)
     reader.start()
-    live.add(name, process)
+    live.add((name, kind), process)
     timed_out = None
     problem = None
     interrupted = False
@@ -343,7 +460,7 @@ def run_module(current, name, kind, root, timeout, live, stopping, command=None)
         stop_tree(process)  # um erro aqui não deixa filho vivo
         raise
     finally:
-        live.remove(name)
+        live.remove((name, kind))
     if interrupted or process.returncode == STATUS_CONTROL_C_EXIT:
         stopping.set()
         return None
@@ -353,7 +470,8 @@ def run_module(current, name, kind, root, timeout, live, stopping, command=None)
 
 
 class Live:
-    """Os filhos vivos, por nome, sob trava: o abort mata cada um com a árvore."""
+    """Os filhos vivos, por (nome, fila), sob trava: o abort mata cada um com a árvore. No `--impact`, o mesmo
+    módulo pode rodar em duas filas."""
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -368,7 +486,7 @@ class Live:
             self.processes.pop(name, None)
 
     def kill_all(self):
-        """Mata a árvore de cada filho ainda vivo; devolve os nomes dos que ela matou."""
+        """Mata a árvore de cada filho ainda vivo; devolve as chaves (nome, fila) dos que ela matou."""
         with self.lock:
             processes = list(self.processes.items())
         killed = set()
@@ -392,8 +510,8 @@ class Run:
         self.root = root
         self.timeout = timeout
         self.lock = threading.Lock()
-        self.outcomes = {}
-        self.interrupted = set()  # os módulos que a interrupção matou (pelo runner ou pelo próprio evento)
+        self.outcomes = {}  # por (nome, fila)
+        self.interrupted = set()  # (nome, fila) dos que a interrupção matou (pelo runner ou pelo próprio evento)
         self.errors = []  # (onde, traceback) dos erros das threads fora de um módulo
         self.live = Live()
         self.stopping = threading.Event()
@@ -407,24 +525,26 @@ class Run:
         if self.stopping.is_set():
             return
         started = time.monotonic()
+        env = without_variable() if kind == IMPACT else None
         try:
-            outcome = run_module(self.current, name, kind, self.root, self.timeout, self.live, self.stopping)
+            outcome = run_module(self.current, name, kind, self.root, self.timeout, self.live, self.stopping,
+                                 env=env)
         except Exception as error:
             outcome = Outcome(name, kind, time.monotonic() - started, None, traceback.format_exc(),
                               problem=f'erro interno do runner ({type(error).__name__}: {error})')
         with self.lock:
             if outcome is None:
-                self.interrupted.add(name)
+                self.interrupted.add((name, kind))
             elif not self.stopping.is_set():
-                self.outcomes[name] = outcome
+                self.outcomes[(name, kind)] = outcome
                 print(module_line(outcome), flush=True)
 
-    def serial_queue(self, names, first_done):
+    def serial_queue(self, entries, first_done):
         try:
-            for name in names:
+            for name, kind in entries:
                 if self.stopping.is_set():
                     break
-                self.one(name, 'serial')
+                self.one(name, kind)
                 first_done.set()
         except Exception:
             with self.lock:
@@ -438,7 +558,7 @@ class Run:
 
     def execute(self):
         first_done = threading.Event()
-        self.queue = threading.Thread(target=self.serial_queue, args=(list(self.current.serial), first_done),
+        self.queue = threading.Thread(target=self.serial_queue, args=(self.current.queue(), first_done),
                                       name='fila-serial')
         self.queue.start()
         while not first_done.wait(POLL_SECONDS):
@@ -459,7 +579,7 @@ class Run:
             if error is not None:
                 self.errors.append(('pool', ''.join(traceback.format_exception(error))))
         self.check_stop()
-        return [self.outcomes[name] for name, _ in self.current.entries() if name in self.outcomes]
+        return [self.outcomes[key] for key in self.current.entries() if key in self.outcomes]
 
     def abort(self):
         """Interrupção: nada mais começa, todo filho vivo morre com a árvore e as threads têm um prazo para
@@ -488,6 +608,11 @@ class Run:
 
 # --- saída --------------------------------------------------------------------------------------------------
 
+def without_variable():
+    """O ambiente deste processo sem a variável: o dos pesados que o `--impact` roda de verdade."""
+    return {key: value for key, value in os.environ.items() if key != VARIABLE}
+
+
 def print_header(current):
     value = os.environ.get(VARIABLE)
     print('Suíte do Frontlights em paralelo')
@@ -498,6 +623,8 @@ def print_header(current):
     print(f'Fila serial: {", ".join(current.serial) if current.serial else "(nenhuma)"}')
     print(f'Módulos: {len(current.serial) + len(current.pool)} ({len(current.serial)} seriais, '
           f'{len(current.pool)} no pool)')
+    if current.impact is not None:
+        print_impact(current.impact)
     print(flush=True)
 
 
@@ -626,7 +753,7 @@ def module_record(current, outcome):
 def report_data(current, options, head, started_at, wall, outcomes, code):
     """O JSON da rodada. Os totais somam só os módulos sem erro de infraestrutura, como a linha de total."""
     good = counted(outcomes)
-    return {
+    data = {
         'version': 1,
         'started_at': started_at.isoformat(timespec='milliseconds'),
         'finished_at': datetime.now().astimezone().isoformat(timespec='milliseconds'),
@@ -648,6 +775,13 @@ def report_data(current, options, head, started_at, wall, outcomes, code):
         'result': RESULTS[code],
         'exit_code': code,
     }
+    if current.impact is not None:  # chaves só do `--impact`, depois das de sempre
+        data['mode'] = 'impact'
+        data['base'] = current.impact.base
+        data['base_commit'] = current.impact.base_commit
+        data['changed'] = current.impact.changed
+        data['impact'] = [dict(item) for item in current.impact.records]
+    return data
 
 
 def write_report(path, data):
@@ -674,12 +808,16 @@ def main(argv=None):
     options = parse(sys.argv[1:] if argv is None else argv)
     try:
         current = plan(options)
-    except SystemExit as error:
+        if options.impact is not None:
+            current.impact = impact_selection(current.tests_dir, options.impact)
+    except (SystemExit, ImpactError) as error:
         print(error, file=sys.stderr)
         return 2
     if options.list:
         print_list(current)
         return 0
+    if current.impact is not None:
+        os.environ[VARIABLE] = 'rapida'  # a rodada rápida, como hoje; os pesados escolhidos rodam sem ela
     root = Path(__file__).resolve().parents[1]
     head = git_head(root) if options.report is not None else None
     run = Run(current, root, options.module_timeout)
@@ -708,7 +846,7 @@ def interrupted(run, current, options, head, started_at, started):
     """Mata o que está vivo e relata só os módulos que terminaram antes da interrupção; sai com 130."""
     killed = run.abort()
     with run.lock:
-        finished = [run.outcomes[name] for name, _ in current.entries() if name in run.outcomes]
+        finished = [run.outcomes[key] for key in current.entries() if key in run.outcomes]
     print(f'\nInterrompido: {killed} módulo{"" if killed == 1 else "s"} morto{"" if killed == 1 else "s"} '
           f'(com as árvores de processos); nada foi somado.', flush=True)
     if options.report is not None:

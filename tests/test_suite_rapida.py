@@ -141,7 +141,14 @@ class FastSuiteTextTests(unittest.TestCase):
                        'skip the modules that start real processes and ports',
                        'reported as skipped with a reason that names the variable',
                        'any other value, or no variable, runs everything',
-                       'Before the independent review and before the merge into the local main, run the whole suite without the variable',
+                       "Per issue, the gate is the project's impact suite",
+                       '(in this repository, `python tests/suite.py --impact {base}`)',
+                       '`homolog suite --mode impact --base <base>`',
+                       "`homolog suite --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>`",
+                       '`N` sized to the suite, since a run past it is killed',
+                       'is run once more, alone, after the watched run ends',
+                       '"Declarar as suítes agora"', '"Rodar a suíte inteira desta vez"',
+                       'The whole suite runs at the release ("The release"), with or without CI in the project',
                        'with or without CI in the project', '`tests.test_serve_preview`',
                        'the six sensitive ones in a serial queue'):
             with self.subTest(phrase=phrase):
@@ -151,7 +158,7 @@ class FastSuiteTextTests(unittest.TestCase):
         text = flat('README.md')
         for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
                        'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
-                       'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
+                       'a suíte inteira sem a variável roda na release, uma vez',
                        'com ou sem CI no projeto', 'A CI do GitHub não define a variável', '`tests.test_serve_preview`',
                        'os seis sensíveis'):
             with self.subTest(phrase=phrase):
@@ -162,7 +169,7 @@ class FastSuiteTextTests(unittest.TestCase):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que a slice toca',
                        'a suíte rápida é a forma de conferir o todo entre slices',
-                       'antes da revisão independente e do merge na main local, a suíte inteira sem a variável',
+                       'a suíte inteira sem a variável roda na release, uma vez',
                        'obrigatória com ou sem CI no projeto', 'os módulos de portas e da prévia do `serve`',
                        'os seis sensíveis numa fila serial'):
             with self.subTest(phrase=phrase):

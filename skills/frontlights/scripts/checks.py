@@ -568,7 +568,8 @@ def kill_tree(process, job=None):
 def run_process(argv, cwd, timeout, warnings, env=None):
     """Roda a suíte em grupo/sessão novos, com a saída em arquivo (um neto vivo não prende a leitura).
 
-    Devolve (código de saída, saída). No prazo estourado mata a árvore inteira e levanta TimeoutExpired.
+    Devolve (código de saída, saída). No prazo estourado mata a árvore inteira e levanta TimeoutExpired, com a
+    saída parcial (texto) em `output`.
     No Windows a suíte inteira roda dentro de um Job Object; sem ele, `warnings` recebe um aviso.
     """
     options = ({'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt'
@@ -592,9 +593,11 @@ def run_process(argv, cwd, timeout, warnings, env=None):
                     job = None
             try:
                 process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as expired:
                 kill_tree(process, job)
                 process.wait()
+                sink.seek(0)
+                expired.output = sink.read().decode(errors='replace')
                 raise
             if os.name != 'nt':
                 kill_tree(process)  # sobras de netos depois de uma execução normal
