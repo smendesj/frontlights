@@ -401,8 +401,10 @@ class LocalMainTextTests(unittest.TestCase):
                        'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
                        '`fullSuite` must be `current`',
                        'the whole suite of the release is green at the tip the release branch was cut from',
-                       'its `recordedHead` equal to the head of the pull request',
-                       'it does not make the pull request unready',
+                       '(`homolog suite-gate --release --head <head of the pull request> --base <base>` answers '
+                       '`current`, from the per-tip record `release/suite-<sha>.json`)',
+                       'Another issue entering the local main, or the suite run for a later release, does not make '
+                       'the pull request unready',
                        'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
@@ -410,13 +412,17 @@ class LocalMainTextTests(unittest.TestCase):
                                                  '**Offer it.**') if title in body]
         self.assertEqual(order, sorted(order))
         self.assertNotIn('(`fullSuite: current`)', body)
+        self.assertNotIn('recordedHead', body.split('**Offer the merge when the PR is ready.**')[1].split('**What wakes')[0])
         self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
                        '"Agora não" deixa a issue homologada na main local',
                        'a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo',
-                       'release/suite.json', 'release/suite-full-<data-hora>.log'):
+                       'release/suite.json', 'release/suite-full-<data-hora>.log',
+                       'release/suite-<sha>.json cópia do mesmo registro por ponta (o sha completo do head), que a '
+                       'execução numa ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a '
+                       'julga, e a PR da release fica pronta por ela'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('| Espera do merge |', protocol)
