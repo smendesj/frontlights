@@ -392,6 +392,64 @@ class SuiteReleaseTests(SuiteTestCase):
         code, gate = self.release_gate(config)
         self.assertEqual((code, gate.get('status')), (2, 'stale'), gate)
 
+    def tip_record(self, head):
+        return self.work / '.frontlights' / 'release' / f'suite-{head}.json'
+
+    def test_two_release_runs_at_two_tips_keep_both_per_tip_records(self):
+        """Revisão da issue 52, rodada 2: a suíte da release guarda também uma cópia por ponta,
+        `release/suite-<sha>.json`, que a rodada numa ponta seguinte não sobrescreve; `suite.json` fica a última."""
+        config = self.config({'full': ()})
+        first = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.assertEqual(self.release(config, '--mode', 'full')[0], 0)
+        self.commit('app.txt', 'three\n', 'another issue in the local main')
+        second = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.assertEqual(self.release(config, '--mode', 'full')[0], 0)
+        for head in (first, second):
+            with self.subTest(head=head):
+                saved = json.loads(self.tip_record(head).read_text(encoding='utf-8'))
+                self.assertEqual((saved['mode'], saved['head'], saved['exitCode']), ('full', head, 0))
+        self.assertEqual(json.loads(self.release_record.read_text(encoding='utf-8'))['head'], second)
+
+    def test_the_gate_of_a_given_tip_stays_current_after_the_local_main_moves_on(self):
+        """Rodada 2: a PR da release A espera; outra issue entra na main local e a suíte roda de novo para a próxima
+        release. `suite-gate --release --head <ponta de A>` segue `current`, mesmo com a worktree principal noutra
+        ponta; sem `--head`, o último registro é julgado como antes."""
+        config = self.config({'full': ()})
+        first = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.assertEqual(self.release(config, '--mode', 'full')[0], 0)
+        self.commit('app.txt', 'three\n', 'another issue in the local main')
+        self.assertEqual(self.release(config, '--mode', 'full')[0], 0)
+        self.commit('app.txt', 'four\n', 'yet another issue')
+        self.git(self.work, 'switch', '-q', 'claude/issue-7')
+        code, gate = self.release_gate(config, '--head', first)
+        self.assertEqual((code, gate.get('status'), gate.get('head')), (0, 'current', first), gate)
+        self.assertTrue(os.path.samefile(gate['recordPath'], self.tip_record(first)))
+        code, latest = self.release_gate(config)
+        self.assertEqual(code, 1, latest)
+
+    def test_the_gate_of_an_unknown_tip_is_missing_and_a_failed_one_is_red(self):
+        config = self.config({'full': ()})
+        unknown = 'a' * 40
+        code, gate = self.release_gate(config, '--head', unknown)
+        self.assertEqual((code, gate.get('status'), gate.get('head')), (2, 'missing', unknown), gate)
+        failing = self.config({'full': ('--falha',)})
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.assertEqual(self.release(failing, '--mode', 'full')[0], 1)
+        code, gate = self.release_gate(config, '--head', head)
+        self.assertEqual((code, gate.get('status')), (2, 'red'), gate)
+
+    def test_head_needs_the_release_and_a_full_sha(self):
+        config = self.config({'full': ()})
+        code, result = self.cli('suite-gate', '--root', str(self.work), '--config', str(config), '--issue', '7',
+                                '--head', 'a' * 40)
+        self.assertEqual(code, 1, result)
+        self.assertIn('--head só vale com --release', result['message'])
+        for head in ('abc1234', 'z' * 40, '../' + 'a' * 37):
+            with self.subTest(head=head):
+                code, result = self.release_gate(config, '--head', head)
+                self.assertEqual(code, 1, result)
+                self.assertIn('sha completo', result['message'])
+
 
 if __name__ == '__main__':
     unittest.main()

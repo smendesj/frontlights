@@ -158,6 +158,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
                          `references/development.md`, "The release")
+  release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa
+                         ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
+                         e a PR da release fica pronta por ela (`references/development.md`, "The release")
   release/suite-full-<data-hora>.log  saída mascarada de cada execução dela
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```

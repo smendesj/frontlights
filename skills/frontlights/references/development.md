@@ -650,10 +650,10 @@ offers the release again with everything accumulated.
   head and base branch, the approved base, and when the wait began.
 - **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
   issue in it are recorded, the whole suite of the release is green at the tip the release branch was cut from
-  (the green full record in `.frontlights/release/suite.json`, its `recordedHead` equal to the head of the pull
-  request), the pull request has no conflict with the base and no finding lacks a destination. Another issue that
-  enters the local main during the wait moves the tip of the local main, not the pull request: it does not make
-  the pull request unready.
+  (`homolog suite-gate --release --head <head of the pull request> --base <base>` answers `current`, from the
+  per-tip record `release/suite-<sha>.json`), the pull request has no conflict with the base and no finding lacks
+  a destination. Another issue entering the local main, or the suite run for a later release, does not make the
+  pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
   merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its
