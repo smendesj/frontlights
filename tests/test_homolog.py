@@ -401,8 +401,12 @@ class LocalMainTextTests(unittest.TestCase):
                        'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
                        '`fullSuite` must be `current`',
                        'the whole suite of the release is green at the tip the release branch was cut from',
-                       '(`homolog suite-gate --release --head <head of the pull request> --base <base>` answers '
-                       '`current`, from the per-tip record `release/suite-<sha>.json`)',
+                       '(`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite-gate --release --head '
+                       '<head of the pull request> --base <base> --root <main worktree> --config '
+                       '.frontlights/config.json` answers `current`, from the per-tip record `release/suite-<sha>.json` '
+                       "in the main worktree's `.frontlights/release/`)",
+                       'on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is '
+                       'refused and nothing runs: commit or discard it first)',
                        'Another issue entering the local main, or the suite run for a later release, does not make '
                        'the pull request unready',
                        'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):

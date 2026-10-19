@@ -438,6 +438,62 @@ class SuiteReleaseTests(SuiteTestCase):
         code, gate = self.release_gate(config, '--head', head)
         self.assertEqual((code, gate.get('status')), (2, 'red'), gate)
 
+    def test_release_with_a_tracked_uncommitted_edit_is_refused_and_runs_nothing(self):
+        """Revisão da issue 52, rodada 3: a suíte da release roda só numa árvore limpa; uma edição não commitada
+        num arquivo versionado (staged ou não) é recusada, nada roda e nenhum registro da ponta é gravado."""
+        config = self.config({'full': ()})
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        for staged in (False, True):
+            with self.subTest(staged=staged):
+                (self.work / 'app.txt').write_text('edição não commitada\n', encoding='utf-8')
+                if staged:
+                    self.git(self.work, 'add', 'app.txt')
+                code, result = self.release(config, '--mode', 'full')
+                self.assertEqual(code, 1, result)
+                self.assertIn('app.txt', result['message'])
+                self.assertFalse(self.release_record.exists())
+                self.assertFalse(self.tip_record(head).exists())
+                self.git(self.work, 'reset', '-q', '--hard')
+
+    def test_release_with_an_untracked_file_outside_frontlights_is_refused(self):
+        config = self.config({'full': ()})
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        (self.work / 'pasta').mkdir()
+        (self.work / 'pasta' / 'novo.txt').write_text('não versionado\n', encoding='utf-8')
+        code, result = self.release(config, '--mode', 'full')
+        self.assertEqual(code, 1, result)
+        self.assertIn('pasta/novo.txt', result['message'])
+        self.assertFalse(self.release_record.exists())
+        self.assertFalse(self.tip_record(head).exists())
+
+    def test_a_file_under_frontlights_does_not_block_the_release_suite(self):
+        config = self.config({'full': ()})
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        (self.work / '.frontlights').mkdir()
+        (self.work / '.frontlights' / 'notas.txt').write_text('registro local\n', encoding='utf-8')
+        code, result = self.release(config, '--mode', 'full')
+        self.assertEqual(code, 0, result)
+        self.assertTrue(self.tip_record(head).exists())
+
+    def test_the_gate_of_a_tip_whose_record_carries_uncommitted_changes_is_missing(self):
+        """Defesa em profundidade: um registro por ponta cuja evidência mostra diff não vazio, ou um arquivo fora do
+        commit, não vale pela ponta; `suite-gate --release --head` responde missing."""
+        import hashlib
+        config = self.config({'full': ()})
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.assertEqual(self.release(config, '--mode', 'full')[0], 0)
+        clean = json.loads(self.tip_record(head).read_text(encoding='utf-8'))
+        dirty_diff = json.loads(json.dumps(clean))
+        dirty_diff['evidence']['diff_sha256'] = hashlib.sha256(b'diff --git a/app.txt b/app.txt\n').hexdigest()
+        untracked = json.loads(json.dumps(clean))
+        untracked['evidence']['files']['solto.txt'] = hashlib.sha256(b'solto\n').hexdigest()
+        for name, record in (('diff', dirty_diff), ('untracked', untracked)):
+            with self.subTest(record=name):
+                self.tip_record(head).write_text(json.dumps(record), encoding='utf-8')
+                code, gate = self.release_gate(config, '--head', head)
+                self.assertEqual((code, gate.get('status')), (2, 'missing'), gate)
+                self.assertIn('não commitad', gate['message'])
+
     def test_head_needs_the_release_and_a_full_sha(self):
         config = self.config({'full': ()})
         code, result = self.cli('suite-gate', '--root', str(self.work), '--config', str(config), '--issue', '7',

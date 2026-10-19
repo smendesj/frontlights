@@ -64,8 +64,10 @@ Operations (each prints one JSON object on stdout):
          run was in progress), startedAt and finishedAt in America/Sao_Paulo. `state` green exits 0; red (failed,
          timed out or not started) exits 1; a mode without a suite is `unconfigured` (exit 2) and nothing runs.
          `--release` (in place of `--issue`) is the whole suite of the release: only `--mode full`, only in a
-         worktree with the local base checked out at its tip (HEAD is `refs/heads/<base>`), both refused (exit 1)
-         otherwise; the record and the log go to `.frontlights/release/`, and the record also to
+         worktree with the local base checked out at its tip (HEAD is `refs/heads/<base>`), and only on a clean
+         tree (no change outside `.frontlights/` left uncommitted, tracked, staged or not, or untracked; the
+         refusal names the files), each refused (exit 1) otherwise, nothing run and no record written; the record
+         and the log go to `.frontlights/release/`, and the record also to
          `release/suite-<full head sha>.json`, the copy of that tip that a run at another tip never overwrites.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
@@ -75,7 +77,9 @@ Operations (each prints one JSON object on stdout):
          current, 2 otherwise. `--release` judges `.frontlights/release/suite.json` as `--require full`, refused
          (exit 1) off the tip of the local `--base` (default main); `release-plan` shares the judgment.
          `--release --head <full sha>` judges the copy of that tip instead, wherever the main worktree stands:
-         `current` (a full run of that head exited 0), `red` (it failed) or `missing` (no copy); `--head` without
+         `current` (a full run of that head exited 0), `red` (it failed) or `missing` (no copy, or a copy whose
+         evidence shows changes not committed: a diff other than the empty one, or a file the commit lacks, so it
+         does not stand for the commit); `--head` without
          `--release`, or not a full sha, is refused (exit 1).
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
@@ -84,6 +88,7 @@ never a traceback.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -108,6 +113,7 @@ SUITE_MODES = ('impact', 'full')                # the suites `homolog.suites` ma
 SUITE_KEYS = ('argv', 'timeoutSeconds')         # the keys of each suite, the shape of `checks.regression`
 BASE_TOKEN = '{base}'                           # replaced in a suite argv by the base the run compares with
 FULL_SUITE_TIMEOUT = 3600                       # the whole suite without a configured timeout (impact: checks')
+EMPTY_DIFF = hashlib.sha256(b'').hexdigest()    # `diff_sha256` of the evidence of a tree with no tracked change
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
 MARKER_LINES = 3         # the marker sits among the first lines of the hook
@@ -789,6 +795,15 @@ def off_base_tip(root, base):
     return f'a worktree principal está em `{branch or "HEAD solta"}`, não na {base} local'
 
 
+def uncommitted_files(root):
+    """The files with a change not committed, tracked (staged or not) or untracked, `.frontlights/` left out as the
+    evidence leaves it out: the release suite runs only on a clean tree, so its per-tip record is the commit's."""
+    code, out, _ = git(root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all',
+                       '--', '.', ':(exclude).frontlights')
+    require(code == 0, 'o git não leu o estado da worktree')
+    return sorted({line[3:].split(' -> ')[-1].strip('"') for line in out.splitlines() if line.strip()})
+
+
 def zoned_now():
     """Now in RELEASE_ZONE (the user's zone), in the machine's local zone when it is unavailable; with offset."""
     try:
@@ -882,6 +897,10 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     base = plain_name(base, 'a branch base')
     place = off_base_tip(root, base) if release else None
     require(place is None, f'{place}; a suíte da release roda só na ponta da {base} local')
+    dirty = uncommitted_files(root) if release else []
+    require(not dirty, f'a worktree tem {len(dirty)} arquivo(s) com alterações não commitadas '
+                       f'({", ".join(dirty[:10])}{", ..." if len(dirty) > 10 else ""}); a suíte da release roda só '
+                       f'numa árvore limpa, commite ou descarte antes; nada foi rodado')
     settings, source = suite_run_settings(load_config(config_path), mode, argv_text, timeout_seconds)
     if settings is None:
         return {'state': 'unconfigured', 'exitCode': 2,
@@ -980,6 +999,22 @@ def release_suite(root, base):
     return judged
 
 
+def tip_changes(root, head, evidence):
+    """None when the evidence of a per-tip record shows a clean tree at `head`: the diff is empty (EMPTY_DIFF) and
+    every file it hashed is in the commit. Otherwise, in Portuguese, what was not committed (`.frontlights/` is never
+    in the evidence)."""
+    files = evidence.get('files')
+    if evidence.get('diff_sha256') != EMPTY_DIFF:
+        return 'alterações não commitadas em arquivos versionados'
+    code, out, _ = git(root, 'ls-tree', '-r', '-z', '--name-only', head)
+    if code != 0 or not isinstance(files, dict):
+        return 'uma evidência que não se confere com o commit'
+    extra = sorted(set(files) - set(out.split('\0')))
+    if extra:
+        return f'arquivo(s) não commitado(s) ({", ".join(extra[:10])}{", ..." if len(extra) > 10 else ""})'
+    return None
+
+
 def judge_tip(root, head):
     """The release suite record of one tip (`release/suite-<head>.json`) judged by itself: `current` when it is a
     full run of that head that exited 0, `red` when it failed, `missing` without it. The main worktree may stand
@@ -993,8 +1028,13 @@ def judge_tip(root, head):
         return result
     require(record.get('head') == head, f'{path} não é o registro da ponta {head[:7]} (head {str(record.get("head"))[:7]})')
     result.update(mode=record['mode'], source=record.get('source'), suiteExitCode=record.get('exitCode'))
+    changes = tip_changes(root, head, record['evidence'])
     if record['mode'] != 'full':
         result.update(status='missing', exitCode=2, message=f'o registro da ponta {head[:7]} não é da suíte inteira')
+    elif changes:
+        result.update(status='missing', exitCode=2,
+                      message=f'o registro da ponta {head[:7]} rodou com {changes}; não vale pelo commit, rode a '
+                              f'suíte da release de novo numa árvore limpa')
     elif record.get('exitCode') != 0:
         result.update(status='red', exitCode=2, message=f'a suíte inteira falhou na ponta {head[:7]}')
     else:

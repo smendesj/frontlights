@@ -617,8 +617,9 @@ offers the release again with everything accumulated.
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. It only reads.
 - **Run the whole suite on the local main.** In the main worktree, on the local main, run
-  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`,
-  then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`
+  on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
+  runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
   again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
@@ -650,8 +651,9 @@ offers the release again with everything accumulated.
   head and base branch, the approved base, and when the wait began.
 - **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
   issue in it are recorded, the whole suite of the release is green at the tip the release branch was cut from
-  (`homolog suite-gate --release --head <head of the pull request> --base <base>` answers `current`, from the
-  per-tip record `release/suite-<sha>.json`), the pull request has no conflict with the base and no finding lacks
+  (`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite-gate --release --head <head of the pull request> --base <base> --root <main worktree> --config .frontlights/config.json`
+  answers `current`, from the per-tip record `release/suite-<sha>.json` in the main worktree's
+  `.frontlights/release/`), the pull request has no conflict with the base and no finding lacks
   a destination. Another issue entering the local main, or the suite run for a later release, does not make the
   pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
