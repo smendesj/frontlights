@@ -830,9 +830,9 @@ prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 n
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
 slice, rode os módulos que a slice toca; por issue, o portão do merge na main local é a suíte por impacto (abaixo,
 regra em [`references/development.md`](skills/frontlights/references/development.md), "Which tests run when"); a
-suíte inteira sem a variável roda na release, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover
--s tests -v`: o runner não deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
-pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
+suíte inteira sem a variável roda na release, uma vez, com ou sem CI no projeto, pelo
+`python -m unittest discover -s tests -v`: o runner não deixa a suíte inteira mais rápida do que o `discover` (na
+issue 27, de 964 s a 1241 s pelo runner contra 934 s pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
 `python tests/suite.py --impact <base>` é a suíte por impacto: roda a suíte rápida como acima e, sem a
 variável, só os módulos pesados (`tests.test_serve_ports`, `tests.test_checks_integration`,
