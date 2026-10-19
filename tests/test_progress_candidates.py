@@ -266,7 +266,7 @@ class TextTests(unittest.TestCase):
         text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
         for phrase in ('Sprint block and chips', '`delivered`', '"Concluído: N partes em M issues"',
                        '"Em andamento: N partes em K issues"', 'There is no "Em validação" chip',
-                       'The covers are not deliveries', 'only the fallback when the facts have no `sprint`'):
+                       'The covers are not deliveries', 'when the facts have no `sprint`, say so plainly'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         contract = self.flat('docs', 'roads-contract.md')

@@ -141,8 +141,6 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     evidence/<data-hora>.txt
     review.json            evidência a que a revisão independente ficou vinculada (`review-gate`)
     merge-local-main.json  operação do merge na main local, conferida pelo `authorize`
-    suite.json             registro da suíte por impacto (ou inteira) da issue, gravado na worktree da issue,
-                           não na principal; campos opcionais `error` e `warnings`
     body-before|body-new|body-after-<carimbo>.md   cópias do corpo que o `closeout.py tick` guarda
   direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
                                 revisão, merge-local-main.json; no charter, a entrada de worktrees leva
@@ -160,7 +158,8 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa): mode, source (config ou
                          argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
                          seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
-                         compara com a ponta (current, stale, red, missing ou unconfigured)
+                         compara com a ponta (current, stale, red, missing ou unconfigured); campos opcionais
+                         `error` e `warnings`; fica na worktree da issue, não na principal
   issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
   release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;

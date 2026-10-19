@@ -45,7 +45,7 @@ class SkillTests(unittest.TestCase):
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
         for phrase in ('no implementation authorization, no merged PR and no green test stands in for it',
                        'Never close a parent before every one of its children is closed', '**The tick in a parent.**',
-                       'cleanup.py', 'offer a new sync'):
+                       'cleanup.py', 'Frontlights does not sync RoadS'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
 
@@ -101,15 +101,13 @@ class ReferenceTests(unittest.TestCase):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')
 
-    def test_the_reference_tells_that_roads_reads_only_the_card_status_and_offers_a_new_sync(self):
+    def test_the_reference_tells_that_roads_reads_only_the_card_status_and_shows_it_after_its_sync(self):
         for phrase in ('RoadS reads only the **Status** of the card in the Project, never whether the issue is closed',
                        'closing an issue without moving its card changes nothing there',
                        'a sync within 30 s of the previous one returns the old snapshot',
-                       '"Sincronizar agora" and "Deixar para depois"', 'the close-only fallback will not show in RoadS'):
+                       'RoadS shows them after its next sync', 'Frontlights does not sync RoadS', 'the close-only fallback will not show in RoadS'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
-        self.assertLessEqual(len('Sincronizar agora'.split()), 5)
-        self.assertLessEqual(len('Deixar para depois'.split()), 5)
 
     def test_closing_is_never_implied(self):
         for phrase in ('with **its own approval**', 'no merged PR and no green test stands in for it',

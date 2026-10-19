@@ -39,6 +39,7 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('every session', stage1)
         self.assertIn('Completar no GitHub as issues que o RoadS mostra?', stage1)
         self.assertLess(stage1.index('roads.py" status'), stage1.index('Then choose the lightest path'))
+        self.assertIn('say `message` in one line', ' '.join(stage1.split()))
         self.assertNotIn('Atualizar a sprint e o roadmap', text)
         self.assertNotIn('roadmap_sync', text)
 

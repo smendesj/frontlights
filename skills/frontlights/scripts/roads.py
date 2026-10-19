@@ -521,16 +521,22 @@ def request(ctx, transport, method, url, body=None):
 # ---------------------------------------------------------------- operations
 
 def op_status(root):
-    result = {'configured': False}
+    result = {'configured': False, 'enabled': False}
     try:
         ctx = Context(root)
     except (Refusal, ValueError, OSError) as error:
+        # An enabled block that does not validate is the user's mistake to hear about, not a project without RoadS.
+        try:
+            sync = read_json(config_path(root)).get('roadmapSync')
+            result['enabled'] = isinstance(sync, dict) and sync.get('enabled') is True
+        except (TypeError, AttributeError, ValueError, OSError):
+            pass
         result.update(ok=True, exitCode=0, ready=False, message=str(error))
         return result
     state, pair, _ = approval_state(ctx)
     secret = 'present' if secret_present(ctx.secret_env) else 'absent'
     ready = secret == 'present' and state == 'approved'
-    result.update(configured=True, project=ctx.name, secretEnvVar=ctx.secret_env, secret=secret, approval=state,
+    result.update(configured=True, enabled=True, project=ctx.name, secretEnvVar=ctx.secret_env, secret=secret, approval=state,
                   endpoint=pair['endpoint'], ready=ready, obsoleteKeys=ctx.obsolete_keys, ok=True, exitCode=0,
                   message='RoadS is ready.' if ready else 'RoadS is not ready; see the fields above.')
     if ctx.obsolete_keys:

@@ -114,6 +114,16 @@ class ConfigurationTests(RoadsTestCase):
                 self.assertFalse(result['ok'])
                 self.assertIn('Unknown operation', result['message'])
 
+    def test_an_enabled_block_that_does_not_validate_is_reported_not_hidden(self):
+        self.write_config(endpoint='http://roads.example.test/api')
+        result = self.run_op('status')
+        self.assertEqual((result['configured'], result['enabled']), (False, True))
+        self.assertIn('https', result['message'])
+        self.write_config(enabled=False)
+        self.assertEqual((self.run_op('status')['configured'], self.run_op('status')['enabled']), (False, False))
+        (self.project / '.frontlights' / 'config.json').unlink()
+        self.assertFalse(self.run_op('status')['enabled'])
+
     def test_secret_variable_must_carry_the_frontlights_prefix(self):
         self.write_config(secretEnvVar='GUARDIANS_API_SECRET')
         result = self.run_op('status')

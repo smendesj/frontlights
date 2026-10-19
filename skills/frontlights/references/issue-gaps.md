@@ -24,8 +24,9 @@ is in their language; quote the helper's English messages only when useful.
 
 ## Steps
 
-1. **Status.** Run `status`. When `configured` is false, say what is missing and offer to create
-   the `roadmapSync` block in `.frontlights/config.json` (shape in `examples/config.json`), asking
+1. **Status.** Run `status`. Stage 1 sends you here only when `configured` is true; when the user asks
+   for this route in a project where it is false, say what `message` reports is missing and offer to create
+   or fix the `roadmapSync` block in `.frontlights/config.json` (shape in `examples/config.json`), asking
    for the RoadS endpoint and the secret variable. Write the block only after the user approves its
    full text. If `secret` is absent, give the user the command to run in their own terminal, in its
    own code block, then stop this route (they restart Claude afterwards); never offer to set it

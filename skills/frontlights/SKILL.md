@@ -163,7 +163,8 @@ reports `configured` true (an enabled `roadmapSync` block in this project) ask w
 Put what `status` reports in the question text: ready, the endpoint not yet approved, or
 the secret absent. Options: "Sim, conferir agora" and "Não, seguir com o pedido". On yes,
 read `references/issue-gaps.md` and follow it, then come back to the request. On no, make
-no call to RoadS and go on. When `configured` is false, say nothing and go on. Frontlights
+no call to RoadS and go on. When `configured` is false and `enabled` is true (the block is on but does not
+validate), say `message` in one line and go on; when both are false, say nothing and go on. Frontlights
 writes no roadmap or week file: RoadS keeps the roadmap from the open issues.
 
 **Progress question, right after the issue-gaps question.** Once the issue-gaps question and

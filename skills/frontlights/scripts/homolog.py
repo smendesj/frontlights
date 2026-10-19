@@ -719,7 +719,8 @@ def op_release_plan(root, base, remote, prefix, records):
     elif result['fullSuite']['status'] != 'current':
         result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
                                           f'{result["fullSuite"]["message"]}; adote um registro inteiro verde da '
-                                          f'mesma árvore (`homolog suite --release --mode full --from <registro>`) ou '
+                                          f'mesma árvore (`homolog suite --release --mode full --from <registro> '
+                                          f'--base {base} --root <worktree principal> --config <config>`) ou '
                                           f'rode `homolog suite --release --mode full --base {base} --root <worktree '
                                           f'principal> --config <config>` na {base} local, e o release-plan de novo.')
     else:
