@@ -210,6 +210,20 @@ class LocalMainTextTests(unittest.TestCase):
                       body)
         self.assertNotIn('rerun the impact suite until', body)
 
+    def test_the_security_notes_cover_the_homolog_suites(self):
+        """Revisão da issue 52, B2: o `inspect` aceita `suites` dentro de `homolog`, e o `homolog suite` está entre
+        os comandos lidos do config, com o filtro de shell do `checks`, sem shell e com a árvore morta no prazo."""
+        security = flat('skills', 'frontlights', 'docs', 'security.md')
+        for phrase in ('dentro de `homolog`, qualquer chave além de `backupDir` e `suites`',
+                       'as suítes da homologação (`homolog suite`)',
+                       'blocos `browserTest`, `checks` e `homolog.suites`; no `homolog suite`, também o `--argv` que a '
+                       'sessão passa',
+                       'O `homolog suite` aplica ao argv de `homolog.suites` e ao `--argv` o mesmo filtro de shell do '
+                       '`checks`, roda sem shell e, no prazo, mata a árvore inteira de processos.'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertNotIn('qualquer outra chave dentro de `homolog`', security)
+
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes',
