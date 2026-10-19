@@ -399,13 +399,17 @@ class LocalMainTextTests(unittest.TestCase):
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
                        'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
-                       '`fullSuite` must be `current`', '(`fullSuite: current`)',
+                       '`fullSuite` must be `current`',
+                       'the whole suite of the release is green at the tip the release branch was cut from',
+                       'its `recordedHead` equal to the head of the pull request',
+                       'it does not make the pull request unready',
                        'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
                                                  '**Offer it.**') if title in body]
         self.assertEqual(order, sorted(order))
+        self.assertNotIn('(`fullSuite: current`)', body)
         self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
