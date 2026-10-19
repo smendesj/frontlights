@@ -836,14 +836,17 @@ def suite_run_settings(config, mode, argv_text, timeout_seconds=None):
 
 def run_suite_process(argv, root, timeout):
     """(exit code or None, timed out, error or None, output, warnings) of one run, no shell, the whole process tree
-    killed at the timeout (checks.run_process)."""
+    killed at the timeout (checks.run_process); a timeout keeps the partial output, then the timeout sentence."""
     import checks   # noqa: PLC0415
     warnings = []
     try:
         code, output = checks.run_process(argv, root, timeout, warnings)
         return code, False, None, output, warnings
-    except subprocess.TimeoutExpired:
-        return None, True, None, f'A suíte passou de {timeout} s e foi interrompida.\n', warnings
+    except subprocess.TimeoutExpired as expired:
+        partial = expired.output if isinstance(expired.output, str) else ''
+        if partial and not partial.endswith('\n'):
+            partial += '\n'
+        return None, True, None, f'{partial}A suíte passou de {timeout} s e foi interrompida.\n', warnings
     except FileNotFoundError:
         return None, False, 'executable_missing', 'Executável da suíte não encontrado.\n', warnings
     except OSError:

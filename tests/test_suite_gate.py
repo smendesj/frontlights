@@ -161,6 +161,20 @@ class SuiteRunTests(SuiteTestCase):
         self.assertLess(saved['seconds'], 20)
         self.assertIn('1 s', result['message'])
 
+    def test_a_timeout_keeps_the_partial_output_in_the_log(self):
+        """Revisão da issue 52, B1: interrompida no prazo, a suíte deixa no log o que já tinha impresso, seguido da
+        frase do prazo, como a saída parcial do `tests/suite.py`."""
+        partial = self.base / 'partial_suite.py'
+        partial.write_text("import time\nprint('linha antes do prazo', flush=True)\ntime.sleep(30)\n",
+                           encoding='utf-8')
+        given = json.dumps([sys.executable, str(partial)])
+        code, result = self.suite(self.config(), 'full', '--argv', given, '--timeout-seconds', '3')
+        self.assertEqual((code, result.get('state')), (1, 'red'), result)
+        log = Path(json.loads(self.record.read_text(encoding='utf-8'))['output']).read_text(encoding='utf-8')
+        self.assertIn('linha antes do prazo', log)
+        self.assertIn('A suíte passou de 3 s e foi interrompida.', log)
+        self.assertLess(log.index('linha antes do prazo'), log.index('A suíte passou de 3 s'))
+
     def test_timeout_seconds_larger_than_the_suite_lets_it_pass_even_with_an_argv(self):
         """M4: com `--argv` e o config dando 1 s, `--timeout-seconds 60` deixa terminar uma suíte de 3 s."""
         slow = self.base / 'slow_suite.py'
