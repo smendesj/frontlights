@@ -1128,6 +1128,29 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.assertTrue(os.path.samefile(full['recordPath'], self.work / '.frontlights' / 'release' / 'suite.json'))
         self.assertIn('Release pronta', result['message'])
 
+    def test_a_whole_suite_adopted_from_an_issue_of_the_same_tree_makes_the_release_ready(self):
+        """Issue 54, S1: a issue roda a suíte inteira na ponta dela e entra na main local por `--no-ff` sem mudar
+        arquivo; a adoção (`suite --release --mode full --from`) deixa o `release-plan` pronto sem rodar a suíte."""
+        fake = self.base / 'fake_suite.py'
+        fake.write_text('import sys\nsys.exit(1 if "--falha" in sys.argv else 0)\n', encoding='utf-8')
+        config = self.base / 'config.json'
+        config.write_text(json.dumps({'repository': None, 'homolog': {'backupDir': None, 'suites': {
+            'full': {'argv': [sys.executable, str(fake), '--falha'], 'timeoutSeconds': 60}}}}), encoding='utf-8')
+        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1')
+        self.commit(self.work, 'issue-1.txt', '1\n', 'issue 1')
+        code, ran = self.cli('suite', '--root', str(self.work), '--config', str(config), '--issue', '1', '--mode',
+                             'full', '--argv', json.dumps([sys.executable, str(fake)]))
+        self.assertEqual(code, 0, ran)
+        self.git(self.work, 'switch', '-q', 'main')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 1 into the local main', 'claude/issue-1')
+        code, adopted = self.cli('suite', '--root', str(self.work), '--config', str(config), '--release', '--mode',
+                                 'full', '--from', ran['recordPath'])
+        self.assertEqual((code, adopted.get('state')), (0, 'adopted'), adopted)
+        code, result = self.plan()
+        self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
+        self.assertEqual((result['fullSuite']['status'], result['fullSuite']['recordedHead']),
+                         ('current', self.sha(self.work)))
+
     def test_a_red_whole_suite_keeps_the_release_back(self):
         self.deliver(1)
         self.full_suite(fail=True)
