@@ -616,7 +616,19 @@ offers the release again with everything accumulated.
   `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. It only reads.
-- **Run the whole suite on the local main.** In the main worktree, on the local main, run
+- **Run the whole suite on the local main.** First, adopt a green run of the same tree: when an issue of the release
+  has a record of the whole suite that is green (exit code 0, no timeout), ran on a clean tree, and whose commit tree
+  (`<head>^{tree}`) is the tree of the tip of the local main, adopt it in the main worktree with
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --from <record> --base <base> --root <main worktree> --config .frontlights/config.json`,
+  which runs nothing: it writes `release/suite.json` and `release/suite-<sha>.json` from that record, with
+  `adoptedFrom` naming the origin (`docs/protocol.md`), then `release-plan` again, as after a run. The session gives
+  the path of the record (the `suite.json` of an issue, in that issue's worktree, or the per-tip record
+  `release/suite-<sha>.json` of another release) and never searches for one; it adopts before the cleanup of the
+  worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing, and the session runs the
+  suite as below: an impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head
+  the repository does not know, another commit tree or other evidence files than the tip's, `--from` with `--argv`
+  or `--timeout-seconds`, a tip that is not the local main's, or a dirty main. Without such a record, the session
+  runs the suite as below. In the main worktree, on the local main, run
   `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`
   on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
   runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
