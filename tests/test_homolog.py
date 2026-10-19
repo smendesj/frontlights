@@ -372,12 +372,22 @@ class LocalMainTextTests(unittest.TestCase):
                        '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
                        '**No closing keyword.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
-                       '`git pull --ff-only origin <base>`', '**Other work goes on.**'):
+                       '`git pull --ff-only origin <base>`', '**Other work goes on.**',
+                       '**Run the whole suite on the local main.**',
+                       'homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json',
+                       '`fullSuite` must be `current`', '(`fullSuite: current`)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
+        order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
+                                                 '**Offer it.**') if title in body]
+        self.assertEqual(order, sorted(order))
+        self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
+        self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
-                       '"Agora não" deixa a issue homologada na main local'):
+                       '"Agora não" deixa a issue homologada na main local',
+                       'a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo',
+                       'release/suite.json', 'release/suite-full-<data-hora>.log'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('| Espera do merge |', protocol)
@@ -388,10 +398,12 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, closeout)
         readme = flat('README.md')
         for phrase in ('#### Homologar na main local, lançar a release, fechar e limpar', '`homolog release-plan`',
-                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)'):
+                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)',
+                       'a release só fica pronta com a suíte inteira verde na ponta da main local'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
         self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('o `fullSuite` do `release-plan`', flat('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 
@@ -1031,12 +1043,93 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of {slug} into the local main', branch)
         return branch
 
+    def full_suite(self, fail=False, root=None):
+        """S3: the whole suite of the release recorded in the main worktree, on the local main, by `homolog suite
+        --release --mode full` with a fake argv (green, or red with `fail`); the config lives outside the repo."""
+        fake = self.base / 'fake_suite.py'
+        fake.write_text('import sys\nsys.exit(1 if "--falha" in sys.argv else 0)\n', encoding='utf-8')
+        config = self.base / 'config.json'
+        config.write_text(json.dumps({'repository': None, 'homolog': {'backupDir': None}}), encoding='utf-8')
+        argv = [sys.executable, str(fake), *(['--falha'] if fail else [])]
+        code, result = self.cli('suite', '--root', str(root or self.work), '--config', str(config), '--release',
+                                '--mode', 'full', '--argv', json.dumps(argv))
+        self.assertEqual(code, 1 if fail else 0, result)
+        return result
+
+    def test_without_the_whole_suite_of_the_tip_the_release_is_not_ready(self):
+        """S3: sem o registro da suíte inteira na ponta da main local, a release não fica pronta (exit 2)."""
+        self.deliver(1)
+        code, result = self.plan()
+        self.assertEqual((code, result['ready']), (2, False), result)
+        self.assertEqual(result['release'], [1])
+        self.assertEqual(result['fullSuite']['status'], 'missing')
+        self.assertIn('homolog suite --release --mode full', result['message'])
+        self.assertIn(self.sha(self.work)[:7], result['message'])
+
+    def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
+        self.deliver(1)
+        self.full_suite()
+        code, result = self.plan()
+        self.assertEqual((code, result['ready']), (0, True), result)
+        full = result['fullSuite']
+        self.assertEqual((full['status'], full['recordedHead']), ('current', self.sha(self.work)))
+        self.assertTrue(os.path.samefile(full['recordPath'], self.work / '.frontlights' / 'release' / 'suite.json'))
+        self.assertIn('Release pronta', result['message'])
+
+    def test_a_red_whole_suite_keeps_the_release_back(self):
+        self.deliver(1)
+        self.full_suite(fail=True)
+        code, result = self.plan()
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'red'), result)
+        self.assertIn('homolog suite --release --mode full', result['message'])
+
+    def test_a_delivery_after_the_whole_suite_makes_it_stale(self):
+        self.deliver(1)
+        self.full_suite()
+        self.deliver(2)
+        code, result = self.plan()
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'stale'), result)
+        self.assertIn('head', result['fullSuite']['changed'])
+        self.assertIn(self.sha(self.work)[:7], result['message'])
+
+    def test_an_uncommitted_edit_after_the_whole_suite_makes_it_stale(self):
+        self.deliver(1)
+        self.full_suite()
+        (self.work / 'README.md').write_text('edited\n', encoding='utf-8')
+        code, result = self.plan()
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'stale'), result)
+        self.assertEqual(result['fullSuite']['files_changed'], ['README.md'])
+
+    def test_a_main_worktree_off_the_local_main_is_elsewhere(self):
+        self.deliver(1)
+        self.full_suite()
+        self.git(self.work, 'switch', '-q', 'claude/issue-1')
+        code, result = self.plan()
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'elsewhere'), result)
+        self.assertIn('claude/issue-1', result['message'])
+        self.assertIn('homolog suite --release --mode full', result['message'])
+
+    def test_behind_and_nothing_to_release_still_come_before_the_whole_suite(self):
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertIn('nada a liberar', result['message'])
+        self.assertEqual(result['fullSuite']['status'], 'missing')
+        self.deliver(1)
+        self.commit(self.other, 'remote.txt', 'remote\n', 'remote work')
+        self.git(self.other, 'push', '-q', 'origin', 'main')
+        self.git(self.work, 'fetch', '-q', 'origin')
+        code, result = self.plan()
+        self.assertEqual(code, 2, result)
+        self.assertIn('sync', result['message'])
+        self.assertNotIn('suíte inteira', result['message'])
+
     def test_work_without_an_issue_makes_a_release_of_its_own(self):
         """Trabalho sem issue: a entrada com `direct` entra na release como `releaseDirect`, com a branch nomeada,
         e a lista das issues não muda."""
         self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'direct': 'melhoria-x', 'branch': 'claude/melhoria-x'},
                     {'direct': 'melhoria-x', 'branch': 'claude/melhoria-x-s1', 'slice': 'S1'})
         self.deliver_direct('melhoria-x')
+        self.full_suite()
         code, result = self.plan()
         self.assertEqual(code, 0, result)
         self.assertEqual((result['ready'], result['release'], result['releaseDirect'], result['skipped']),
@@ -1055,6 +1148,7 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'push', '-q', 'origin', 'main')   # melhoria-y is already in the remote main
         self.deliver(2)
         self.deliver_direct('melhoria-x')
+        self.full_suite()
         code, result = self.plan()
         self.assertEqual(code, 0, result)
         self.assertEqual((result['release'], result['releaseDirect']), ([2], ['melhoria-x']))
@@ -1134,6 +1228,7 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'push', '-q', 'origin', 'main')
         remote_main = self.sha(self.origin, 'main')
         self.deliver(2)
+        self.full_suite()
         code, result = self.plan()
         self.assertEqual(code, 0, result)
         self.assertEqual((result['ok'], result['ready'], result['release'], result['ahead'], result['behind'], result['skipped']),
@@ -1202,6 +1297,7 @@ class HomologReleasePlanTests(unittest.TestCase):
 
     def test_an_existing_release_branch_of_the_day_is_never_reused(self):
         self.deliver(1)
+        self.full_suite()
         code, first = self.plan()
         self.assertEqual(code, 0, first)
         name = first['releaseBranch']
@@ -1222,6 +1318,7 @@ class HomologReleasePlanTests(unittest.TestCase):
 
     def test_a_remote_tracking_release_branch_of_the_day_is_skipped_too(self):
         self.deliver(1)
+        self.full_suite()
         code, first = self.plan()
         self.assertEqual(code, 0, first)
         name = first['releaseBranch']
@@ -1262,6 +1359,7 @@ class HomologReleasePlanTests(unittest.TestCase):
 
     def test_records_without_an_authorization_map_no_issue_and_ask(self):
         self.deliver(1)
+        self.full_suite()
         empty = self.base / 'elsewhere'
         (empty / '.frontlights').mkdir(parents=True)
         for folder in (empty, self.base / 'absent'):
