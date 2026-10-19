@@ -65,7 +65,8 @@ Operations (each prints one JSON object on stdout):
          timed out or not started) exits 1; a mode without a suite is `unconfigured` (exit 2) and nothing runs.
          `--release` (in place of `--issue`) is the whole suite of the release: only `--mode full`, only in a
          worktree with the local base checked out at its tip (HEAD is `refs/heads/<base>`), both refused (exit 1)
-         otherwise; the record and the log go to `.frontlights/release/`.
+         otherwise; the record and the log go to `.frontlights/release/`, and the record also to
+         `release/suite-<full head sha>.json`, the copy of that tip that a run at another tip never overwrites.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
          differ, `files_changed` the files), `red` (the tip of the record, the suite failed), `missing` (no record
@@ -73,6 +74,9 @@ Operations (each prints one JSON object on stdout):
          record and no `homolog.suites`). A record is judged even without suites in the config. Exit 0 only for
          current, 2 otherwise. `--release` judges `.frontlights/release/suite.json` as `--require full`, refused
          (exit 1) off the tip of the local `--base` (default main); `release-plan` shares the judgment.
+         `--release --head <full sha>` judges the copy of that tip instead, wherever the main worktree stands:
+         `current` (a full run of that head exited 0), `red` (it failed) or `missing` (no copy); `--head` without
+         `--release`, or not a full sha, is refused (exit 1).
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
 session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
@@ -769,6 +773,11 @@ def record_folder(root, issue=None):
     return folder / 'release' if issue is None else folder / 'issues' / str(issue)
 
 
+def tip_record_path(root, head):
+    """`.frontlights/release/suite-<full head sha>.json`, the release suite record of one tip."""
+    return record_folder(root) / f'suite-{head}.json'
+
+
 def off_base_tip(root, base):
     """None when `root` has the local `base` checked out and HEAD is `refs/heads/<base>`; otherwise where it stands,
     in Portuguese: the release suite is run, and judged, only on the tip of the local base."""
@@ -897,9 +906,15 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     if warnings:
         record['warnings'] = warnings
     path = folder / 'suite.json'
-    path.write_text(json.dumps(record, indent=2, ensure_ascii=True), encoding='utf-8')
-    return {'state': 'green' if code == 0 else 'red', 'record': record, 'recordPath': str(path),
-            'exitCode': 0 if code == 0 else 1, 'message': suite_message(record, settings['timeout'])}
+    text = json.dumps(record, indent=2, ensure_ascii=True)
+    path.write_text(text, encoding='utf-8')
+    result = {'state': 'green' if code == 0 else 'red', 'record': record, 'recordPath': str(path),
+              'exitCode': 0 if code == 0 else 1, 'message': suite_message(record, settings['timeout'])}
+    if release:   # the copy of this tip, which a run at a later tip never overwrites (`suite-gate --head`)
+        tip = tip_record_path(root, evidence['head'])
+        tip.write_text(text, encoding='utf-8')
+        result['tipRecordPath'] = str(tip)
+    return result
 
 
 def read_suite_record(path):
@@ -965,10 +980,44 @@ def release_suite(root, base):
     return judged
 
 
-def op_suite_gate(root, config_path, issue, required, release=False, base='main'):
+def judge_tip(root, head):
+    """The release suite record of one tip (`release/suite-<head>.json`) judged by itself: `current` when it is a
+    full run of that head that exited 0, `red` when it failed, `missing` without it. The main worktree may stand
+    anywhere: the tip is named, not read from the tree."""
+    path = tip_record_path(root, head)
+    record = read_suite_record(path)
+    result = {'recordPath': str(path), 'head': head, 'required': 'full'}
+    if record is None:
+        result.update(status='missing', exitCode=2,
+                      message=f'não há registro da suíte inteira da ponta {head[:7]} em {path}')
+        return result
+    require(record.get('head') == head, f'{path} não é o registro da ponta {head[:7]} (head {str(record.get("head"))[:7]})')
+    result.update(mode=record['mode'], source=record.get('source'), suiteExitCode=record.get('exitCode'))
+    if record['mode'] != 'full':
+        result.update(status='missing', exitCode=2, message=f'o registro da ponta {head[:7]} não é da suíte inteira')
+    elif record.get('exitCode') != 0:
+        result.update(status='red', exitCode=2, message=f'a suíte inteira falhou na ponta {head[:7]}')
+    else:
+        result.update(status='current', exitCode=0, message=f'a suíte inteira passou na ponta {head[:7]}')
+    return result
+
+
+def full_sha(value):
+    """`--head` as a full commit sha (40 or 64 hex digits), lowercased."""
+    text = str(value or '').strip().lower()
+    require(len(text) in (40, 64) and all(char in '0123456789abcdef' for char in text),
+            '--head precisa ser o sha completo de um commit (40 ou 64 dígitos hexadecimais)')
+    return text
+
+
+def op_suite_gate(root, config_path, issue, required, release=False, base='main', head=None):
     worktree(root)
+    require(head is None or release, '--head só vale com --release: julga o registro da release de uma ponta')
     issue = None if release else issue_number(issue)
     suites = suite_block(load_config(config_path))
+    if release and head is not None:
+        plain_name(base, 'a branch base')
+        return judge_tip(root, full_sha(head))
     if release:
         base = plain_name(base, 'a branch base')
         place = off_base_tip(root, base)
@@ -983,12 +1032,13 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
 # ---------------------------------------------------------------- command line
 
 def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
-        issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None):
+        issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None,
+        head=None):
     try:
         if operation == 'suite':
             result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds)
         elif operation == 'suite-gate':
-            result = op_suite_gate(root, config, issue, required, release, base)
+            result = op_suite_gate(root, config, issue, required, release, base, head)
         elif operation == 'hook':
             result = op_hook(root, base, install)
         elif operation == 'sync':
@@ -1040,6 +1090,8 @@ def build_parser():
                                                            'timeoutSeconds of the config (with or without --argv)')
         elif name == 'suite-gate':
             command.add_argument('--require', choices=('full',), help='only a full suite record counts')
+            command.add_argument('--head', help='with --release: the full sha of a tip; judges release/suite-<sha>.json '
+                                                'wherever the main worktree stands')
         elif name == 'hook':
             mode = command.add_mutually_exclusive_group()
             mode.add_argument('--check', action='store_true', help='report the hook without writing (the default)')
@@ -1067,7 +1119,8 @@ def main(argv=None):
                      getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
-                     getattr(args, 'release', False), getattr(args, 'timeout_seconds', None))
+                     getattr(args, 'release', False), getattr(args, 'timeout_seconds', None),
+                     getattr(args, 'head', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))
