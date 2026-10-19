@@ -78,5 +78,54 @@ class DescriptionTests(unittest.TestCase):
             self.assertIn(trigger, description)
 
 
+class ReleaseAdoptionTextTests(unittest.TestCase):
+    """Issue 54, S4: a regra da release manda adotar com `--from` a suíte inteira verde, limpa e de mesma árvore de
+    uma issue da release, e rodar nos outros casos; o `protocol.md` descreve `adoptedFrom`. A regra vive só em
+    `references/development.md`."""
+
+    COMMAND = ('homolog suite --release --mode full --from <record> --base <base> --root <main worktree> '
+               '--config .frontlights/config.json')
+
+    def test_the_release_adopts_a_green_run_of_the_same_tree(self):
+        text = flat(SOURCE.read_text(encoding='utf-8'))
+        item = text.split('**Run the whole suite on the local main.**')[1].split('**Offer it.**')[0]
+        for phrase in (self.COMMAND, 'which runs nothing',
+                       'has a record of the whole suite that is green (exit code 0, no timeout), ran on a clean '
+                       'tree, and whose commit tree (`<head>^{tree}`) is the tree of the tip of the local main',
+                       "The session gives the path of the record (the `suite.json` of an issue, in that issue's "
+                       'worktree, or the per-tip record `release/suite-<sha>.json` of another release) and never '
+                       'searches for one',
+                       'before the cleanup of the worktrees (stage 7)',
+                       'A refusal writes nothing, and the session runs the suite as below',
+                       'Without such a record, the session runs the suite as below',
+                       'then `release-plan` again, as after a run'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, item)
+        adopt, run = item.find(self.COMMAND), item.find('In the main worktree, on the local main, run')
+        self.assertTrue(0 <= adopt < run, 'a adoção vem antes da execução da suíte inteira')
+
+    def test_the_protocol_describes_adopted_from(self):
+        text = flat((SKILL_DIR / 'docs' / 'protocol.md').read_text(encoding='utf-8'))
+        for phrase in ('com `homolog suite --release --mode full --from <registro>`, o registro da release é '
+                       'adotado sem rodar',
+                       'guarda a execução original e a evidência atual da main local',
+                       '`adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem',
+                       'os juízes o leem como um rodado'):
+            with self.subTest(file='protocol.md', phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_the_adoption_rule_lives_once_in_development(self):
+        references = {path.relative_to(ROOT).as_posix(): flat(path.read_text(encoding='utf-8')).count(
+            'homolog suite --release --mode full --from')
+            for path in sorted((SKILL_DIR / 'references').glob('*.md'))}
+        homes = {path: count for path, count in references.items() if count}
+        self.assertEqual(homes, {SOURCE.relative_to(ROOT).as_posix(): 1},
+                         'a adoção com --from deve aparecer só em references/development.md entre as referências')
+        rule = 'whose commit tree (`<head>^{tree}`) is the tree of the tip of the local main'
+        homes = {path.relative_to(ROOT).as_posix(): text.count(rule) for path, text in texts().items() if rule in text}
+        self.assertEqual(homes, {SOURCE.relative_to(ROOT).as_posix(): 1},
+                         'a regra da adoção deve aparecer uma vez, só em references/development.md')
+
+
 if __name__ == '__main__':
     unittest.main()
