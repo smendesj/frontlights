@@ -180,7 +180,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
                        'the three gates run at the same time on that tip',
                        'with a screen the review waits for the watched run',
-                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`',
+                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`',
                        'The whole suite waits for the release.',
                        'an operation that still carries `full_suite` is refused, naming `suite_gate`',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
@@ -384,7 +384,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
-                       'homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json',
+                       'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
                        '`fullSuite` must be `current`', '(`fullSuite: current`)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
@@ -1075,6 +1075,19 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.assertEqual(result['fullSuite']['status'], 'missing')
         self.assertIn('homolog suite --release --mode full', result['message'])
         self.assertIn(self.sha(self.work)[:7], result['message'])
+
+    def test_the_message_names_the_base_of_the_project_in_the_command(self):
+        """Revisão da issue 52, M2: num projeto cuja base não é main, o comando da suíte inteira que a mensagem
+        manda rodar leva `--base <a base>`; sem ele, a release rodaria (e julgaria) a ponta da main."""
+        self.git(self.work, 'switch', '-q', '-c', 'develop')
+        self.git(self.work, 'push', '-q', 'origin', 'develop')
+        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1')
+        self.commit(self.work, 'issue-1.txt', '1\n', 'issue 1')
+        self.git(self.work, 'switch', '-q', 'develop')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 1 into the local develop', 'claude/issue-1')
+        code, result = self.plan('--base', 'develop')
+        self.assertEqual((code, result['release'], result['fullSuite']['status']), (2, [1], 'missing'), result)
+        self.assertIn('`homolog suite --release --mode full --base develop`', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
         self.deliver(1)

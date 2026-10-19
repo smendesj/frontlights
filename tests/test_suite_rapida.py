@@ -143,6 +143,8 @@ class FastSuiteTextTests(unittest.TestCase):
                        'any other value, or no variable, runs everything',
                        "Per issue, the gate is the project's impact suite",
                        '(in this repository, `python tests/suite.py --impact {base}`)',
+                       '`homolog suite --mode impact --base <base>`',
+                       "`homolog suite --mode full --base <base> --argv '<the accepted argv>'",
                        'is run once more, alone, after the watched run ends',
                        '"Declarar as suítes agora"', '"Rodar a suíte inteira desta vez"',
                        'The whole suite runs at the release ("The release"), with or without CI in the project',

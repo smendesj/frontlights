@@ -178,14 +178,14 @@ variable; any other value, or no variable, runs everything. The runner runs the 
 parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Per issue, the gate is the project's impact suite: `homolog.suites.impact` in
 `.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), run by
-`homolog suite --mode impact` at the tip of the branch of the issue, in the background, started together with the
+`homolog suite --mode impact --base <base>` at the tip of the branch of the issue, in the background, started together with the
 watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
 watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
 while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
 (the argv proposed from `inspect` and `checks.regression`, written to `homolog.suites`) or "Rodar a suíte inteira
-desta vez" (`homolog suite --mode full --argv '<the accepted argv>'`, which the gate then reads). The whole suite
+desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>'`, which the gate then reads). The whole suite
 runs at the release ("The release"), with or without CI in the project, through
 `python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
 `discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
@@ -552,7 +552,7 @@ watched run); then the check and the merge:
    merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
    shown to the reviewer as part of the diff.
 2. **Gate 1, the impact suite.** The impact suite run at that tip ("Which tests run when") is judged by
-   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`, which answers
+   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`, which answers
    `current` (exit code 0); record the command, the count and the exit code in the handoff (and the rerun alone
    after `--concurrent`, if there was one). Red means the issue is not homologated: the failure goes back to its
    slice's loop, or to the user as a question; `unconfigured` is the question of "Which tests run when"; never
@@ -615,7 +615,7 @@ offers the release again with everything accumulated.
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. It only reads.
 - **Run the whole suite on the local main.** In the main worktree, on the local main, run
-  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json`,
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`,
   then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered

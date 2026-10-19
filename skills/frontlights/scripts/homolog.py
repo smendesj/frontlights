@@ -693,7 +693,8 @@ def op_release_plan(root, base, remote, prefix, records):
     elif result['fullSuite']['status'] != 'current':
         result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
                                           f'{result["fullSuite"]["message"]}; rode `homolog suite --release --mode '
-                                          f'full` na worktree principal, na {base} local, e o release-plan de novo.')
+                                          f'full --base {base}` na worktree principal, na {base} local, e o '
+                                          f'release-plan de novo.')
     else:
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:
