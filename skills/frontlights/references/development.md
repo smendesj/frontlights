@@ -455,8 +455,9 @@ evidence --root <worktree>` hashes/HEAD and save that output with the review res
 the merge into the local main, before opening or updating a PR and after every commit: exit code 0 means the review still
 covers the code, exit code 2 means it is stale. Any commit, edit or new file after the
 review makes it stale (bringing a base into the branch included), whatever its size:
-rerun the impact suite until `homolog suite-gate` answers `current` again, take new evidence and have the
-independent reviewer look again. A
+take new evidence and have the independent reviewer look again, with the impact suite rerun on the new tip
+beside that review round, not before it ("Into the local main"); `homolog suite-gate` must answer `current`
+again before the merge. A
 stale review is never reported as reviewed. If no
 independent reviewer is available, report "implemented, awaiting independent
 review", not completed. Do not manufacture reviewer identities or approvals.

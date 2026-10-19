@@ -200,6 +200,16 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, whole)
 
+    def test_a_stale_review_reruns_the_impact_suite_beside_the_new_round(self):
+        """Revisão da issue 52, M1: depois de uma revisão vencida, a suíte de impacto roda de novo ao lado da nova
+        rodada de revisão, nunca numa fila antes dela; o `suite-gate` volta a `current` antes do merge."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        body = ' '.join(text.split('## Review, checkpoints and renewal')[1].split('## Into the local main')[0].split())
+        self.assertIn('with the impact suite rerun on the new tip beside that review round, not before it '
+                      '("Into the local main"); `homolog suite-gate` must answer `current` again before the merge',
+                      body)
+        self.assertNotIn('rerun the impact suite until', body)
+
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes',
