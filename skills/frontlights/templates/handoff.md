@@ -4,7 +4,7 @@
 - Authorization reference, expiration, concurrency and permitted operations:
 - Monitoring arrangement, confirmation and phone-connection evidence:
 - Repository path, branch, base and HEAD:
-- Merge na main local (a branch da issue é cortada da main local e nunca enviada; os três portões com a evidência de cada um: suíte inteira no tip da branch da issue, `review-gate` atual, `browser-gate` respondido ou `not_needed`; a saída do `authorize` para `merge_into_local_main`; o commit do merge na main local):
+- Merge na main local (a branch da issue é cortada da main local e nunca enviada; os três portões com a evidência de cada um: `suite-gate` `current` no tip da branch da issue (e a segunda rodada sozinha, se houve `--concurrent`), `review-gate` atual, `browser-gate` respondido ou `not_needed`; a saída do `authorize` para `merge_into_local_main`; o commit do merge na main local):
 - Repository map and approved decisions:
 - Files changed / diff hash / files hash:
 - Slice em andamento (id da caixa, também em `checkpoint --slice`, com a worktree e a branch dela) e slices já marcadas com evidência (id, commit, worktree e comandos de cada uma):

@@ -162,7 +162,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'Nothing of an issue goes to GitHub before the release',
                        'writing the remote main (`origin/main`, the base branch on GitHub)',
                        'the local main is written only by the covered merge',
-                       '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`',
+                       '`{"suite_gate": "current", "review_gate": "current", "browser_gate": "answered"}`',
                        '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
@@ -177,7 +177,12 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
         body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
         for phrase in ('homologation bench', 'refused as the remote main', '**Bring the local main in first.**',
-                       '`git merge main`', '**Gate 1, the full suite.**', 'never the fast suite',
+                       '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
+                       'the three gates run at the same time on that tip',
+                       'with a screen the review waits for the watched run',
+                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`',
+                       'The whole suite waits for the release.',
+                       'an operation that still carries `full_suite` is refused, naming `suite_gate`',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
                        '**Gate 3, the watched run.**', '**The check and the merge.**', '`merge_into_local_main`',
                        '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>`',
@@ -206,7 +211,8 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('**Main local e main remota.**',
                        '`merge_into_local_main` só com `target` igual a `base.branch`', 'são recusados como main remota',
                        'nunca de uma slice',
-                       '`full_suite: green`, `review_gate: current` e `browser_gate: answered` ou `not_needed`',
+                       'com os três `gates` de "Into the local main" (`references/development.md`)',
+                       'ou a chave antiga `full_suite`, nomeia o portão na recusa', 'não prova que a suíte rodou',
                        'conferência prévia, não barreira', 'não lê o Git',
                        'confere `edit`, `test`, `checkpoint` e `merge_into_local_main`',
                        'os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"), os únicos permitidos'):

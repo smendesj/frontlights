@@ -44,7 +44,7 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
 
 - **Antes:** <print do teste assistido, ou o teste vermelho: comando e falha>
   **Depois:** <print do teste assistido, ou o mesmo teste verde: comando e resultado>
-- **Portões:** suíte inteira <comando, contagem, saída>; revisão independente <rodadas, `review-gate`
+- **Portões:** suíte por impacto <`suite-gate`, contagem, saída>; revisão independente <rodadas, `review-gate`
   atual>; teste assistido <resposta do usuário, ou `not_needed`>.
 
 ## Risco do merge

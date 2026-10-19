@@ -891,7 +891,7 @@ class ParallelSuiteTextTests(unittest.TestCase):
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')
         for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'É a suíte inteira e o comando da CI',
-                       'pelo `discover`, continua obrigatória antes da revisão independente e do merge na main local',
+                       'pelo `discover`, roda na release; por issue vale a suíte por impacto',
                        '`python -m compileall -q skills/frontlights/scripts tests`', 'issue 27'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)

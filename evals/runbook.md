@@ -221,7 +221,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     with more than five open children cut into top-level issues linked by `--blocked-by`.
 27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
     from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session
-    brings the local main into the branch, runs the whole suite at that tip, has the independent review bound to it
+    brings the local main into the branch, runs the impact suite at that tip (`suite-gate` `current`), has the independent review bound to it
     (`review-gate` `current`) and `browser-gate` `answered` or `not_needed`, writes the `merge_into_local_main`
     operation and runs `authorize` before `git merge --no-ff` on the local main; an operation with a red gate, a
     slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's

@@ -77,8 +77,8 @@ homologação: acumula as issues que passaram nos três portões, e a issue fech
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
 remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
-nunca de uma slice) e com `gates` `full_suite: green`, `review_gate:
-current` e `browser_gate: answered` ou `not_needed`; qualquer outro valor nomeia o portão vermelho na recusa.
+nunca de uma slice) e com os três `gates` de "Into the local main" (`references/development.md`); um valor fora
+deles, ou a chave antiga `full_suite`, nomeia o portão na recusa.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
