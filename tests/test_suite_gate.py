@@ -27,6 +27,15 @@ if '--dorme' in sys.argv:
 sys.exit(1 if '--falha' in sys.argv else 0)
 '''
 
+# O argv falso do relatório (issue 57, S3): `--copia <arquivo> <caminho>` copia os bytes do arquivo para o caminho
+# que o `{report}` virou; sem `--copia`, não grava relatório nenhum.
+REPORTER = '''import shutil, sys
+if '--copia' in sys.argv:
+    at = sys.argv.index('--copia')
+    shutil.copyfile(sys.argv[at + 1], sys.argv[at + 2])
+sys.exit(1 if '--falha' in sys.argv else 0)
+'''
+
 
 class SuiteTestCase(unittest.TestCase):
     """Um repositório temporário com um commit, um config fora dele e o argv falso fora dele."""
@@ -247,6 +256,118 @@ class SuiteRunTests(SuiteTestCase):
         self.assertEqual(routed, direct)
 
 
+class SuiteReportTests(SuiteTestCase):
+    """Issue 57, S3: com `{report}` no argv de `homolog.suites.impact`, a suíte grava num arquivo novo da pasta da
+    issue a lista do que rodou (`ran`) e do que rodou por inteiro (`complete`), e o `suite.json` a guarda."""
+
+    TODAY = {'mode', 'source', 'base', 'argv', 'head', 'evidence', 'exitCode', 'timedOut', 'seconds', 'output',
+             'concurrent', 'startedAt', 'finishedAt'}
+    VALID = {'ran': ['tests.test_a', 'tests.test_b.Classe.test_um'], 'complete': ['tests.test_a']}
+
+    def setUp(self):
+        super().setUp()
+        self.reporter = self.base / 'report_suite.py'
+        self.reporter.write_text(REPORTER, encoding='utf-8')
+
+    def payload(self, content):
+        """A file outside the repository with `content` (bytes as is, anything else as JSON) for the fake to copy."""
+        path = self.base / f'payload-{len(list(self.base.glob("payload-*")))}.json'
+        path.write_bytes(content if isinstance(content, bytes) else json.dumps(content).encode('utf-8'))
+        return path
+
+    def report_config(self, *flags, mode='impact'):
+        path = self.base / 'config.json'
+        suites = {mode: {'argv': [sys.executable, str(self.reporter), *flags], 'timeoutSeconds': 60}}
+        path.write_text(json.dumps({'repository': None, 'homolog': {'suites': suites}}), encoding='utf-8')
+        return path
+
+    def run_with(self, content, *flags):
+        copy = ('--copia', str(self.payload(content)), '{report}') if content is not None else ('{report}',)
+        return self.suite(self.report_config(*flags, *copy, '--base', '{base}'), 'impact')
+
+    def saved(self):
+        return json.loads(self.record.read_text(encoding='utf-8'))
+
+    def test_a_valid_report_gives_ran_and_complete_in_the_record(self):
+        for name, content in (('utf-8', self.VALID),
+                              ('utf-8-sig', b'\xef\xbb\xbf' + json.dumps(self.VALID).encode('utf-8'))):
+            with self.subTest(encoding=name):
+                code, result = self.run_with(content)
+                self.assertEqual((code, result.get('state')), (0, 'green'), result)
+                saved = self.saved()
+                self.assertEqual(saved, result['record'])
+                self.assertEqual((saved['ran'], saved['complete']), (self.VALID['ran'], self.VALID['complete']))
+                report = Path(saved['report'])
+                self.assertTrue(report.is_absolute())
+                self.assertTrue(os.path.samefile(report.parent, self.record.parent))
+                self.assertRegex(report.name, r'^suite-report-\d{8}-\d{6}(-\d+)?\.json$')
+                self.assertEqual(saved['argv'][-3:], [str(report), '--base', 'main'])
+                self.assertNotIn('warnings', saved)
+                gate_code, gate = self.gate(self.report_config('{report}'))
+                self.assertEqual((gate_code, gate.get('status')), (0, 'current'), gate)
+
+    def test_a_failed_run_keeps_its_exit_code_and_still_records_the_report(self):
+        code, result = self.run_with(self.VALID, '--falha')
+        self.assertEqual((code, result.get('state')), (1, 'red'), result)
+        saved = self.saved()
+        self.assertEqual((saved['exitCode'], saved['ran']), (1, self.VALID['ran']))
+
+    def test_a_missing_oversized_or_invalid_report_is_a_warning_without_the_lists(self):
+        cases = {
+            'ausente': None,
+            'grande': b' ' * (2 * 1024 * 1024 + 1),
+            'não JSON': b'{"ran": [',
+            'utf-16': json.dumps(self.VALID).encode('utf-16'),
+            'lista': ['tests.test_a'],
+            'chave a mais': dict(self.VALID, outra=[]),
+            'sem complete': {'ran': ['tests.test_a']},
+            'ran não lista': {'ran': 'tests.test_a', 'complete': []},
+            'id vazio': {'ran': [''], 'complete': []},
+            'id não texto': {'ran': [7], 'complete': []},
+            'NUL': {'ran': ['tests.test_a\0'], 'complete': []},
+            'duplicado em ran': {'ran': ['tests.test_a', 'tests.test_a'], 'complete': []},
+            'duplicado em complete': {'ran': ['tests.test_a'], 'complete': ['tests.test_a', 'tests.test_a']},
+            'complete fora de ran': {'ran': ['tests.test_a'], 'complete': ['tests.test_b']},
+        }
+        for name, content in cases.items():
+            with self.subTest(report=name):
+                code, result = self.run_with(content)
+                self.assertEqual((code, result.get('state')), (0, 'green'), result)
+                saved = self.saved()
+                self.assertNotIn('ran', saved)
+                self.assertNotIn('complete', saved)
+                self.assertTrue(os.path.samefile(Path(saved['report']).parent, self.record.parent))
+                self.assertTrue(any('relatório' in warning and saved['report'] in warning
+                                    for warning in saved.get('warnings', [])), saved.get('warnings'))
+                gate_code, gate = self.gate(self.report_config('{report}'))
+                self.assertEqual((gate_code, gate.get('status')), (0, 'current'), gate)
+
+    def test_without_the_marker_the_record_is_the_one_of_today(self):
+        code, result = self.suite(self.report_config('--base', '{base}'), 'impact')
+        self.assertEqual(code, 0, result)
+        self.assertEqual(set(self.saved()), self.TODAY)
+        self.assertEqual(list(self.record.parent.glob('suite-report-*')), [])
+
+    def test_the_marker_out_of_its_place_in_the_config_is_refused_and_nothing_runs(self):
+        for name, flags, mode in (('na suíte inteira', ('{report}',), 'full'),
+                                  ('dentro de um argumento', ('--saida={report}',), 'impact'),
+                                  ('duas vezes', ('{report}', '{report}'), 'impact')):
+            with self.subTest(case=name):
+                code, result = self.suite(self.report_config(*flags, mode=mode), mode)
+                self.assertEqual(code, 1, result)
+                self.assertIn('{report}', result['message'])
+                self.assertIn(f'homolog.suites.{mode}.argv', result['message'])
+                self.assertFalse(self.record.exists())
+
+    def test_the_marker_in_a_given_argv_is_refused(self):
+        given = json.dumps([sys.executable, str(self.reporter), '{report}'])
+        code, result = self.suite(self.config(), 'full', '--argv', given)
+        self.assertEqual(code, 1, result)
+        self.assertIn('{report}', result['message'])
+        self.assertIn('--argv', result['message'])
+        self.assertFalse(self.record.exists())
+
+
 class SuiteInspectTests(SuiteTestCase):
     def inspect(self, config):
         return subprocess.run([sys.executable, str(FRONTLIGHTS), 'inspect', '--config', str(config), '--root',
@@ -263,6 +384,18 @@ class SuiteInspectTests(SuiteTestCase):
         self.assertEqual(refused.returncode, 1)
         self.assertNotIn('Traceback', refused.stderr)
         self.assertIn('homolog.suites.full.argv', json.loads(refused.stderr)['error'])
+
+    def test_inspect_accepts_the_report_marker_only_in_the_impact_suite(self):
+        """Issue 57, S3: `{report}` vale como argumento inteiro de `homolog.suites.impact.argv`; na suíte inteira,
+        o inspect recusa o config."""
+        accepted = self.inspect(self.config({'impact': ('{report}', '{base}'), 'full': ()}))
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        refused = self.inspect(self.config({'impact': (), 'full': ('{report}',)}))
+        self.assertEqual(refused.returncode, 1)
+        self.assertNotIn('Traceback', refused.stderr)
+        error = json.loads(refused.stderr)['error']
+        self.assertIn('homolog.suites.full.argv', error)
+        self.assertIn('{report}', error)
 
     def test_the_example_config_gives_the_suites_room_for_their_measured_duration(self):
         """Revisão da issue 52, M3: a suíte inteira levou 934 s com a máquina quieta e 28 min carregada; os prazos

@@ -159,7 +159,15 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
                          seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
                          compara com a ponta (current, stale, red, missing ou unconfigured); campos opcionais
-                         `error` e `warnings`; fica na worktree da issue, não na principal
+                         `error` e `warnings`; fica na worktree da issue, não na principal. Com o marcador
+                         `{report}` no argv de `homolog.suites.impact` (só lá, como argumento inteiro, uma vez),
+                         ganha `report` (o caminho do relatório da execução) e, se o relatório for válido, `ran`
+                         e `complete` (os ids que rodaram e os que rodaram por inteiro); relatório ausente, grande
+                         demais ou inválido vira um aviso em `warnings`, sem `ran` nem `complete`, e o exitCode
+                         fica o da execução; sem o marcador, nenhum desses campos
+  issues/<n>/suite-report-<data-hora>.json  relatório que a suíte de impacto grava no caminho do `{report}`:
+                         objeto `{"ran": [ids], "complete": [ids]}`, listas de textos não vazios sem NUL e sem
+                         repetição, todo id de `complete` também em `ran`, nenhuma outra chave
   issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
   release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;

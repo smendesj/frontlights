@@ -53,7 +53,11 @@ Operations (each prints one JSON object on stdout):
          records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
-         whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main). With
+         whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
+         `{report}` (only in `homolog.suites.impact.argv`, only as one whole argument, at most once; refused anywhere
+         else) the absolute path of a fresh `.frontlights/issues/<n>/suite-report-<YYYYmmdd-HHMMSS>.json`: after the
+         run the record takes `report` (the path) and, from a valid report `{"ran": [ids], "complete": [ids]}`,
+         `ran` and `complete`; a missing, too large or invalid one is a warning in `warnings`, the exit code as is. With
          `--mode full`, `--argv '<json list>'` runs once the argv the user accepted instead of the config (`source:
          argument`; `config` otherwise); `--argv` with impact is a refusal. `--timeout-seconds N` (a positive
          integer, with or without `--argv`) is the timeout of this run in place of the config's; without either,
@@ -118,6 +122,7 @@ HOMOLOG_KEYS = ('backupDir', 'suites')          # the keys of the `homolog` bloc
 SUITE_MODES = ('impact', 'full')                # the suites `homolog.suites` may declare
 SUITE_KEYS = ('argv', 'timeoutSeconds')         # the keys of each suite, the shape of `checks.regression`
 BASE_TOKEN = '{base}'                           # replaced in a suite argv by the base the run compares with
+REPORT_TOKEN = '{report}'                       # impact only, a whole argument: the path of the report of the run
 FULL_SUITE_TIMEOUT = 3600                       # the whole suite without a configured timeout (impact: checks')
 EMPTY_DIFF = hashlib.sha256(b'').hexdigest()    # `diff_sha256` of the evidence of a tree with no tracked change
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
@@ -748,27 +753,35 @@ def suite_block(config):
     if unknown:
         raise Refusal(f'homolog.suites tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são impact e full')
     for mode in SUITE_MODES:
-        suite_entry(suites.get(mode), f'homolog.suites.{mode}')
+        suite_entry(suites.get(mode), f'homolog.suites.{mode}', report=mode == 'impact')
     return suites
 
 
-def suite_argv(argv, key):
+def suite_argv(argv, key, report=False):
     """The rules of `checks.<name>.argv` (checks.command_settings): a list of non-empty texts, no NUL byte, no
-    embedded shell. A refusal never repeats the arguments."""
+    embedded shell. With `report` (the impact suite of the config), REPORT_TOKEN may be one whole argument, at most
+    once; anywhere else it is refused. A refusal never repeats the arguments."""
     import checks   # noqa: PLC0415  (lazy: only the suite operations need it)
     require(isinstance(argv, list), f'{key} precisa ser uma lista de argumentos, não um texto')
     require(argv and all(isinstance(argument, str) and argument for argument in argv),
             f'{key} precisa ter só textos não vazios')
     require(not any('\0' in argument for argument in argv), f'{key} não aceita byte NUL em nenhum argumento')
+    marked = [argument for argument in argv if REPORT_TOKEN in argument]
+    require(report or not marked, f'{key} não aceita o marcador {REPORT_TOKEN}: ele vale só em '
+                                  'homolog.suites.impact.argv, como um argumento inteiro')
+    require(all(argument == REPORT_TOKEN for argument in marked),
+            f'{key} aceita o marcador {REPORT_TOKEN} só como um argumento inteiro, não dentro de outro argumento')
+    require(len(marked) <= 1, f'{key} aceita o marcador {REPORT_TOKEN} uma vez só')
     reason = checks.embedded_shell(argv)
     require(not reason, f'{key} não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, wrappers, &&, '
                         '|, ;, redirecionamentos, python -c); declare o executável e seus argumentos')
     return argv
 
 
-def suite_entry(entry, key, default_timeout=None):
+def suite_entry(entry, key, default_timeout=None, report=False):
     """{'argv', 'timeout'} of one suite, or None when it is absent or null; the shape of `checks.regression`.
-    Without `timeoutSeconds`, `default_timeout` (`checks.DEFAULT_TIMEOUT` when not given)."""
+    Without `timeoutSeconds`, `default_timeout` (`checks.DEFAULT_TIMEOUT` when not given); `report`: the argv may
+    carry REPORT_TOKEN (`suite_argv`)."""
     import checks   # noqa: PLC0415
     if entry is None:
         return None
@@ -776,7 +789,7 @@ def suite_entry(entry, key, default_timeout=None):
     unknown = [str(name)[:40] for name in entry if name not in SUITE_KEYS]
     if unknown:
         raise Refusal(f'{key} tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são argv e timeoutSeconds')
-    argv = suite_argv(entry.get('argv'), f'{key}.argv')
+    argv = suite_argv(entry.get('argv'), f'{key}.argv', report)
     timeout = entry.get('timeoutSeconds', default_timeout or checks.DEFAULT_TIMEOUT)
     require(type(timeout) is int and timeout > 0, f'{key}.timeoutSeconds precisa ser um inteiro positivo')
     return {'argv': argv, 'timeout': timeout}
@@ -857,7 +870,8 @@ def suite_run_settings(config, mode, argv_text, timeout_seconds=None):
     import checks   # noqa: PLC0415
     timeout_seconds = timeout_argument(timeout_seconds)
     default = FULL_SUITE_TIMEOUT if mode == 'full' else checks.DEFAULT_TIMEOUT
-    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}', default)
+    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}', default,
+                             report=mode == 'impact')
     if argv_text is None:
         settings, source = configured, 'config'
     else:
@@ -890,6 +904,42 @@ def run_suite_process(argv, root, timeout):
         return None, False, 'executable_missing', 'Executável da suíte não encontrado.\n', warnings
     except OSError:
         return None, False, 'cannot_start', 'A suíte não pôde ser iniciada.\n', warnings
+
+
+def report_refusal(data):
+    """None when `data` is a valid suite report, `{"ran": [ids], "complete": [ids]}` (lists of non-empty texts
+    without NUL, no repeated id, every id of complete also in ran, no other key); otherwise why not, in Portuguese."""
+    if not isinstance(data, dict) or set(data) != {'ran', 'complete'}:
+        return 'ele precisa ser um objeto com as chaves ran e complete, e só elas'
+    for key in ('ran', 'complete'):
+        ids = data[key]
+        if not (isinstance(ids, list) and all(isinstance(item, str) and item and '\0' not in item for item in ids)):
+            return f'{key} precisa ser uma lista de textos não vazios, sem byte NUL'
+        if len(set(ids)) != len(ids):
+            return f'{key} repete um id'
+    if not set(data['complete']) <= set(data['ran']):
+        return 'todo id de complete precisa estar também em ran'
+    return None
+
+
+def suite_report(path):
+    """({'ran', 'complete'}, None) from the report the run wrote at `path` (at most RECORD_BYTES, UTF-8 with or
+    without BOM), or (None, the warning in Portuguese) when it is missing, too large or invalid."""
+    lacking = 'o registro fica sem ran e complete'
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None, f'a suíte não gravou o relatório {path}; {lacking}'
+    if size > RECORD_BYTES:
+        return None, f'o relatório {path} passa de {RECORD_BYTES} bytes e não foi lido; {lacking}'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError, RecursionError):
+        return None, f'o relatório {path} não é um JSON legível em UTF-8; {lacking}'
+    reason = report_refusal(data)
+    if reason:
+        return None, f'o relatório {path} foi recusado: {reason}; {lacking}'
+    return {'ran': data['ran'], 'complete': data['complete']}, None
 
 
 def suite_message(record, timeout):
@@ -992,7 +1042,11 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     folder = record_folder(root, issue)
     folder.mkdir(parents=True, exist_ok=True)
     started = zoned_now()
-    log = fresh_file(folder, f'suite-{mode}-{started.strftime("%Y%m%d-%H%M%S")}', '.log')
+    stamp = started.strftime('%Y%m%d-%H%M%S')
+    log = fresh_file(folder, f'suite-{mode}-{stamp}', '.log')
+    report = fresh_file(folder, f'suite-report-{stamp}', '.json') if REPORT_TOKEN in argv else None
+    if report is not None:
+        argv = [str(report) if argument == REPORT_TOKEN else argument for argument in argv]
     code, timed_out, error, output, warnings = run_suite_process(argv, str(Path(root).resolve()), settings['timeout'])
     finished = zoned_now()
     log.write_text(checks.redact(output), encoding='utf-8')
@@ -1003,6 +1057,13 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
               'finishedAt': finished.isoformat(timespec='seconds')}
     if error:
         record['error'] = error
+    if report is not None:   # the run's own exit code stands either way; a bad report is only a warning
+        record['report'] = str(report)
+        lists, warning = suite_report(report)
+        if warning:
+            warnings.append(warning)
+        else:
+            record.update(lists)
     if warnings:
         record['warnings'] = warnings
     path = folder / 'suite.json'
