@@ -45,7 +45,10 @@ Operations (each prints one JSON object on stdout):
          `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped). Work without an issue (an entry with a `direct` slug instead of `issue`) goes
+         no issue branch mapped; `fullSuite` not `current`). `fullSuite` judges `.frontlights/release/suite.json`
+         at the tip of the local base the way `suite-gate --release` does: `current`, `missing`, `stale`, `red`, or
+         `elsewhere` when the main worktree is not on that tip; with `recordPath`, `recordedHead` and what changed.
+         It is checked last, after behind, nothing ahead and no issue branch. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
          the same way, in `directs` and `releaseDirect`, and makes the release ready too. It only reads Git and the
          records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
@@ -58,12 +61,16 @@ Operations (each prints one JSON object on stdout):
          `.frontlights/` left out), exitCode, timedOut, seconds, output, concurrent (`--concurrent`: the watched
          run was in progress), startedAt and finishedAt in America/Sao_Paulo. `state` green exits 0; red (failed,
          timed out or not started) exits 1; a mode without a suite is `unconfigured` (exit 2) and nothing runs.
+         `--release` (in place of `--issue`) is the whole suite of the release: only `--mode full`, only in a
+         worktree with the local base checked out at its tip (HEAD is `refs/heads/<base>`), both refused (exit 1)
+         otherwise; the record and the log go to `.frontlights/release/`.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
          differ, `files_changed` the files), `red` (the tip of the record, the suite failed), `missing` (no record
          while the config declares a suite, or an impact record under `--require full`) and `unconfigured` (no
          record and no `homolog.suites`). A record is judged even without suites in the config. Exit 0 only for
-         current, 2 otherwise.
+         current, 2 otherwise. `--release` judges `.frontlights/release/suite.json` as `--require full`, refused
+         (exit 1) off the tip of the local `--base` (default main); `release-plan` shares the judgment.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
 session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
@@ -668,7 +675,7 @@ def op_release_plan(root, base, remote, prefix, records):
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
               'behind': behind, 'issues': issues, 'release': release, 'directs': directs,
               'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,
-              'prefixSource': source, 'skipped': skipped, 'ready': False}
+              'prefixSource': source, 'skipped': skipped, 'fullSuite': release_suite(root, base), 'ready': False}
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
                                           'antes do release-plan.')
@@ -683,6 +690,10 @@ def op_release_plan(root, base, remote, prefix, records):
         result.update(exitCode=2, message=f'A {base} local tem {ahead} commit(s) além de {remote}/{base}, mas nenhuma '
                                           'branch de issue das autorizações está neles; confira os registros em '
                                           '.frontlights/ ou aponte --records para a pasta certa.')
+    elif result['fullSuite']['status'] != 'current':
+        result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
+                                          f'{result["fullSuite"]["message"]}; rode `homolog suite --release --mode '
+                                          f'full` na worktree principal, na {base} local, e o release-plan de novo.')
     else:
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:
@@ -907,6 +918,23 @@ def judge_suite(root, path, required=None, configured=True):
         result.update(status='current', exitCode=0,
                       message=f'a suíte {record["mode"]} passou nesta ponta ({compared["current_head"][:7]})')
     return result
+
+
+def release_suite(root, base):
+    """The whole suite of the release judged at the tip of the local base (`judge_suite`, full required), or
+    `elsewhere` when the main worktree is not on that tip; never a refusal, so the plan still answers."""
+    path = record_folder(root) / 'suite.json'
+    place = off_base_tip(root, base)
+    if place is not None:
+        return {'recordPath': str(path), 'status': 'elsewhere', 'message': place}
+    try:
+        judged = judge_suite(root, path, 'full')
+    except Refusal as error:
+        return {'recordPath': str(path), 'status': 'missing', 'message': str(error)}
+    if judged['status'] == 'missing' and 'mode' not in judged:
+        judged['message'] = f'não há registro da suíte inteira em {path}'
+    judged.pop('exitCode')
+    return judged
 
 
 def op_suite_gate(root, config_path, issue, required, release=False, base='main'):
