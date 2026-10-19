@@ -2,8 +2,8 @@
 """Homologation helper (issue 32): the local base branch (`main`) is the homologation bench of the project. It is
 never pushed; the release leaves by a branch of its own and one pull request. This module guards that rule in Git
 and keeps the bench current with the remote. Every Git call is a list argv run without a shell, with a timeout and
-GIT_TERMINAL_PROMPT=0. `run` knows four operations, `hook`, `sync`, `bundle` and `release-plan`; an unknown one is
-a refusal.
+GIT_TERMINAL_PROMPT=0. `run` knows six operations, `hook`, `sync`, `bundle`, `release-plan`, `suite` and
+`suite-gate`; an unknown one is a refusal.
 
 Operations (each prints one JSON object on stdout):
   hook   --check (the default): is the `pre-push` hook that refuses pushing the local base installed, is it ours
@@ -48,6 +48,22 @@ Operations (each prints one JSON object on stdout):
          no issue branch mapped). Work without an issue (an entry with a `direct` slug instead of `issue`) goes
          the same way, in `directs` and `releaseDirect`, and makes the release ready too. It only reads Git and the
          records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
+  suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
+         "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
+         whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main). With
+         `--mode full`, `--argv '<json list>'` runs once the argv the user accepted instead of the config (`source:
+         argument`; `config` otherwise); `--argv` with impact is a refusal. The masked output goes to
+         `.frontlights/issues/<n>/suite-<mode>-<YYYYmmdd-HHMMSS>.log` and the record to `.frontlights/issues/<n>/
+         suite.json`: mode, source, base, argv, head and evidence (`frontlights.py evidence`, taken before the run,
+         `.frontlights/` left out), exitCode, timedOut, seconds, output, concurrent (`--concurrent`: the watched
+         run was in progress), startedAt and finishedAt in America/Sao_Paulo. `state` green exits 0; red (failed,
+         timed out or not started) exits 1; a mode without a suite is `unconfigured` (exit 2) and nothing runs.
+  suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
+         suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
+         differ, `files_changed` the files), `red` (the tip of the record, the suite failed), `missing` (no record
+         while the config declares a suite, or an impact record under `--require full`) and `unconfigured` (no
+         record and no `homolog.suites`). A record is judged even without suites in the config. Exit 0 only for
+         current, 2 otherwise.
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
 session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
@@ -74,7 +90,10 @@ MERGED_PR = re.compile(r'Merge pull request #[0-9]+ from [^/\s]+/(\S+)')   # Git
 DEFAULT_PREFIX = 'claude/'   # the branch prefix when neither --prefix nor a record names one
 RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
 RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
-BACKUP_KEYS = {'backupDir'}                     # the only key of the `homolog` block of the config
+HOMOLOG_KEYS = ('backupDir', 'suites')          # the keys of the `homolog` block of the config
+SUITE_MODES = ('impact', 'full')                # the suites `homolog.suites` may declare
+SUITE_KEYS = ('argv', 'timeoutSeconds')         # the keys of each suite, the shape of `checks.regression`
+BASE_TOKEN = '{base}'                           # replaced in a suite argv by the base the run compares with
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
 MARKER_LINES = 3         # the marker sits among the first lines of the hook
@@ -306,8 +325,8 @@ def op_sync(root, base, remote):
 def backup_dir(config):
     """The folder `homolog.backupDir` names, as a Path, or None when no backup is configured.
 
-    `homolog` absent or null is None; otherwise it must be an object whose only key is `backupDir`, so a typo never
-    passes in silence. `backupDir` absent or null is None; otherwise a non-empty string with an absolute path (a
+    `homolog` absent or null is None; otherwise it must be an object whose keys are `backupDir` and `suites` (see
+    `suite_settings`), so a typo never passes in silence. `backupDir` absent or null is None; otherwise a non-empty string with an absolute path (a
     drive or UNC root on Windows), without `..` segments, not starting with `~`, without `{placeholder}` braces,
     NUL or control characters. The folder need not exist: `inspect` is read-only and the folder may be a synced
     cloud folder; `bundle` checks it at run time. A refusal never repeats the value.
@@ -315,10 +334,10 @@ def backup_dir(config):
     block = config.get('homolog')
     if block is None:
         return None
-    require(isinstance(block, dict), 'homolog precisa ser um objeto com a chave backupDir')
-    unknown = [str(key)[:40] for key in block if key not in BACKUP_KEYS]
+    require(isinstance(block, dict), 'homolog precisa ser um objeto com as chaves backupDir e suites')
+    unknown = [str(key)[:40] for key in block if key not in HOMOLOG_KEYS]
     if unknown:
-        raise Refusal(f'homolog tem a chave desconhecida `{unknown[0]}`; a única chave aceita é backupDir')
+        raise Refusal(f'homolog tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são backupDir e suites')
     value = block.get('backupDir')
     if value is None:
         return None
@@ -674,11 +693,217 @@ def op_release_plan(root, base, remote, prefix, records):
     return result
 
 
+# ---------------------------------------------------------------- suite and suite-gate
+
+def suite_block(config):
+    """The `homolog.suites` object, every mode in it validated, or None when it is absent or null."""
+    if config.get('homolog') is None:
+        return None
+    backup_dir(config)   # the refusals of the block itself and of its keys
+    suites = config['homolog'].get('suites')
+    if suites is None:
+        return None
+    require(isinstance(suites, dict), 'homolog.suites precisa ser um objeto com as chaves impact e full')
+    unknown = [str(key)[:40] for key in suites if key not in SUITE_MODES]
+    if unknown:
+        raise Refusal(f'homolog.suites tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são impact e full')
+    for mode in SUITE_MODES:
+        suite_entry(suites.get(mode), f'homolog.suites.{mode}')
+    return suites
+
+
+def suite_argv(argv, key):
+    """The rules of `checks.<name>.argv` (checks.command_settings): a list of non-empty texts, no NUL byte, no
+    embedded shell. A refusal never repeats the arguments."""
+    import checks   # noqa: PLC0415  (lazy: only the suite operations need it)
+    require(isinstance(argv, list), f'{key} precisa ser uma lista de argumentos, não um texto')
+    require(argv and all(isinstance(argument, str) and argument for argument in argv),
+            f'{key} precisa ter só textos não vazios')
+    require(not any('\0' in argument for argument in argv), f'{key} não aceita byte NUL em nenhum argumento')
+    reason = checks.embedded_shell(argv)
+    require(not reason, f'{key} não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, wrappers, &&, '
+                        '|, ;, redirecionamentos, python -c); declare o executável e seus argumentos')
+    return argv
+
+
+def suite_entry(entry, key):
+    """{'argv', 'timeout'} of one suite, or None when it is absent or null; the shape of `checks.regression`."""
+    import checks   # noqa: PLC0415
+    if entry is None:
+        return None
+    require(isinstance(entry, dict), f'{key} precisa ser um objeto com argv e timeoutSeconds')
+    unknown = [str(name)[:40] for name in entry if name not in SUITE_KEYS]
+    if unknown:
+        raise Refusal(f'{key} tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são argv e timeoutSeconds')
+    argv = suite_argv(entry.get('argv'), f'{key}.argv')
+    timeout = entry.get('timeoutSeconds', checks.DEFAULT_TIMEOUT)
+    require(type(timeout) is int and timeout > 0, f'{key}.timeoutSeconds precisa ser um inteiro positivo')
+    return {'argv': argv, 'timeout': timeout}
+
+
+def issue_number(value):
+    require(isinstance(value, str) and value.isdigit() and 0 < int(value) and len(value) <= 9,
+            'a issue precisa ser um número inteiro positivo')
+    return int(value)
+
+
+def suite_folder(root, issue):
+    return Path(root).resolve() / '.frontlights' / 'issues' / str(issue)
+
+
+def zoned_now():
+    """Now in RELEASE_ZONE (the user's zone), in the machine's local zone when it is unavailable; with offset."""
+    try:
+        return datetime.now(zoneinfo.ZoneInfo(RELEASE_ZONE))
+    except (KeyError, OSError, ValueError):
+        return datetime.now().astimezone()
+
+
+def tree_evidence(root):
+    """The `frontlights.py evidence` of `root` (HEAD, branch, diff and file hashes, `.frontlights/` left out): the
+    evidence `review-gate` compares."""
+    import frontlights   # noqa: PLC0415  (lazy: frontlights imports this module too)
+    try:
+        return frontlights.git_evidence(root)
+    except (ValueError, subprocess.TimeoutExpired) as error:
+        raise Refusal(f'a evidência da árvore não pôde ser lida: {str(error)[:STDERR_LIMIT]}')
+
+
+def suite_run_settings(config, mode, argv_text):
+    """(settings, source): the suite of the config, or the one `--argv` gives (full only; the timeout of the config
+    when it declares the mode). Settings None: the mode is not configured and nothing is given."""
+    import checks   # noqa: PLC0415
+    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}')
+    if argv_text is None:
+        return configured, 'config'
+    require(mode == 'full', '--argv só vale com --mode full: a suíte de impacto vem sempre do config')
+    try:
+        given = json.loads(argv_text)
+    except ValueError:
+        raise Refusal('--argv precisa ser uma lista JSON de argumentos')
+    timeout = configured['timeout'] if configured else checks.DEFAULT_TIMEOUT
+    return {'argv': suite_argv(given, '--argv'), 'timeout': timeout}, 'argument'
+
+
+def run_suite_process(argv, root, timeout):
+    """(exit code or None, timed out, error or None, output, warnings) of one run, no shell, the whole process tree
+    killed at the timeout (checks.run_process)."""
+    import checks   # noqa: PLC0415
+    warnings = []
+    try:
+        code, output = checks.run_process(argv, root, timeout, warnings)
+        return code, False, None, output, warnings
+    except subprocess.TimeoutExpired:
+        return None, True, None, f'A suíte passou de {timeout} s e foi interrompida.\n', warnings
+    except FileNotFoundError:
+        return None, False, 'executable_missing', 'Executável da suíte não encontrado.\n', warnings
+    except OSError:
+        return None, False, 'cannot_start', 'A suíte não pôde ser iniciada.\n', warnings
+
+
+def suite_message(record, timeout):
+    mode = record['mode']
+    if record['exitCode'] == 0:
+        return f'A suíte {mode} passou em {record["seconds"]} s em {record["head"][:7]}.'
+    if record['timedOut']:
+        return f'A suíte {mode} passou do prazo de {timeout} s e foi interrompida.'
+    if record.get('error'):
+        return f'A suíte {mode} não rodou ({record["error"]}).'
+    return f'A suíte {mode} falhou (código {record["exitCode"]}); a saída está em {record["output"]}.'
+
+
+def op_suite(root, config_path, issue, mode, base, concurrent, argv_text):
+    import checks   # noqa: PLC0415
+    worktree(root)
+    issue = issue_number(issue)
+    require(mode in SUITE_MODES, 'o modo da suíte precisa ser impact ou full')
+    base = plain_name(base, 'a branch base')
+    settings, source = suite_run_settings(load_config(config_path), mode, argv_text)
+    if settings is None:
+        return {'state': 'unconfigured', 'exitCode': 2,
+                'message': f'o config não declara homolog.suites.{mode}; nada foi rodado'}
+    argv = [argument.replace(BASE_TOKEN, base) for argument in settings['argv']]
+    checks.load_user_secrets(config_path)
+    evidence = tree_evidence(root)          # before the run: an edit during it makes the record stale
+    folder = suite_folder(root, issue)
+    folder.mkdir(parents=True, exist_ok=True)
+    started = zoned_now()
+    log = fresh_file(folder, f'suite-{mode}-{started.strftime("%Y%m%d-%H%M%S")}', '.log')
+    code, timed_out, error, output, warnings = run_suite_process(argv, str(Path(root).resolve()), settings['timeout'])
+    finished = zoned_now()
+    log.write_text(checks.redact(output), encoding='utf-8')
+    record = {'mode': mode, 'source': source, 'base': base, 'argv': checks.redact_argv(argv),
+              'head': evidence['head'], 'evidence': evidence, 'exitCode': code, 'timedOut': timed_out,
+              'seconds': round((finished - started).total_seconds(), 3), 'output': str(log),
+              'concurrent': bool(concurrent), 'startedAt': started.isoformat(timespec='seconds'),
+              'finishedAt': finished.isoformat(timespec='seconds')}
+    if error:
+        record['error'] = error
+    if warnings:
+        record['warnings'] = warnings
+    path = folder / 'suite.json'
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=True), encoding='utf-8')
+    return {'state': 'green' if code == 0 else 'red', 'record': record, 'recordPath': str(path),
+            'exitCode': 0 if code == 0 else 1, 'message': suite_message(record, settings['timeout'])}
+
+
+def read_suite_record(path):
+    """The record at `path`, or None when there is none; a Refusal when it is not a suite record."""
+    if not path.exists():
+        return None
+    data = read_record(path)
+    evidence = data.get('evidence') if isinstance(data, dict) else None
+    require(isinstance(evidence, dict) and data.get('mode') in SUITE_MODES,
+            f'{path} não é um registro de suíte (mode e evidence); rode `homolog suite` de novo')
+    return data
+
+
+def op_suite_gate(root, config_path, issue, required):
+    import frontlights   # noqa: PLC0415
+    worktree(root)
+    issue = issue_number(issue)
+    suites = suite_block(load_config(config_path))
+    path = suite_folder(root, issue) / 'suite.json'
+    record = read_suite_record(path)
+    result = {'recordPath': str(path), 'required': required}
+    if record is None:
+        if not suites or all(suites.get(mode) is None for mode in SUITE_MODES):
+            result.update(status='unconfigured', exitCode=2,
+                          message='não há registro de suíte e o config não declara homolog.suites')
+        else:
+            result.update(status='missing', exitCode=2, message=f'não há registro de suíte em {path}; rode `homolog suite`')
+        return result
+    try:
+        compared = frontlights.review_gate(record['evidence'], tree_evidence(root))
+    except ValueError as error:
+        raise Refusal(f'{path} tem uma evidência incompleta: {str(error)[:STDERR_LIMIT]}')
+    result.update(mode=record['mode'], source=record.get('source'), suiteExitCode=record.get('exitCode'),
+                  changed=compared['changed'], files_changed=compared['files_changed'],
+                  recordedHead=compared['reviewed_head'], currentHead=compared['current_head'])
+    if compared['status'] != 'current':
+        result.update(status='stale', exitCode=2,
+                      message=f'a suíte rodou em outra ponta; difere: {", ".join(compared["changed"])}')
+    elif record.get('exitCode') != 0:
+        result.update(status='red', exitCode=2, message=f'a suíte {record["mode"]} falhou nesta ponta')
+    elif required == 'full' and record['mode'] != 'full':
+        result.update(status='missing', exitCode=2,
+                      message=f'o registro é da suíte {record["mode"]}; --require full pede a suíte completa')
+    else:
+        result.update(status='current', exitCode=0,
+                      message=f'a suíte {record["mode"]} passou nesta ponta ({compared["current_head"][:7]})')
+    return result
+
+
 # ---------------------------------------------------------------- command line
 
-def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None):
+def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
+        issue=None, mode=None, concurrent=False, argv=None, required=None):
     try:
-        if operation == 'hook':
+        if operation == 'suite':
+            result = op_suite(root, config, issue, mode, base, concurrent, argv)
+        elif operation == 'suite-gate':
+            result = op_suite_gate(root, config, issue, required)
+        elif operation == 'hook':
             result = op_hook(root, base, install)
         elif operation == 'sync':
             result = op_sync(root, base, remote)
@@ -708,11 +933,23 @@ def build_parser():
     parser = JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('hook', 'sync', 'bundle', 'release-plan'):
+    for name in ('hook', 'sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
-        command.add_argument('--root', required=True, help="the project's main worktree")
-        command.add_argument('--base', default='main', help='the base branch, the local homologation (default main)')
-        if name == 'hook':
+        command.add_argument('--root', required=True, help="the project's main worktree (suite: the issue's worktree)")
+        if name != 'suite-gate':
+            command.add_argument('--base', default='main',
+                                 help='the base branch, the local homologation (default main); suite: replaces {base}')
+        if name in ('suite', 'suite-gate'):
+            command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.suites')
+            command.add_argument('--issue', required=True, help='the issue number: the record is .frontlights/issues/<n>/suite.json')
+        if name == 'suite':
+            command.add_argument('--mode', required=True, choices=SUITE_MODES, help='the suite to run')
+            command.add_argument('--concurrent', action='store_true',
+                                 help='the watched run was in progress during this run (recorded)')
+            command.add_argument('--argv', help='full only: a JSON list run once instead of homolog.suites.full')
+        elif name == 'suite-gate':
+            command.add_argument('--require', choices=('full',), help='only a full suite record counts')
+        elif name == 'hook':
             mode = command.add_mutually_exclusive_group()
             mode.add_argument('--check', action='store_true', help='report the hook without writing (the default)')
             mode.add_argument('--install', action='store_true', help='write the hook when missing or already ours')
@@ -735,9 +972,10 @@ def build_parser():
 def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
-        result = run(args.operation, args.root, args.base, getattr(args, 'remote', 'origin'),
+        result = run(args.operation, args.root, getattr(args, 'base', 'main'), getattr(args, 'remote', 'origin'),
                      getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
-                     getattr(args, 'records', None))
+                     getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
+                     getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))
