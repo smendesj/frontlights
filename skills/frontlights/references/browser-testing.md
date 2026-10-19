@@ -516,9 +516,18 @@ the answer is recorded verbatim.
 
 ## Evidence
 
-Before each browser run, take `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" evidence --root <worktree>`.
+Before each browser run, take `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" evidence --root <worktree>`
+and `python "${CLAUDE_SKILL_DIR}/scripts/progress_report.py" evidence-dir --root <worktree> --issue <n>` (`<n>` as
+below). The second prints `evidenceDir`, the folder of the run's prints, and `summaryDir`, the folder of the prints
+kept for the summary. When the `roadmapSync` block of the project's config names `scrumRoot` and `weekFolderPattern`, the folder is
+the one of the sprint the run happens in (the Monday of that week, Sao Paulo time) under scrumRoot, in
+`evidencias/<repository>/<n>` (the name after the slash of `repository`), so the prints outlive the cleanup of the
+worktrees and stay at hand for the summary; without them it is `.frontlights/issues/<n>/browser/` as before. That
+sprint folder is synced and shared with the company: every print saved there follows the rules of the watched run
+(test data only, never production, no password, no real person's data and no local path on screen) and is looked at
+before it is kept. A run that crosses midnight into another week keeps the folder it started with.
 Write `.frontlights/issues/<n>/browser/result.json` (for a family that already exists, `<n>` is its lead
-issue and the file is the family's) with timestamp, branch,
+issue and the file is the family's) with `pastaDosPrints` (the `evidenceDir` of the run), timestamp, branch,
 `head`, `diff_sha256`, the account used (`conta 1` or `conta 2`, never the login),
 each step and its result, console and network errors, screenshot file names, the
 failure kind and the user's answer. A watched run adds `assistido` (true or
@@ -529,7 +538,8 @@ source of each response (`back real` or `interceptada`) and,
 when a profile was moved, only the profile field before and after the undo (never
 the whole row, which can hold a login or a password hash); its screenshots are
 exactly one per pass and issue, named `antes-<n>` and `depois-<n>` (`<n>` is the issue), plus `falha-<caso>` for a failed
-case. Screenshots stay in the same folder, and so do `perfil-original.json` and `dados-de-teste.json`. The
+case. Screenshots go to `evidenceDir`, named by file name in `result.json`; `perfil-original.json` and
+`dados-de-teste.json` stay beside `result.json`. The
 records of `.frontlights/issues/<n>/checks/` sit beside it. The records are
 tied to the `head` they ran on: for the watched run `browser-gate` says whether the record still covers the
 code (`stale` asks again), and the `checks` records are stale after any later commit, so rerun them before
@@ -544,7 +554,7 @@ allows routine issue updates; otherwise keep it in the handoff as pending.
 
 The DEPOIS pass of a watched run is also the cheapest moment to take the prints the "Resumo para a
 diretoria" will need (`progress-report.md` step 6 offers them). The summary shows a single print per
-delivery, so this costs at most one extra capture per delivery and nothing leaves the project.
+delivery, so this costs at most one extra capture per delivery.
 
 - **Which.** In DEPOIS only, never ANTES, a single print per delivery (the top-level issue of the
   family): the one screen, message or list a person would recognise as what changed, taken right after
@@ -554,10 +564,11 @@ delivery, so this costs at most one extra capture per delivery and nothing leave
   data and no local path: crop, or choose another view of the same result, or take no print for that case. Test
   data only. JPEG or PNG, at most 1 MB and about 1920 px wide. Look at every image yourself and retake the
   blurry, empty or error ones.
-- **Where.** `.frontlights/issues/<n>/browser/resumo/` (the issue's folder; the lead issue's for a family) of the project's **main
-  worktree** (the first one `git worktree list` shows), never of a linked one:
-  the cleanup of the delivered worktrees takes their `.frontlights` records with them, and the summary comes
-  days later. A `candidates.json` lists each print:
+- **Where.** The `summaryDir` that `evidence-dir` printed for the run (section "Evidence"): `resumo/` of the issue's
+  folder (the lead issue's for a family) in the sprint folder, or, in a project without a sprint folder,
+  `.frontlights/issues/<n>/browser/resumo/` of the project's **main worktree** (the first one `git worktree list`
+  shows), never of a linked one: the cleanup of the delivered worktrees takes their `.frontlights` records with
+  them, and the summary comes days later. A `candidates.json` lists each print:
   `[{"file": "<image in this folder>", "caption": "<one plain sentence in Portuguese>", "issue": <slice>,
   "cover": <delivery>, "repository": "<OWNER/REPOSITORY>", "takenAt": "<ISO 8601 instant with its offset>", "head": "<DEPOIS head>",
   "visibleFiles": {"<visible file>": "<git blob id>"}}]`.
@@ -566,5 +577,6 @@ delivery, so this costs at most one extra capture per delivery and nothing leave
   slice (the `by_root` of `browser-gate`) to its Git blob id as served in DEPOIS, so the summary can tell
   whether the code the print shows is still the code that was delivered. Write `candidates.json` from
   scratch on each run of the watched test and keep only what DEPOIS just produced.
-- **Never sent from here.** These files stay in the project's `.frontlights` folder, which is never
-  committed. They go to the synced summary folder only when the user chooses them in the summary step.
+- **Never sent from here.** The watched run never commits nor sends these files. In the sprint folder they are
+  already in the company's synced, shared folder, so they are cleaned before they are saved, as above; they go
+  to the folder of the summary only when the user chooses them in the summary step.

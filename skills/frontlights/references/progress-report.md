@@ -210,7 +210,9 @@ operation runs in, because the collectors, the draft guide and the approval all 
      the session opened> --repository <the facts file's `repository`> --to <to>` (read-only, no network, no
      approval, nothing is copied; add `--ref <branch>` for work that is not on `HEAD` yet). A project other
      than the summary's product has none of its prints offered: the `--repository` check says so. It lists the prints that watched browser tests kept for the summary
-     (`browser-testing.md`, "Prints kept for the progress summary"): `cover` (the delivery's issue), `issue`
+     (`browser-testing.md`, "Prints kept for the progress summary"), read from the sprint folder of each run of
+     the 8 weeks up to `--to` and from the older `.frontlights` folder of the main worktree, which it still reads until
+     its prints are migrated: `cover` (the delivery's issue), `issue`
      (the slice), `file`, `caption`, `takenAt`, `fresh` (the code the print shows is still the code of the
      ref) and `problems`. Match them to the deliveries by `cover` = the entry's issue. A candidate with
      `problems` (not `fresh`, or an unreadable image) is not offered: say why in one line.

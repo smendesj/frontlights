@@ -20,8 +20,9 @@ Expected, in this order:
    turns `removido: true`. What the product only anonymizes is listed in the report with the exact `DELETE` of each id this
    run created, shown in full in an `AskUserQuestion`, and nothing runs before the answer. Interrupt a run: the next
    session removes the entries not marked before anything else.
-6. In DEPOIS the run keeps one clean print per visible case in `browser/resumo/` of the project's main worktree (not a
-   linked one) with `candidates.json` (slice, `cover`, `repository`, `takenAt` with offset, `head` and `visibleFiles` with
+6. In DEPOIS the run keeps one clean print per visible case in the `summaryDir` of `evidence-dir` (`resumo/` of
+   `<sprint>/evidencias/<repository>/<n>` under scrumRoot; in a project without it, `browser/resumo/` of the main
+   worktree, not a linked one) with `candidates.json` (slice, `cover`, `repository`, `takenAt` with offset, `head` and `visibleFiles` with
    blob ids): no strip, no browser chrome, no person's name or data. Removing the delivered worktrees leaves them.
 7. At the prints step of the summary, `progress_report.py candidates --root <main worktree> --repository <facts repository>
    --to <last day>` lists them (a print of another repository is a problem, not an offer) with
