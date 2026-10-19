@@ -159,7 +159,17 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
                          seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
                          compara com a ponta (current, stale, red, missing ou unconfigured); campos opcionais
-                         `error` e `warnings`; fica na worktree da issue, não na principal
+                         `error` e `warnings`; fica na worktree da issue, não na principal. Com o marcador
+                         `{report}` no argv de `homolog.suites.impact` (só lá, como argumento inteiro, uma vez),
+                         ganha `report` (o caminho do relatório da execução) e, se o relatório for válido, `ran`
+                         e `complete` (os ids que rodaram e os que rodaram por inteiro); relatório ausente, grande
+                         demais ou inválido vira um aviso em `warnings`, sem `ran` nem `complete`, e o exitCode
+                         fica o da execução; sem o marcador, nenhum desses campos
+  issues/<n>/suite-report-<data-hora>.json  relatório que a suíte de impacto grava no caminho do `{report}`:
+                         objeto com `ran` e `complete` (`{"ran": [ids], "complete": [ids]}`), listas de textos não
+                         vazios sem NUL e sem repetição, todo id de `complete` também em `ran`; as outras chaves
+                         (as de sempre do `--report` do `tests/suite.py`: version, modules, totals, mode...) são
+                         ignoradas, e o registro guarda só `ran` e `complete`
   issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
   release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
@@ -169,7 +179,17 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          (warnings incluídos), menos base, head e evidence: mode, source, argv, exitCode,
                          timedOut, seconds, output, concurrent, startedAt e finishedAt vêm dela), e
                          `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem; os juízes o leem como
-                         um rodado
+                         um rodado. Com o marcador `{covered}` no argv de `homolog.suites.full` (só lá, como
+                         argumento inteiro, uma vez), ganha `covered` {complete, from [{issue, path, head, tree}],
+                         refused [{issue, path, reason}], file}: `complete` lista os ids que os registros de
+                         impacto das issues da release rodaram inteiros e verdes na mesma árvore da ponta (a
+                         suíte os pulou), `from` os registros que contaram, `refused` os que não contaram e o
+                         motivo, e `file` o `release/suite-covered-<data-hora>.json` (`{"complete": [ids]}`) que a
+                         suíte recebeu; quando a lista das issues da release não sai (sem
+                         `refs/remotes/<remoto>/<base>`, ou sem registro de autorização que nomeie uma delas),
+                         `warnings` diz por que nada foi pulado; os juízes o leem como a suíte inteira da ponta. Na suíte inteira de uma
+                         issue, o arquivo (`issues/<n>/suite-covered-<data-hora>.json`) vem com a lista vazia; sem
+                         o marcador, nenhum desses campos nem arquivos
   release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa
                          ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
                          e a PR da release fica pronta por ela (`references/development.md`, "The release")
@@ -334,10 +354,11 @@ módulos de portas e da prévia do `serve` e de integração do `checks`, cada u
 cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
-Por issue, o portão é a suíte por impacto do projeto (`references/development.md`, "Which tests run when"); a
-suíte inteira sem a variável roda na release, uma vez, pelo `python -m unittest discover -s tests -v` (o runner
-não a deixa mais rápida do que o `discover`), obrigatória com ou sem CI no projeto; a CI do GitHub deste
-repositório roda o mesmo `discover` e não define a variável.
+Por issue, o portão é a suíte por impacto do projeto, e a suíte inteira sem a variável roda na release, uma vez,
+obrigatória com ou sem CI no projeto; o que cada uma roda está em `references/development.md`, "Which tests run
+when" e "The release". A CI do GitHub deste repositório fica como a conferência inteira, pelo
+`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`): ela roda o mesmo
+`discover` e não define a variável.
 
 ## Ponto de retomada e continuação
 

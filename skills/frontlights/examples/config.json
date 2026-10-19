@@ -10,19 +10,18 @@
           "python",
           "tests/suite.py",
           "--impact",
-          "{base}"
+          "{base}",
+          "--report",
+          "{report}"
         ],
         "timeoutSeconds": 2400
       },
       "full": {
         "argv": [
           "python",
-          "-m",
-          "unittest",
-          "discover",
-          "-s",
-          "tests",
-          "-v"
+          "tests/suite.py",
+          "--skip-covered",
+          "{covered}"
         ],
         "timeoutSeconds": 5400
       }

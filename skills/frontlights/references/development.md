@@ -180,11 +180,16 @@ modules that start real processes and ports (`tests.test_serve_ports`,
 variable; any other value, or no variable, runs everything. The runner runs the safe modules in
 parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Per issue, the gate is the project's impact suite: `homolog.suites.impact` in
-`.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), run by
+`.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), with `--report {report}`
+so the record says what ran and what ran whole, run by
 `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --root <issue-worktree> --config <config>
 --issue <n> --mode impact --base <base> [--concurrent]` at the tip of the branch of the issue, in the background, started together with the
 watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
-watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
+watched run. In this repository `--impact` runs only what the diff `<base>...HEAD` plus the working tree touches,
+chosen over every test module by the selection of `tests/pre_commit.py`: a changed module whole, a module that cites a
+changed file or imports a changed script only in the classes that do (whole when that is outside a class),
+`tests.test_single_source` always whole, and every module whole when the runner or the selection changes; the chosen
+heavy modules run without the variable in the serial queue, and `--list` shows the plan. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
 while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
@@ -194,9 +199,12 @@ desta vez" (`homolog suite --root <issue-worktree> --config <config> --issue <n>
 is killed: without it and without `homolog.suites.full.timeoutSeconds` the run gets 3600 s, which the whole suite of
 this repository has already exceeded under load). `<config>` is always the main worktree's
 `.frontlights/config.json`, by its absolute path: it is usually untracked and absent from an issue's worktree. The whole suite
-runs at the release ("The release"), with or without CI in the project, through
-`python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
-`discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
+runs at the release ("The release"), with or without CI in the project. In this repository it is
+`python tests/suite.py --skip-covered {covered}`: the complement, through the parallel runner, of what the impact of
+the release's issues already ran whole on the same tree, every other module run, the heavy ones in the serial queue
+and without the variable; the runner does not make the whole suite faster than `discover`, and the time saved is what
+it skips. The CI of this repository stays the full check: it runs the whole suite through
+`python -m unittest discover -s tests -v`, and runs the same `discover` and never sets the variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
@@ -644,7 +652,17 @@ offers the release again with everything accumulated.
   suite as below. In the main worktree, on the local main, run
   `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config <config>`
   on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
-  runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
+  runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. With `{covered}` in
+  `homolog.suites.full.argv` (this repository's, in "Which tests run when"), the release runs only what no impact
+  record of the release's issues ran whole and green on the same tree: the run hands the suite a file with the
+  `complete` of each impact record (read from the issue's worktree, the `path` of its authorization entry) that is
+  green, from a clean tree, of a known head whose commit tree and file hashes are the tip's, and the suite runs the
+  rest. Any other record (red, from another tree, with a change not committed, a full or a report-less one, a
+  worktree already gone) adds nothing, and its reason is kept. The release record names what was skipped, where it
+  came from and what did not count (`covered`, `docs/protocol.md`); `suite-gate --release` and `release-plan` judge it
+  as the whole suite of the tip and say how many modules it skipped. So this run, like the adoption, comes before the
+  cleanup of the worktrees. The CI of the release's pull request stays the full check and runs everything. Without the
+  marker the suite runs whole, as before. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
   again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv

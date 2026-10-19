@@ -49,7 +49,8 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
 
 **Suíte inteira da release:** <comando, contagem, saída> na ponta da main local `<sha curto>`, de onde a branch da
 release foi cortada. Quando ela foi adotada (`homolog suite --release --from`), diga "adotada da ponta `<sha curto da
-origem>`" e cite <comando, contagem, saída e tempo da execução original>.
+origem>`" e cite <comando, contagem, saída e tempo da execução original>. Quando ela rodou só o complemento
+(`covered` no registro), diga quantos módulos pulou e de onde vieram <as issues e as pontas dos registros de impacto>.
 
 ## Risco do merge
 

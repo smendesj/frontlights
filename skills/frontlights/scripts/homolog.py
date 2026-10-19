@@ -53,7 +53,22 @@ Operations (each prints one JSON object on stdout):
          records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
-         whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main). With
+         whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
+         `{report}` (only in `homolog.suites.impact.argv`, only as one whole argument, at most once; refused anywhere
+         else) the absolute path of a fresh `.frontlights/issues/<n>/suite-report-<YYYYmmdd-HHMMSS>.json`: after the
+         run the record takes `report` (the path) and, from a valid report (an object with `ran` and `complete`,
+         lists of ids; any other key, like the usual ones of the `--report` of `tests/suite.py`, ignored), `ran`
+         and `complete`; a missing, too large or invalid one is a warning in `warnings`, the exit code as is.
+         `{covered}` (only in `homolog.suites.full.argv`, with the same rules; refused in impact and in `--argv`)
+         becomes the absolute path of a fresh `suite-covered-<YYYYmmdd-HHMMSS>.json` in the record folder,
+         `{"complete": [ids]}`: with `--release`, the union of `complete` of the impact records of the issues of the
+         release (the `release` of `release-plan`), each read from `.frontlights/issues/<n>/suite.json` in the
+         worktree its authorization entry names, that ran green on a clean tree whose commit tree and file hashes are
+         the tip's (the checks of the adoption after its first); a record that does not count adds nothing and its
+         reason is kept. Outside the release the list is empty. The record takes `covered` {complete, from [{issue,
+         path, head, tree}], refused [{issue, path, reason}], file}, and `warnings` when the list of the issues of
+         the release cannot be had (no `<remote>/<base>`, or no authorization record names one of them), so the
+         record says why nothing was skipped; without the marker, nothing of this. With
          `--mode full`, `--argv '<json list>'` runs once the argv the user accepted instead of the config (`source:
          argument`; `config` otherwise); `--argv` with impact is a refusal. `--timeout-seconds N` (a positive
          integer, with or without `--argv`) is the timeout of this run in place of the config's; without either,
@@ -82,6 +97,8 @@ Operations (each prints one JSON object on stdout):
          record and no `homolog.suites`). A record is judged even without suites in the config. Exit 0 only for
          current, 2 otherwise. `--release` judges `.frontlights/release/suite.json` as `--require full`, refused
          (exit 1) off the tip of the local `--base` (default main); `release-plan` shares the judgment.
+         A release record with `covered` (a run with `{covered}`) is the whole suite of its tip like any other; both
+         judges of the release, and `release-plan`, pass `covered` on and say how many modules it skipped.
          `--release --head <full sha>` judges the copy of that tip instead, wherever the main worktree stands:
          `current` (a full run of that head exited 0), `red` (it failed) or `missing` (no copy, or a copy whose
          evidence shows changes not committed: a diff other than the empty one, or a file the commit lacks, so it
@@ -118,6 +135,9 @@ HOMOLOG_KEYS = ('backupDir', 'suites')          # the keys of the `homolog` bloc
 SUITE_MODES = ('impact', 'full')                # the suites `homolog.suites` may declare
 SUITE_KEYS = ('argv', 'timeoutSeconds')         # the keys of each suite, the shape of `checks.regression`
 BASE_TOKEN = '{base}'                           # replaced in a suite argv by the base the run compares with
+REPORT_TOKEN = '{report}'                       # impact only, a whole argument: the path of the report of the run
+COVERED_TOKEN = '{covered}'                     # full only, a whole argument: the path of what is already covered
+MARKERS = {REPORT_TOKEN: 'impact', COVERED_TOKEN: 'full'}   # each marker and the only suite whose argv takes it
 FULL_SUITE_TIMEOUT = 3600                       # the whole suite without a configured timeout (impact: checks')
 EMPTY_DIFF = hashlib.sha256(b'').hexdigest()    # `diff_sha256` of the evidence of a tree with no tracked change
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
@@ -567,9 +587,25 @@ def work_branches(folder):
     never both, and its `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later
     record wins for the same issue or slug. A slice entry is ignored in silence; a malformed entry, record or
     prefix, and every record past RECORD_LIMIT, is skipped and counted."""
+    entries, skipped = work_entries(folder)
+    issues = {entry['issue']: entry['branch'] for entry in entries if 'issue' in entry}
+    directs = {entry['direct']: entry['branch'] for entry in entries if 'direct' in entry}
+    return issues, directs, skipped
+
+
+def issue_worktrees(folder):
+    """{issue number: the `path` of its worktree} from the same entries as `work_branches` (a later record wins);
+    an entry without a non-empty `path` names no worktree (issue 57, S4)."""
+    entries, _ = work_entries(folder)
+    return {entry['issue']: entry['path'] for entry in entries if 'issue' in entry and entry['path']}
+
+
+def work_entries(folder):
+    """([{'issue' or 'direct', 'branch', 'path'}], skipped) in record order: the valid entries `work_branches`
+    describes, with the `path` of the worktree (None when it is not a non-empty text)."""
     files = record_files(folder)
     skipped = max(0, len(files) - RECORD_LIMIT)
-    issues, directs = {}, {}
+    found = []
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
         prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
@@ -583,15 +619,17 @@ def work_branches(folder):
             number = entry.get('issue') if isinstance(entry, dict) else None
             direct = entry.get('direct') if isinstance(entry, dict) else None
             branch = entry.get('branch') if isinstance(entry, dict) else None
+            path = entry.get('path') if isinstance(entry, dict) else None
+            path = path if isinstance(path, str) and path.strip() else None
             if not is_plain(branch) or not branch.startswith(prefix):
                 skipped += 1
             elif direct is None and type(number) is int and number > 0:
-                issues[number] = branch
+                found.append({'issue': number, 'branch': branch, 'path': path})
             elif number is None and isinstance(direct, str) and DIRECT.fullmatch(direct):
-                directs[direct] = branch
+                found.append({'direct': direct, 'branch': branch, 'path': path})
             else:
                 skipped += 1
-    return issues, directs, skipped
+    return found, skipped
 
 
 def ancestry(root, commit, ref):
@@ -672,6 +710,30 @@ def release_prefix(prefix, records):
     return max(found, key=rank)['prefix'], 'records'
 
 
+def release_work(root, base, remote, records):
+    """(issues, directs, skipped): every issue and every work without an issue of the authorization records under
+    `records` (`work_branches`), each with its branch, its tip and whether that tip is in the local `base` and in
+    `<remote>/<base>`; `pending` says which of them the release carries."""
+    local_ref, remote_ref = f'refs/heads/{base}', f'refs/remotes/{remote}/{base}'
+    remote_tip = rev(root, remote_ref)
+    mapping, direct_mapping, skipped = work_branches(records)
+
+    def located(key, value, branch):
+        tip = rev(root, f'refs/heads/{branch}')
+        return {key: value, 'branch': branch, 'tip': tip, 'present': tip is not None,
+                'inLocalMain': ancestry(root, tip, local_ref),
+                'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)}
+
+    issues = [located('issue', number, mapping[number]) for number in sorted(mapping)]
+    directs = [located('direct', slug, direct_mapping[slug]) for slug in sorted(direct_mapping)]
+    return issues, directs, skipped
+
+
+def pending(item):
+    """True when the release carries this item of `release_work`: its branch is in the local base, not in the remote."""
+    return item['present'] and item['inLocalMain'] is True and item['inRemoteMain'] is False
+
+
 def op_release_plan(root, base, remote, prefix, records):
     worktree(root)
     base = plain_name(base, 'a branch base')
@@ -681,19 +743,7 @@ def op_release_plan(root, base, remote, prefix, records):
     local = rev(root, local_ref)
     require(local, f'a branch base `{base}` não existe neste repositório')
     remote_tip = rev(root, remote_ref)
-    mapping, direct_mapping, skipped = work_branches(root if records is None else records)
-
-    def located(key, value, branch):
-        tip = rev(root, f'refs/heads/{branch}')
-        return {key: value, 'branch': branch, 'tip': tip, 'present': tip is not None,
-                'inLocalMain': ancestry(root, tip, local_ref),
-                'inRemoteMain': ancestry(root, tip, remote_ref if remote_tip else None)}
-
-    def pending(item):
-        return item['present'] and item['inLocalMain'] is True and item['inRemoteMain'] is False
-
-    issues = [located('issue', number, mapping[number]) for number in sorted(mapping)]
-    directs = [located('direct', slug, direct_mapping[slug]) for slug in sorted(direct_mapping)]
+    issues, directs, skipped = release_work(root, base, remote, root if records is None else records)
     release = [i['issue'] for i in issues if pending(i)]
     release_direct = [d['direct'] for d in directs if pending(d)]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
@@ -729,7 +779,8 @@ def op_release_plan(root, base, remote, prefix, records):
             parts.append(f'{len(release_direct)} trabalho(s) sem issue ({", ".join(release_direct)})')
         result.update(ready=True, exitCode=0,
                       message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
-                              f'ainda fora de {remote}/{base}; a branch da release é {name}.')
+                              f'ainda fora de {remote}/{base}; a branch da release é {name}.'
+                              f'{skipped_sentence(result["fullSuite"].get("covered"))}')
     return result
 
 
@@ -748,27 +799,37 @@ def suite_block(config):
     if unknown:
         raise Refusal(f'homolog.suites tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são impact e full')
     for mode in SUITE_MODES:
-        suite_entry(suites.get(mode), f'homolog.suites.{mode}')
+        suite_entry(suites.get(mode), f'homolog.suites.{mode}', mode=mode)
     return suites
 
 
-def suite_argv(argv, key):
+def suite_argv(argv, key, mode=None):
     """The rules of `checks.<name>.argv` (checks.command_settings): a list of non-empty texts, no NUL byte, no
-    embedded shell. A refusal never repeats the arguments."""
+    embedded shell. In the suite `mode` of the config, its marker of MARKERS (REPORT_TOKEN for impact,
+    COVERED_TOKEN for full) may be one whole argument, at most once; anywhere else (another suite, `--argv`) a
+    marker is refused. A refusal never repeats the arguments."""
     import checks   # noqa: PLC0415  (lazy: only the suite operations need it)
     require(isinstance(argv, list), f'{key} precisa ser uma lista de argumentos, não um texto')
     require(argv and all(isinstance(argument, str) and argument for argument in argv),
             f'{key} precisa ter só textos não vazios')
     require(not any('\0' in argument for argument in argv), f'{key} não aceita byte NUL em nenhum argumento')
+    for token, place in MARKERS.items():
+        marked = [argument for argument in argv if token in argument]
+        require(mode == place or not marked, f'{key} não aceita o marcador {token}: ele vale só em '
+                                             f'homolog.suites.{place}.argv, como um argumento inteiro')
+        require(all(argument == token for argument in marked),
+                f'{key} aceita o marcador {token} só como um argumento inteiro, não dentro de outro argumento')
+        require(len(marked) <= 1, f'{key} aceita o marcador {token} uma vez só')
     reason = checks.embedded_shell(argv)
     require(not reason, f'{key} não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, wrappers, &&, '
                         '|, ;, redirecionamentos, python -c); declare o executável e seus argumentos')
     return argv
 
 
-def suite_entry(entry, key, default_timeout=None):
+def suite_entry(entry, key, default_timeout=None, mode=None):
     """{'argv', 'timeout'} of one suite, or None when it is absent or null; the shape of `checks.regression`.
-    Without `timeoutSeconds`, `default_timeout` (`checks.DEFAULT_TIMEOUT` when not given)."""
+    Without `timeoutSeconds`, `default_timeout` (`checks.DEFAULT_TIMEOUT` when not given); `mode`: the argv may
+    carry the marker of that suite (`suite_argv`)."""
     import checks   # noqa: PLC0415
     if entry is None:
         return None
@@ -776,7 +837,7 @@ def suite_entry(entry, key, default_timeout=None):
     unknown = [str(name)[:40] for name in entry if name not in SUITE_KEYS]
     if unknown:
         raise Refusal(f'{key} tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são argv e timeoutSeconds')
-    argv = suite_argv(entry.get('argv'), f'{key}.argv')
+    argv = suite_argv(entry.get('argv'), f'{key}.argv', mode)
     timeout = entry.get('timeoutSeconds', default_timeout or checks.DEFAULT_TIMEOUT)
     require(type(timeout) is int and timeout > 0, f'{key}.timeoutSeconds precisa ser um inteiro positivo')
     return {'argv': argv, 'timeout': timeout}
@@ -857,7 +918,7 @@ def suite_run_settings(config, mode, argv_text, timeout_seconds=None):
     import checks   # noqa: PLC0415
     timeout_seconds = timeout_argument(timeout_seconds)
     default = FULL_SUITE_TIMEOUT if mode == 'full' else checks.DEFAULT_TIMEOUT
-    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}', default)
+    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}', default, mode=mode)
     if argv_text is None:
         settings, source = configured, 'config'
     else:
@@ -892,6 +953,45 @@ def run_suite_process(argv, root, timeout):
         return None, False, 'cannot_start', 'A suíte não pôde ser iniciada.\n', warnings
 
 
+def report_refusal(data):
+    """None when `data` is a valid suite report: an object with `ran` and `complete` (lists of non-empty texts
+    without NUL, no repeated id, every id of complete also in ran); any other key, like the usual keys of the
+    `--report` of `tests/suite.py` (version, modules, totals, mode...), is ignored. Otherwise why not, in
+    Portuguese."""
+    if not isinstance(data, dict) or not {'ran', 'complete'} <= set(data):
+        return 'ele precisa ser um objeto com as chaves ran e complete'
+    for key in ('ran', 'complete'):
+        ids = data[key]
+        if not (isinstance(ids, list) and all(isinstance(item, str) and item and '\0' not in item for item in ids)):
+            return f'{key} precisa ser uma lista de textos não vazios, sem byte NUL'
+        if len(set(ids)) != len(ids):
+            return f'{key} repete um id'
+    if not set(data['complete']) <= set(data['ran']):
+        return 'todo id de complete precisa estar também em ran'
+    return None
+
+
+def suite_report(path):
+    """({'ran', 'complete'}, None) from the report the run wrote at `path` (at most RECORD_BYTES, UTF-8 with or
+    without BOM; only those two keys are taken), or (None, the warning in Portuguese) when it is missing, too large
+    or invalid."""
+    lacking = 'o registro fica sem ran e complete'
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None, f'a suíte não gravou o relatório {path}; {lacking}'
+    if size > RECORD_BYTES:
+        return None, f'o relatório {path} passa de {RECORD_BYTES} bytes e não foi lido; {lacking}'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError, RecursionError):
+        return None, f'o relatório {path} não é um JSON legível em UTF-8; {lacking}'
+    reason = report_refusal(data)
+    if reason:
+        return None, f'o relatório {path} foi recusado: {reason}; {lacking}'
+    return {'ran': data['ran'], 'complete': data['complete']}, None
+
+
 def suite_message(record, timeout):
     mode = record['mode']
     if record['exitCode'] == 0:
@@ -921,8 +1021,17 @@ def adoption_refusal(root, base, origin, evidence):
     tree is the tip's and whose file hashes are the tip's now."""
     if origin['mode'] != 'full':
         return 'é um registro da suíte por impacto, e a release pede a suíte inteira'
+    return same_tree_refusal(root, base, origin, evidence, 'a suíte inteira')
+
+
+def same_tree_refusal(root, base, origin, evidence, what):
+    """None when the suite record `origin` (`what` names its suite in the reason) stands for the tip of the local
+    `base`, whose evidence now is `evidence`: it ran green (exit code 0, no timeout, no error) on a clean tree, its
+    head is known, the tree of that head is the tip's and its file hashes are the tip's now. Otherwise why not, in
+    Portuguese. The adoption (`adoption_refusal`) and the covered modules of the release (`impact_refusal`) share
+    it."""
     if origin.get('exitCode') != 0 or origin.get('timedOut') is not False or origin.get('error'):
-        return 'a suíte inteira desse registro não passou (código diferente de 0, prazo estourado ou não rodou)'
+        return f'{what} desse registro não passou (código diferente de 0, prazo estourado ou não rodou)'
     head = origin.get('head')
     if not (isinstance(head, str) and OID.fullmatch(head) and origin['evidence'].get('head') == head
             and tree_of(root, head)):
@@ -962,8 +1071,80 @@ def adopt_suite(root, base, from_record):
                        f'da {base} local (mesma árvore {str(tree)[:7]}); nada rodou.'}
 
 
+def impact_refusal(root, base, origin, evidence):
+    """None when the impact record `origin` of an issue covers its `complete` at the tip of the local `base`;
+    otherwise why not, in Portuguese (`same_tree_refusal` after the impact checks)."""
+    if origin['mode'] != 'impact':
+        return 'é um registro da suíte inteira, e só o impacto diz o que rodou inteiro'
+    if report_refusal({'ran': origin.get('ran'), 'complete': origin.get('complete')}):
+        return (f'ele não traz ran e complete válidos (a suíte de impacto rodou sem o {REPORT_TOKEN}, ou o '
+                'relatório foi recusado)')
+    return same_tree_refusal(root, base, origin, evidence, 'a suíte por impacto')
+
+
+def covered_by_release(root, base, remote, evidence):
+    """{'complete', 'from', 'refused'}: the union of `complete` of the impact records of the issues of the release
+    (`release_work` over the authorization records of `root`, `pending`) that count by `impact_refusal`, read from
+    `.frontlights/issues/<n>/suite.json` in the worktree its authorization entry names; `from` names each record
+    that counted ({issue, path, head, tree}), `refused` each one that did not ({issue, path, reason}). When the list
+    of the issues of the release cannot be had (no `refs/remotes/<remote>/<base>`, or no authorization record names
+    an issue the release carries), `warnings` says why nothing was skipped."""
+    remote_ref = f'refs/remotes/{remote}/{base}'
+    if rev(root, remote_ref) is None:
+        return {'complete': [], 'from': [], 'refused': [], 'warnings': [
+            f'não há {remote_ref} neste repositório, então a lista das issues da release não pôde ser calculada e '
+            f'nada foi pulado; rode o homolog sync antes']}
+    issues, _, _ = release_work(root, base, remote, root)
+    places = issue_worktrees(root)
+    complete, origins, refused = [], [], []
+    carried = [item for item in issues if pending(item)]
+    if not carried:
+        return {'complete': [], 'from': [], 'refused': [], 'warnings': [
+            f'nenhum registro de autorização desta worktree nomeia uma issue da release (na {base} local e fora de '
+            f'{remote_ref}), então nada foi pulado']}
+    for item in carried:
+        number = item['issue']
+        place = places.get(number)
+        if place is None:
+            refused.append({'issue': number, 'path': None,
+                            'reason': 'as autorizações não dão a worktree da issue, então não há registro a ler'})
+            continue
+        path, origin, reason = record_folder(Path(root, place), number) / 'suite.json', None, None
+        if not Path(root, place).is_dir():
+            reason = f'a worktree da issue não existe mais em {place}'
+        else:
+            try:
+                origin = read_suite_record(path)
+            except Refusal as error:
+                reason = str(error)
+            if origin is not None:
+                reason = impact_refusal(root, base, origin, evidence)
+            elif reason is None:
+                reason = 'não há registro de suíte da issue'
+        if reason:
+            refused.append({'issue': number, 'path': str(path), 'reason': reason})
+            continue
+        complete += [name for name in origin['complete'] if name not in complete]
+        origins.append({'issue': number, 'path': str(path), 'head': origin['head'],
+                        'tree': tree_of(root, origin['head'])})
+    return {'complete': complete, 'from': origins, 'refused': refused}
+
+
+def skipped_sentence(covered):
+    """The sentence of a message that says how many modules a run with COVERED_TOKEN skipped and from whose
+    impact; '' without `covered`."""
+    if not isinstance(covered, dict):
+        return ''
+    names = ', '.join(f'#{item.get("issue")}' for item in covered.get('from') or [])
+    count, refused = len(covered.get('complete') or []), len(covered.get('refused') or [])
+    where = f', que o impacto de {names} rodou inteiro(s) na mesma árvore' if names else ''
+    left = f'; {refused} registro(s) de issue não contaram' if refused else ''
+    why = ''.join(f' ({warning})' for warning in covered.get('warnings') or [])
+    return f' A suíte inteira pulou {count} módulo(s){where}{left}{why}.'
+
+
 def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False, timeout_seconds=None,
-             from_record=None):
+             from_record=None, remote='origin'):
     import checks   # noqa: PLC0415
     worktree(root)
     issue = None if release else issue_number(issue)
@@ -992,7 +1173,19 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     folder = record_folder(root, issue)
     folder.mkdir(parents=True, exist_ok=True)
     started = zoned_now()
-    log = fresh_file(folder, f'suite-{mode}-{started.strftime("%Y%m%d-%H%M%S")}', '.log')
+    stamp = started.strftime('%Y%m%d-%H%M%S')
+    log = fresh_file(folder, f'suite-{mode}-{stamp}', '.log')
+    report = fresh_file(folder, f'suite-report-{stamp}', '.json') if REPORT_TOKEN in argv else None
+    if report is not None:
+        argv = [str(report) if argument == REPORT_TOKEN else argument for argument in argv]
+    covered = None
+    if COVERED_TOKEN in argv:   # outside the release no issue covers anything: the file lists nothing
+        covered = (covered_by_release(root, base, plain_name(remote, 'o remoto'), evidence) if release
+                   else {'complete': [], 'from': [], 'refused': []})
+        file = fresh_file(folder, f'suite-covered-{stamp}', '.json')
+        file.write_text(json.dumps({'complete': covered['complete']}, ensure_ascii=True), encoding='utf-8')
+        covered['file'] = str(file)
+        argv = [str(file) if argument == COVERED_TOKEN else argument for argument in argv]
     code, timed_out, error, output, warnings = run_suite_process(argv, str(Path(root).resolve()), settings['timeout'])
     finished = zoned_now()
     log.write_text(checks.redact(output), encoding='utf-8')
@@ -1003,13 +1196,23 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
               'finishedAt': finished.isoformat(timespec='seconds')}
     if error:
         record['error'] = error
+    if report is not None:   # the run's own exit code stands either way; a bad report is only a warning
+        record['report'] = str(report)
+        lists, warning = suite_report(report)
+        if warning:
+            warnings.append(warning)
+        else:
+            record.update(lists)
+    if covered is not None:
+        record['covered'] = covered
     if warnings:
         record['warnings'] = warnings
     path = folder / 'suite.json'
     text = json.dumps(record, indent=2, ensure_ascii=True)
     path.write_text(text, encoding='utf-8')
     result = {'state': 'green' if code == 0 else 'red', 'record': record, 'recordPath': str(path),
-              'exitCode': 0 if code == 0 else 1, 'message': suite_message(record, settings['timeout'])}
+              'exitCode': 0 if code == 0 else 1,
+              'message': suite_message(record, settings['timeout']) + skipped_sentence(covered)}
     if release:   # the copy of this tip, which a run at a later tip never overwrites (`suite-gate --head`)
         tip = tip_record_path(root, evidence['head'])
         tip.write_text(text, encoding='utf-8')
@@ -1098,12 +1301,23 @@ def tip_changes(root, head, evidence):
 
 def adopted(result, record):
     """`result` with the `adoptedFrom` of an adopted record and, when it is current, the tip it was adopted from in
-    its message (issue 54)."""
+    its message (issue 54); and with what a run with COVERED_TOKEN skipped (`skipping`)."""
     origin = record.get('adoptedFrom')
     if isinstance(origin, dict):
         result['adoptedFrom'] = origin
         if result.get('status') == 'current':
             result['message'] += f', adotada da ponta {str(origin.get("head"))[:7]}'
+    return skipping(result, record)
+
+
+def skipping(result, record):
+    """`result` with the `covered` of a release run with COVERED_TOKEN (issue 57, S4) and, in its message, how many
+    modules it skipped and from whose impact."""
+    covered = record.get('covered')
+    if isinstance(covered, dict):
+        result['covered'] = covered
+        sentence = skipped_sentence(covered).strip().rstrip('.')
+        result['message'] += f'; {sentence[0].lower()}{sentence[1:]}'
     return result
 
 
@@ -1157,8 +1371,9 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
         required = 'full'
     configured = bool(suites) and any(suites.get(mode) is not None for mode in SUITE_MODES)
     result = {'required': required}
-    result.update(judge_suite(root, record_folder(root, issue) / 'suite.json', required, configured))
-    return result
+    path = record_folder(root, issue) / 'suite.json'
+    result.update(judge_suite(root, path, required, configured))
+    return skipping(result, read_suite_record(path) or {}) if release else result
 
 
 # ---------------------------------------------------------------- command line
@@ -1168,7 +1383,8 @@ def run(operation, root, base='main', remote='origin', install=False, config=Non
         head=None, source=None):
     try:
         if operation == 'suite':
-            result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds, source)
+            result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds, source,
+                              remote)
         elif operation == 'suite-gate':
             result = op_suite_gate(root, config, issue, required, release, base, head)
         elif operation == 'hook':
