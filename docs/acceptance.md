@@ -21,8 +21,11 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   É a suíte inteira e o comando da CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
   runner da issue 27, só Windows): pula esses dois módulos e o da prévia (`test_serve_preview`, issue 34) com o
-  motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada; a rodada inteira sem a variável,
-  pelo `discover`, roda na release; por issue vale a suíte por impacto.
+  motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada.
+  O complemento (`python tests/suite.py --skip-covered {covered}`), e não mais a rodada inteira pelo `discover`, roda na release; por issue vale a suíte por impacto
+  (só o que o diff toca, pela escolha do `tests/pre_commit.py`, mais o `test_single_source`); a rodada inteira pelo
+  `discover` fica para a CI, como conferência. A regra está em `skills/frontlights/references/development.md`,
+  "Which tests run when".
 - `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
   sem agentes, hooks nem servidores MCP.

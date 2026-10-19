@@ -56,8 +56,9 @@ Operations (each prints one JSON object on stdout):
          whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
          `{report}` (only in `homolog.suites.impact.argv`, only as one whole argument, at most once; refused anywhere
          else) the absolute path of a fresh `.frontlights/issues/<n>/suite-report-<YYYYmmdd-HHMMSS>.json`: after the
-         run the record takes `report` (the path) and, from a valid report `{"ran": [ids], "complete": [ids]}`,
-         `ran` and `complete`; a missing, too large or invalid one is a warning in `warnings`, the exit code as is.
+         run the record takes `report` (the path) and, from a valid report (an object with `ran` and `complete`,
+         lists of ids; any other key, like the usual ones of the `--report` of `tests/suite.py`, ignored), `ran`
+         and `complete`; a missing, too large or invalid one is a warning in `warnings`, the exit code as is.
          `{covered}` (only in `homolog.suites.full.argv`, with the same rules; refused in impact and in `--argv`)
          becomes the absolute path of a fresh `suite-covered-<YYYYmmdd-HHMMSS>.json` in the record folder,
          `{"complete": [ids]}`: with `--release`, the union of `complete` of the impact records of the issues of the
@@ -65,7 +66,9 @@ Operations (each prints one JSON object on stdout):
          worktree its authorization entry names, that ran green on a clean tree whose commit tree and file hashes are
          the tip's (the checks of the adoption after its first); a record that does not count adds nothing and its
          reason is kept. Outside the release the list is empty. The record takes `covered` {complete, from [{issue,
-         path, head, tree}], refused [{issue, path, reason}], file}; without the marker, nothing of this. With
+         path, head, tree}], refused [{issue, path, reason}], file}, and `warnings` when the list of the issues of
+         the release cannot be had (no `<remote>/<base>`, or no authorization record names one of them), so the
+         record says why nothing was skipped; without the marker, nothing of this. With
          `--mode full`, `--argv '<json list>'` runs once the argv the user accepted instead of the config (`source:
          argument`; `config` otherwise); `--argv` with impact is a refusal. `--timeout-seconds N` (a positive
          integer, with or without `--argv`) is the timeout of this run in place of the config's; without either,
@@ -951,10 +954,12 @@ def run_suite_process(argv, root, timeout):
 
 
 def report_refusal(data):
-    """None when `data` is a valid suite report, `{"ran": [ids], "complete": [ids]}` (lists of non-empty texts
-    without NUL, no repeated id, every id of complete also in ran, no other key); otherwise why not, in Portuguese."""
-    if not isinstance(data, dict) or set(data) != {'ran', 'complete'}:
-        return 'ele precisa ser um objeto com as chaves ran e complete, e só elas'
+    """None when `data` is a valid suite report: an object with `ran` and `complete` (lists of non-empty texts
+    without NUL, no repeated id, every id of complete also in ran); any other key, like the usual keys of the
+    `--report` of `tests/suite.py` (version, modules, totals, mode...), is ignored. Otherwise why not, in
+    Portuguese."""
+    if not isinstance(data, dict) or not {'ran', 'complete'} <= set(data):
+        return 'ele precisa ser um objeto com as chaves ran e complete'
     for key in ('ran', 'complete'):
         ids = data[key]
         if not (isinstance(ids, list) and all(isinstance(item, str) and item and '\0' not in item for item in ids)):
@@ -968,7 +973,8 @@ def report_refusal(data):
 
 def suite_report(path):
     """({'ran', 'complete'}, None) from the report the run wrote at `path` (at most RECORD_BYTES, UTF-8 with or
-    without BOM), or (None, the warning in Portuguese) when it is missing, too large or invalid."""
+    without BOM; only those two keys are taken), or (None, the warning in Portuguese) when it is missing, too large
+    or invalid."""
     lacking = 'o registro fica sem ran e complete'
     try:
         size = path.stat().st_size
@@ -1080,13 +1086,23 @@ def covered_by_release(root, base, remote, evidence):
     """{'complete', 'from', 'refused'}: the union of `complete` of the impact records of the issues of the release
     (`release_work` over the authorization records of `root`, `pending`) that count by `impact_refusal`, read from
     `.frontlights/issues/<n>/suite.json` in the worktree its authorization entry names; `from` names each record
-    that counted ({issue, path, head, tree}), `refused` each one that did not ({issue, path, reason})."""
+    that counted ({issue, path, head, tree}), `refused` each one that did not ({issue, path, reason}). When the list
+    of the issues of the release cannot be had (no `refs/remotes/<remote>/<base>`, or no authorization record names
+    an issue the release carries), `warnings` says why nothing was skipped."""
+    remote_ref = f'refs/remotes/{remote}/{base}'
+    if rev(root, remote_ref) is None:
+        return {'complete': [], 'from': [], 'refused': [], 'warnings': [
+            f'não há {remote_ref} neste repositório, então a lista das issues da release não pôde ser calculada e '
+            f'nada foi pulado; rode o homolog sync antes']}
     issues, _, _ = release_work(root, base, remote, root)
     places = issue_worktrees(root)
     complete, origins, refused = [], [], []
-    for item in issues:
-        if not pending(item):
-            continue
+    carried = [item for item in issues if pending(item)]
+    if not carried:
+        return {'complete': [], 'from': [], 'refused': [], 'warnings': [
+            f'nenhum registro de autorização desta worktree nomeia uma issue da release (na {base} local e fora de '
+            f'{remote_ref}), então nada foi pulado']}
+    for item in carried:
         number = item['issue']
         place = places.get(number)
         if place is None:
@@ -1123,7 +1139,8 @@ def skipped_sentence(covered):
     count, refused = len(covered.get('complete') or []), len(covered.get('refused') or [])
     where = f', que o impacto de {names} rodou inteiro(s) na mesma árvore' if names else ''
     left = f'; {refused} registro(s) de issue não contaram' if refused else ''
-    return f' A suíte inteira pulou {count} módulo(s){where}{left}.'
+    why = ''.join(f' ({warning})' for warning in covered.get('warnings') or [])
+    return f' A suíte inteira pulou {count} módulo(s){where}{left}{why}.'
 
 
 def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False, timeout_seconds=None,

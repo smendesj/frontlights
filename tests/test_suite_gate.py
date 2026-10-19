@@ -306,6 +306,55 @@ class SuiteReportTests(SuiteTestCase):
                 gate_code, gate = self.gate(self.report_config('{report}'))
                 self.assertEqual((gate_code, gate.get('status')), (0, 'current'), gate)
 
+    def test_a_report_with_the_usual_keys_of_the_runner_still_gives_ran_and_complete(self):
+        """Revisão da issue 57, rodada 1, S1: o `--report` do `tests/suite.py --impact` grava `ran` e `complete`
+        junto das chaves de sempre (version, modules, totals, mode, impact...); o registro pega `ran` e `complete` e
+        ignora o resto."""
+        content = dict(self.VALID, version=1, started_at='2026-10-19T10:00:00.000-03:00',
+                       finished_at='2026-10-19T10:00:01.000-03:00', seconds=1.0, head='0' * 40, variable=None,
+                       workers=4, module_timeout=900, tests_dir='tests', modules=[{'name': 'tests.test_a'}],
+                       totals={'modules': 1, 'tests_run': 3, 'skipped': 0, 'failures': 0, 'errors': 0,
+                               'infrastructure': 0},
+                       result='ok', exit_code=0, mode='impact', base='main', base_commit='1' * 40,
+                       changed=['app.txt'], impact=[{'name': 'tests.test_a', 'selected': True, 'reason': 'mudou',
+                                                     'classes': None}])
+        code, result = self.run_with(content)
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        saved = self.saved()
+        self.assertEqual((saved.get('ran'), saved.get('complete')), (self.VALID['ran'], self.VALID['complete']),
+                         saved.get('warnings'))
+        self.assertNotIn('warnings', saved)
+        for key in ('version', 'modules', 'totals', 'impact', 'changed', 'base_commit'):
+            with self.subTest(key=key):
+                self.assertNotIn(key, saved)
+
+    @unittest.skipUnless(os.name == 'nt', 'o runner tests/suite.py só roda no Windows')
+    def test_the_real_runner_with_impact_and_report_gives_ran_and_complete_in_the_record(self):
+        """Revisão da issue 57, rodada 1, S1: o argv do config real (`python tests/suite.py --impact {base}
+        --report {report}`), sobre uma pasta `tests/` mínima do repositório temporário, deixa `ran` e `complete` no
+        `suite.json`: o módulo que a issue mudou rodou inteiro, o que ela não toca ficou de fora."""
+        tests = self.work / 'tests'
+        tests.mkdir()
+        case = 'import unittest\n\n\nclass Caso(unittest.TestCase):\n    def test_ok(self):\n        pass\n'
+        self.git(self.work, 'switch', '-q', 'main')
+        (tests / 'test_parado.py').write_text(case, encoding='utf-8')
+        self.git(self.work, 'add', 'tests')
+        self.git(self.work, 'commit', '-q', '-m', 'test_parado na main')
+        self.git(self.work, 'switch', '-q', 'claude/issue-7')
+        self.git(self.work, 'merge', '-q', '--no-edit', 'main')
+        self.commit('tests/test_mudado.py', case, 'test_mudado na issue')
+        path = self.base / 'config.json'
+        argv = [sys.executable, str(ROOT / 'tests' / 'suite.py'), '--tests-dir', str(tests), '--serial=',
+                '--workers', '1', '--impact', '{base}', '--report', '{report}']
+        path.write_text(json.dumps({'repository': None, 'homolog': {
+            'suites': {'impact': {'argv': argv, 'timeoutSeconds': 120}}}}), encoding='utf-8')
+        code, result = self.suite(path, 'impact', '--base', 'main')
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        saved = self.saved()
+        self.assertEqual((saved.get('ran'), saved.get('complete')), (['test_mudado'], ['test_mudado']),
+                         saved.get('warnings'))
+        self.assertNotIn('warnings', saved)
+
     def test_a_failed_run_keeps_its_exit_code_and_still_records_the_report(self):
         code, result = self.run_with(self.VALID, '--falha')
         self.assertEqual((code, result.get('state')), (1, 'red'), result)
@@ -319,8 +368,9 @@ class SuiteReportTests(SuiteTestCase):
             'não JSON': b'{"ran": [',
             'utf-16': json.dumps(self.VALID).encode('utf-16'),
             'lista': ['tests.test_a'],
-            'chave a mais': dict(self.VALID, outra=[]),
             'sem complete': {'ran': ['tests.test_a']},
+            'sem ran, com outras chaves': {'complete': [], 'version': 1, 'mode': 'impact'},
+            'complete não lista': {'ran': ['tests.test_a'], 'complete': 'tests.test_a'},
             'ran não lista': {'ran': 'tests.test_a', 'complete': []},
             'id vazio': {'ran': [''], 'complete': []},
             'id não texto': {'ran': [7], 'complete': []},
@@ -937,6 +987,30 @@ class ReleaseCoveredTests(CoveredTestCase):
                 self.assertIn(needle, reasons.get(number, ''), covered['refused'])
         self.assertEqual(sorted(reasons), [1, 2, 3, 4, 5, 6])
         self.assertTrue(all('path' in item for item in covered['refused']))
+
+    def assert_nothing_skipped_with_the_reason(self, needle):
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': []})
+        covered = self.saved()['covered']
+        self.assertEqual((covered['complete'], covered['from']), ([], []))
+        self.assertTrue(any(needle in warning for warning in covered.get('warnings') or []), covered)
+        self.assertIn(needle, result['message'])
+
+    def test_without_the_remote_ref_of_the_base_nothing_is_skipped_and_the_reason_is_recorded(self):
+        """Revisão da issue 57, rodada 1, B4: sem `refs/remotes/origin/<base>` a lista das issues da release não sai;
+        nada é pulado, e o `covered` do registro da release nomeia o ref que faltou."""
+        self.issue(1)
+        self.deliver(1)
+        self.git(self.work, 'update-ref', '-d', 'refs/remotes/origin/main')
+        self.assert_nothing_skipped_with_the_reason('refs/remotes/origin/main')
+
+    def test_without_an_authorization_record_of_the_issues_nothing_is_skipped_and_the_reason_is_recorded(self):
+        """B4: sem registro de autorização que nomeie uma issue da release, o `covered` diz por que nada foi pulado."""
+        self.issue(1)
+        self.deliver(1)
+        (self.work / '.frontlights' / 'authorization.json').unlink()
+        self.assert_nothing_skipped_with_the_reason('autorização')
 
     def test_without_the_marker_the_release_record_is_the_one_of_today(self):
         self.issue(1)
