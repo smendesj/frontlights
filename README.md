@@ -332,8 +332,9 @@ Configure o bloco `roadmapSync` no `.frontlights/config.json` do projeto (veja
   valor no seu próprio terminal, com
   `setx FRONTLIGHTS_API_SECRET "<valor emitido pelo RoadS>"`, e reinicie o Claude;
 - `scrumRoot` é a pasta das semanas, e aceita `%USERPROFILE%`; `weekFolderPattern` nomeia a pasta de
-  cada semana (`{yyyy}` e o primeiro `{dd_MM}` vêm da segunda-feira, o seguinte da sexta). Os dois só
-  são usados pelo `weekShots` do resumo.
+  cada semana (`{yyyy}` e o primeiro `{dd_MM}` vêm da segunda-feira, o seguinte da sexta). Os dois são
+  usados pelo `weekShots` do resumo e pelo `evidence-dir`, que grava ali os prints do teste assistido
+  (`evidencias/`), com o `roadmapSync` ligado ou não; sem eles, esses prints ficam no `.frontlights`.
 
 As chaves da antiga sincronização do roadmap (`roadmapFile`, `sprintFilePattern`, `maxSprintItems`,
 `markCompleted`, `issueTargets`) são ignoradas; o `status` as lista em `obsoleteKeys` e a skill oferece
