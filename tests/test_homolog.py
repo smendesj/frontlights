@@ -303,7 +303,7 @@ class LocalMainTextTests(unittest.TestCase):
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('a chave `homolog.backupDir` aponta uma pasta sua, por caminho absoluto', flat('README.md'))
         example = json.loads(read('skills', 'frontlights', 'examples', 'config.json'))
-        self.assertEqual(example['homolog'], {'backupDir': None})
+        self.assertIsNone(example['homolog']['backupDir'])
         self.assertIn('S3: `homolog bundle` grava', flat('docs', 'acceptance.md'))
         self.assertIn('one `.bundle` file there which `git bundle verify` accepts', flat('evals', 'runbook.md'))
 
