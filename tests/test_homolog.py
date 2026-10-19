@@ -1150,6 +1150,9 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
         self.assertEqual((result['fullSuite']['status'], result['fullSuite']['recordedHead']),
                          ('current', self.sha(self.work)))
+        issue_head = self.sha(self.work, 'claude/issue-1')
+        self.assertEqual(result['fullSuite']['adoptedFrom']['head'], issue_head)
+        self.assertIn(f'adotada da ponta {issue_head[:7]}', result['fullSuite']['message'])
 
     def test_a_red_whole_suite_keeps_the_release_back(self):
         self.deliver(1)

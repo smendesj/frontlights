@@ -561,6 +561,15 @@ class SuiteAdoptionTests(AdoptionTestCase):
         code, gate = self.release_gate('--head', self.main_head)
         self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
 
+    def test_the_gate_of_the_adopted_tip_names_the_origin(self):
+        """S3: `suite-gate --release --head` repassa `adoptedFrom` e diz de qual ponta a suíte foi adotada."""
+        self.assertEqual(self.adopt()[0], 0)
+        code, gate = self.release_gate('--head', self.main_head)
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+        self.assertEqual((gate['adoptedFrom']['head'], gate['adoptedFrom']['tree']), (self.issue_head, self.issue_tree))
+        self.assertTrue(os.path.samefile(gate['adoptedFrom']['path'], self.source))
+        self.assertIn(f'adotada da ponta {self.issue_head[:7]}', gate['message'])
+
 
 class SuiteAdoptionRefusalTests(AdoptionTestCase):
     """S2: `--from` recusa, sem gravar nada, o registro que não vale pela ponta da main local."""
