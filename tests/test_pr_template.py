@@ -75,6 +75,18 @@ class PullRequestTemplateTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, evidence)
 
+    def test_an_adopted_whole_suite_names_the_origin_tip_and_the_original_run(self):
+        """Issue 54, S3: quando a suíte inteira da release foi adotada (`--from`), a Evidência diz de qual ponta e
+        cita a execução original; o handoff registra a adoção."""
+        evidence = flat(section(self.text, 'Evidência'))
+        for phrase in ('adotada da ponta `<sha curto da origem>`',
+                       '<comando, contagem, saída e tempo da execução original>'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, evidence)
+        handoff = flat(read('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('a adoção da suíte inteira, quando houve (`adoptedFrom`: o registro de origem, a ponta e a '
+                      'árvore)', handoff)
+
     def test_the_merge_risk_names_the_door_and_the_blast_radius(self):
         risk = flat(section(self.text, 'Risco do merge'))
         for phrase in ('**Porta:**', 'mão única', 'mão dupla', '**Raio de impacto:**',

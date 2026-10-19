@@ -507,5 +507,159 @@ class SuiteReleaseTests(SuiteTestCase):
                 self.assertIn('sha completo', result['message'])
 
 
+class AdoptionTestCase(SuiteTestCase):
+    """Issue 54: a release adota, sem rodar nada, a suíte inteira verde que uma issue rodou numa árvore limpa cuja
+    árvore de commit é a mesma da ponta da main local (`homolog suite --release --mode full --from <registro>`).
+
+    A issue 7 roda a suíte inteira na ponta dela e entra na main local por `--no-ff`, sem mudar arquivo; o config da
+    release declara uma suíte que falharia, de modo que uma execução de verdade daria vermelho."""
+
+    def setUp(self):
+        super().setUp()
+        code, result = self.suite(self.config({'full': ()}), 'full')
+        self.assertEqual(code, 0, result)
+        self.source = self.record
+        self.issue_head = self.git(self.work, 'rev-parse', 'HEAD').stdout.strip()
+        self.issue_tree = self.git(self.work, 'rev-parse', 'HEAD^{tree}').stdout.strip()
+        self.git(self.work, 'switch', '-q', 'main')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 7 into the local main', 'claude/issue-7')
+        self.main_head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.failing = self.config({'full': ('--falha',)})
+
+    @property
+    def release_folder(self):
+        return self.work / '.frontlights' / 'release'
+
+    def adopt(self, *flags, source=None, config=None):
+        return self.cli('suite', '--root', str(self.work), '--config', str(config or self.failing), '--release',
+                        '--mode', 'full', '--from', str(source or self.source), *flags)
+
+    def release_gate(self, *flags):
+        return self.cli('suite-gate', '--root', str(self.work), '--config', str(self.failing), '--release', *flags)
+
+
+
+class SuiteAdoptionTests(AdoptionTestCase):
+    def test_a_green_full_record_of_the_same_tree_is_adopted_without_running(self):
+        """S1: os dois registros da release são gravados com a evidência da main local e `adoptedFrom`, nada roda
+        (nenhum log na pasta da release), e os dois juízes da release respondem `current`."""
+        self.assertNotEqual(self.main_head, self.issue_head)
+        code, result = self.adopt()
+        self.assertEqual((code, result.get('state')), (0, 'adopted'), result)
+        for path in (self.release_folder / 'suite.json', self.release_folder / f'suite-{self.main_head}.json'):
+            with self.subTest(record=path.name):
+                saved = json.loads(path.read_text(encoding='utf-8'))
+                self.assertEqual((saved['mode'], saved['head'], saved['exitCode'], saved['timedOut']),
+                                 ('full', self.main_head, 0, False))
+                self.assertEqual((saved['evidence']['head'], saved['evidence']['branch']), (self.main_head, 'main'))
+                adopted = saved['adoptedFrom']
+                self.assertTrue(os.path.samefile(adopted['path'], self.source))
+                self.assertEqual((adopted['head'], adopted['tree']), (self.issue_head, self.issue_tree))
+        self.assertEqual(list(self.release_folder.glob('*.log')), [])
+        code, gate = self.release_gate()
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+        code, gate = self.release_gate('--head', self.main_head)
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+
+    def test_the_gate_of_the_adopted_tip_names_the_origin(self):
+        """S3: `suite-gate --release --head` repassa `adoptedFrom` e diz de qual ponta a suíte foi adotada."""
+        self.assertEqual(self.adopt()[0], 0)
+        code, gate = self.release_gate('--head', self.main_head)
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+        self.assertEqual((gate['adoptedFrom']['head'], gate['adoptedFrom']['tree']), (self.issue_head, self.issue_tree))
+        self.assertTrue(os.path.samefile(gate['adoptedFrom']['path'], self.source))
+        self.assertIn(f'adotada da ponta {self.issue_head[:7]}', gate['message'])
+
+
+class SuiteAdoptionRefusalTests(AdoptionTestCase):
+    """S2: `--from` recusa, sem gravar nada, o registro que não vale pela ponta da main local."""
+
+    def forged(self, evidence=None, **changes):
+        """A copy of the issue's green record, outside the repository, with `changes` (and `evidence` keys)."""
+        record = json.loads(self.source.read_text(encoding='utf-8'))
+        record.update(changes)
+        record['evidence'].update(evidence or {})
+        path = self.base / f'origem-{len(list(self.base.glob("origem-*.json")))}.json'
+        path.write_text(json.dumps(record), encoding='utf-8')
+        return path
+
+    def assert_refused_without_writing(self, needle, *flags, source=None):
+        code, result = self.adopt(*flags, source=source)
+        self.assertEqual(code, 1, result)
+        self.assertIn(needle, result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+        self.assertFalse((self.release_folder / f'suite-{self.main_head}.json').exists())
+
+    def test_a_record_of_the_impact_suite_is_refused(self):
+        self.assert_refused_without_writing('suíte por impacto', source=self.forged(mode='impact'))
+
+    def test_a_red_a_timed_out_or_a_failed_to_start_record_is_refused(self):
+        for name, changes in (('red', {'exitCode': 1}), ('timeout', {'exitCode': None, 'timedOut': True}),
+                              ('error', {'exitCode': None, 'error': 'executable_missing'})):
+            with self.subTest(record=name):
+                self.assert_refused_without_writing('não passou', source=self.forged(**changes))
+
+    def test_a_record_run_with_a_diff_or_a_file_outside_the_commit_is_refused(self):
+        import hashlib
+        files = dict(json.loads(self.source.read_text(encoding='utf-8'))['evidence']['files'],
+                     **{'solto.txt': hashlib.sha256(b'solto\n').hexdigest()})
+        diff = hashlib.sha256(b'diff --git a/app.txt b/app.txt\n').hexdigest()
+        for name, evidence in (('diff', {'diff_sha256': diff}), ('untracked', {'files': files})):
+            with self.subTest(record=name):
+                self.assert_refused_without_writing('não commitad', source=self.forged(evidence))
+
+    def test_a_record_whose_head_the_repository_does_not_know_is_refused(self):
+        for head in ('a' * 40, 'main'):
+            with self.subTest(head=head):
+                self.assert_refused_without_writing('não conhece', source=self.forged({'head': head}, head=head))
+
+    def test_a_record_of_another_commit_tree_is_refused(self):
+        """A suíte rodou no primeiro commit da main, cuja árvore não é a da ponta da main local."""
+        first = self.git(self.work, 'rev-parse', 'main~1').stdout.strip()
+        self.assert_refused_without_writing('outra árvore', source=self.forged({'head': first}, head=first))
+
+    def test_a_record_whose_file_hashes_differ_is_refused_and_the_release_records_stay_as_they_were(self):
+        """Mesma árvore de commit, mas o hash dos arquivos da evidência não é o da main local agora: recusado, e os
+        registros que uma adoção anterior gravou ficam byte a byte como estavam."""
+        self.assertEqual(self.adopt()[0], 0)
+        records = (self.release_folder / 'suite.json', self.release_folder / f'suite-{self.main_head}.json')
+        before = [path.read_bytes() for path in records]
+        code, result = self.adopt(source=self.forged({'files_sha256': 'b' * 64}))
+        self.assertEqual(code, 1, result)
+        self.assertIn('hash dos arquivos', result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertEqual([path.read_bytes() for path in records], before)
+
+    def test_from_with_argv_or_timeout_seconds_is_refused(self):
+        for flags in (('--argv', json.dumps(self.argv())), ('--timeout-seconds', '30')):
+            with self.subTest(flag=flags[0]):
+                self.assert_refused_without_writing(flags[0], *flags)
+
+    def test_from_without_the_release_is_refused(self):
+        code, result = self.cli('suite', '--root', str(self.work), '--config', str(self.failing), '--issue', '7',
+                                '--mode', 'full', '--from', str(self.source))
+        self.assertEqual(code, 1, result)
+        self.assertIn('--from só vale com --release', result['message'])
+        self.assertEqual(json.loads(self.source.read_text(encoding='utf-8'))['head'], self.issue_head)
+
+    def test_a_path_without_a_suite_record_is_refused(self):
+        missing = self.base / 'nao-existe.json'
+        self.assert_refused_without_writing('não há registro de suíte', source=missing)
+
+    def test_off_the_tip_or_with_the_local_main_dirty_the_refusals_of_today_hold(self):
+        self.git(self.work, 'switch', '-q', 'claude/issue-7')
+        code, result = self.adopt()
+        self.assertEqual(code, 1, result)
+        self.assertIn('não na main local', result['message'])
+        self.git(self.work, 'switch', '-q', 'main')
+        (self.work / 'app.txt').write_text('edição não commitada\n', encoding='utf-8')
+        code, result = self.adopt()
+        self.assertEqual(code, 1, result)
+        self.assertIn('app.txt', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+        self.assertFalse((self.release_folder / f'suite-{self.main_head}.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
