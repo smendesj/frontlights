@@ -178,14 +178,16 @@ variable; any other value, or no variable, runs everything. The runner runs the 
 parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Per issue, the gate is the project's impact suite: `homolog.suites.impact` in
 `.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), run by
-`homolog suite --mode impact` at the tip of the branch of the issue, in the background, started together with the
+`homolog suite --mode impact --base <base>` at the tip of the branch of the issue, in the background, started together with the
 watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
 watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
 while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
 (the argv proposed from `inspect` and `checks.regression`, written to `homolog.suites`) or "Rodar a suíte inteira
-desta vez" (`homolog suite --mode full --argv '<the accepted argv>'`, which the gate then reads). The whole suite
+desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>`, which the
+gate then reads; `N` sized to the suite, since a run past it is killed: without it and without
+`homolog.suites.full.timeoutSeconds` the run gets 3600 s). The whole suite
 runs at the release ("The release"), with or without CI in the project, through
 `python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
 `discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
@@ -455,8 +457,9 @@ evidence --root <worktree>` hashes/HEAD and save that output with the review res
 the merge into the local main, before opening or updating a PR and after every commit: exit code 0 means the review still
 covers the code, exit code 2 means it is stale. Any commit, edit or new file after the
 review makes it stale (bringing a base into the branch included), whatever its size:
-rerun the impact suite until `homolog suite-gate` answers `current` again, take new evidence and have the
-independent reviewer look again. A
+take new evidence and have the independent reviewer look again, with the impact suite rerun on the new tip
+beside that review round, not before it ("Into the local main"); `homolog suite-gate` must answer `current`
+again before the merge. A
 stale review is never reported as reviewed. If no
 independent reviewer is available, report "implemented, awaiting independent
 review", not completed. Do not manufacture reviewer identities or approvals.
@@ -551,7 +554,7 @@ watched run); then the check and the merge:
    merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
    shown to the reviewer as part of the diff.
 2. **Gate 1, the impact suite.** The impact suite run at that tip ("Which tests run when") is judged by
-   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`, which answers
+   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`, which answers
    `current` (exit code 0); record the command, the count and the exit code in the handoff (and the rerun alone
    after `--concurrent`, if there was one). Red means the issue is not homologated: the failure goes back to its
    slice's loop, or to the user as a question; `unconfigured` is the question of "Which tests run when"; never
@@ -614,12 +617,13 @@ offers the release again with everything accumulated.
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. It only reads.
 - **Run the whole suite on the local main.** In the main worktree, on the local main, run
-  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json`,
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`,
   then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
   again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
-  of the full suite, asked like the `unconfigured` question of "Which tests run when".
+  of the full suite, asked like the `unconfigured` question of "Which tests run when", and `--timeout-seconds <N>`
+  sized to that suite (3600 s without it).
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.
@@ -645,8 +649,11 @@ offers the release again with everything accumulated.
   and what happens at the merge. In the handoff (the `Release` line): the pull request number with its issues,
   head and base branch, the approved base, and when the wait began.
 - **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
-  issue in it are recorded, the whole suite of the release is green at the tip (`fullSuite: current`), the pull
-  request has no conflict with the base and no finding lacks a destination.
+  issue in it are recorded, the whole suite of the release is green at the tip the release branch was cut from
+  (the green full record in `.frontlights/release/suite.json`, its `recordedHead` equal to the head of the pull
+  request), the pull request has no conflict with the base and no finding lacks a destination. Another issue that
+  enters the local main during the wait moves the tip of the local main, not the pull request: it does not make
+  the pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
   merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its

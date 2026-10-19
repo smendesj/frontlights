@@ -12,7 +12,7 @@
           "--impact",
           "{base}"
         ],
-        "timeoutSeconds": 600
+        "timeoutSeconds": 2400
       },
       "full": {
         "argv": [
@@ -23,7 +23,7 @@
           "-s",
           "tests"
         ],
-        "timeoutSeconds": 900
+        "timeoutSeconds": 3600
       }
     }
   },

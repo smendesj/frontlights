@@ -55,7 +55,9 @@ Operations (each prints one JSON object on stdout):
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
          whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main). With
          `--mode full`, `--argv '<json list>'` runs once the argv the user accepted instead of the config (`source:
-         argument`; `config` otherwise); `--argv` with impact is a refusal. The masked output goes to
+         argument`; `config` otherwise); `--argv` with impact is a refusal. `--timeout-seconds N` (a positive
+         integer, with or without `--argv`) is the timeout of this run in place of the config's; without either,
+         full gets 3600 s and impact the default of `checks`. The masked output goes to
          `.frontlights/issues/<n>/suite-<mode>-<YYYYmmdd-HHMMSS>.log` and the record to `.frontlights/issues/<n>/
          suite.json`: mode, source, base, argv, head and evidence (`frontlights.py evidence`, taken before the run,
          `.frontlights/` left out), exitCode, timedOut, seconds, output, concurrent (`--concurrent`: the watched
@@ -101,6 +103,7 @@ HOMOLOG_KEYS = ('backupDir', 'suites')          # the keys of the `homolog` bloc
 SUITE_MODES = ('impact', 'full')                # the suites `homolog.suites` may declare
 SUITE_KEYS = ('argv', 'timeoutSeconds')         # the keys of each suite, the shape of `checks.regression`
 BASE_TOKEN = '{base}'                           # replaced in a suite argv by the base the run compares with
+FULL_SUITE_TIMEOUT = 3600                       # the whole suite without a configured timeout (impact: checks')
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
 MARKER_LINES = 3         # the marker sits among the first lines of the hook
@@ -693,7 +696,8 @@ def op_release_plan(root, base, remote, prefix, records):
     elif result['fullSuite']['status'] != 'current':
         result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
                                           f'{result["fullSuite"]["message"]}; rode `homolog suite --release --mode '
-                                          f'full` na worktree principal, na {base} local, e o release-plan de novo.')
+                                          f'full --base {base}` na worktree principal, na {base} local, e o '
+                                          f'release-plan de novo.')
     else:
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:
@@ -737,8 +741,9 @@ def suite_argv(argv, key):
     return argv
 
 
-def suite_entry(entry, key):
-    """{'argv', 'timeout'} of one suite, or None when it is absent or null; the shape of `checks.regression`."""
+def suite_entry(entry, key, default_timeout=None):
+    """{'argv', 'timeout'} of one suite, or None when it is absent or null; the shape of `checks.regression`.
+    Without `timeoutSeconds`, `default_timeout` (`checks.DEFAULT_TIMEOUT` when not given)."""
     import checks   # noqa: PLC0415
     if entry is None:
         return None
@@ -747,7 +752,7 @@ def suite_entry(entry, key):
     if unknown:
         raise Refusal(f'{key} tem a chave desconhecida `{unknown[0]}`; as chaves aceitas são argv e timeoutSeconds')
     argv = suite_argv(entry.get('argv'), f'{key}.argv')
-    timeout = entry.get('timeoutSeconds', checks.DEFAULT_TIMEOUT)
+    timeout = entry.get('timeoutSeconds', default_timeout or checks.DEFAULT_TIMEOUT)
     require(type(timeout) is int and timeout > 0, f'{key}.timeoutSeconds precisa ser um inteiro positivo')
     return {'argv': argv, 'timeout': timeout}
 
@@ -793,32 +798,55 @@ def tree_evidence(root):
         raise Refusal(f'a evidência da árvore não pôde ser lida: {str(error)[:STDERR_LIMIT]}')
 
 
-def suite_run_settings(config, mode, argv_text):
-    """(settings, source): the suite of the config, or the one `--argv` gives (full only; the timeout of the config
-    when it declares the mode). Settings None: the mode is not configured and nothing is given."""
-    import checks   # noqa: PLC0415
-    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}')
-    if argv_text is None:
-        return configured, 'config'
-    require(mode == 'full', '--argv só vale com --mode full: a suíte de impacto vem sempre do config')
+def timeout_argument(text):
+    """`--timeout-seconds` as a positive integer, None when it is not given."""
+    if text is None:
+        return None
     try:
-        given = json.loads(argv_text)
+        value = int(str(text).strip())
     except ValueError:
-        raise Refusal('--argv precisa ser uma lista JSON de argumentos')
-    timeout = configured['timeout'] if configured else checks.DEFAULT_TIMEOUT
-    return {'argv': suite_argv(given, '--argv'), 'timeout': timeout}, 'argument'
+        value = 0
+    require(value > 0, '--timeout-seconds precisa ser um inteiro positivo (segundos)')
+    return value
+
+
+def suite_run_settings(config, mode, argv_text, timeout_seconds=None):
+    """(settings, source): the suite of the config, or the one `--argv` gives (full only; the timeout of the config
+    when it declares the mode). Without a configured timeout, full gets FULL_SUITE_TIMEOUT and impact
+    `checks.DEFAULT_TIMEOUT`; `--timeout-seconds` overrides the timeout either way. Settings None: the mode is not
+    configured and nothing is given."""
+    import checks   # noqa: PLC0415
+    timeout_seconds = timeout_argument(timeout_seconds)
+    default = FULL_SUITE_TIMEOUT if mode == 'full' else checks.DEFAULT_TIMEOUT
+    configured = suite_entry((suite_block(config) or {}).get(mode), f'homolog.suites.{mode}', default)
+    if argv_text is None:
+        settings, source = configured, 'config'
+    else:
+        require(mode == 'full', '--argv só vale com --mode full: a suíte de impacto vem sempre do config')
+        try:
+            given = json.loads(argv_text)
+        except ValueError:
+            raise Refusal('--argv precisa ser uma lista JSON de argumentos')
+        timeout = configured['timeout'] if configured else default
+        settings, source = {'argv': suite_argv(given, '--argv'), 'timeout': timeout}, 'argument'
+    if settings is not None and timeout_seconds is not None:
+        settings = dict(settings, timeout=timeout_seconds)
+    return settings, source
 
 
 def run_suite_process(argv, root, timeout):
     """(exit code or None, timed out, error or None, output, warnings) of one run, no shell, the whole process tree
-    killed at the timeout (checks.run_process)."""
+    killed at the timeout (checks.run_process); a timeout keeps the partial output, then the timeout sentence."""
     import checks   # noqa: PLC0415
     warnings = []
     try:
         code, output = checks.run_process(argv, root, timeout, warnings)
         return code, False, None, output, warnings
-    except subprocess.TimeoutExpired:
-        return None, True, None, f'A suíte passou de {timeout} s e foi interrompida.\n', warnings
+    except subprocess.TimeoutExpired as expired:
+        partial = expired.output if isinstance(expired.output, str) else ''
+        if partial and not partial.endswith('\n'):
+            partial += '\n'
+        return None, True, None, f'{partial}A suíte passou de {timeout} s e foi interrompida.\n', warnings
     except FileNotFoundError:
         return None, False, 'executable_missing', 'Executável da suíte não encontrado.\n', warnings
     except OSError:
@@ -836,7 +864,7 @@ def suite_message(record, timeout):
     return f'A suíte {mode} falhou (código {record["exitCode"]}); a saída está em {record["output"]}.'
 
 
-def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False):
+def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False, timeout_seconds=None):
     import checks   # noqa: PLC0415
     worktree(root)
     issue = None if release else issue_number(issue)
@@ -845,7 +873,7 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     base = plain_name(base, 'a branch base')
     place = off_base_tip(root, base) if release else None
     require(place is None, f'{place}; a suíte da release roda só na ponta da {base} local')
-    settings, source = suite_run_settings(load_config(config_path), mode, argv_text)
+    settings, source = suite_run_settings(load_config(config_path), mode, argv_text, timeout_seconds)
     if settings is None:
         return {'state': 'unconfigured', 'exitCode': 2,
                 'message': f'o config não declara homolog.suites.{mode}; nada foi rodado'}
@@ -955,10 +983,10 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
 # ---------------------------------------------------------------- command line
 
 def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
-        issue=None, mode=None, concurrent=False, argv=None, required=None, release=False):
+        issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None):
     try:
         if operation == 'suite':
-            result = op_suite(root, config, issue, mode, base, concurrent, argv, release)
+            result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds)
         elif operation == 'suite-gate':
             result = op_suite_gate(root, config, issue, required, release, base)
         elif operation == 'hook':
@@ -1008,6 +1036,8 @@ def build_parser():
             command.add_argument('--concurrent', action='store_true',
                                  help='the watched run was in progress during this run (recorded)')
             command.add_argument('--argv', help='full only: a JSON list run once instead of homolog.suites.full')
+            command.add_argument('--timeout-seconds', help='a positive integer: the timeout of this run, in place of '
+                                                           'timeoutSeconds of the config (with or without --argv)')
         elif name == 'suite-gate':
             command.add_argument('--require', choices=('full',), help='only a full suite record counts')
         elif name == 'hook':
@@ -1037,7 +1067,7 @@ def main(argv=None):
                      getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
-                     getattr(args, 'release', False))
+                     getattr(args, 'release', False), getattr(args, 'timeout_seconds', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

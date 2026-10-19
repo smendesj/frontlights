@@ -180,7 +180,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
                        'the three gates run at the same time on that tip',
                        'with a screen the review waits for the watched run',
-                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`',
+                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`',
                        'The whole suite waits for the release.',
                        'an operation that still carries `full_suite` is refused, naming `suite_gate`',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
@@ -199,6 +199,30 @@ class LocalMainTextTests(unittest.TestCase):
         for gone in ('pushing the work branches', 'Draft PRs are covered', 'delivered in one PR'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, whole)
+
+    def test_a_stale_review_reruns_the_impact_suite_beside_the_new_round(self):
+        """Revisão da issue 52, M1: depois de uma revisão vencida, a suíte de impacto roda de novo ao lado da nova
+        rodada de revisão, nunca numa fila antes dela; o `suite-gate` volta a `current` antes do merge."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        body = ' '.join(text.split('## Review, checkpoints and renewal')[1].split('## Into the local main')[0].split())
+        self.assertIn('with the impact suite rerun on the new tip beside that review round, not before it '
+                      '("Into the local main"); `homolog suite-gate` must answer `current` again before the merge',
+                      body)
+        self.assertNotIn('rerun the impact suite until', body)
+
+    def test_the_security_notes_cover_the_homolog_suites(self):
+        """Revisão da issue 52, B2: o `inspect` aceita `suites` dentro de `homolog`, e o `homolog suite` está entre
+        os comandos lidos do config, com o filtro de shell do `checks`, sem shell e com a árvore morta no prazo."""
+        security = flat('skills', 'frontlights', 'docs', 'security.md')
+        for phrase in ('dentro de `homolog`, qualquer chave além de `backupDir` e `suites`',
+                       'as suítes da homologação (`homolog suite`)',
+                       'blocos `browserTest`, `checks` e `homolog.suites`; no `homolog suite`, também o `--argv` que a '
+                       'sessão passa',
+                       'O `homolog suite` aplica ao argv de `homolog.suites` e ao `--argv` o mesmo filtro de shell do '
+                       '`checks`, roda sem shell e, no prazo, mata a árvore inteira de processos.'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertNotIn('qualquer outra chave dentro de `homolog`', security)
 
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
@@ -374,13 +398,18 @@ class LocalMainTextTests(unittest.TestCase):
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
-                       'homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json',
-                       '`fullSuite` must be `current`', '(`fullSuite: current`)'):
+                       'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
+                       '`fullSuite` must be `current`',
+                       'the whole suite of the release is green at the tip the release branch was cut from',
+                       'its `recordedHead` equal to the head of the pull request',
+                       'it does not make the pull request unready',
+                       'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
                                                  '**Offer it.**') if title in body]
         self.assertEqual(order, sorted(order))
+        self.assertNotIn('(`fullSuite: current`)', body)
         self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
@@ -1065,6 +1094,19 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.assertEqual(result['fullSuite']['status'], 'missing')
         self.assertIn('homolog suite --release --mode full', result['message'])
         self.assertIn(self.sha(self.work)[:7], result['message'])
+
+    def test_the_message_names_the_base_of_the_project_in_the_command(self):
+        """Revisão da issue 52, M2: num projeto cuja base não é main, o comando da suíte inteira que a mensagem
+        manda rodar leva `--base <a base>`; sem ele, a release rodaria (e julgaria) a ponta da main."""
+        self.git(self.work, 'switch', '-q', '-c', 'develop')
+        self.git(self.work, 'push', '-q', 'origin', 'develop')
+        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1')
+        self.commit(self.work, 'issue-1.txt', '1\n', 'issue 1')
+        self.git(self.work, 'switch', '-q', 'develop')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 1 into the local develop', 'claude/issue-1')
+        code, result = self.plan('--base', 'develop')
+        self.assertEqual((code, result['release'], result['fullSuite']['status']), (2, [1], 'missing'), result)
+        self.assertIn('`homolog suite --release --mode full --base develop`', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
         self.deliver(1)
