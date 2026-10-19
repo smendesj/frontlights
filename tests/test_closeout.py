@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import closeout
-import roadmap_sync as rs
+import roads as rs
 
 SCRIPT = Path(closeout.__file__)
 REPO = 'OWNER/REPOSITORY'

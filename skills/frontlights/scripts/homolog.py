@@ -69,6 +69,12 @@ Operations (each prints one JSON object on stdout):
          refusal names the files), each refused (exit 1) otherwise, nothing run and no record written; the record
          and the log go to `.frontlights/release/`, and the record also to
          `release/suite-<full head sha>.json`, the copy of that tip that a run at another tip never overwrites.
+         `--release --mode full --from <record>` runs nothing: it adopts a whole-suite record of the same commit tree
+         (an issue's `suite.json` or another release's `release/suite-<sha>.json`) that ran green, without timeout, on
+         a clean tree: it answers `state: "adopted"` and writes both release records with `adoptedFrom` (the origin path, its
+         head and tree). It refuses (exit 1, nothing written) an impact, red or timed-out record, one with a diff or a
+         file outside the commit, an unknown head, another tree or other evidence files than the tip's, a place that
+         is not the clean tip of the local base, and `--from` with `--argv` or `--timeout-seconds`.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
          differ, `files_changed` the files), `red` (the tip of the record, the suite failed), `missing` (no record
@@ -389,7 +395,7 @@ def load_config(path):
 
 
 def reparse_tag(path):
-    """0 for an ordinary entry, the reparse tag otherwise; -1 when unreadable (as roadmap_sync does for scrumRoot)."""
+    """0 for an ordinary entry, the reparse tag otherwise; -1 when unreadable (as roads.py does for scrumRoot)."""
     try:
         info = os.lstat(path)
     except OSError:
@@ -712,9 +718,10 @@ def op_release_plan(root, base, remote, prefix, records):
                                           '.frontlights/ ou aponte --records para a pasta certa.')
     elif result['fullSuite']['status'] != 'current':
         result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
-                                          f'{result["fullSuite"]["message"]}; rode `homolog suite --release --mode '
-                                          f'full --base {base}` na worktree principal, na {base} local, e o '
-                                          f'release-plan de novo.')
+                                          f'{result["fullSuite"]["message"]}; adote um registro inteiro verde da '
+                                          f'mesma árvore (`homolog suite --release --mode full --from <registro>`) ou '
+                                          f'rode `homolog suite --release --mode full --base {base} --root <worktree '
+                                          f'principal> --config <config>` na {base} local, e o release-plan de novo.')
     else:
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:

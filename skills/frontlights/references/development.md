@@ -26,7 +26,10 @@ goes back through `AskUserQuestion`.
 `confirmed_by` and `monitoring.confirmed_by`, `"autorização permanente (docs/security.md)"` in `approval_reference` and an `expires_at` at
 most 24 hours ahead. Its `monitoring` block is `mode: "local"`; `phone_connected: true` only when the user
 states, unprompted in this session, that the phone received and answered. Local files record consent but cannot
-enforce it.
+enforce it. Before recording a new charter over one that exists, keep the current one as
+`.frontlights/authorization-<YYYY-MM-DD>-issue-<n>.json` (never delete it): `release-plan`, `bundle`, `closeout`
+and `cleanup` read every `.frontlights/authorization*.json` to map the issue branches, prefixes and worktrees, and
+an issue still waiting for its release loses its mapping when its charter is overwritten.
 
 **Covered**, for the issues of the family or batch at hand: editing, testing, committing, the covered merges
 below, running migrations on the local development database, creating and removing test data through the
@@ -65,7 +68,7 @@ merge, with its three gates green), turning on a setting, key or flag in product
 the test data the run created. Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
 silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
-own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them. The
+own stage (the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary) keep them. The
 host's own permission prompts are not Frontlights' to remove and still apply.
 
 ## The start of stage 6: the pre-push hook and the sync of the local main
@@ -178,16 +181,19 @@ variable; any other value, or no variable, runs everything. The runner runs the 
 parallel and the six sensitive ones in a serial queue, one at a time; `--report <file>` writes
 the JSON of the run as evidence. Per issue, the gate is the project's impact suite: `homolog.suites.impact` in
 `.frontlights/config.json` (in this repository, `python tests/suite.py --impact {base}`), run by
-`homolog suite --mode impact --base <base>` at the tip of the branch of the issue, in the background, started together with the
+`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --root <issue-worktree> --config <config>
+--issue <n> --mode impact --base <base> [--concurrent]` at the tip of the branch of the issue, in the background, started together with the
 watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
 watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
 while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
 (the argv proposed from `inspect` and `checks.regression`, written to `homolog.suites`) or "Rodar a suíte inteira
-desta vez" (`homolog suite --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>`, which the
-gate then reads; `N` sized to the suite, since a run past it is killed: without it and without
-`homolog.suites.full.timeoutSeconds` the run gets 3600 s). The whole suite
+desta vez" (`homolog suite --root <issue-worktree> --config <config> --issue <n> --mode full --base <base> --argv
+'<the accepted argv>' --timeout-seconds <N>`, which the gate then reads; `N` sized to the suite, since a run past it
+is killed: without it and without `homolog.suites.full.timeoutSeconds` the run gets 3600 s, which the whole suite of
+this repository has already exceeded under load). `<config>` is always the main worktree's
+`.frontlights/config.json`, by its absolute path: it is usually untracked and absent from an issue's worktree. The whole suite
 runs at the release ("The release"), with or without CI in the project, through
 `python -m unittest discover -s tests -v` in this repository: the runner does not make the whole suite faster than
 `discover`, and the CI of this repository runs the same `discover` and never sets the variable either.
@@ -554,7 +560,7 @@ watched run); then the check and the merge:
    merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
    shown to the reviewer as part of the diff.
 2. **Gate 1, the impact suite.** The impact suite run at that tip ("Which tests run when") is judged by
-   `homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`, which answers
+   `homolog suite-gate --root <issue-worktree> --config <config> --issue <n> --base <base>`, which answers
    `current` (exit code 0); record the command, the count and the exit code in the handoff (and the rerun alone
    after `--concurrent`, if there was one). Red means the issue is not homologated: the failure goes back to its
    slice's loop, or to the user as a question; `unconfigured` is the question of "Which tests run when"; never
@@ -580,7 +586,7 @@ watched run); then the check and the merge:
    <its branch>`.
 6. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
    `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
-   .frontlights/config.json` (covered; the only write the run makes outside the project, and only into that folder): it writes `<project>-<date>-<time>.bundle`, the local main and the work
+   <config>` (covered; the only write the run makes outside the project, and only into that folder): it writes `<project>-<date>-<time>.bundle`, the local main and the work
    branches of every `branch_prefix` in the authorization records (`.frontlights/authorization*.json`; `claude/`
    when there is none; `--prefix` names one prefix alone), into the folder named by `homolog.backupDir` in `.frontlights/config.json`
    (an absolute path of the user's, typically a synced folder; `inspect` refuses a relative path, `..` or `~`,
@@ -612,14 +618,19 @@ offers the release again with everything accumulated.
   lists the issues whose branch is in the local main and not yet in `origin/<base>` (`release`), the work without
   an issue in the same state (`releaseDirect`, from the entries with `direct`; `directs` has the detail), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
-  record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
+  record by `issued_at` (records without a valid `issued_at` rank below those with one, and ties go to the last
+  file name; `claude/` when there is none;
   `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
-  `current`: say so in one line. It only reads.
-- **Run the whole suite on the local main.** First, adopt a green run of the same tree: when an issue of the release
+  `current`: say so in one line. Exit code 1 without `origin/<base>` (or when Git cannot count the commits): run
+  `homolog sync` first. It only reads.
+- **Run the whole suite on the local main.** First, adopt a green run of the same tree. In the usual flow an issue
+  has only its impact record, which adoption refuses, so there is usually nothing to adopt: a whole-suite record of an
+  issue exists only when the `unconfigured` answer "Rodar a suíte inteira desta vez" ran it, or when someone ran
+  `homolog suite --issue <n> --mode full` on purpose. When an issue of the release
   has a record of the whole suite that is green (exit code 0, no timeout), ran on a clean tree, and whose commit tree
   (`<head>^{tree}`) is the tree of the tip of the local main, adopt it in the main worktree with
-  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --from <record> --base <base> --root <main worktree> --config .frontlights/config.json`,
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --from <record> --base <base> --root <main worktree> --config <config>`,
   which runs nothing: it writes `release/suite.json` and `release/suite-<sha>.json` from that record, with
   `adoptedFrom` naming the origin (`docs/protocol.md`), then `release-plan` again, as after a run. The session gives
   the path of the record (the `suite.json` of an issue, in that issue's worktree, or the per-tip record
@@ -631,14 +642,18 @@ offers the release again with everything accumulated.
   committing or discarding the change, and the adoption is tried again; `--from` with `--argv` or
   `--timeout-seconds` is a mistake of the call, redone without them. Without such a record, the session runs the
   suite as below. In the main worktree, on the local main, run
-  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config <config>`
   on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
   runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
   again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
   of the full suite, asked like the `unconfigured` question of "Which tests run when", and `--timeout-seconds <N>`
-  sized to that suite (3600 s without it).
+  sized to that suite (3600 s without it, which the whole suite of this repository has already exceeded under load).
+  A run that ends with `timedOut: true` is not a product failure: say so in one line and run the same command again
+  with `--timeout-seconds <N>` above the measured duration (5400 s worked where 3600 s was exceeded), and propose
+  raising `homolog.suites.full.timeoutSeconds` in the config when it happens again. Only a run that finished red
+  becomes a finding.
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.

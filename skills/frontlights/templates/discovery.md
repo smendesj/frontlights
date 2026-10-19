@@ -2,7 +2,7 @@
 
 - Project/repository:
 - RoadS observation source and retrieved-at timestamp:
-- Roadmap/sprint source and freshness:
+- RoadS Roadmap source and freshness:
 - Existing GitHub issues / deduplication result:
 - Facts and repository evidence:
 - Inferences:

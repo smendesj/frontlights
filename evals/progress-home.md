@@ -1,12 +1,12 @@
 # Progress question in any project, and a start by plain words (manual; no model score claimed)
 
 Setup: the project that declares the `roadmapSync.progress` block (approved, secret present), a second project with
-roadmap sync configured but no progress block, and a third with no `.frontlights/config.json` at all. Nothing is
+an enabled `roadmapSync` block but no progress block, and a third with no `.frontlights/config.json` at all. Nothing is
 registered yet. The skill is installed by the junction and its `description` names the plain-language triggers.
 
 Expected, in this order:
 
-1. `/frontlights` in the second project: the roadmap question is asked as before; the progress question is not, and
+1. `/frontlights` in the second project: the issue-gaps question is asked as before; the progress question is not, and
    the session asks once "Registrar o projeto que guarda o bloco do Resumo para a diretoria?" with the options "Sim,
    escolher a pasta" and "Agora não"; "Agora não" ends it for the session. In the third project the session says
    nothing about it.

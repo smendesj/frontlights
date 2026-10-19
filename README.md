@@ -138,7 +138,11 @@ As branches de trabalho usam o `branch_prefix` da autorização, com padrão `cl
 projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
-trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa. Configure o RoadS somente quando o
+trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa.
+As suítes da homologação ficam em `homolog.suites`: `impact` (o portão de cada issue) e `full` (a suíte inteira da
+release), cada uma com `argv` (lista de argumentos, sem shell; `{base}` vira a branch base) e `timeoutSeconds`; o
+`inspect` as confere. Sem `full.timeoutSeconds` a suíte inteira tem 3600 s, que a deste repositório já passou sob
+carga (o exemplo usa 5400). Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
 
 ```json
@@ -246,11 +250,6 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   e também quando dois campos diferentes implicam labels da mesma família (um único valor, como
   `Both`, pode implicar `area:frontend` e `area:backend` de propósito), e no `gaps` vira `labelConflicts`
   para você decidir.
-- `roadmapSync.issueTargets` só conhece `repository` e `project` (`owner` e `number`); chave a mais,
-  por exemplo um `project` copiado do bloco do topo com `assignee` ou `fields`, passa a ser recusada em
-  toda operação de sincronização. O `owner` segue a mesma regra de login do `project` do topo (letras,
-  números e `-`) e o `number` é um inteiro positivo, porque o `owner` é digitado em `gh project
-  item-add`. As regras do quadro são as do `project` do topo.
 - O `project` recusa chave desconhecida, para que um erro de digitação (`label_rules` em vez de
   `labels`) não desligue a regra em silêncio. O `inspect` mostra as regras lidas.
 
@@ -306,91 +305,46 @@ a partir de outro plugin. A consulta ao quadro e ao planejamento de entregas exi
 ferramentas configuradas separadamente; o utilitário consulta issues do GitHub e
 uma rota JSON de observações. Integrações ausentes são informadas explicitamente.
 
-### Sincronizar sprint e roadmap com o RoadS
+### Completar as issues que o RoadS mostra
 
-Toda sessão `/frontlights` começa perguntando se a sprint e o roadmap devem ser atualizados
-de acordo com o RoadS. Com a resposta "sim", o Frontlights:
+O RoadS mantém o Roadmap a partir das issues abertas, e o Frontlights não escreve `ROADMAP.md` nem
+`SPRINT_*.md`. As pastas da semana sob o `scrumRoot` guardam só arquivos pontuais, como os prints do
+resumo para a diretoria.
 
-1. pede ao RoadS que sincronize o quadro (o mesmo "Sincronizar" do botão) e informa quantos
-   itens entraram e saíram (e quantos foram renomeados, quando o RoadS informa). Se o RoadS
-   sincronizou há menos de 30 s, só avisa. Se a sincronização falhar, pergunta se você quer
-   seguir com o último estado;
-2. lê o estado do roadmap (sprints, datas, itens e limite) e busca as mudanças que um Scrum
-   Master fez no Roadmap do RoadS. Sem esse estado, a sincronização para com um erro claro: não há
-   alternativa automática. Se a cópia do quadro no RoadS tiver mais de 24 h, ou nunca tiver sido
-   feita, você é avisado;
-3. escreve a prosa em cópias temporárias do `ROADMAP.md` do ano e do `SPRINT_*.md` de cada
-   sprint que tem mudança. A pasta e o arquivo de uma sprint nova são criados dentro do
-   `scrumRoot`, seguindo os títulos e as seções do `SPRINT_*.md` mais recente. O mesmo vale para as conclusões: um item de sprint que o RoadS mostra como concluído (`done`, inclusive acima do
-   limite da sprint) e que ainda não foi registrado entra no plano como "concluída", com a data da **sincronização** (não a da
-   entrega), no `ROADMAP.md` e no arquivo da sprint dele. Isso vem só do `done` do estado, nunca de a issue estar
-   fechada, não existe na fila do RoadS e por isso nunca é confirmado ao RoadS: um plano só de conclusões termina
-   sem `ack` (`not_needed`). `roadmapSync.markCompleted: false` desliga;
-4. mostra o diff para aprovação;
-5. grava, com backup ao lado de cada arquivo;
-6. confere as marcas ocultas de cada mudança;
-7. só então confirma ao RoadS;
-8. completa as issues que o RoadS mostra: o RoadS cria a issue com labels, Status, Prioridade,
-   Repositório, Stack, Description e o esforço, mas não define responsável nem tipo nativo, e as
-   issues que nasceram em outro lugar chegam ao quadro com o que tinham. O utilitário `gaps`
-   (somente leitura) lista, nas issues dos sprints e dos grupos, o que falta contra as regras do
-   `project`: o que o config resolve sozinho (padrão de campo, label que um valor implica,
-   responsável e tipo do quadro, entrar no quadro) e o que exige escolha. O Frontlights propõe os
-   valores, mostra a tabela inteira, e você aprova antes de qualquer escrita. Só se preenche o que
-   está vazio, nunca se sobrescreve valor existente, e o texto do corpo de uma issue nunca é
-   editado. Ao final, `gaps` roda de novo para conferir. Campo sem opção no quadro é apenas
-   informado.
-
-Quem decide o limite de itens por sprint é o RoadS, e o limite é só informação: o Frontlights
-escreve no arquivo da semana as mudanças dos itens acima do limite como as dos demais, na ordem do
-`position` (a ordem que o Scrum Master arrastou no RoadS): os itens dentro do limite primeiro e, só
-quando algum item acima do limite tem entrada no arquivo, a linha "Acima do limite de N:" uma única vez
-(atualizada quando o N muda e tirada quando não sobra entrada depois dela) e depois os demais; a entrada de
-um item que saiu da semana (por `move_lane` ou `remove`) fica onde está, com a saída registrada, e mantém a linha
-enquanto estiver depois dela, e quando o item volta à semana, a mesma entrada registra a volta e vai para o lugar
-dela pelo `position` (um `add` cujo `#N` já tem entrada vira pergunta: reaproveitar a entrada ou abrir outra); e
-avisa, sem
-perguntar, quais passaram do limite. Cada sprint é
-uma semana, listada na ordem das datas; uma semana sem mudança não ganha arquivo.
-
-Quando uma issue é renomeada no GitHub, o RoadS faz o item acompanhar o título e enfileira um `modify` só com o
-título novo. O Frontlights acha a entrada pelo número da issue que a mudança traz (o `#N` ou o link que os arquivos
-citam), e não pelo título, que nos arquivos pode ser o antigo: troca o título antigo pelo novo no `ROADMAP.md` e em
-cada `SPRINT_*.md` do plano, sem tocar no resto, e diz quantos `modify` de título o plano tem. Sem número (um item
-ainda sem issue, por exemplo), acha pelo título e pela lane. Se um `modify` ou `move_lane` não achar entrada no roadmap,
-se um `add` achar entrada do mesmo `#N`, ou se qualquer mudança achar mais de uma, ele pergunta; uma segunda entrada
-só é aberta num `add`, quando você escolhe.
-
-Quem escreve os arquivos é sempre esta máquina: o RoadS não alcança a pasta onde eles ficam.
+Quando o projeto tem o bloco `roadmapSync` habilitado, toda sessão `/frontlights` começa perguntando se
+você quer completar no GitHub as issues que o RoadS mostra. O RoadS cria a issue com labels, Status,
+Prioridade, Repositório, Stack, Description e o esforço, mas não define responsável nem tipo nativo, e
+as issues que nasceram em outro lugar chegam ao quadro com o que tinham. Com a resposta "sim", o
+utilitário `gaps` (somente leitura) lista, nas issues das sprints e dos grupos, o que falta contra as
+regras do `project`: o que o config resolve sozinho (padrão de campo, label que um valor implica,
+responsável e tipo do quadro, entrar no quadro) e o que exige escolha. O Frontlights propõe os valores,
+mostra a tabela inteira, e você aprova antes de qualquer escrita. Só se preenche o que está vazio, nunca
+se sobrescreve valor existente, e o texto do corpo de uma issue nunca é editado. Ao final, `gaps` roda
+de novo para conferir. Campo sem opção no quadro é apenas informado. Se a cópia do quadro no RoadS tiver
+mais de 24 h, ou nunca tiver sido feita, você é avisado.
 
 Configure o bloco `roadmapSync` no `.frontlights/config.json` do projeto (veja
 `examples/config.json`):
 
-- `endpoint` é a base `/api/frontlights` do RoadS, que responde `POST sync-board`,
-  `GET roadmap-state`, `GET pending-changes` e `POST ack`. A aprovação vale para essa base, com
-  o mesmo segredo para os quatro;
+- `endpoint` é a base `/api/frontlights` do RoadS; o `gaps` lê `GET roadmap-state` e o resumo usa a
+  rota do bloco `progress`. A aprovação vale para essa base, com o mesmo segredo;
 - `secretEnvVar` nomeia a variável do segredo, que precisa começar por `FRONTLIGHTS_`. Defina o
   valor no seu próprio terminal, com
   `setx FRONTLIGHTS_API_SECRET "<valor emitido pelo RoadS>"`, e reinicie o Claude;
-- `scrumRoot` é a pasta onde ficam os arquivos, e aceita `%USERPROFILE%`;
-- `roadmapFile`, `weekFolderPattern` e `sprintFilePattern` montam os caminhos. As datas de
-  início e fim de cada sprint vêm do RoadS; o `ROADMAP.md` usa o ano da semana atual. `{yyyy}` vem
-  do início da sprint. Em cada padrão, o primeiro `{dd_MM}` é o início e o seguinte, o fim;
-- `maxSprintItems` é o limite local, usado só quando o RoadS não informa o dele (4);
-- `markCompleted` é opcional (padrão `true`): registra como "concluída" os itens de sprint que o RoadS mostra em `done`,
-  uma vez cada, com a data da sincronização; um registro nunca é retirado (se o cartão sair de Done, o `.md` continua
-  "concluída"). `false` desliga;
-- `issueTargets` diz, para cada produto do RoadS, o repositório e o quadro onde a issue nasce.
-  Produto sem destino não gera issue.
+- `scrumRoot` é a pasta das semanas, e aceita `%USERPROFILE%`; `weekFolderPattern` nomeia a pasta de
+  cada semana (`{yyyy}` e o primeiro `{dd_MM}` vêm da segunda-feira, o seguinte da sexta). Os dois só
+  são usados pelo `weekShots` do resumo.
 
-Na primeira vez, o envio do segredo para aquele endereço precisa da sua aprovação. O estado da
-sincronização (aprovação, marca, plano e cópias temporárias) fica em `.frontlights/roadmap-sync/`,
-fora do Git. O utilitário é `python scripts/roadmap_sync.py status|approve|fetch|apply|ack|rotate-markers|gaps --root <projeto>`.
-O `gaps` só lê, usa o `gh` da própria máquina (a conta ativa precisa enxergar o repositório e o
-quadro) e aceita `--only-sprints` para deixar os grupos do backlog de fora.
+As chaves da antiga sincronização do roadmap (`roadmapFile`, `sprintFilePattern`, `maxSprintItems`,
+`markCompleted`, `issueTargets`) são ignoradas; o `status` as lista em `obsoleteKeys` e a skill oferece
+tirá-las do bloco. Na primeira vez, o envio do segredo para aquele endereço precisa da sua aprovação, que
+fica em `.frontlights/roadmap-sync/approval.json`, fora do Git (a aprovação dada antes continua valendo).
+O utilitário é `python scripts/roads.py status|approve|gaps --root <projeto>`. O `gaps` só lê, usa o
+`gh` da própria máquina (a conta ativa precisa enxergar o repositório e o quadro) e aceita
+`--only-sprints` para deixar os grupos do backlog de fora.
 
-Limites conhecidos do `gaps`: só enxerga o repositório e o quadro do `config.json` (issues de
-outros produtos em `issueTargets` são ignoradas); lê até 100 labels, 20 responsáveis, 20 cartões e 50
+Limites conhecidos do `gaps`: só enxerga o repositório e o quadro do `config.json`; lê até 100 labels,
+20 responsáveis, 20 cartões e 50
 valores de quadro por issue (uma issue maior é ignorada e listada em `skipped`, nunca lida como vazia);
 campos de seleção múltipla, de usuário e outros tipos além de seleção única, texto, número, data e
 iteração não são lidos, e um campo desses configurado em `fields` aparece em `unfillable` e sempre
@@ -403,23 +357,23 @@ chaves extras ali, remova-as.
 ### Resumo para a diretoria (opcional)
 
 O bloco `roadmapSync.progress` mora em um projeto só (por exemplo, o RoadS), e a pergunta aparece
-em qualquer projeto: logo depois da pergunta do roadmap (inclusive quando não havia nada pendente, ou
+em qualquer projeto: logo depois da pergunta das issues do RoadS (inclusive quando ela não foi feita, ou
 quando você respondeu "não") o `/frontlights` pergunta: "Atualizar também o Resumo para a diretoria no
 RoadS?". O projeto que tem o próprio bloco usa o dele (mesmo desabilitado); os outros usam o projeto que
 você registrou uma vez como dono do bloco, com `python scripts/progress_report.py home --set <projeto>`,
 só depois do seu sim. O registro fica no diretório pessoal, assinado com a chave do usuário, nunca num
 repositório, e diz só onde o bloco está: o bloco lá continua precisando da própria aprovação. O
 `status` informa `source`, `operationsRoot` (o projeto em que as demais operações rodam), `home` e
-`homeState`; sem bloco e sem registro a pergunta não aparece e, se o projeto usa a sincronização do
-roadmap, o Frontlights pergunta uma vez por sessão se você quer registrar o projeto dono do bloco
+`homeState`; sem bloco e sem registro a pergunta não aparece e, se o projeto tem o bloco `roadmapSync`
+habilitado, o Frontlights pergunta uma vez por sessão se você quer registrar o projeto dono do bloco
 (e oferece como opção cada pasta vizinha que tenha um). Com a resposta "sim", o Frontlights:
 
 1. pergunta ao RoadS qual período coletar;
 2. roda os coletores que o próprio projeto configurou e mostra a tabela de conferência dos números;
 3. só segue depois da sua confirmação desses números;
 4. redige o arquivo de textos em linguagem simples, seguindo o guia que o projeto indica
-   (`draftGuide`) e a partir dos fatos coletados, dos registros locais e, quando a sincronização do
-   roadmap está configurada, do roadmap e da sprint da semana (que alimentam os próximos passos); o
+   (`draftGuide`) e a partir dos fatos coletados e dos registros locais (a `sprint` dos fatos alimenta
+   os próximos passos); o
    próprio projeto monta o rascunho final com fatos, uso, dados de acesso locais e prints. O resumo é
    do produto que o `facts.json` nomeia em `scope` (entregas, dificuldades e próximos passos só dele; o uso
    do Claude cobre todos os projetos conectados). Cada entrega é uma issue de topo e representa a família
@@ -495,7 +449,7 @@ O bloco fica dentro de `roadmapSync` (veja `examples/config.json`) e reaproveita
     entrega. O `hidden` booleano do arquivo de textos prevalece sobre o do coletor.
   - **Aprovação:** `scrumRoot`, `weekFolderPattern` e `weekShots` entram no bloco aprovado.
     Ativar o `weekShots` pede nova aprovação.
-  - **Mesmas travas da sincronização do roadmap:** nada fora do `scrumRoot`, sem junção nem link no
+  - **Travas das pastas da semana:** nada fora do `scrumRoot`, sem junção nem link no
     caminho.
 
 Como esse bloco faz o Frontlights executar comandos lidos de um arquivo de configuração, nada roda e
@@ -624,7 +578,7 @@ execução, antes de qualquer processo subir. Um `browserTest` que declara só a
 
 ### Fechar o que terminou
 
-Depois da pergunta do roadmap e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
+Depois da pergunta das issues do RoadS e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
 que ele trabalhou neste projeto e que já têm **todos os critérios de aceitação marcados**, pergunta se pode
 fechá-las e mover os cartões para Done. A lista vem completa, com as sub-issues antes dos pais, os PRs
 ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
@@ -637,7 +591,7 @@ aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim 
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.
 O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: fechar sem mover o cartão não muda nada
 lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo; por isso, depois de mover
-cartões, o Frontlights oferece sincronizar de novo. Nenhuma autorização de implementação, merge ou teste verde
+cartões, o Frontlights avisa que o RoadS só os mostra depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
 `python scripts/cleanup.py plan|verify ...`, e só leem. A exceção é `python scripts/closeout.py tick --issue <n>
@@ -723,7 +677,7 @@ só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em
 [`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
 As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
-aprovações do texto da issue, do plano de issues, do fechamento, da limpeza, do roadmap e do resumo. Os pedidos de
+aprovações do texto da issue, do plano de issues, do fechamento, da limpeza, das issues do RoadS e do resumo. Os pedidos de
 permissão do próprio Claude Code não são do Frontlights e continuam valendo.
 
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
@@ -847,7 +801,7 @@ sai com 2 sem rodar nada.
 Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
 pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao
 `HEAD` (no índice, fora dele e não rastreados), roda o `compileall` e os módulos `tests/test_*.py` que estão
-entre eles, inteiros, e os que citam o nome de um deles ou importam um script mudado (`import roadmap_sync`);
+entre eles, inteiros, e os que citam o nome de um deles ou importam um script mudado (`import roads`);
 destes, só as classes de teste que citam ou importam (`-k '*.<Classe>.*'`), ou o módulo inteiro quando isso
 fica fora delas. Os módulos rodam com
 `FRONTLIGHTS_SUITE=rapida`, do menor arquivo para o maior, quatro de cada vez, sob um prazo total de 20 s

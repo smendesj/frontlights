@@ -1,6 +1,6 @@
-"""`roadmap_sync.py gaps`: lista, só leitura, o que as issues mostradas pela RoadS ainda não têm.
+"""`roads.py gaps`: lista, só leitura, o que as issues mostradas pela RoadS ainda não têm.
 
-Seams: `roadmap_sync.run('gaps', ...)` com o transporte HTTP e o `gh` simulados, e `issue_gaps`.
+Seams: `roads.run('gaps', ...)` com o transporte HTTP e o `gh` simulados, e `issue_gaps`.
 Os testes usam transporte e GitHub simulados: não homologam a RoadS nem o GitHub reais.
 """
 import json
@@ -12,8 +12,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
-import roadmap_sync as rs
-from test_roadmap_sync import RoadmapSyncTestCase, Transport, SECRET, state_fixture
+import roads as rs
+from test_roads import RoadsTestCase, Transport, SECRET, state_fixture
 
 BASE = 'https://roads.example.test/api/frontlights/'
 URL = 'https://github.com/OWNER/REPOSITORY/issues/%d'
@@ -113,7 +113,7 @@ class FakeGh:
         return answer
 
 
-class GapsTestCase(RoadmapSyncTestCase):
+class GapsTestCase(RoadsTestCase):
     def setUp(self):
         super().setUp()
         self.configure()
@@ -143,8 +143,7 @@ class GapsReadingTests(GapsTestCase):
         self.assertEqual(transport.calls[0]['headers']['Authorization'], f'Bearer {SECRET}')
         self.assertTrue(all(call[:2] == ['api', 'graphql'] for call in gh.calls))
         self.assertTrue(all('mutation' not in ' '.join(call) for call in gh.calls))
-        self.assertFalse((self.project / '.frontlights' / 'roadmap-sync' / 'plan.json').exists())
-        self.assertEqual(self.roadmap.read_text(encoding='utf-8').count('roads:'), 0)
+        self.assertEqual(list(self.scrum.iterdir()), [])
 
     def test_it_refuses_before_approval_without_any_call(self):
         result, transport, gh = self.gaps(state([item(12)]), approve=False)
@@ -207,6 +206,15 @@ class GapsReadingTests(GapsTestCase):
         self.assertIn('i12:', read)
         self.assertNotIn('i20:', read)
         self.assertEqual({i['from']['kind'] for i in result['issues']}, {'sprint'})
+
+    def test_a_stale_snapshot_is_reported_for_the_warning(self):
+        for synced, stale in (('2026-09-28T11:55:00Z', False), (None, True)):
+            with self.subTest(synced=synced):
+                payload = state([item(12)])
+                payload['snapshotSyncedAt'] = synced
+                result, _, _ = self.gaps(payload, FakeGh({12: node(12)}))
+                self.assertTrue(result['ok'], result['message'])
+                self.assertIs(result['snapshotStale'], stale)
 
 
 class GapsFindingsTests(GapsTestCase):
@@ -532,30 +540,6 @@ class GapsHardeningTests(GapsTestCase):
                 rs.graphql(lambda argv, e=errors: {'data': {}, 'errors': e}, 'query', missing_ok={'i1'})
             self.assertIn('GitHub answered the read with an error', str(caught.exception))
 
-    def test_issue_targets_owner_and_number_are_checked_like_the_top_level_project(self):
-        curly = 'x”; calc; “y'
-        for project in ({'owner': '$(touch pwned)', 'number': 7}, {'owner': 'x"; calc; "', 'number': 7},
-                        {'owner': 'a`b', 'number': 7}, {'owner': 'a\nb', 'number': 7}, {'owner': curly, 'number': 7},
-                        {'owner': 'a b', 'number': 7}, {'owner': '-a', 'number': 7}, {'owner': 'a' * 40, 'number': 7},
-                        {'owner': 'OWNER', 'number': True}, {'owner': 'OWNER', 'number': 0}, {'owner': 'OWNER', 'number': '7'},
-                        {'owner': 5, 'number': 7}):
-            with self.subTest(project=project):
-                self.write_config(issueTargets={'Example Product': {'repository': 'OWNER/REPOSITORY', 'project': project}})
-                result = self.run_op('status')
-                self.assertFalse(result['configured'])
-                self.assertIn('issueTargets', result['message'])
-        self.write_config(issueTargets={'Example Product': {'repository': 'OWNER/REPOSITORY', 'project': {'owner': 'My-Org1', 'number': 7}}})
-        self.assertTrue(self.run_op('status')['configured'])
-
-    def test_issue_targets_refuse_keys_they_do_not_know(self):
-        for target in ({'repository': 'OWNER/REPOSITORY', 'projet': {}},
-                       {'repository': 'OWNER/REPOSITORY', 'project': {'owner': 'OWNER', 'number': 7, 'labels': {}}}):
-            with self.subTest(target=target):
-                self.write_config(issueTargets={'Example Product': target})
-                result = self.run_op('status')
-                self.assertFalse(result['configured'])
-                self.assertIn('issueTargets', result['message'])
-
 
 class GhTransportTests(unittest.TestCase):
     """The real subprocess path, with a child process standing in for gh."""
@@ -615,22 +599,20 @@ class DocumentedContractTests(unittest.TestCase):
         # Whitespace is collapsed so a promise survives the documentation being re-wrapped.
         return ' '.join(ROOT.joinpath(*parts).read_text(encoding='utf-8').split())
 
-    def test_the_sync_route_has_the_completion_step_before_offering_issues(self):
-        route = self.text('skills', 'frontlights', 'references', 'roadmap-sync.md')
-        self.assertIn('7. **Complete the issues.**', route)
-        self.assertIn('8. **Offer issues.**', route)
-        self.assertLess(route.index('7. **Complete the issues.**'), route.index('8. **Offer issues.**'))
-        for promise in ('roadmap_sync.py" gaps --root', '`fill`', '`choose`', '`unfillable`', '`--only-sprints`',
+    def test_the_gaps_route_documents_every_promise(self):
+        route = self.text('skills', 'frontlights', 'references', 'issue-gaps.md')
+        for promise in ('roads.py" gaps --root', '`fill`', '`choose`', '`unfillable`', '`--only-sprints`',
                         'AskUserQuestion', 'never over one that exists', 'never edits', '`staleDefaults`', '`labelConflicts`',
                         '`rules.neverTyped`', '.unwritable`', '`rules.labelPattern`', 'one double-quoted argument',
                         '`--number` or `--date`', 'never invent one'):
             with self.subTest(promise=promise):
                 self.assertIn(promise, route)
 
-    def test_nothing_pending_still_reaches_the_completion_step(self):
-        route = self.text('skills', 'frontlights', 'references', 'roadmap-sync.md')
-        self.assertIn('go straight to step 7', route)
-        self.assertNotIn('Nothing pending: say so and end the route', route)
+    def test_the_gaps_route_writes_no_roadmap_or_sprint_file(self):
+        route = self.text('skills', 'frontlights', 'references', 'issue-gaps.md')
+        for gone in ('ROADMAP.md', 'SPRINT_', 'fetch', 'apply', 'ack', 'marker'):
+            with self.subTest(gone=gone):
+                self.assertNotRegex(route, rf'(?<![\w-]){gone}(?![\w-])')
 
     def test_the_issue_recipe_publishes_labels_body_lines_and_text_fields(self):
         recipe = self.text('skills', 'frontlights', 'references', 'issues.md')
@@ -642,7 +624,7 @@ class DocumentedContractTests(unittest.TestCase):
 
     def test_the_utility_and_its_limits_are_documented_in_portuguese(self):
         readme = self.text('README.md')
-        self.assertIn('rotate-markers|gaps --root', readme)
+        self.assertIn('status|approve|gaps --root', readme)
         self.assertIn('--only-sprints', readme)
         self.assertIn('issue_type_by_label', readme)
         self.assertIn('body_fields', readme)
@@ -660,7 +642,7 @@ class DocumentedContractTests(unittest.TestCase):
         if not words:
             self.skipTest('no forbidden-word list outside the repository')
         for path in (ROOT / 'README.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'security.md',
-                     REFERENCES / 'issues.md', REFERENCES / 'roadmap-sync.md', ROOT / 'skills' / 'frontlights' / 'scripts' / 'roadmap_sync.py',
+                     REFERENCES / 'issues.md', REFERENCES / 'issue-gaps.md', ROOT / 'skills' / 'frontlights' / 'scripts' / 'roads.py',
                      ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py', ROOT / 'tests' / 'test_board_rules.py', Path(__file__)):
             body = path.read_text(encoding='utf-8').casefold()
             for word in words:

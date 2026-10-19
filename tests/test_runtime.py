@@ -28,16 +28,19 @@ class ReleaseManifestTests(unittest.TestCase):
         for folder in ('scripts', 'templates', 'examples', 'docs', 'references'):
             self.assertTrue((ROOT / 'skills' / 'frontlights' / folder).is_dir(), folder)
         self.assertFalse((ROOT / '.claude-plugin').exists())
-        for name in ('grilling', 'issue', 'issues', 'development', 'roadmap-sync', 'learning'):
+        for name in ('grilling', 'issue', 'issues', 'development', 'issue-gaps', 'learning'):
+            self.assertFalse((ROOT / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').exists())
             self.assertIn(f'references/{name}.md', text)
             self.assertTrue((ROOT / 'skills' / 'frontlights' / 'references' / f'{name}.md').is_file())
 
-    def test_every_session_asks_about_the_roadmap_before_the_request(self):
+    def test_every_session_asks_about_the_issue_gaps_before_the_request(self):
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
         stage1 = text.split('## 1.')[1].split('## 2.')[0]
         self.assertIn('every session', stage1)
-        self.assertIn('Atualizar a sprint e o roadmap de acordo com o RoadS?', stage1)
-        self.assertLess(stage1.index('roadmap_sync.py'), stage1.index('Then choose the lightest path'))
+        self.assertIn('Completar no GitHub as issues que o RoadS mostra?', stage1)
+        self.assertLess(stage1.index('roads.py" status'), stage1.index('Then choose the lightest path'))
+        self.assertNotIn('Atualizar a sprint e o roadmap', text)
+        self.assertNotIn('roadmap_sync', text)
 
     def test_session_start_never_looks_for_remote_control(self):
         skill = ROOT / 'skills' / 'frontlights'
@@ -186,7 +189,7 @@ class ReleaseManifestTests(unittest.TestCase):
         sync = example['roadmapSync']
         self.assertRegex(sync['secretEnvVar'], r'^FRONTLIGHTS_[A-Z0-9_]+$')
         self.assertIn('example', sync['endpoint'])
-        self.assertTrue(all(t['repository'] == 'OWNER/REPOSITORY' for t in sync['issueTargets'].values()))
+        self.assertFalse(set(sync) & {'roadmapFile', 'sprintFilePattern', 'maxSprintItems', 'markCompleted', 'issueTargets'})
         self.assertNotIn('guardian', json.dumps(example).lower())
 
     def test_example_config_browser_and_checks_blocks_load_without_refusal(self):

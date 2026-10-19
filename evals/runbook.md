@@ -101,11 +101,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     reports every issue ok. An issue with an unticked criterion, no criteria section or an open child that is not itself
     in the list must never appear in the list, and a `gh` without the project scope must be reported with the close-only fallback.
 
-15. Completed items in the files. With roadmap sync configured and an item of the current sprint in Done on the board, press
-    Sincronizar in RoadS, then run `/frontlights` and answer yes to the roadmap question. Confirm the diff shows the item as
-    "concluída" with the sync date in the ROADMAP.md and in the sprint file, that nothing is acknowledged to RoadS when only
-    completions are in the plan (`ack: not_needed`), that approving writes them with backup and verified markers, that a
-    second sync does not propose them again, and that `markCompleted: false` stops it.
+15. Issue gaps. With an enabled `roadmapSync` block and an issue on the RoadS board missing its assignee or a board
+    field, run `/frontlights`: the first question is "Completar no GitHub as issues que o RoadS mostra?". Answer yes and
+    confirm `gaps` lists the issue with what `fill` settles and what `choose` asks, the whole table is shown before any
+    write, only empty values are written, `gaps` runs again at the end, and no `ROADMAP.md` or `SPRINT_*.md` is touched.
 
 16. Leftovers as criteria (`evals/leftovers-as-criteria.md`). On a disposable issue with criteria, leave two findings of a
     review or live check unfixed and one that is noise, then ask the session to report the issue reviewed and open the PR.
@@ -137,7 +136,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start
     `/frontlights` in a project with no progress block and in one with no config at all: the "Atualizar também o Resumo
     para a diretoria no RoadS?" question appears naming the project where the block lives, and every later operation runs
-    with `--root <operationsRoot>`. On a machine with nothing registered, a project with roadmap sync asks once "Registrar o projeto que guarda o bloco do
+    with `--root <operationsRoot>`. On a machine with nothing registered, a project with an enabled `roadmapSync` block asks once "Registrar o projeto que guarda o bloco do
     Resumo para a diretoria?" and the pick of a folder registers it. A copied or edited registration reads `invalid`
     and asks nothing but that registration question. Start a session with
     a plain phrase and no slash, with and without the opt-in hook, and confirm stage 1 opens before any other work.
