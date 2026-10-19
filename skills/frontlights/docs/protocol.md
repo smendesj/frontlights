@@ -150,6 +150,11 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   preview/log/<nome>.log  log mascarado de cada processo da prévia
   preview/branch.json    nome da branch da prévia, que o `preview stop` não apaga (o primeiro refresh reconhece a branch como da prévia)
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
+  issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa): mode, source (config ou
+                         argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
+                         seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
+                         compara com a ponta (current, stale, red, missing ou unconfigured)
+  issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
   issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
 ```
 
