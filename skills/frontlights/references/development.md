@@ -184,7 +184,11 @@ the JSON of the run as evidence. Per issue, the gate is the project's impact sui
 `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --root <issue-worktree> --config <config>
 --issue <n> --mode impact --base <base> [--concurrent]` at the tip of the branch of the issue, in the background, started together with the
 watched run (an issue that changes the screen) or the review (one that does not); with a screen the review still waits for the
-watched run. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
+watched run. In this repository `--impact` runs only what the diff `<base>...HEAD` plus the working tree touches,
+chosen over every test module by the selection of `tests/pre_commit.py`: a changed module whole, a module that cites a
+changed file or imports a changed script only in the classes that do (whole when that is outside a class),
+`tests.test_single_source` always whole, and every module whole when the runner or the selection changes; the chosen
+heavy modules run without the variable in the serial queue, and `--list` shows the plan. `homolog suite-gate` answering `current` (exit code 0) is gate 1 of "Into the local main". A failure
 while the watched run was in progress (`--concurrent`) is run once more, alone, after the watched run ends: green is
 `current`, and the handoff records the first failure as possible resource contention; red is a real failure, back to
 its slice's loop or to the user. `unconfigured` is a question with `AskUserQuestion`: "Declarar as suítes agora"
