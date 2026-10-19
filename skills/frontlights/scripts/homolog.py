@@ -907,13 +907,42 @@ def write_release_records(root, record):
     return latest, tip
 
 
+def adoption_refusal(root, base, origin, evidence):
+    """None when the record `origin` may be adopted by the release at the tip of the local `base`, whose evidence
+    now is `evidence`; otherwise why not, in Portuguese: a green whole suite, run on a clean tree, whose commit
+    tree is the tip's and whose file hashes are the tip's now."""
+    if origin['mode'] != 'full':
+        return 'é um registro da suíte por impacto, e a release pede a suíte inteira'
+    if origin.get('exitCode') != 0 or origin.get('timedOut') is not False or origin.get('error'):
+        return 'a suíte inteira desse registro não passou (código diferente de 0, prazo estourado ou não rodou)'
+    head = origin.get('head')
+    if not (isinstance(head, str) and OID.fullmatch(head) and origin['evidence'].get('head') == head
+            and tree_of(root, head)):
+        return f'este repositório não conhece o commit {str(head)[:40]} do registro'
+    changes = tip_changes(root, head, origin['evidence'])
+    if changes:
+        return f'ele rodou com {changes}, e só vale o registro de uma árvore limpa'
+    tree, tip_tree = tree_of(root, head), tree_of(root, f'refs/heads/{base}')
+    if tree != tip_tree:
+        return f'ele rodou em outra árvore ({tree[:7]}), e a ponta da {base} local tem a árvore {str(tip_tree)[:7]}'
+    if origin['evidence'].get('files_sha256') != evidence['files_sha256']:
+        return f'o hash dos arquivos da evidência dele não é o da {base} local agora'
+    return None
+
+
 def adopt_suite(root, base, from_record):
     """Issue 54: the whole suite of the release taken from a green record of the same commit tree (`--from`),
     nothing run: the record keeps the original run and takes the evidence of the local main now, with
     `adoptedFrom` naming the path, the head and the tree of the origin."""
     path = Path(from_record).resolve()
-    origin = read_suite_record(path)
+    try:
+        origin = read_suite_record(path)
+    except Refusal as error:
+        raise Refusal(f'{error}; nada foi gravado')
+    require(origin is not None, f'não há registro de suíte em {path}; nada foi gravado')
     evidence = tree_evidence(root)
+    reason = adoption_refusal(root, base, origin, evidence)
+    require(reason is None, f'{path} não vale pela ponta da {base} local: {reason}; nada foi gravado')
     tree = tree_of(root, origin['head'])
     record = dict(origin, base=base, head=evidence['head'], evidence=evidence,
                   adoptedFrom={'path': str(path), 'head': origin['head'], 'tree': tree,
@@ -932,6 +961,10 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     issue = None if release else issue_number(issue)
     require(mode in SUITE_MODES, 'o modo da suíte precisa ser impact ou full')
     require(not release or mode == 'full', '--release só aceita --mode full: a release roda a suíte inteira')
+    require(from_record is None or release, '--from só vale com --release: a release adota a suíte inteira de uma '
+                                            'issue; nada foi gravado')
+    require(from_record is None or (argv_text is None and timeout_seconds is None),
+            '--from não roda nada, então não aceita --argv nem --timeout-seconds; nada foi gravado')
     base = plain_name(base, 'a branch base')
     place = off_base_tip(root, base) if release else None
     require(place is None, f'{place}; a suíte da release roda só na ponta da {base} local')
