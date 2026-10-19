@@ -177,7 +177,15 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          (warnings incluídos), menos base, head e evidence: mode, source, argv, exitCode,
                          timedOut, seconds, output, concurrent, startedAt e finishedAt vêm dela), e
                          `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem; os juízes o leem como
-                         um rodado
+                         um rodado. Com o marcador `{covered}` no argv de `homolog.suites.full` (só lá, como
+                         argumento inteiro, uma vez), ganha `covered` {complete, from [{issue, path, head, tree}],
+                         refused [{issue, path, reason}], file}: `complete` lista os ids que os registros de
+                         impacto das issues da release rodaram inteiros e verdes na mesma árvore da ponta (a
+                         suíte os pulou), `from` os registros que contaram, `refused` os que não contaram e o
+                         motivo, e `file` o `release/suite-covered-<data-hora>.json` (`{"complete": [ids]}`) que a
+                         suíte recebeu; os juízes o leem como a suíte inteira da ponta. Na suíte inteira de uma
+                         issue, o arquivo (`issues/<n>/suite-covered-<data-hora>.json`) vem com a lista vazia; sem
+                         o marcador, nenhum desses campos nem arquivos
   release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa
                          ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
                          e a PR da release fica pronta por ela (`references/development.md`, "The release")

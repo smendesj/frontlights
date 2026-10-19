@@ -795,5 +795,180 @@ class SuiteAdoptionRefusalTests(AdoptionTestCase):
         self.assertFalse((self.release_folder / f'suite-{self.main_head}.json').exists())
 
 
+class CoveredTestCase(SuiteTestCase):
+    """Issue 57, S4: com `{covered}` no argv de `homolog.suites.full`, a release passa à suíte inteira um arquivo
+    `{"complete": [ids]}` com o que o impacto das issues da release rodou inteiro e verde na mesma árvore da ponta,
+    e grava no registro da release o que foi pulado e de onde veio.
+
+    A main local tem um remoto bare; cada issue tem a própria worktree (`git worktree add`), cortada da main local,
+    um commit e a suíte rodada ali pelo `homolog suite`; o registro de autorização da worktree principal a nomeia. A
+    suíte falsa é o REPORTER: no impacto copia o relatório para o `{report}`, na inteira copia o arquivo do
+    `{covered}` para `recebido.json`, fora do repositório."""
+
+    def setUp(self):
+        super().setUp()
+        self.git(self.work, 'switch', '-q', 'main')
+        self.reporter = self.base / 'report_suite.py'
+        self.reporter.write_text(REPORTER, encoding='utf-8')
+        origin = self.base / 'origin.git'
+        self.git(None, 'init', '-q', '--bare', '-b', 'main', str(origin))
+        self.git(self.work, 'remote', 'add', 'origin', str(origin))
+        self.git(self.work, 'push', '-q', 'origin', 'main')
+        self.received = self.base / 'recebido.json'
+        self.marked = ('--copia', '{covered}', str(self.received))
+        self.entries = []
+
+    def write_config(self, impact=('{report}',), full=None):
+        path = self.base / 'config.json'
+        suites = {'impact': {'argv': [sys.executable, str(self.reporter), *impact], 'timeoutSeconds': 60},
+                  'full': {'argv': [sys.executable, str(self.reporter), *(self.marked if full is None else full)],
+                           'timeoutSeconds': 60}}
+        path.write_text(json.dumps({'repository': None, 'homolog': {'suites': suites}}), encoding='utf-8')
+        return path
+
+    def issue(self, number, complete=('tests.test_a',), mode='impact', flags=(), report=True, loose=False):
+        """The worktree of issue `number`, cut from the local main now, with one commit; its suite run there (the
+        impact one with a report whose `complete` is `complete`, unless `report` is false); `loose` leaves an
+        untracked file in it during the run. The authorization record of the main worktree names it."""
+        path, branch = self.base / f'wt-{number}', f'claude/issue-{number}'
+        self.git(self.work, 'worktree', 'add', '-q', '-b', branch, str(path), 'main')
+        (path / f'issue-{number}.txt').write_text(f'{number}\n', encoding='utf-8')
+        self.git(path, 'add', '.')
+        self.git(path, 'commit', '-q', '-m', f'issue {number}')
+        if loose:
+            (path / 'solto.txt').write_text('solto\n', encoding='utf-8')
+        payload = self.base / f'payload-{number}.json'
+        payload.write_text(json.dumps({'ran': [*complete, 'tests.test_z.Classe'], 'complete': list(complete)}),
+                           encoding='utf-8')
+        config = self.write_config(impact=(*flags, *(('--copia', str(payload), '{report}') if report else ())))
+        code, result = self.cli('suite', '--root', str(path), '--config', str(config), '--issue', str(number),
+                                '--mode', mode)
+        self.assertEqual(code, 1 if '--falha' in flags else 0, result)
+        self.entries.append({'issue': number, 'branch': branch, 'path': str(path)})
+        (self.work / '.frontlights').mkdir(exist_ok=True)
+        (self.work / '.frontlights' / 'authorization.json').write_text(json.dumps(
+            {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': self.entries}),
+            encoding='utf-8')
+        return path
+
+    def deliver(self, number):
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of issue {number} into the local main',
+                 f'claude/issue-{number}')
+
+    def release(self, config=None, *flags):
+        return self.cli('suite', '--root', str(self.work), '--config', str(config or self.write_config()),
+                        '--release', '--mode', 'full', *flags)
+
+    @property
+    def release_folder(self):
+        return self.work / '.frontlights' / 'release'
+
+    def saved(self, name='suite.json'):
+        return json.loads((self.release_folder / name).read_text(encoding='utf-8'))
+
+
+class ReleaseCoveredTests(CoveredTestCase):
+    def test_the_release_skips_what_the_impact_of_an_issue_of_the_same_tree_ran_whole(self):
+        """O arquivo do `{covered}` traz o `complete` do impacto da issue; os dois registros da release gravam o
+        que foi pulado e de onde veio; o portão da release (com e sem `--head`) e o `release-plan` o aceitam como a
+        suíte inteira da ponta e dizem quantos módulos foram pulados."""
+        worktree = self.issue(1, complete=('tests.test_a', 'tests.test_b'))
+        self.deliver(1)
+        head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        issue_head = self.git(self.work, 'rev-parse', 'claude/issue-1').stdout.strip()
+        tree = self.git(self.work, 'rev-parse', 'claude/issue-1^{tree}').stdout.strip()
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')),
+                         {'complete': ['tests.test_a', 'tests.test_b']})
+        self.assertIn('2 módulo', result['message'])
+        for name in ('suite.json', f'suite-{head}.json'):
+            with self.subTest(record=name):
+                saved = self.saved(name)
+                covered = saved['covered']
+                self.assertEqual((covered['complete'], covered['refused']), (['tests.test_a', 'tests.test_b'], []))
+                self.assertEqual([(item['issue'], item['head'], item['tree']) for item in covered['from']],
+                                 [(1, issue_head, tree)])
+                self.assertTrue(os.path.samefile(covered['from'][0]['path'],
+                                                 worktree / '.frontlights' / 'issues' / '1' / 'suite.json'))
+                self.assertTrue(os.path.samefile(Path(covered['file']).parent, self.release_folder))
+                self.assertIn(covered['file'], saved['argv'])
+        config = self.write_config()
+        for flags in ((), ('--head', head)):
+            with self.subTest(gate=flags):
+                code, gate = self.cli('suite-gate', '--root', str(self.work), '--config', str(config), '--release',
+                                      *flags)
+                self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+                self.assertEqual(gate['covered'], self.saved()['covered'])
+                self.assertIn('2 módulo', gate['message'])
+        code, plan = self.cli('release-plan', '--root', str(self.work))
+        self.assertEqual((code, plan['ready'], plan['release'], plan['fullSuite']['status']),
+                         (0, True, [1], 'current'), plan)
+        self.assertEqual(plan['fullSuite']['covered'], self.saved()['covered'])
+        self.assertIn('2 módulo', plan['message'])
+
+    def test_a_record_that_does_not_count_contributes_nothing_and_its_reason_is_recorded(self):
+        """Cada issue entra na main local logo depois do próprio registro; só a última tem a árvore da ponta."""
+        self.issue(1)                                       # verde, mas a ponta andou depois dela
+        self.deliver(1)
+        self.issue(2, flags=('--falha',))                   # vermelho
+        self.deliver(2)
+        self.issue(3, report=False)                         # impacto sem o {report}: sem complete
+        self.deliver(3)
+        self.issue(4, mode='full')                          # registro da suíte inteira
+        self.deliver(4)
+        self.issue(5, loose=True)                           # rodou com um arquivo fora do commit
+        self.deliver(5)
+        removed = self.issue(6)                             # a worktree saiu antes da release
+        self.deliver(6)
+        self.git(self.work, 'worktree', 'remove', '--force', str(removed))
+        self.issue(8, complete=('tests.test_c',))           # a árvore da ponta
+        self.deliver(8)
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_c']})
+        covered = self.saved()['covered']
+        self.assertEqual(covered['complete'], ['tests.test_c'])
+        self.assertEqual([item['issue'] for item in covered['from']], [8])
+        reasons = {item['issue']: item['reason'] for item in covered['refused']}
+        for number, needle in ((1, 'outra árvore'), (2, 'não passou'), (3, 'complete'), (4, 'suíte inteira'),
+                               (5, 'não commitad'), (6, 'não existe')):
+            with self.subTest(issue=number):
+                self.assertIn(needle, reasons.get(number, ''), covered['refused'])
+        self.assertEqual(sorted(reasons), [1, 2, 3, 4, 5, 6])
+        self.assertTrue(all('path' in item for item in covered['refused']))
+
+    def test_without_the_marker_the_release_record_is_the_one_of_today(self):
+        self.issue(1)
+        self.deliver(1)
+        code, result = self.release(self.write_config(full=()))
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(set(self.saved()), SuiteReportTests.TODAY)
+        self.assertEqual(list(self.release_folder.glob('suite-covered-*')), [])
+        self.assertFalse(self.received.exists())
+
+    def test_the_marker_out_of_its_place_is_refused_and_nothing_runs(self):
+        for name, impact, full, mode in (('na suíte de impacto', ('{covered}',), (), 'impact'),
+                                         ('dentro de um argumento', (), ('--cobertos={covered}',), 'full'),
+                                         ('duas vezes', (), ('{covered}', '{covered}'), 'full')):
+            with self.subTest(case=name):
+                code, result = self.release(self.write_config(impact=impact, full=full))
+                self.assertEqual(code, 1, result)
+                self.assertIn('{covered}', result['message'])
+                self.assertIn(f'homolog.suites.{mode}.argv', result['message'])
+                self.assertFalse((self.release_folder / 'suite.json').exists())
+        given = json.dumps([sys.executable, str(self.reporter), '{covered}'])
+        code, result = self.release(self.write_config(), '--argv', given)
+        self.assertEqual(code, 1, result)
+        self.assertIn('{covered}', result['message'])
+        self.assertIn('--argv', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+
+    def test_the_whole_suite_of_an_issue_skips_nothing(self):
+        """Fora da release não há issue que cubra nada: o arquivo do `{covered}` vem vazio e a suíte roda tudo."""
+        self.issue(1, mode='full')
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': []})
+
+
 if __name__ == '__main__':
     unittest.main()

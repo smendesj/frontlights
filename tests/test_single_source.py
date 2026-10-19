@@ -25,6 +25,8 @@ SINGLE = {
     '"Mesclar a PR #<n> em <base>?"': 'a pergunta do merge da release',
     '"Dar destino pela escada"': 'a pergunta do limite de rodadas da revisão',
     '**Run the whole suite on the local main.**': 'a suíte inteira da release na main local (issue 52, S3)',
+    "the release runs only what no impact record of the release's issues ran whole and green on the same tree":
+        'a release roda só o que faltou (issue 57, S4)',
 }
 
 # cópias em português que deram lugar a um ponteiro
