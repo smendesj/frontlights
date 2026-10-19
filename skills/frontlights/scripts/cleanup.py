@@ -3,7 +3,7 @@
 requests that carried the work were merged into the approved base.
 
 Read only. It reads Git (worktree list, status, ancestry; always with `--no-optional-locks`, so not even the index
-is refreshed) and GitHub (`gh api graphql`, the reader of roadmap_sync.py) and prints what the session may propose.
+is refreshed) and GitHub (`gh api graphql`, the reader of roads.py) and prints what the session may propose.
 Removing is done by the session, with its own `git`, after the user said yes: this helper never changes a
 repository, a file or GitHub, and the commands it prints are values to type, not something it runs. Every command
 is built from validated values (an existing registered worktree path without characters a command line cannot
@@ -55,7 +55,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import closeout  # noqa: E402  (its reader of the records, branch rule and the GitHub reader it shares)
 import frontlights  # noqa: E402  (the rule for text a command line can carry)
-import roadmap_sync as rs  # noqa: E402
+import roads as rs  # noqa: E402
 
 Refusal = rs.Refusal
 require = rs.require

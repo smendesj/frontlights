@@ -1,6 +1,6 @@
 # Progress report ("Resumo para a diretoria") in RoadS
 
-On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "Roadmap e resumo".
+On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "RoadS e resumo".
 
 Prepares the plain-language progress summary for people who follow the work from outside, and
 sends the collected content to RoadS as a draft. Reviewing, editing, checking the numbers, copying
@@ -60,7 +60,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
   run before the user approved the exact block (step 2).
 - A failure of `window`, a collector or `push` is reported with its cause, and nothing is claimed
   as updated.
-- Never create issues, never change the roadmap or sprint files here.
+- Never create issues here.
 
 ## Steps
 
@@ -128,23 +128,13 @@ operation runs in, because the collectors, the draft guide and the approval all 
      project documents the contract, and do not guess field names.
    - **Sources.** Read the facts and usage files the block names (`factsFile`, `usageFile`, relative to the
      `operationsRoot`), the local issue records under `.frontlights/issues/` of the project the session
-     opened and, when it is another one, of the `operationsRoot`, and, when roadmap sync is configured, the
-     roadmap file and the sprint file of the current week. Find them with the read-only `python
-     "${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" status --root <operationsRoot>` (no network; it reports
-     the files). Read those two files, never write them here. They are the source of "Próximos passos"
-     and of what is in development versus still in the backlog, so the next steps reflect the sprint of
-     the week. The items after the line "Acima do limite de N:" of the sprint file are past the sprint
-     limit: they are not commitments of the week, and the next steps say so when they cite them. An
-     entry whose latest record is the exit or the removal of its item (a `move_lane` out of the week, a
-     `remove`, with no later return to the week) is not an item of the week at all, wherever it sits. When no
-     sprint file for the current week exists, say so plainly to the user and write the next steps only
-     from the facts.
+     opened and, when it is another one, of the `operationsRoot`. Frontlights keeps no roadmap or sprint
+     file: what is in development versus still in the backlog comes from the facts (`sprint`, below).
    - **Statuses.** The status of each person's delivery comes from the collected facts, never from
      your own guess.
    - **Product scope.** The summary is about the product the facts file names in `scope` (PRODUCT, say).
      Deliveries, difficulties and next steps come only from issues of that product: the entries of the facts
-     and their families, the local records of those issues, and the roadmap and sprint items whose `produto`
-     is that product. Records and items of any other project are never a source, even when that project is the
+     and their families and the local records of those issues. Records and items of any other project are never a source, even when that project is the
      `operationsRoot` or the one the session opened. The Claude usage numbers are the one exception: they
      cover every connected project and are not edited here.
    - **Sprint block and chips.** The facts file carries `sprint` (the covers of the sprint: the items of the Project
@@ -155,8 +145,8 @@ operation runs in, because the collectors, the draft guide and the approval all 
      parts of a cover without sub-issues are its acceptance-criteria boxes). There
      is no "Em validação" chip. The text never repeats those numbers. The covers are not deliveries: they need no
      entry and no print. "Próximos passos" come from what is left in each cover (`open`), in the order of the
-     sprint, in plain words; the sprint file of the week is only the fallback when the facts have no `sprint`, and a
-     sprint file that disagrees with `sprint` (an older reading, other items) is said to the user in one line. When
+     sprint, in plain words; when the facts have no `sprint`, say so plainly to the user and write the next steps
+     only from the rest of the facts. When
      the draft guide allows it, a cover may get one sentence in the `sprint` field of the texts file.
    - **Families and boxes.** An entry stands for a whole family: the issue and every sub-issue under it,
      however deep. A delivery without sub-issues has its parts in the boxes of its acceptance-criteria section

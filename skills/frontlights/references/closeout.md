@@ -216,9 +216,8 @@ approved list, the user's literal answer, the commands run and the verify output
 RoadS reads only the **Status** of the card in the Project, never whether the issue is closed: closing an issue
 without moving its card changes nothing there, and a completed item stays in its sprint, marked done, until the
 sprint rotation removes it. RoadS also refreshes only when it syncs, and a sync within 30 s of the previous one
-returns the old snapshot. So, when cards were moved and the roadmap sync of stage 1 is configured, tell the user
-this in one line and offer a new sync (a question with options, "Sincronizar agora" and "Deixar para depois");
-on yes run the roadmap sync again as `references/roadmap-sync.md` describes. Without a usable board (`board.status` `unconfigured`, `unavailable` or `done_option_missing`) say plainly that the close-only fallback will not show in RoadS.
+returns the old snapshot. So, when cards were moved, tell the user in one line that RoadS shows them after its
+next sync (the board's own "Sincronizar" there); Frontlights does not sync RoadS. Without a usable board (`board.status` `unconfigured`, `unavailable` or `done_option_missing`) say plainly that the close-only fallback will not show in RoadS.
 
 ## Never
 

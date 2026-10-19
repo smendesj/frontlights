@@ -21,9 +21,10 @@
           "unittest",
           "discover",
           "-s",
-          "tests"
+          "tests",
+          "-v"
         ],
-        "timeoutSeconds": 3600
+        "timeoutSeconds": 5400
       }
     }
   },
@@ -32,20 +33,7 @@
     "endpoint": "https://roads.example.com/api/frontlights",
     "secretEnvVar": "FRONTLIGHTS_API_SECRET",
     "scrumRoot": "%USERPROFILE%\\PASTA\\SCRUM",
-    "roadmapFile": "{yyyy}/ROADMAP.md",
     "weekFolderPattern": "{yyyy}/{dd_MM}",
-    "sprintFilePattern": "SPRINT_{dd_MM}_a_{dd_MM}.md",
-    "maxSprintItems": 4,
-    "markCompleted": true,
-    "issueTargets": {
-      "PRODUTO": {
-        "repository": "OWNER/REPOSITORY",
-        "project": {
-          "owner": "OWNER",
-          "number": 1
-        }
-      }
-    },
     "progress": {
       "enabled": false,
       "path": "progress-report",

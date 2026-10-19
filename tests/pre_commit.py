@@ -6,7 +6,7 @@ Roda em segundos o que pega um commit vermelho por erro de script ou de texto, s
    --untracked-files=all`; um renomeado conta pelo nome novo);
 2. `python -m compileall -q skills/frontlights/scripts tests`;
 3. os módulos `tests/test_*.py` que estão entre os mudados (inteiros) e os que citam o nome de um arquivo mudado
-   ou importam um script mudado (`import roadmap_sync`): desses, só as classes de teste que citam ou importam
+   ou importam um script mudado (`import roads`): desses, só as classes de teste que citam ou importam
    (`-k '*.<Classe>.*'`), ou o módulo inteiro quando isso está fora de uma classe com métodos `test*` (um import
    no topo, uma constante, um helper, uma classe base sem testes);
 4. cada um como no `tests/suite.py` (o `run_module` dele: `python -m unittest discover -s tests -p <módulo>.py`,
@@ -15,7 +15,7 @@ Roda em segundos o que pega um commit vermelho por erro de script ou de texto, s
    árvore de processos e o que não começou fica de fora; os dois ficam para a suíte inteira, sem contar como falha.
 
 Nenhum hook o roda: o `CLAUDE.md` manda rodá-lo antes de cada commit. Ele confere a árvore de trabalho, não o
-índice, e não substitui a suíte inteira, obrigatória antes da revisão independente e do merge na main local.
+índice, e não substitui a suíte por impacto (portão do merge na main local) nem a suíte inteira (na release).
 Limite conhecido: uma classe que herda os testes de uma classe base que cita o arquivo não é escolhida pelo `-k`
 da base. Código 0: verde, inclusive com o que ficou para a suíte; 1: o compileall ou um módulo falhou (ou não
 importou); 2: erro de uso ou do Git; 130: interrompido (Ctrl+C). Só biblioteca padrão; só Windows, como o
@@ -85,7 +85,7 @@ def changed_files(root):
 
 
 def uses(node, stems):
-    """Se o nó importa um script mudado pelo nome do módulo (`import roadmap_sync`, `from closeout import x`) ou o
+    """Se o nó importa um script mudado pelo nome do módulo (`import roads`, `from closeout import x`) ou o
     carrega por ele como primeiro argumento de uma chamada de carga (`importlib.import_module('serve')`): a forma
     como os testes de unidade chegam aos scripts sem escrever o nome do arquivo. Uma string solta igual ao nome não
     conta: `'frontlights'` é pedaço de quase todo caminho dos testes (`ROOT / 'skills' / 'frontlights'`)."""

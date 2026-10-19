@@ -6,9 +6,9 @@ subagents (`Agent`, several calls in one message).
 
 Expected:
 
-1. Stages 0 to 2: `update-check`, `roadmap_sync.py status`, `progress_report.py status`, `closeout.py candidates`
-   and `inspect` are launched in one message. The questions still come in the order of stage 1 (roadmap, progress,
-   closeout), and `candidates` runs again when a yes to the roadmap sync wrote the board.
+1. Stages 0 to 2: `update-check`, `roads.py status`, `progress_report.py status`, `closeout.py candidates`
+   and `inspect` are launched in one message. The questions still come in the order of stage 1 (issue gaps, progress,
+   closeout), and `candidates` runs again when a yes to the issue gaps wrote the board.
 2. Stage 3: before the solution round, one read-only subagent per layer the change touches reports the conventions
    with example paths, all launched in one message; every question of the interview comes from the session, never
    from a worker.

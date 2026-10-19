@@ -24,7 +24,7 @@ references are `references/grilling.md` (stage 3),
 `browser-testing.md`),
 `references/review.md` (the independent reviewer's standard, named only in the reviewer's brief),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
-`references/roadmap-sync.md` (the roadmap question of stage 1, when the user
+`references/issue-gaps.md` (the issue-gaps question of stage 1, when the user
 says yes), `references/progress-report.md` (the progress question that follows it, when the user says yes, and the registration of the block's home). `references/learning.md` is read only when the user turns learning mode on in the grilling or asks for an
 explanation there. `templates/pr.md` is the model of the release's pull request (stage 6), adapted under
 `references/LICENSE-pr.md`.
@@ -155,26 +155,26 @@ Run the update commands only when the user asks.
 
 ## 1. Take the request and right-size the path
 
-**Roadmap question, first, every session.** Before anything else in this stage,
+**Issue-gaps question, first, every session.** Before anything else in this stage,
 even when the user arrived with another request, run the read-only `python
-"${CLAUDE_SKILL_DIR}/scripts/roadmap_sync.py" status --root <project>` (no
-network) and ask with `AskUserQuestion`:
-"Atualizar a sprint e o roadmap de acordo com o RoadS?"
-Put what `status` reports in the question text: configured
-and ready (with the sprint week), the endpoint not yet approved, the secret
-absent, a draft left staged, or not configured in this project. Options: "Sim,
-sincronizar agora" and "Não, seguir com o pedido". On yes, read
-`references/roadmap-sync.md` and follow it, then come back to the request. On
-no, make no call to RoadS and go on.
+"${CLAUDE_SKILL_DIR}/scripts/roads.py" status --root <project>` (no network). Only when it
+reports `configured` true (an enabled `roadmapSync` block in this project) ask with
+`AskUserQuestion`: "Completar no GitHub as issues que o RoadS mostra?"
+Put what `status` reports in the question text: ready, the endpoint not yet approved, or
+the secret absent. Options: "Sim, conferir agora" and "Não, seguir com o pedido". On yes,
+read `references/issue-gaps.md` and follow it, then come back to the request. On no, make
+no call to RoadS and go on. When `configured` is false and `enabled` is true (the block is on but does not
+validate), say `message` in one line and go on; when both are false, say nothing and go on. Frontlights
+writes no roadmap or week file: RoadS keeps the roadmap from the open issues.
 
-**Progress question, right after the roadmap question.** Once the roadmap question and
-everything it triggered are done, and also when the roadmap had nothing pending or the
-user answered no to it, run the read-only `python
+**Progress question, right after the issue-gaps question.** Once the issue-gaps question and
+everything it triggered are done, and also when it was not asked or the user answered no
+to it, run the read-only `python
 "${CLAUDE_SKILL_DIR}/scripts/progress_report.py" status --root <project>` (no
 network), in whatever project the session opened. The block of the summary lives in one
 project (the one the user registered once as its home), and `status` finds it from any
 other, so the question is asked in any project once that home is registered (until then only a project
-with roadmap sync is offered the registration). Only when it reports `ask` true (an
+with an enabled `roadmapSync` block is offered the registration). Only when it reports `ask` true (an
 enabled `roadmapSync.progress` block, the project's own or the registered home's) ask
 with `AskUserQuestion`: "Atualizar também o Resumo para a diretoria no RoadS?"
 Put what `status` reports in the question text: ready, the block not yet approved, the
@@ -183,7 +183,7 @@ secret absent and, when `source` is `home`, the project where the block lives
 On yes, read `references/progress-report.md` and follow it, running every operation with
 `--root <operationsRoot>`, the project `status` reported, then come back to the request.
 On no, make no call to RoadS and run nothing. When `ask` is false, a disabled block says
-nothing; an absent one says nothing either, except when roadmap sync is configured in this
+nothing; an absent one says nothing either, except when an enabled `roadmapSync` block is in this
 project and `homeState` is `none` or `invalid`, or when `source` is `home` and `configured` is false (the
 registered project lost its block or moved): then the user has no way to learn that the summary
 exists, so ask once per session with `AskUserQuestion`: "Registrar o projeto que guarda o
@@ -292,7 +292,7 @@ RoadS is optional. When `.frontlights/config.json` is absent, or its `roads` key
 null, or the source is unreachable, say so in one line and carry on from the
 user's request. Never block on it.
 
-Where RoadS observations, roadmap/sprint and GitHub issues/board exist they are
+Where RoadS observations, the RoadS Roadmap and GitHub issues/board exist they are
 context, never a constraint on what the user may ask for; when the request and
 the RoadS material diverge, the request wins and you note the divergence. Record
 source URL, retrieval time and freshness. Do not claim completeness when

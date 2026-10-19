@@ -1,7 +1,7 @@
 """`docs/roads-contract.md` descreve o que o Frontlights realmente faz: os conjuntos fechados e a regra de versão
 do texto batem com o código, e o documento só traz marcadores genéricos (repositório público).
 
-Seam: o texto do contrato contra as constantes e as funções públicas de `roadmap_sync` e `progress_report`.
+Seam: o texto do contrato contra as constantes e as funções públicas de `roads` e `progress_report`.
 """
 import re
 import sys
@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
-import roadmap_sync as rs
+import roads as rs
 
 DOC = (ROOT / 'docs' / 'roads-contract.md').read_text(encoding='utf-8')
 
@@ -31,28 +31,13 @@ class ClosedSetsTests(unittest.TestCase):
         self.assertEqual(set(re.findall(r'[a-z_]+', cells[1])), set(rs.ITEM_STATUSES))
         self.assertIn('recusado', cells[2])
 
-    def test_actions_match_the_code_and_an_unknown_one_is_tolerated(self):
-        cells = table_row('action de uma mudança')
-        self.assertEqual(set(re.findall(r'[a-z_]+', cells[1])), set(rs.ACTIONS))
-        self.assertIn('tolerado', cells[2])
-        change = {'id': 'c1', 'action': 'archive', 'item': {'title': 'T'}}
-        self.assertFalse(rs.normalise_changes({'changes': [change]})[0]['knownAction'])
-
-    def test_the_version_is_one_and_the_table_covers_every_route_that_carries_it(self):
+    def test_the_version_is_one_and_the_table_covers_the_route_the_skill_reads(self):
         self.assertEqual(rs.STATE_SCHEMA_VERSION, 1)
         self.assertIn('versão deste contrato é **1**', DOC)
-        for route, expected in (('GET roadmap-state', 'obrigatório'), ('GET pending-changes', 'opcional'),
-                                ('POST sync-board', 'opcional'), ('POST ack', 'opcional')):
-            with self.subTest(route=route):
-                self.assertEqual(table_row(route)[1], expected)
-
-    def test_the_documented_version_rules_are_the_ones_the_code_applies(self):
-        for payload in ({'changes': [], 'schemaVersion': 1}, {'changes': []}):
-            self.assertEqual(rs.normalise_changes(payload), [])
-        with self.assertRaisesRegex(rs.Refusal, 'schemaVersion'):
-            rs.normalise_changes({'changes': [], 'schemaVersion': 2})
-        self.assertEqual(rs.board_result('{"ok": true, "ran": true, "schemaVersion": 1}')['ok'], True)
-        self.assertEqual(rs.board_result('{"ok": true, "ran": true, "schemaVersion": 2}')['reason'], 'invalid_response')
+        self.assertEqual(table_row('GET roadmap-state')[1], 'obrigatório')
+        for route in ('GET pending-changes', 'POST sync-board', 'POST ack'):
+            with self.subTest(route=route), self.assertRaises(AssertionError):
+                table_row(route)
 
     def test_only_proximo_does_not_need_a_print(self):
         facts = {'entries': [{'issue': 1, 'status': 'proximo'}, {'issue': 2, 'status': 'novo-valor'}]}
@@ -84,59 +69,40 @@ class DocumentShapeTests(unittest.TestCase):
 
     def test_the_contract_states_what_the_service_really_sends(self):
         flat = ' '.join(DOC.split())
-        for phrase in ('`from_lane_id` (a de origem)', '`lane_id` (a lane de destino)', 'Compare instantes, nunca textos',
+        for phrase in ('Compare instantes, nunca textos',
                        '`concluido`, `em_validacao`, `em_andamento`, `bloqueado`, `proximo`', 'conjunto fechado',
-                       'o dia do **último instante** da janela', 'unsupported_schema_version',
-                       'O Frontlights envia `"schemaVersion": 1` no corpo de `POST ack`'):
+                       'o dia do **último instante** da janela', 'other_draft_pending'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
     def test_the_contract_describes_the_sprints_as_weeks_by_date(self):
         flat = ' '.join(DOC.split())
         for phrase in ('`laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA`', 'na ordem de `startDate`, nunca pelo texto do id',
-                       'aceita as duas formas', 'nunca as duas na mesma resposta', 'pode vir semana com `items: []`',
-                       'Semana sem mudança não ganha arquivo', 'só a semana que termina mexe',
-                       'itens de semanas futuras não recebem `move_lane` de virada', 'issue closed before its sprint',
-                       'a ordem que o scrum master arrastou', '"Acima do limite de N:"',
-                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1',
-                       'toda semana citada por uma mudança ainda sem ack', 'só quando algum item acima do limite tem entrada no arquivo',
-                       'o `from_lane_id` (de `move_lane`)'):
+                       'aceita as duas formas', 'nunca as duas na mesma resposta', 'uma semana pode vir com `items: []`',
+                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
-        for gone in ('`laneId` é posicional', 'Item acima do limite fica fora da sprint', 'passam para a nova sprint atual',
-                     'a próxima e a terceira sprint existem só no RoadS', '"sprintId": "sprint-2026-01-05", "laneId": "proxima"'):
+
+    def test_the_contract_says_the_skill_stopped_calling_the_queue_routes(self):
+        flat = ' '.join(DOC.split())
+        for phrase in ('Rotas que o Frontlights deixou de chamar (19/10/2026)',
+                       'não chama `POST sync-board`, `GET pending-changes` nem `POST ack`',
+                       'é decisão do dono do RoadS', 'são ignorados'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat)
+        for gone in ('### `POST sync-board`', '### `GET pending-changes', '### `POST ack`', '"Acima do limite de N:"',
+                     'markCompleted', 'Semana sem mudança não ganha arquivo'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, flat)
-        self.assertIn('a semana encerrada vir vazia no estado até o ack é promessa do RoadS', flat)
-        acceptance = ' '.join((ROOT / 'docs' / 'acceptance.md').read_text(encoding='utf-8').split())
-        self.assertIn('manter a semana encerrada (com `items: []`) no estado até o ack', acceptance)
-        self.assertIn('As semanas identificadas pela data (issue 39) só têm cobertura simulada', acceptance)
 
     def test_the_contract_records_what_the_service_does_with_the_project_status(self):
         flat = ' '.join(DOC.split())
         for phrase in ('Só o Status do Project conta', 'não é lido** para itens de sprint', 'Item de sprint concluído fica',
-                       'Só a **rotação** das sprints o remove', 'sprint ended, issue done', 'Grupos são diferentes',
+                       'quando a **rotação** das sprints o retira', 'Grupos são diferentes',
                        'nunca do GitHub ao vivo', 'até 30 s depois de outra',
-                       'Fechar uma issue sem mover o cartão para Done não muda nada no RoadS',
-                       'o Frontlights a registra como "concluída", com a data da sincronização', '`roadmapSync.markCompleted`'):
+                       'Fechar uma issue sem mover o cartão para Done não muda nada no RoadS'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
-
-    def test_the_completed_marks_are_described_where_users_and_maintainers_look(self):
-        for name in ('README.md', 'skills/frontlights/docs/protocol.md', 'skills/frontlights/docs/security.md'):
-            with self.subTest(name=name):
-                self.assertIn('markCompleted', ' '.join((ROOT / name).read_text(encoding='utf-8').split()))
-        for name in ('README.md', 'skills/frontlights/docs/protocol.md'):
-            with self.subTest(name=name):
-                self.assertIn('not_needed', ' '.join((ROOT / name).read_text(encoding='utf-8').split()))
-        reference = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').read_text(encoding='utf-8').split())
-        for phrase in ('completed', 'markCompleted'):
-            self.assertIn(phrase, reference)
-
-    def test_the_move_lane_keys_in_the_contract_are_the_ones_the_code_reads(self):
-        change = {'id': 'm1', 'action': 'move_lane', 'item': {'title': 'T'},
-                  'payload': {'from_lane_id': 'origem', 'lane_id': 'destino', 'reason': 'x', 'title': 'T'}}
-        self.assertEqual(rs.normalise_changes({'changes': [change]})[0]['_move'], ('origem', 'destino'))
 
     def test_only_generic_placeholders_appear(self):
         hosts = set(re.findall(r'https?://([^/\s"`)]+)', DOC))

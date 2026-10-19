@@ -102,9 +102,9 @@ class StandingAuthorizationTests(unittest.TestCase):
                       'question', development)
 
     def test_the_approvals_with_their_own_stage_keep_them(self):
-        self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, roadmap and summary) keep them",
+        self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary) keep them",
                       flat('skills', 'frontlights', 'references', 'development.md'))
-        self.assertIn('da limpeza, do roadmap e do resumo', flat('README.md'))
+        self.assertIn('da limpeza, das issues do RoadS e do resumo', flat('README.md'))
 
     def test_the_merge_is_offered_when_the_pr_is_ready(self):
         development = flat('skills', 'frontlights', 'references', 'development.md')

@@ -266,10 +266,11 @@ class SuiteInspectTests(SuiteTestCase):
 
     def test_the_example_config_gives_the_suites_room_for_their_measured_duration(self):
         """Revisão da issue 52, M3: a suíte inteira levou 934 s com a máquina quieta e 28 min carregada; os prazos
-        do config de exemplo cobrem isso (impacto 2400 s, inteira 3600 s)."""
+        do config de exemplo cobrem isso (impacto 2400 s). A inteira passou de 3600 s sob carga numa release de
+        19/10/2026, então o exemplo dá 5400 s."""
         example = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
         suites = example['homolog']['suites']
-        self.assertEqual((suites['impact']['timeoutSeconds'], suites['full']['timeoutSeconds']), (2400, 3600))
+        self.assertEqual((suites['impact']['timeoutSeconds'], suites['full']['timeoutSeconds']), (2400, 5400))
 
 
 class SuiteGateTests(SuiteTestCase):

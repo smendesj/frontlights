@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
-import roadmap_sync as rs
+import roads as rs
 
 ROOT = Path(__file__).resolve().parents[1]
 SECRET = 'sentinel-secret-value-9f3a'
@@ -114,9 +114,7 @@ class ProgressTestCase(unittest.TestCase):
 
     def write_config(self, progress='default', **sync_overrides):
         sync = {'enabled': True, 'endpoint': self.endpoint, 'secretEnvVar': 'FRONTLIGHTS_API_SECRET',
-                'scrumRoot': str(self.out), 'roadmapFile': '{yyyy}/ROADMAP.md',
-                'weekFolderPattern': '{yyyy}/{dd_MM}', 'sprintFilePattern': 'SPRINT_{dd_MM}_a_{dd_MM}.md',
-                'maxSprintItems': 4, 'issueTargets': {}}
+                'scrumRoot': str(self.out), 'weekFolderPattern': '{yyyy}/{dd_MM}'}
         if progress == 'default':
             progress = self.block()
         if progress is not None:
@@ -278,13 +276,10 @@ class StatusTests(ProgressTestCase):
                 result = self.run_op('status')
                 self.assertEqual((result['valid'], result['ready']), (False, False))
 
-    def test_roadmap_sync_behaves_the_same_with_or_without_the_progress_block(self):
-        def roadmap_status():
-            result = rs.run('status', str(self.project))
-            return {key: value for key, value in result.items() if key != 'markerNonceAgeDays'}
-        with_block = roadmap_status()
+    def test_roads_status_is_the_same_with_or_without_the_progress_block(self):
+        with_block = rs.run('status', str(self.project))
         self.write_config(progress=None)
-        self.assertEqual(roadmap_status(), with_block)
+        self.assertEqual(rs.run('status', str(self.project)), with_block)
 
 
 class ApproveAndGuardTests(ProgressTestCase):
@@ -657,13 +652,13 @@ class PluginContractTests(unittest.TestCase):
     def read(self, *parts):
         return (ROOT.joinpath(*parts)).read_text(encoding='utf-8')
 
-    def test_skill_asks_the_progress_question_right_after_the_roadmap_question(self):
+    def test_skill_asks_the_progress_question_right_after_the_issue_gaps_question(self):
         stage1 = self.read('skills', 'frontlights', 'SKILL.md').split('## 1.')[1].split('## 2.')[0]
         question = 'Atualizar também o Resumo para a diretoria no RoadS?'
         self.assertIn(question, stage1)
         self.assertIn('progress_report.py', stage1)
         self.assertIn('references/progress-report.md', stage1)
-        self.assertLess(stage1.index('Atualizar a sprint e o roadmap de acordo com o RoadS?'), stage1.index(question))
+        self.assertLess(stage1.index('Completar no GitHub as issues que o RoadS mostra?'), stage1.index(question))
         self.assertLess(stage1.index(question), stage1.index('Then choose the lightest path'))
         self.assertIn('Sim, preparar o resumo agora', stage1)
         self.assertIn('Não, seguir com o pedido', stage1)
@@ -675,16 +670,17 @@ class PluginContractTests(unittest.TestCase):
                        'setx FRONTLIGHTS_API_SECRET', 'Concluído', 'Em validação', 'Em andamento', 'Bloqueado', 'Próximo'):
             self.assertIn(needle, text)
 
-    def test_reference_reads_the_items_past_the_sprint_limit_as_such(self):
+    def test_reference_takes_the_next_steps_from_the_facts_never_from_a_sprint_file(self):
         text = ' '.join(self.read('skills', 'frontlights', 'references', 'progress-report.md').split())
-        self.assertIn('The items after the line "Acima do limite de N:" of the sprint file are past the sprint limit', text)
-        self.assertIn('they are not commitments of the week', text)
-        self.assertIn('is not an item of the week at all, wherever it sits', text)
-        self.assertIn('with no later return to the week', text)
+        self.assertIn('Frontlights keeps no roadmap or sprint file', text)
+        self.assertIn('when the facts have no `sprint`, say so plainly', text)
+        for gone in ('Acima do limite de N:', 'roadmap_sync.py', 'sprint file of the week'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, text)
 
     def test_reference_covers_the_guide_the_sprint_sources_and_the_prints_step(self):
         text = self.read('skills', 'frontlights', 'references', 'progress-report.md')
-        for needle in ('draftGuide', 'shotsDir', 'captions.json', 'roadmap_sync.py', 'status --root', 'current week',
+        for needle in ('draftGuide', 'shotsDir', 'captions.json', 'status --root',
                        '1 MB', '1920', 'at most 40', 'push --draft <file>', 'sign-in line'):
             self.assertIn(needle, text)
         self.assertLess(text.index('**Draft.**'), text.index('**Prints.**'))

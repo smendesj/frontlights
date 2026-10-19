@@ -11,7 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import progress_report as pr
-import roadmap_sync as rs
+import roads as rs
 from test_progress_report import ProgressTestCase, state
 
 PNG = b'\x89PNG\r\n\x1a\n' + b'0' * 32
@@ -320,7 +320,7 @@ class WeekBlockTests(WeekShotsTestCase):
         self.write_config(progress=self.block(pushCommand=[sys.executable, 'push.py', '{draft}', '{shotsDir}']))
         self.assertIn('only weekShots', self.run_op('status')['message'])
 
-    def test_a_root_that_is_not_fully_qualified_is_refused_like_roadmap_sync_does(self):
+    def test_a_root_that_is_not_fully_qualified_is_refused(self):
         for bad in ('rel', '..\\algo', 'C:pasta', '%FRONTLIGHTS_UNSET_VAR_X%\\Scrum'):
             with self.subTest(bad=bad):
                 self.write_config(progress=self.week_block(), scrumRoot=bad)

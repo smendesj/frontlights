@@ -11,7 +11,9 @@
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling; sem seção, dito uma vez, quando o log do grilling diz "não se aplica") e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo, a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
+`homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
+(`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
 
@@ -60,7 +62,8 @@ conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.
 
 A release é oferecida ao fim de cada issue homologada e segue `references/development.md`, "The release": o
 `homolog release-plan` (só leitura) nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização
-mais recente; sem `issued_at`, o último registro pelo nome do arquivo), a PR única leva o corpo do modelo
+mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o
+último nome de arquivo), a PR única leva o corpo do modelo
 `templates/pr.md`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
 vale (merge em outra branch, PR fechada sem merge ou não encontrada não fecha nada). Com o merge confirmado, `git
 pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release; "Agora não" deixa a issue
@@ -128,21 +131,23 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
   plan.json
   authorization.json
+  authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
+                   bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/
     issue.json
     handoff.md
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
+    review.json            evidência a que a revisão independente ficou vinculada (`review-gate`)
+    merge-local-main.json  operação do merge na main local, conferida pelo `authorize`
+    body-before|body-new|body-after-<carimbo>.md   cópias do corpo que o `closeout.py tick` guarda
   direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
                                 revisão, merge-local-main.json; no charter, a entrada de worktrees leva
                                 `direct` (slug listado em `direct_ids`) no lugar de `issue`
   roadmap-sync/
-    approval.json    par (endereço, variável) aprovado pelo usuário
-    marker.json      segredo local das marcas; nunca sai da máquina
-    plan.json        mudanças buscadas no RoadS, sprints do roadmap-state (itens dentro e fora do limite), marcas e destinos
-    state.json       último asOf confirmado
-    staging/         cópias temporárias do ROADMAP e do SPRINT de cada sprint com mudança (vazia para sprint nova)
+    approval.json    par (endereço, variável) aprovado pelo usuário; marker.json, plan.json, state.json e
+                     staging/ são sobras da antiga sincronização do roadmap, que nada mais lê
   progress-report/
     approval.json    aprovação do bloco exato `roadmapSync.progress` (hash assinado com a chave do usuário)
   serve/<n>.json     pids e portas dos processos que o `serve start` subiu para a issue
@@ -153,7 +158,8 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa): mode, source (config ou
                          argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
                          seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
-                         compara com a ponta (current, stale, red, missing ou unconfigured)
+                         compara com a ponta (current, stale, red, missing ou unconfigured); campos opcionais
+                         `error` e `warnings`; fica na worktree da issue, não na principal
   issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
   release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
@@ -212,56 +218,35 @@ registros nunca trazem login nem senha: a conta aparece como `conta 1` ou `conta
 rodou: no teste assistido, quem diz se ela ainda vale é o `browser-gate`; os registros de `checks` ficam
 antigos depois de qualquer commit.
 
-### Roadmap e resumo
+### RoadS e resumo
 
 O contrato com o RoadS (rotas, versão, o que é mudança aditiva e a regra para uma quebra) está em
 `docs/roads-contract.md`.
 
-A sincronização do roadmap (`scripts/roadmap_sync.py`) segue esta ordem no `fetch`: `POST
-sync-board`, `GET roadmap-state` e `GET pending-changes`, todos sob o `endpoint` aprovado e com o
-mesmo segredo. Os padrões de caminho (`roadmapFile`, `weekFolderPattern`, `sprintFilePattern`)
-são conferidos antes de qualquer chamada de rede. Uma falha do `sync-board`, inclusive tempo
-esgotado ou resposta cortada, não interrompe o `fetch`: o resultado a relata (`syncBoard`,
-`syncBoardFailed`) e a skill pergunta se segue com o último estado. Sem `roadmap-state` válido
-(endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
-anos 2000 a 2100), o `fetch` é recusado sem alternativa automática. Cada sprint com mudança recebe o
-seu `SPRINT_*.md`, montado com as datas do RoadS; um `move_lane` alcança a sprint de origem e a
-de destino. Cada sprint é uma semana, listada na ordem das datas (`startDate`), e a lane
-casa pelo texto exato com o `laneId` do estado lido nesse `fetch`, na forma posicional antiga (`atual`, `proxima`,
-`terceira`) ou na forma `sprint-DD-MM-AAAA`. Na forma por data, o RoadS mantém no estado toda semana citada por
-mudança ainda sem ack (com `items: []` quando ficou vazia, inclusive a encerrada pela virada); na forma posicional,
-até a migração, um `move_lane` enfileirado antes da virada cita a lane como ela era, e a skill pergunta quando ela
-não bate com a semana que o usuário lembra. Uma lane sem semana nem grupo no estado lido não alcança arquivo de
-sprint por essa lane: o `fetch` a avisa como inesperada e a skill pergunta antes do `apply`. Pasta e arquivo novos só são
-criados dentro do
-`scrumRoot`, sem junção nem link no caminho, e passam pelo mesmo diff e aprovação. As mudanças dos itens com
-`overLimit` entram no arquivo da semana como as dos demais, depois da linha "Acima do limite de N:" (que só aparece
-quando algum item do excedente tem entrada no arquivo; a entrada de um item que saiu da semana fica onde está e a
-mantém enquanto estiver depois dela, e quando o item volta à semana, a mesma entrada registra a volta e vai para o
-lugar dela pelo `position`; um `add` cujo `#N` já tem entrada vira pergunta), na ordem do `position`, e esses itens são avisados; `snapshotStale` indica cópia do quadro com mais de
-24 h ou ausente. Marcas, backups, recusa de encolhimento e confirmação continuam como antes. Um item de sprint
-com `done` verdadeiro (inclusive acima do limite), ainda sem marca no `ROADMAP.md` nem no arquivo da sprint dele, entra no
-plano como uma mudança sintética `completed` (id `done-<itemId>`, com `completedOn` na data da sincronização em São
-Paulo): ela passa pelo mesmo diff, aprovação, marca e verificação, mas não existe na fila do RoadS, então o `ack` só
-cobre as mudanças reais e um plano só de conclusões termina com `ack: not_needed`. `roadmapSync.markCompleted`
-(padrão true) desliga isso.
+O Frontlights não sincroniza roadmap nem sprint: o RoadS mantém o Roadmap a partir das issues abertas, e
+`ROADMAP.md` e `SPRINT_*.md` não são escritos. As pastas da semana sob `roadmapSync.scrumRoot` (nomeadas por
+`weekFolderPattern`) guardam só arquivos pontuais: os prints do resumo e os do teste assistido (`evidencias/`). As chaves da antiga sincronização
+(`roadmapFile`, `sprintFilePattern`, `maxSprintItems`, `markCompleted`, `issueTargets`) são ignoradas, e o
+`status` de `scripts/roads.py` as lista em `obsoleteKeys`; a aprovação do par (URL, variável) continua em
+`.frontlights/roadmap-sync/approval.json`.
 
-Depois da confirmação, o passo `gaps` completa as issues que o RoadS mostra. Ele só lê: `GET
-roadmap-state` de novo (nada é consumido), e no GitHub só as issues do repositório do `config.json`,
+A pergunta da etapa 1 sobre as issues do RoadS roda o passo `gaps` (`references/issue-gaps.md`). Ele só lê: `GET
+roadmap-state` (nada é consumido), e no GitHub só as issues do repositório do `config.json`,
 por `gh api graphql`, com a conta ativa do `gh`. Uma URL do RoadS fora desse repositório é ignorada
 e listada em `skipped`; issue fechada não é tocada. O resultado separa o que o config resolve
 sozinho (`fill`) do que exige escolha (`choose`), e informa os campos do quadro sem opção
 (`unfillable`). As escritas seguem a tabela aprovada pelo usuário, com o `gh` da sessão e as
-permissões vigentes, só em valor vazio, e terminam relendo com `gaps`. Esse passo roda também
-quando não há mudança pendente.
+permissões vigentes, só em valor vazio, e terminam relendo com `gaps`. Sem `roadmap-state` válido
+(endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
+anos 2000 a 2100), o passo é recusado; `snapshotStale` indica cópia do quadro com mais de 24 h ou ausente.
 
-O passo do resumo para a diretoria (`scripts/progress_report.py`) vem logo depois da pergunta do
-roadmap, em qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
+O passo do resumo para a diretoria (`scripts/progress_report.py`) vem logo depois da pergunta das
+issues do RoadS, em qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
 próprio projeto ou o do projeto que o usuário registrou como dono (`progress_report.py home --set`, com o sim
 dele; o `status` informa `source`, `operationsRoot` e `homeState`, e as demais operações rodam em
 `operationsRoot`). A ordem é: `status`,
 aprovação do bloco, `window`, `collect`, conferência dos números pelo usuário, arquivo de textos
-(guia `draftGuide`, roadmap e sprint da semana), prints em `shotsDir` com `captions.json` (ou, com
+(guia `draftGuide` e fatos coletados), prints em `shotsDir` com `captions.json` (ou, com
 `weekShots`, na pasta do resumo que `shots --to` resolve, com a issue de cada print e pelo menos um
 por entrega visível fora de `proximo`), rascunho mostrado na íntegra, aprovação e `push --draft` (com
 `--to` quando há `weekShots`). A pasta é a da segunda-feira seguinte à semana do último dia do período,
@@ -410,7 +395,7 @@ A evidência a que a revisão ficou vinculada é salva em
 a compara com a atual: saída 0 (`current`) vale, saída 2 (`stale`) significa que houve commit, edição ou
 arquivo novo depois da revisão, e pede nova revisão antes de a issue ser relatada como revisada, entrar na
 main local ou ter PR aberto ou atualizado; os três portões do merge na main local estão em
-`references/development.md`, "Into the local main". Uma família de branches é integrada localmente, com a suíte completa
-verde, antes de entrar na main local. A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
+`references/development.md`, "Into the local main". Uma família de branches é integrada localmente, com a suíte por
+impacto verde, antes de entrar na main local (`references/development.md`, "Integrating a family before the local main"). A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
 linha "Achados sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de
 origem, que só fecha com ela tratada, concluída e marcada com evidência.

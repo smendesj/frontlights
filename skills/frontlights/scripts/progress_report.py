@@ -92,8 +92,8 @@ import time
 import urllib.parse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import roadmap_sync as rs  # noqa: E402  (shared configuration, credential and transport helpers)
-from roadmap_sync import Refusal, require  # noqa: E402
+import roads as rs  # noqa: E402  (shared configuration, credential and transport helpers)
+from roads import Refusal, require  # noqa: E402
 
 TAIL_BYTES = 6 * 1024
 STDERR_TAIL_BYTES = 2 * 1024
@@ -163,7 +163,7 @@ def week_segment(value):
 
 
 class Progress:
-    """The validated `roadmapSync.progress` block and the endpoint/secret it shares with roadmap sync."""
+    """The validated `roadmapSync.progress` block and the endpoint/secret it shares with the rest of the roadmapSync block."""
 
     def __init__(self, root):
         self.root = Path(root).resolve()
@@ -224,7 +224,7 @@ class Progress:
             require(self.facts_file, 'roadmapSync.progress.factsFile is required with weekShots: it names the deliveries '
                                      'that need a print')
             root = rs.expand_root(sync.get('scrumRoot'))
-            # The same rule roadmap sync applies: a relative root would follow the current directory.
+            # The same rule roads.contained_path applies: a relative root would follow the current directory.
             require(rs.fully_qualified(root), f'Refusing scrumRoot {root}: it must be a fully qualified path')
             self.scrum_root = os.path.abspath(root)
             self.week_pattern = sync.get('weekFolderPattern')

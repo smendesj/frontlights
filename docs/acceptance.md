@@ -48,7 +48,7 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
 | 12. Família de issues e branches empilhadas | Parcial | aplicado à mão na 0.16.0: sub-issues lidas, `needs-decision` no grilling, worktrees das filhas saindo da branch do pai | PR de filha com a base do pai e o retarget depois do merge nunca foram exercitados; falta uma sessão real com esta versão |
 | 13. Teste de navegador assistido | Parcial | aplicado à mão na 0.16.0: pergunta antes da janela, Chrome visível, ANTES e DEPOIS, cada caso 2 vezes, janela aberta 45 s, perfil restrito real movido e devolvido; o resultado real passou | os auxiliares `serve` e `checks` não foram usados; a pergunta de fechamento da 0.19.0 ("Assistir de novo", "Aprovado", "Precisa de alteração", "Pode prosseguir") só tem prova textual e falta uma sessão real com esta versão |
 | 14. Fechamento de issues e cartões em Done | Pendente | implementado e testado com `gh` simulado: só propõe issue aberta com todos os critérios marcados, filhas antes dos pais, aprovação própria da lista e releitura do GitHub | falta uma sessão real em que uma pessoa mescle uma família e responda à pergunta |
-| 15. Conclusões registradas nos `.md` | Pendente | implementado e testado com transporte simulado: só o `done` do estado conta, mesma aprovação, marca e verificação, sem `ack` para o que não está na fila do RoadS | falta uma sessão real: Done no quadro, Sincronizar no RoadS e a sincronização aprovada no Frontlights |
+| 15. Conclusões registradas nos `.md` | Retirado | a sincronização de `ROADMAP.md` e `SPRINT_*.md` saiu em 19/10/2026: o RoadS mantém o Roadmap a partir das issues abertas, e a etapa 1 pergunta só se completa as issues que o RoadS mostra (`gaps`) | nada a provar |
 | 16. Pendências como critério de aceitação | Pendente | regra escrita na skill, nos modelos e nos docs, e testada: o `closeout.py` conta a pendência como critério (a issue com ela aberta sai da lista) e avisa sobre a seção legada "Pendências conhecidas" fora dos critérios, com `gh` simulado | falta uma sessão real em que o portão liste os achados, o texto exato do critério seja aprovado antes da escrita e o corpo no GitHub mude só pelas linhas acrescentadas; o portão é regra da skill, não barreira |
 | 17. Espera do merge, marcação no pai e limpeza | Pendente | implementado e testado com `gh` simulado e repositórios Git reais em pasta temporária: `merge-status` só aceita merge na base aprovada, `parentTicks` e `tick-check` conferem que só `[ ]` virou `[x]`, e `cleanup.py` só propõe o que tem o tip igual à cabeça de uma PR mesclada que chegou à base, sem alteração pendente, sem PR aberta e fora da pasta da sessão, nomeia os arquivos ignorados e só oferece a worktree de integração sem commit próprio | falta uma sessão real em que uma pessoa faça o merge de uma família empilhada; o gatilho (inscrição na PR ou monitor) depende do ambiente e a espera é regra da skill, não barreira |
 | 18. Pergunta do resumo em qualquer projeto e início por linguagem natural | Pendente | implementado e testado com projetos temporários e um RoadS simulado: o bloco do próprio projeto vale primeiro, o registro assinado do usuário vale sem bloco, um registro copiado, editado ou sem assinatura vira `invalid`, as operações seguintes rodam na raiz do registro; o modelo de comando lista os gatilhos em português e o hook opcional foi testado como script | falta uma sessão real: a pergunta em dois projetos sem o bloco, o hook sendo executado pelo Claude Code a cada prompt e a frase comum abrindo o estágio 1 |
@@ -76,14 +76,13 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   pendências restantes; o `gaps` completou issues reais; e um rascunho do resumo com prints chegou ao RoadS
   em 05/10 já no contrato novo. O RoadS não registra quem chamou cada rota, então que foi o Frontlights é provável,
   não provado: por isso o Frontlights manda um User-Agent com a versão (hoje o commit da skill) e o RoadS passa a registrá-lo.
-- Os caminhos de erro (tempo esgotado do `sync-board`, credencial trocada, `schemaVersion` desconhecido,
-  marcas recusadas) só têm cobertura simulada.
+- Os caminhos de erro do `roadmap-state` (credencial trocada, `schemaVersion` desconhecido) só têm cobertura simulada.
+- Desde 19/10/2026 o Frontlights não sincroniza roadmap nem sprint: não chama `sync-board`, `pending-changes` nem
+  `ack`, e só lê `roadmap-state` no `gaps`.
 - O contrato agora está escrito em [`docs/roads-contract.md`](roads-contract.md), com versão, regra de
   mudança aditiva e regra de quebra.
-- As semanas identificadas pela data (issue 39) só têm cobertura simulada: o `fetch` e o `apply` foram testados
-  com estados nas duas formas (posicional e `sprint-DD-MM-AAAA`), excedente no arquivo da semana e lane sem par
-  avisada, sem o RoadS real; falta a primeira sincronização real depois da migração do RoadS, que também prova a
-  promessa do RoadS de manter a semana encerrada (com `items: []`) no estado até o ack.
+- As semanas identificadas pela data (issue 39): a leitura do `roadmap-state` nas duas formas (posicional e
+  `sprint-DD-MM-AAAA`) só tem cobertura simulada.
 
 ## Defeitos achados no uso real e corrigidos nesta versão
 
