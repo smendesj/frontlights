@@ -1,4 +1,5 @@
-"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1, S2 e S3; `--impact` das issues 52, S4, e 57, S1).
+"""Runner paralelo da suíte de testes do Frontlights (issue 27, S1, S2 e S3; `--impact` das issues 52, S4, e 57, S1;
+`--skip-covered` da issue 57, S2).
 
 Roda cada módulo `test_*.py` da pasta como um processo filho (`python -m unittest discover -s <pasta> -p <arquivo>`,
 o mesmo modo da suíte inteira, que respeita o `load_tests` da suíte rápida): os módulos sensíveis da lista SERIAL
@@ -33,8 +34,18 @@ relatório ganha `mode: "impact"`, `base`, `base_commit`, `changed`, `impact` (p
 `complete` (os módulos que rodaram inteiros), depois das chaves de sempre; o `--list` mostra o plano: os módulos,
 inteiros ou com as classes, e por quê. Base que o Git não resolve: sai com 2 sem rodar nada.
 
+`--skip-covered <arquivo>` é o complemento da suíte (issue 57, S2): roda todos os módulos da pasta, inteiros e SEM
+a variável (a semântica da suíte inteira, com os pesados de verdade), menos os listados em `complete` do arquivo, o
+mesmo `complete` que o relatório do `--impact` grava. Os seriais vão na fila serial, na ordem da lista SERIAL; os
+demais, no pool. O arquivo é `{"complete": [ids]}`: um objeto JSON só com a chave `complete`, uma lista de textos
+não vazios, sem NUL e sem repetição, em UTF-8 (com ou sem BOM) e de até COVERED_LIMIT bytes. Um id é o nome de um
+módulo (`test_x`); o que não nomeia módulo da pasta sai como desconhecido e não muda mais nada. Arquivo ausente,
+ilegível ou inválido, e o `--skip-covered` junto do `--impact`, saem com 2 sem rodar nada. O relatório ganha
+`mode: "complement"`, `skipped_covered` (os pulados, em ordem) e `unknown_covered`; o `--list` mostra os que rodam
+e os pulados por cobertos.
+
 Uso: python tests/suite.py [--tests-dir PASTA] [--serial a,b,c] [--workers N] [--module-timeout S]
-                           [--report ARQUIVO] [--list] [--impact BASE]
+                           [--report ARQUIVO] [--list] [--impact BASE | --skip-covered ARQUIVO]
 """
 import argparse
 import json
@@ -76,6 +87,7 @@ HEAVY = ('test_serve_ports', 'test_checks_integration', 'test_serve_preview')
 RUNNER_FILES = ('suite.py', 'pre_commit.py')
 SINGLE_SOURCE = 'test_single_source'  # o teste de fonte única: no `--impact`, roda sempre, inteiro
 IMPACT = 'impacto'  # a fila dos pesados que rodam sem a variável no `--impact`
+COVERED_LIMIT = 256 * 1024  # o tamanho máximo, em bytes, do arquivo do `--skip-covered`
 
 ANSI = re.compile(r'\x1b\[[0-9;]*m')  # 3.13+ colore a saída do unittest com FORCE_COLOR ou PYTHON_COLORS
 RAN_LINE = re.compile(r'^Ran (\d+) tests? in [\d.]+s$')
@@ -135,6 +147,9 @@ def parse(argv):
     parser.add_argument('--impact', metavar='BASE', default=None,
                         help='suíte por impacto: só os módulos e as classes que o diff BASE...HEAD mais a árvore de '
                              'trabalho toca, mais o test_single_source; os pesados sem a variável')
+    parser.add_argument('--skip-covered', metavar='ARQUIVO', type=Path, default=None,
+                        help='complemento da suíte: todos os módulos inteiros e sem a variável, menos os listados '
+                             'em "complete" do arquivo JSON')
     return parser.parse_args(argv)
 
 
@@ -144,15 +159,20 @@ class Plan:
     """Os módulos que rodariam: a fila serial na ordem dada e o pool em ordem alfabética. No `--impact`, `impact`
     traz a escolha de cada módulo (Impact) e só os escolhidos rodam: os seriais na fila serial, na ordem dela, com
     os pesados sem a variável (fila `impacto`); os demais no pool. O primeiro da fila roda sozinho, como na suíte
-    inteira. Um pesado escolhido fora da lista serial vai para o fim da fila."""
+    inteira. Um pesado escolhido fora da lista serial vai para o fim da fila. No `--skip-covered`, `covered` traz
+    os cobertos (Covered), que ficam de fora das duas filas."""
 
-    def __init__(self, tests_dir, shown_dir, serial, pool, workers, impact=None):
+    def __init__(self, tests_dir, shown_dir, serial, pool, workers, impact=None, covered=None):
         self.tests_dir = tests_dir
         self.shown_dir = shown_dir
         self.serial = serial
         self.pool = pool
         self.workers = workers
         self.impact = impact
+        self.covered = covered
+
+    def skipped(self):
+        return set(self.covered.skipped) if self.covered is not None else set()
 
     def chosen(self):
         """{módulo: classes, ou None para o módulo inteiro} dos escolhidos no `--impact`; None fora dele."""
@@ -167,14 +187,14 @@ class Plan:
     def queue(self):
         chosen = self.chosen()
         if chosen is None:
-            return [(name, 'serial') for name in self.serial]
+            return [(name, 'serial') for name in self.serial if name not in self.skipped()]
         entries = [(name, IMPACT if name in HEAVY else 'serial') for name in self.serial if name in chosen]
         return entries + [(name, IMPACT) for name in chosen if name in HEAVY and name not in self.serial]
 
     def pool_names(self):
         chosen = self.chosen()
         if chosen is None:
-            return list(self.pool)
+            return [name for name in self.pool if name not in self.skipped()]
         return [name for name in self.pool if name in chosen and name not in HEAVY]
 
     def entries(self):
@@ -230,6 +250,9 @@ def print_list(current):
     if current.impact is not None:
         print()
         print_impact(current.impact)
+    if current.covered is not None:
+        print()
+        print_covered(current.covered)
 
 
 # --- suíte por impacto (--impact) ---------------------------------------------------------------------------
@@ -318,6 +341,69 @@ def print_impact(impact):
             if item['name'] in HEAVY:
                 verdict += ', sem a variável'
         print(f'  {item["name"]}: {verdict} ({item["reason"]})')
+
+
+# --- complemento da suíte (--skip-covered) ------------------------------------------------------------------
+
+class CoveredError(Exception):
+    pass
+
+
+class Covered:
+    """Os cobertos do `--skip-covered`: os módulos da pasta que ficam de fora e os ids que não nomeiam módulo
+    nenhum dela, ambos em ordem."""
+
+    def __init__(self, skipped, unknown):
+        self.skipped = skipped
+        self.unknown = unknown
+
+
+def unique_keys(pairs):
+    """O `object_pairs_hook` do arquivo dos cobertos: uma chave repetida é arquivo inválido, não a última vence."""
+    keys = [key for key, _ in pairs]
+    repeated = sorted({key for key in keys if keys.count(key) > 1})
+    if repeated:
+        raise ValueError(f'chave repetida: {", ".join(repeated)}')
+    return dict(pairs)
+
+
+def covered_selection(tests_dir, path):
+    """Lê o arquivo `{"complete": [ids]}` (UTF-8 com ou sem BOM, até COVERED_LIMIT bytes) e devolve o Covered.
+    Levanta CoveredError quando o arquivo falta, não se lê ou não tem exatamente esse formato."""
+    def refuse(why):
+        return CoveredError(f'--skip-covered: o arquivo {path} {why}. Nada foi rodado.')
+    try:
+        with open(path, 'rb') as stream:
+            raw = stream.read(COVERED_LIMIT + 1)
+    except OSError as error:
+        raise refuse(f'não pôde ser lido ({error})') from error
+    if len(raw) > COVERED_LIMIT:
+        raise refuse(f'passa de {COVERED_LIMIT} bytes')
+    try:
+        data = json.loads(raw.decode('utf-8-sig'), object_pairs_hook=unique_keys)
+    except UnicodeDecodeError as error:
+        raise refuse(f'não está em UTF-8 ({error})') from error
+    except ValueError as error:
+        raise refuse(f'não é um JSON válido ({error})') from error
+    if not isinstance(data, dict) or set(data) != {'complete'}:
+        raise refuse('precisa ser um objeto JSON só com a chave "complete"')
+    ids = data['complete']
+    if not isinstance(ids, list):
+        raise refuse('precisa ter em "complete" uma lista')
+    for item in ids:
+        if not isinstance(item, str) or not item or '\0' in item:
+            raise refuse(f'tem em "complete" um id que não é um texto não vazio e sem NUL ({item!r})')
+    repeated = sorted({item for item in ids if ids.count(item) > 1})
+    if repeated:
+        raise refuse(f'repete em "complete" o id {", ".join(repeated)}')
+    found = {module.stem for module in tests_dir.glob('test_*.py') if module.is_file()}
+    return Covered(sorted(set(ids) & found), sorted(set(ids) - found))
+
+
+def print_covered(covered):
+    print(f'Pulados por cobertos: {", ".join(covered.skipped) if covered.skipped else "(nenhum)"}')
+    if covered.unknown:
+        print(f'Ids desconhecidos: {", ".join(covered.unknown)}')
 
 
 # --- um módulo por processo filho ---------------------------------------------------------------------------
@@ -664,6 +750,8 @@ def print_header(current):
     print(f'Módulos: {len(queue) + len(pool)} ({len(queue)} seriais, {len(pool)} no pool)')
     if current.impact is not None:
         print_impact(current.impact)
+    if current.covered is not None:
+        print_covered(current.covered)
     print(flush=True)
 
 
@@ -820,6 +908,10 @@ def report_data(current, options, head, started_at, wall, outcomes, code):
         data['changed'] = current.impact.changed
         data['impact'] = [dict(item) for item in current.impact.records]
         data['ran'], data['complete'] = ran_ids(current, outcomes)
+    if current.covered is not None:  # chaves só do `--skip-covered`, depois das de sempre
+        data['mode'] = 'complement'
+        data['skipped_covered'] = list(current.covered.skipped)
+        data['unknown_covered'] = list(current.covered.unknown)
     return data
 
 
@@ -860,11 +952,17 @@ def main(argv=None):
               'python -m unittest discover -s tests -v.', file=sys.stderr)
         return 2
     options = parse(sys.argv[1:] if argv is None else argv)
+    if options.impact is not None and options.skip_covered is not None:
+        print('--skip-covered não combina com --impact: o complemento roda o que o impacto não rodou inteiro. '
+              'Nada foi rodado.', file=sys.stderr)
+        return 2
     try:
         current = plan(options)
         if options.impact is not None:
             current.impact = impact_selection(current.tests_dir, options.impact)
-    except (SystemExit, ImpactError) as error:
+        if options.skip_covered is not None:
+            current.covered = covered_selection(current.tests_dir, options.skip_covered)
+    except (SystemExit, ImpactError, CoveredError) as error:
         print(error, file=sys.stderr)
         return 2
     if options.list:
@@ -872,6 +970,8 @@ def main(argv=None):
         return 0
     if current.impact is not None:
         os.environ[VARIABLE] = 'rapida'  # os escolhidos rodam com ela; os pesados escolhidos, sem ela
+    if current.covered is not None:
+        os.environ.pop(VARIABLE, None)  # o complemento é a suíte inteira: todos sem a variável
     root = Path(__file__).resolve().parents[1]
     head = git_head(root) if options.report is not None else None
     run = Run(current, root, options.module_timeout)
