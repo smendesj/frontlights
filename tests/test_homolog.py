@@ -36,7 +36,7 @@ def stage(number):
     return ' '.join(text.split(f'## {number}.')[1].split(f'## {number + 1}.')[0].split())
 
 
-GREEN = {'full_suite': 'green', 'review_gate': 'current', 'browser_gate': 'answered'}
+GREEN = {'suite_gate': 'current', 'review_gate': 'current', 'browser_gate': 'answered'}
 
 
 class LocalMainMergeAuthorizeTests(unittest.TestCase):
@@ -76,8 +76,17 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         op = dict(self.op, gates=dict(GREEN, browser_gate='not_needed'))
         self.assertEqual(frontlights.authorize(self.c, op)['scope_check'], 'pass')
 
+    def test_an_operation_that_still_carries_full_suite_is_refused_naming_suite_gate(self):
+        """Issue 52, S2: o portão da suíte inteira saiu; a chave antiga é recusada antes dos portões, com ou sem
+        `suite_gate`, e a recusa nomeia `suite_gate`."""
+        without = {k: v for k, v in GREEN.items() if k != 'suite_gate'}
+        for gates in (dict(GREEN, full_suite='green'), dict(without, full_suite='green')):
+            with self.subTest(gates=gates), self.assertRaisesRegex(ValueError, r'full_suite is gone.*suite_gate'):
+                frontlights.authorize(self.c, dict(self.op, gates=gates))
+
     def test_a_missing_or_red_gate_refuses_and_names_the_gate(self):
-        reds = {'full_suite': ('red', 'skipped', True, None), 'review_gate': ('stale', 'current ', None),
+        reds = {'suite_gate': ('green', 'stale', 'unconfigured', 'red', 'missing', True, None),
+                'review_gate': ('stale', 'current ', None),
                 'browser_gate': ('pending', 'stale', 'contradiction', 'dispensado', None)}
         for gate, values in reds.items():
             for value in values:
@@ -225,7 +234,7 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertEqual(charter['base']['branch'], 'main')
         op = json.loads(read('skills', 'frontlights', 'examples', 'operation-merge-local-main.json'))
         self.assertEqual((op['kind'], op['target']), ('merge_into_local_main', 'main'))
-        self.assertEqual(set(op['gates']), {'full_suite', 'review_gate', 'browser_gate'})
+        self.assertEqual(set(op['gates']), {'suite_gate', 'review_gate', 'browser_gate'})
         # the example operation passes `authorize` against the example charter once the placeholders are filled
         with tempfile.TemporaryDirectory() as temp:
             charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',

@@ -1108,7 +1108,7 @@ def direct_charter(root, *extra, **overrides):
 
 
 class AuthorizeDirectTests(unittest.TestCase):
-    GATES = {'full_suite': 'green', 'review_gate': 'current', 'browser_gate': 'not_needed'}
+    GATES = {'suite_gate': 'current', 'review_gate': 'current', 'browser_gate': 'not_needed'}
 
     def setUp(self):
         temp = tempfile.TemporaryDirectory()

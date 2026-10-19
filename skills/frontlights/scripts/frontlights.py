@@ -362,10 +362,11 @@ def board_resolution(plan, project):
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
 SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
-# Issue 32, S1: the branch of an issue enters the LOCAL main only with these three gates green. The values
-# are the words the tools print: the full suite, `review-gate` (`current`) and `browser-gate` (`answered`,
-# or `not_needed` when nothing on the screen changed). The remote main (`origin/main`) is never a target.
-LOCAL_MAIN_GATES = {'full_suite': ('green',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
+# Issue 32, S1, and issue 52, S2: the branch of an issue enters the LOCAL main only with these three gates green.
+# The values are the words the tools print: `homolog suite-gate` (`current`: the impact suite covers the tip),
+# `review-gate` (`current`) and `browser-gate` (`answered`, or `not_needed` when nothing on the screen changed).
+# The whole suite runs at the release, not here. The remote main (`origin/main`) is never a target.
+LOCAL_MAIN_GATES = {'suite_gate': ('current',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
 # Work without an issue (the Direct path, or a Short one that publishes no issue) is named by a slug of its own: the
 # `direct` of its `worktrees` entries, listed in the charter's `direct_ids`, takes the place of `issue`.
 DIRECT_RULE = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')
@@ -658,7 +659,10 @@ def authorize(charter, operation):
             require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
             raise ValueError(f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
         gates = operation.get('gates')
-        require(isinstance(gates, dict), 'gates required: full_suite, review_gate and browser_gate, each green')
+        require(isinstance(gates, dict), 'gates required: suite_gate, review_gate and browser_gate, each green')
+        require('full_suite' not in gates,
+                'gate full_suite is gone: the gate is suite_gate, `homolog suite-gate` answering current '
+                '(the full suite runs at the release)')
         for gate, green in LOCAL_MAIN_GATES.items():
             require(gates.get(gate) in green,
                     f'gate {gate} is not green: {gates.get(gate)!r} (green is {" or ".join(green)})')
