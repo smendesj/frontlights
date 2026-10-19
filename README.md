@@ -555,10 +555,17 @@ anonimiza) é listado com o `DELETE` exato, só dos ids criados, para você apro
 **Prints para o resumo.** O teste assistido guarda só um print da ANTES e um da DEPOIS por issue (a tela que
 melhor mostra o que mudou, no mesmo ponto nas duas), nunca um por passo ou por repetição; um caso que falha pode guardar
 a sua imagem de falha. Na passada DEPOIS ele também guarda, para cada entrega, um único
-print limpo (sem a faixa, sem a barra do navegador, sem identidade nem dado de pessoa) em
-`.frontlights/issues/<n>/browser/resumo/` da worktree principal (a limpeza das worktrees entregues leva o
-`.frontlights` delas), com um `candidates.json` que diz a parte, a entrega (`cover`), o repositório, o instante e os arquivos visíveis com o id Git que tinham. Nada sai do projeto nessa hora: o resumo só copia o
+print limpo (sem a faixa, sem a barra do navegador, sem identidade nem dado de pessoa) no `resumo/` da pasta
+de evidências, com um `candidates.json` que diz a parte, a entrega (`cover`), o repositório, o instante e os arquivos visíveis com o id Git que tinham. O resumo só copia o
 que você escolher na etapa dos prints.
+
+**Onde ficam os prints.** Quando o `.frontlights/config.json` do projeto tem `roadmapSync.scrumRoot` e
+`weekFolderPattern`, os prints do teste assistido (antes, depois, falha e os do resumo) vão para a pasta da sprint
+em que o teste rodou, `<scrumRoot>/<pasta da segunda-feira>/evidencias/<repositório>/<issue>/`, que o
+`progress_report.py evidence-dir` resolve e cria; o `result.json` continua no `.frontlights` e aponta para ela em
+`pastaDosPrints`. Assim a limpeza das worktrees entregues não leva os prints, e eles ficam à mão para o resumo. A
+pasta é sincronizada e compartilhada com a empresa: só dados de teste aparecem nos prints. Sem esses campos, tudo
+fica em `.frontlights/issues/<n>/browser/` como antes (os do resumo na worktree principal).
 
 Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
 pronto para assistir. Com o sim, o teste roda em um Chrome de janela visível, nunca oculta e com

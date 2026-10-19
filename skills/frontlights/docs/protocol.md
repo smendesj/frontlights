@@ -168,7 +168,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
                          e a PR da release fica pronta por ela (`references/development.md`, "The release")
   release/suite-full-<data-hora>.log  saída mascarada de cada execução dela
-  issues/<n>/browser/result.json  resultado do teste de navegador, com os prints ao lado
+  issues/<n>/browser/result.json  resultado do teste de navegador; `pastaDosPrints` diz onde estão os prints da
+                         rodada: a pasta da issue na sprint (`progress_report.py evidence-dir`), ou esta
+                         mesma pasta num projeto sem `scrumRoot` e `weekFolderPattern`
 ```
 
 ### Teste no navegador

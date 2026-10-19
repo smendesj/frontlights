@@ -156,10 +156,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     family whose flow needs a non-owner and a login of another account that the config does not have, confirm the run
     creates them through the product, records only kinds and ids in `dados-de-teste.json`, runs the two cases in both
     passes, removes everything after the closing answer and reports the residue with the exact `DELETE`, never skipping a
-    case for a missing login and never carrying "não crie usuário" in a brief. The DEPOIS pass keeps clean prints in
-    `browser/resumo/`; at the summary's prints step `candidates` lists them, the user picks "Usar os do teste assistido",
+    case for a missing login and never carrying "não crie usuário" in a brief. The DEPOIS pass keeps clean prints in the
+    `summaryDir` that `evidence-dir` printed (`resumo/` of the issue's folder in the sprint folder); at the summary's prints step `candidates` lists them, the user picks "Usar os do teste assistido",
     "Capturar novos" or "Misturar" per delivery, the chosen print is copied with the cover's number, and a print whose
-    visible code changed is not offered. Count the images the run left in `browser/`: one `antes-<n>` and one
+    visible code changed is not offered. Count the images the run left in its `evidenceDir`: one `antes-<n>` and one
     `depois-<n>` per issue (plus a `falha-<caso>` only for a failed case), never one per step. Try a `captions.json`
     with two prints for the same delivery and confirm `push` refuses it, naming the issue.
 
