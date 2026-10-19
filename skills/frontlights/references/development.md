@@ -328,7 +328,7 @@ can assert the very behavior another child changes on purpose, and a clean Git m
 does not make a green suite. Before a family with more than one branch enters the local
 main, integrate it locally: an integration worktree from the parent's branch that
 merges every verified child branch (local only: never pushed, never a PR), then run
-the full relevant suite and the type checks. The watched browser run already happened, once
+the impact suite and the type checks. The watched browser run already happened, once
 for the batch and before the reviews; `browser-gate` says whether its record still covers this
 code, and `stale` asks again. When a local integration worktree already served that run, this
 integration is the same one: reuse it and redo it after a fix. Findings follow the destination ladder; a fix goes to the branch that owns
@@ -610,8 +610,16 @@ offers the release again with everything accumulated.
   an issue in the same state (`releaseDirect`, from the entries with `direct`; `directs` has the detail), the commits
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (without `issued_at`, the last record by file name; `claude/` when there is none;
-  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, or that the local main is behind and
-  must be synced first: say so in one line. It only reads.
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
+  must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
+  `current`: say so in one line. It only reads.
+- **Run the whole suite on the local main.** In the main worktree, on the local main, run
+  `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json`,
+  then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
+  false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
+  by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
+  again only after a green run on the new tip. A project without `homolog.suites.full` passes `--argv` with the argv
+  of the full suite, asked like the `unconfigured` question of "Which tests run when".
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.
@@ -637,7 +645,8 @@ offers the release again with everything accumulated.
   and what happens at the merge. In the handoff (the `Release` line): the pull request number with its issues,
   head and base branch, the approved base, and when the wait began.
 - **Offer the merge when the PR is ready.** The release's pull request is ready when the three gates of every
-  issue in it are recorded, the pull request has no conflict with the base and no finding lacks a destination.
+  issue in it are recorded, the whole suite of the release is green at the tip (`fullSuite: current`), the pull
+  request has no conflict with the base and no finding lacks a destination.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
   merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its

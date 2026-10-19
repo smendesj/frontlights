@@ -372,12 +372,22 @@ class LocalMainTextTests(unittest.TestCase):
                        '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
                        '**No closing keyword.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
-                       '`git pull --ff-only origin <base>`', '**Other work goes on.**'):
+                       '`git pull --ff-only origin <base>`', '**Other work goes on.**',
+                       '**Run the whole suite on the local main.**',
+                       'homolog suite --release --mode full --root <main worktree> --config .frontlights/config.json',
+                       '`fullSuite` must be `current`', '(`fullSuite: current`)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
+        order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
+                                                 '**Offer it.**') if title in body]
+        self.assertEqual(order, sorted(order))
+        self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
+        self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
-                       '"Agora não" deixa a issue homologada na main local'):
+                       '"Agora não" deixa a issue homologada na main local',
+                       'a suíte inteira na main local (`homolog suite --release --mode full`) antes da oferta',
+                       'release/suite.json', 'release/suite-full-<data-hora>.log'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('| Espera do merge |', protocol)
@@ -388,10 +398,12 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, closeout)
         readme = flat('README.md')
         for phrase in ('#### Homologar na main local, lançar a release, fechar e limpar', '`homolog release-plan`',
-                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)'):
+                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)',
+                       'a release só fica pronta com a suíte inteira verde na ponta da main local'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
         self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('o `fullSuite` do `release-plan`', flat('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 

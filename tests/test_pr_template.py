@@ -67,6 +67,14 @@ class PullRequestTemplateTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, evidence)
 
+    def test_the_evidence_carries_the_whole_suite_of_the_release(self):
+        """Issue 52, S3: a suíte inteira roda uma vez por release, na ponta da main local, e a Evidência a cita."""
+        evidence = flat(section(self.text, 'Evidência'))
+        for phrase in ('**Suíte inteira da release:**', 'na ponta da main local `<sha curto>`',
+                       'de onde a branch da release foi cortada'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, evidence)
+
     def test_the_merge_risk_names_the_door_and_the_blast_radius(self):
         risk = flat(section(self.text, 'Risco do merge'))
         for phrase in ('**Porta:**', 'mão única', 'mão dupla', '**Raio de impacto:**',

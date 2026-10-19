@@ -47,6 +47,9 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
 - **Portões:** suíte por impacto <`suite-gate`, contagem, saída>; revisão independente <rodadas, `review-gate`
   atual>; teste assistido <resposta do usuário, ou `not_needed`>.
 
+**Suíte inteira da release:** <comando, contagem, saída> na ponta da main local `<sha curto>`, de onde a branch da
+release foi cortada.
+
 ## Risco do merge
 
 Um só, consolidado para a release inteira. A porta é de mão única quando há migration ou dado apagado: diga
