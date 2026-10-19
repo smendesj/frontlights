@@ -187,6 +187,13 @@ def rev(root, ref):
     return tip if code == 0 and OID.fullmatch(tip) else None
 
 
+def tree_of(root, commit):
+    """The tree of the commit `commit` names, or None when the repository does not know that commit."""
+    code, out, _ = git(root, 'rev-parse', '--verify', '--quiet', f'{commit}^{{commit}}^{{tree}}')
+    tree = out.strip()
+    return tree if code == 0 and OID.fullmatch(tree) else None
+
+
 def status_lines(root):
     """Tracked files with changes (staged or not); untracked files are not counted."""
     code, out, _ = git(root, 'status', '--porcelain', '--untracked-files=no')
@@ -888,7 +895,38 @@ def suite_message(record, timeout):
     return f'A suíte {mode} falhou (código {record["exitCode"]}); a saída está em {record["output"]}.'
 
 
-def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False, timeout_seconds=None):
+def write_release_records(root, record):
+    """`release/suite.json` (the latest) and `release/suite-<head>.json` (this tip's, which a later tip never
+    overwrites), the same text in both; their paths."""
+    folder = record_folder(root)
+    folder.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(record, indent=2, ensure_ascii=True)
+    latest, tip = folder / 'suite.json', tip_record_path(root, record['head'])
+    latest.write_text(text, encoding='utf-8')
+    tip.write_text(text, encoding='utf-8')
+    return latest, tip
+
+
+def adopt_suite(root, base, from_record):
+    """Issue 54: the whole suite of the release taken from a green record of the same commit tree (`--from`),
+    nothing run: the record keeps the original run and takes the evidence of the local main now, with
+    `adoptedFrom` naming the path, the head and the tree of the origin."""
+    path = Path(from_record).resolve()
+    origin = read_suite_record(path)
+    evidence = tree_evidence(root)
+    tree = tree_of(root, origin['head'])
+    record = dict(origin, base=base, head=evidence['head'], evidence=evidence,
+                  adoptedFrom={'path': str(path), 'head': origin['head'], 'tree': tree,
+                               'adoptedAt': zoned_now().isoformat(timespec='seconds')})
+    latest, tip = write_release_records(root, record)
+    return {'state': 'adopted', 'record': record, 'recordPath': str(latest), 'tipRecordPath': str(tip),
+            'exitCode': 0,
+            'message': f'A suíte inteira de {origin["head"][:7]} foi adotada para a ponta {evidence["head"][:7]} '
+                       f'da {base} local (mesma árvore {str(tree)[:7]}); nada rodou.'}
+
+
+def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False, timeout_seconds=None,
+             from_record=None):
     import checks   # noqa: PLC0415
     worktree(root)
     issue = None if release else issue_number(issue)
@@ -901,6 +939,8 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, releas
     require(not dirty, f'a worktree tem {len(dirty)} arquivo(s) com alterações não commitadas '
                        f'({", ".join(dirty[:10])}{", ..." if len(dirty) > 10 else ""}); a suíte da release roda só '
                        f'numa árvore limpa, commite ou descarte antes; nada foi rodado')
+    if from_record is not None:
+        return adopt_suite(root, base, from_record)
     settings, source = suite_run_settings(load_config(config_path), mode, argv_text, timeout_seconds)
     if settings is None:
         return {'state': 'unconfigured', 'exitCode': 2,
@@ -1073,10 +1113,10 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
 
 def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
         issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None,
-        head=None):
+        head=None, source=None):
     try:
         if operation == 'suite':
-            result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds)
+            result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds, source)
         elif operation == 'suite-gate':
             result = op_suite_gate(root, config, issue, required, release, base, head)
         elif operation == 'hook':
@@ -1128,6 +1168,9 @@ def build_parser():
             command.add_argument('--argv', help='full only: a JSON list run once instead of homolog.suites.full')
             command.add_argument('--timeout-seconds', help='a positive integer: the timeout of this run, in place of '
                                                            'timeoutSeconds of the config (with or without --argv)')
+            command.add_argument('--from', dest='source',
+                                 help='with --release: a green whole-suite record of the same commit tree, adopted '
+                                      'without running anything')
         elif name == 'suite-gate':
             command.add_argument('--require', choices=('full',), help='only a full suite record counts')
             command.add_argument('--head', help='with --release: the full sha of a tip; judges release/suite-<sha>.json '
@@ -1160,7 +1203,7 @@ def main(argv=None):
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
                      getattr(args, 'release', False), getattr(args, 'timeout_seconds', None),
-                     getattr(args, 'head', None))
+                     getattr(args, 'head', None), getattr(args, 'source', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

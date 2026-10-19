@@ -507,5 +507,57 @@ class SuiteReleaseTests(SuiteTestCase):
                 self.assertIn('sha completo', result['message'])
 
 
+class SuiteAdoptionTests(SuiteTestCase):
+    """Issue 54: a release adota, sem rodar nada, a suíte inteira verde que uma issue rodou numa árvore limpa cuja
+    árvore de commit é a mesma da ponta da main local (`homolog suite --release --mode full --from <registro>`).
+
+    A issue 7 roda a suíte inteira na ponta dela e entra na main local por `--no-ff`, sem mudar arquivo; o config da
+    release declara uma suíte que falharia, de modo que uma execução de verdade daria vermelho."""
+
+    def setUp(self):
+        super().setUp()
+        code, result = self.suite(self.config({'full': ()}), 'full')
+        self.assertEqual(code, 0, result)
+        self.source = self.record
+        self.issue_head = self.git(self.work, 'rev-parse', 'HEAD').stdout.strip()
+        self.issue_tree = self.git(self.work, 'rev-parse', 'HEAD^{tree}').stdout.strip()
+        self.git(self.work, 'switch', '-q', 'main')
+        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 7 into the local main', 'claude/issue-7')
+        self.main_head = self.git(self.work, 'rev-parse', 'main').stdout.strip()
+        self.failing = self.config({'full': ('--falha',)})
+
+    @property
+    def release_folder(self):
+        return self.work / '.frontlights' / 'release'
+
+    def adopt(self, *flags, source=None, config=None):
+        return self.cli('suite', '--root', str(self.work), '--config', str(config or self.failing), '--release',
+                        '--mode', 'full', '--from', str(source or self.source), *flags)
+
+    def release_gate(self, *flags):
+        return self.cli('suite-gate', '--root', str(self.work), '--config', str(self.failing), '--release', *flags)
+
+    def test_a_green_full_record_of_the_same_tree_is_adopted_without_running(self):
+        """S1: os dois registros da release são gravados com a evidência da main local e `adoptedFrom`, nada roda
+        (nenhum log na pasta da release), e os dois juízes da release respondem `current`."""
+        self.assertNotEqual(self.main_head, self.issue_head)
+        code, result = self.adopt()
+        self.assertEqual((code, result.get('state')), (0, 'adopted'), result)
+        for path in (self.release_folder / 'suite.json', self.release_folder / f'suite-{self.main_head}.json'):
+            with self.subTest(record=path.name):
+                saved = json.loads(path.read_text(encoding='utf-8'))
+                self.assertEqual((saved['mode'], saved['head'], saved['exitCode'], saved['timedOut']),
+                                 ('full', self.main_head, 0, False))
+                self.assertEqual((saved['evidence']['head'], saved['evidence']['branch']), (self.main_head, 'main'))
+                adopted = saved['adoptedFrom']
+                self.assertTrue(os.path.samefile(adopted['path'], self.source))
+                self.assertEqual((adopted['head'], adopted['tree']), (self.issue_head, self.issue_tree))
+        self.assertEqual(list(self.release_folder.glob('*.log')), [])
+        code, gate = self.release_gate()
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+        code, gate = self.release_gate('--head', self.main_head)
+        self.assertEqual((code, gate.get('status')), (0, 'current'), gate)
+
+
 if __name__ == '__main__':
     unittest.main()
