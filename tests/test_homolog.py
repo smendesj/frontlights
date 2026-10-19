@@ -180,7 +180,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
                        'the three gates run at the same time on that tip',
                        'with a screen the review waits for the watched run',
-                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n> --base <base>`',
+                       '`homolog suite-gate --root <issue-worktree> --config <config> --issue <n> --base <base>`',
                        'The whole suite waits for the release.',
                        'an operation that still carries `full_suite` is refused, naming `suite_gate`',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
@@ -360,17 +360,18 @@ class LocalMainTextTests(unittest.TestCase):
     def test_the_release_name_follows_the_newest_record(self):
         """Issue 44, S2: o nome da release usa o prefixo do registro de autorização mais recente, sem `--prefix`."""
         release = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ("the prefix of the newest authorization record by `issued_at` (without `issued_at`, the last "
-                       "record by file name; `claude/` when there is none; `--prefix` names it alone", '`prefix` and `prefixSource` say which'):
+        for phrase in ("the prefix of the newest authorization record by `issued_at` (records without a valid `issued_at` "
+                       "rank below those with one, and ties go to the last file name; `claude/` when there is none; "
+                       "`--prefix` names it alone", '`prefix` and `prefixSource` say which'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, release)
-        self.assertIn('without `issued_at`, the last record by file name', release)
+        self.assertIn('records without a valid `issued_at` rank below those with one', release)
         self.assertIn('say in one line how many records `skipped` counts', release)
         for file in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
             with self.subTest(file=file[-1]):
                 text = flat(*file)
                 self.assertIn('o prefixo do registro de autorização mais recente', text)
-                self.assertIn('sem `issued_at`, o último registro pelo nome do arquivo', text)
+                self.assertIn('os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o', text)
         self.assertIn('das branches de trabalho de todo `branch_prefix` dos registros de autorização',
                       flat('skills', 'frontlights', 'docs', 'security.md'))
 
@@ -398,7 +399,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
-                       'homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json',
+                       'homolog suite --release --mode full --base <base> --root <main worktree> --config <config>',
                        '`fullSuite` must be `current`',
                        'the whole suite of the release is green at the tip the release branch was cut from',
                        '(`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite-gate --release --head '
@@ -409,7 +410,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'refused and nothing runs: commit or discard it first)',
                        'Another issue entering the local main, or the suite run for a later release, does not make '
                        'the pull request unready',
-                       'and `--timeout-seconds <N>` sized to that suite (3600 s without it)'):
+                       'and `--timeout-seconds <N>` sized to that suite (3600 s without it, which the whole suite of this repository has already exceeded under load)', 'Only a run that finished red becomes a finding'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
@@ -422,7 +423,7 @@ class LocalMainTextTests(unittest.TestCase):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
                        '"Agora não" deixa a issue homologada na main local',
-                       'a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo',
+                       'ou rodada com `homolog suite --release --mode full`) e o `release-plan` de novo',
                        'release/suite.json', 'release/suite-full-<data-hora>.log',
                        'release/suite-<sha>.json cópia do mesmo registro por ponta (o sha completo do head), que a '
                        'execução numa ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a '
@@ -1116,7 +1117,7 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 1 into the local develop', 'claude/issue-1')
         code, result = self.plan('--base', 'develop')
         self.assertEqual((code, result['release'], result['fullSuite']['status']), (2, [1], 'missing'), result)
-        self.assertIn('`homolog suite --release --mode full --base develop`', result['message'])
+        self.assertIn('`homolog suite --release --mode full --base develop --root', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
         self.deliver(1)

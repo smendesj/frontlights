@@ -45,10 +45,16 @@ Operations (each prints one JSON object on stdout):
             scrumRoot, one per summary; `--meeting` only for the window of the last `window` answer)
             and create it when missing.
   candidates  read-only, no network, no approval, run in the project the session opened: the prints that
-            watched browser tests kept for the summary (`.frontlights/issues/<n>/browser/resumo/candidates.json`),
-            taken up to `--to`, each with its `cover` (the delivery's issue), whether the code it shows is still
+            watched browser tests kept for the summary (`resumo/candidates.json` of the issue's folder in the sprint
+            folders of the 8 weeks up to `--to`, and the older `.frontlights/issues/<n>/browser/resumo/`), taken up to `--to`, each with its `cover` (the delivery's issue), whether the code it shows is still
             the code of `--ref` (default HEAD), and its problems; with `--repository OWNER/REPOSITORY` (the
             facts file's repository) a print recorded for another repository is a problem. It copies nothing.
+  evidence-dir  no network, no approval, run in the worktree of the run: `--issue <n>` (the lead issue of a
+            family) prints `evidenceDir`, where the watched browser test saves its prints, and `summaryDir`, where
+            it keeps the ones for the summary. With `roadmapSync.scrumRoot` and `weekFolderPattern` (whether or not
+            roadmapSync is enabled) it is `<scrumRoot>/<weekFolderPattern of the Monday of the run>/evidencias/
+            <repository name>/<n>`, created when missing, and its `resumo/`; `--at` is the instant of the run,
+            default now, its week taken in the Sao Paulo calendar. Without them, `.frontlights` as before.
   push      run the configured push command with `{draft}` substituted (plus --shot/--caption when the
             config names no `shotsDir` nor `weekShots`; the project's push command reads `shotsDir`
             itself). With `weekShots` (and `--to`), first check the summary folder's `captions.json` and
@@ -86,8 +92,8 @@ import time
 import urllib.parse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import roadmap_sync as rs  # noqa: E402  (shared configuration, credential and transport helpers)
-from roadmap_sync import Refusal, require  # noqa: E402
+import roads as rs  # noqa: E402  (shared configuration, credential and transport helpers)
+from roads import Refusal, require  # noqa: E402
 
 TAIL_BYTES = 6 * 1024
 STDERR_TAIL_BYTES = 2 * 1024
@@ -95,7 +101,7 @@ DEFAULT_TIMEOUT = 300
 MAX_TIMEOUT = 24 * 60 * 60
 PATH_PATTERN = r'[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*'
 DATE_PATTERN = r'\d{4}-\d{2}-\d{2}'
-OPERATIONS = ['status', 'approve', 'window', 'collect', 'shots', 'push', 'home', 'candidates']
+OPERATIONS = ['status', 'approve', 'window', 'collect', 'shots', 'push', 'home', 'candidates', 'evidence-dir']
 MAX_SHOTS = 40
 MAX_SHOT_BYTES = 1024 * 1024
 MAX_CAPTIONS_BYTES = 256 * 1024
@@ -157,7 +163,7 @@ def week_segment(value):
 
 
 class Progress:
-    """The validated `roadmapSync.progress` block and the endpoint/secret it shares with roadmap sync."""
+    """The validated `roadmapSync.progress` block and the endpoint/secret it shares with the rest of the roadmapSync block."""
 
     def __init__(self, root):
         self.root = Path(root).resolve()
@@ -218,7 +224,7 @@ class Progress:
             require(self.facts_file, 'roadmapSync.progress.factsFile is required with weekShots: it names the deliveries '
                                      'that need a print')
             root = rs.expand_root(sync.get('scrumRoot'))
-            # The same rule roadmap sync applies: a relative root would follow the current directory.
+            # The same rule roads.contained_path applies: a relative root would follow the current directory.
             require(rs.fully_qualified(root), f'Refusing scrumRoot {root}: it must be a fully qualified path')
             self.scrum_root = os.path.abspath(root)
             self.week_pattern = sync.get('weekFolderPattern')
@@ -871,40 +877,153 @@ def candidate_entry(root, ref, folder, record, item, last_day, repository=None):
             'fresh': fresh, 'usable': not problems, 'problems': problems, 'record': record}
 
 
+EVIDENCE_FOLDER = 'evidencias'
+CANDIDATE_WEEKS = 8   # sprints read back by candidates, before the week of the last day of the period
+ISSUE_FOLDER = re.compile(r'[1-9][0-9]{0,9}')
+REPOSITORY_FOLDER = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,99}')
+
+
+def evidence_layout(root):
+    """(scrumRoot, weekFolderPattern, repository folder) from the project's `.frontlights/config.json` (the main
+    worktree's from a linked one), or None when it names no `roadmapSync.scrumRoot` or no `weekFolderPattern`: the
+    prints then stay in `.frontlights`. Neither `roadmapSync.enabled` nor the progress block plays a part."""
+    path = rs.config_path(root)
+    config = rs.read_json(path) if path else None
+    sync = config.get('roadmapSync') if isinstance(config, dict) else None
+    if not isinstance(sync, dict) or not sync.get('scrumRoot') or not sync.get('weekFolderPattern'):
+        return None
+    scrum_root = rs.expand_root(sync.get('scrumRoot'))
+    require(rs.fully_qualified(scrum_root), f'Refusing scrumRoot {scrum_root}: it must be a fully qualified path')
+    pattern = sync.get('weekFolderPattern')
+    require(isinstance(pattern, str) and pattern.strip(), 'roadmapSync.weekFolderPattern must be a text')
+    repository = config.get('repository')
+    if repository is None:
+        name = path.parent.parent.name
+    else:
+        require(isinstance(repository, str) and REPOSITORY.fullmatch(repository), 'repository must be OWNER/REPOSITORY')
+        name = repository.split('/')[1]
+    require(REPOSITORY_FOLDER.fullmatch(name) and not name.endswith('.'),
+            f'Refusing the repository folder {name!r}: letters, digits, ".", "-" and "_", not ending in a dot')
+    return os.path.abspath(scrum_root), pattern, name
+
+
+def sprint_relative(pattern, monday, name, issue=None):
+    """`<weekFolderPattern of that Monday>/evidencias/<repository>[/<issue>]`, relative to scrumRoot."""
+    week = rs.expand_pattern(pattern, monday, monday + dt.timedelta(days=4)).rstrip('/\\')
+    return f'{week}/{EVIDENCE_FOLDER}/{name}' + ('' if issue is None else f'/{issue}')
+
+
+def op_evidence_dir(root, issue, at=None):
+    """Where the watched browser test of `issue` (the lead issue of a family) saves its prints: the issue's folder
+    in the sprint the test runs in (the Monday of that week in the Sao Paulo calendar), created when missing, and
+    its `resumo/` for the prints kept for the summary. Without a sprint folder, `.frontlights` as before. No network,
+    no approval."""
+    require(type(issue) is int and issue >= 1, '--issue must be the positive number of the issue (the lead one of a family)')
+    if at is None:
+        instant = dt.datetime.now(SAO_PAULO)
+    else:
+        try:
+            instant = dt.datetime.fromisoformat(str(at))
+        except ValueError:
+            raise Refusal('--at must be an ISO 8601 instant with its offset')
+        require(instant.tzinfo is not None, '--at must carry its offset')
+    layout = evidence_layout(root)
+    if layout is None:
+        here = os.path.abspath(root)
+        main = rs.main_worktree(root) or Path(here)
+        folder = os.path.join(here, '.frontlights', 'issues', str(issue), 'browser')
+        os.makedirs(folder, exist_ok=True)
+        return {'ok': True, 'exitCode': 0, 'inSprint': False, 'sprint': None, 'evidenceDir': folder,
+                'summaryDir': os.path.join(str(main), '.frontlights', 'issues', str(issue), 'browser', 'resumo'),
+                'message': 'This project names no roadmapSync.scrumRoot and weekFolderPattern: the prints stay in '
+                           '.frontlights (the summary ones in the main worktree).'}
+    scrum_root, pattern, name = layout
+    day = instant.astimezone(SAO_PAULO).date()
+    monday = day - dt.timedelta(days=day.weekday())
+    folder = rs.safe_folder(scrum_root, sprint_relative(pattern, monday, name, issue), create=True)
+    return {'ok': True, 'exitCode': 0, 'inSprint': True, 'sprint': monday.isoformat(), 'evidenceDir': folder,
+            'summaryDir': os.path.join(folder, 'resumo'),
+            'message': f'Save the prints of the run in {folder} and record it as pastaDosPrints in result.json.'}
+
+
+def by_number(names):
+    return sorted(names, key=lambda name: (len(name), name))
+
+
+def candidate_listing(folder, lead, warnings):
+    """The items of `<folder>/candidates.json`, or None when there is none or it cannot be read (with a warning)."""
+    listing = os.path.join(folder, 'candidates.json')
+    if not os.path.isfile(listing):
+        return None
+    tag = rs.reparse_tag(listing)
+    if not (tag == 0 or rs.cloud_tag(tag)) or os.path.getsize(listing) > MAX_CAPTIONS_BYTES:
+        warnings.append(f'issue {lead}: candidates.json is a link or larger than 256 KB; skipped')
+        return None
+    try:
+        items = read_json_file(listing, f'candidates.json of issue {lead}')
+    except Refusal as error:
+        warnings.append(str(error))
+        return None
+    if not isinstance(items, list):
+        warnings.append(f'issue {lead}: candidates.json must be a list; skipped')
+        return None
+    return items
+
+
+def sprint_summary_folders(root, last_day, warnings):
+    """(lead, folder) of every `resumo/` under `evidencias/<repository>/<n>` in the sprint folders of the
+    CANDIDATE_WEEKS weeks up to the week of `last_day`, newest first. Nothing when the project has no sprint folder."""
+    try:
+        layout = evidence_layout(root)
+    except (Refusal, ValueError, OSError) as error:
+        warnings.append(f'the sprint folders were not read: {error}')
+        return []
+    if layout is None:
+        return []
+    scrum_root, pattern, name = layout
+    monday = last_day - dt.timedelta(days=last_day.weekday())
+    found = []
+    for week in range(CANDIDATE_WEEKS + 1):
+        relative = sprint_relative(pattern, monday - dt.timedelta(weeks=week), name)
+        try:
+            folder = rs.contained_path(scrum_root, relative)
+        except Refusal as error:
+            warnings.append(f'the sprint folders were not read: {error}')
+            return found
+        if not os.path.isdir(folder):
+            continue
+        for lead in by_number(os.listdir(folder)):
+            if not ISSUE_FOLDER.fullmatch(lead):
+                continue
+            try:
+                found.append((lead, rs.contained_path(scrum_root, f'{relative}/{lead}/resumo')))
+            except Refusal as error:
+                warnings.append(f'issue {lead}: {error}')
+    return found
+
+
 def op_candidates(root, date_to, ref=None, repository=None):
-    """The prints the watched browser tests kept for the summary (`.frontlights/issues/<n>/browser/resumo/`),
-    taken up to the last day of the period, each with whether the code it shows is still the code in `ref`
-    (default HEAD of `root`). Read-only: no network, no approval, nothing is copied."""
+    """The prints the watched browser tests kept for the summary (`resumo/` of the issue's folder in the sprint
+    folder, `evidencias/<repository>/<n>/resumo/`, and the older `.frontlights/issues/<n>/browser/resumo/` until
+    those are migrated), taken up to the last day of the period, each with whether the code it shows is still the
+    code in `ref` (default HEAD of `root`). Read-only: no network, no approval, nothing is copied."""
     last_day = parse_date(date_to, '--to') if date_to else None
     require(last_day is not None, '--to is required: the last day of the period, inclusive, YYYY-MM-DD')
     ref = ref or 'HEAD'
     require(repository is None or (isinstance(repository, str) and REPOSITORY.fullmatch(repository)),
             '--repository must be OWNER/REPOSITORY')
     require(REF_NAME.fullmatch(ref) and '..' not in ref, '--ref must be a branch, tag or commit name')
-    base = Path(root) / '.frontlights' / 'issues'
     found, warnings = [], []
+    folders = sprint_summary_folders(root, last_day, warnings)
+    base = Path(root) / '.frontlights' / 'issues'
     if base.is_dir():
-        for lead in sorted(os.listdir(base), key=lambda name: (len(name), name)):
-            folder = os.path.join(base, lead, 'browser', 'resumo')
-            listing = os.path.join(folder, 'candidates.json')
-            if not os.path.isfile(listing):
-                continue
-            tag = rs.reparse_tag(listing)
-            if not (tag == 0 or rs.cloud_tag(tag)) or os.path.getsize(listing) > MAX_CAPTIONS_BYTES:
-                warnings.append(f'issue {lead}: candidates.json is a link or larger than 256 KB; skipped')
-                continue
-            try:
-                items = read_json_file(listing, f'candidates.json of issue {lead}')
-            except Refusal as error:
-                warnings.append(str(error))
-                continue
-            if not isinstance(items, list):
-                warnings.append(f'issue {lead}: candidates.json must be a list; skipped')
-                continue
-            for item in items[:MAX_SHOTS * 2]:
-                entry = candidate_entry(root, ref, folder, lead, item, last_day, repository)
-                if entry is not None:
-                    found.append(entry)
+        folders += [(lead, os.path.join(base, lead, 'browser', 'resumo')) for lead in by_number(os.listdir(base))]
+    for lead, folder in folders:
+        items = candidate_listing(folder, lead, warnings)
+        for item in (items or [])[:MAX_SHOTS * 2]:
+            entry = candidate_entry(root, ref, folder, lead, item, last_day, repository)
+            if entry is not None:
+                found.append(entry)
     found.sort(key=lambda entry: (entry.get('cover') or 0, entry.get('takenAt') or ''))
     return {'ok': True, 'exitCode': 0, 'ref': ref, 'candidates': found, 'warnings': warnings,
             'message': f'{sum(1 for entry in found if entry["usable"])} of {len(found)} print(s) from watched tests can be reused; '
@@ -995,10 +1114,10 @@ def op_push(root, draft, shots, captions, date_to=None, date_from=None, meeting=
 
 
 def run(operation, root='.', transport=None, date_from=None, date_to=None, draft=None, shots=(), captions=(), meeting=None,
-        home_set=None, home_clear=False, ref=None, repository=None, start=None, end=None):
+        home_set=None, home_clear=False, ref=None, repository=None, start=None, end=None, issue=None, at=None):
     transport = transport or rs.http_default
     try:
-        if operation not in ('status', 'home', 'candidates'):
+        if operation not in ('status', 'home', 'candidates', 'evidence-dir'):
             root = resolve_root(root)[0]
         if operation == 'status':
             result = op_status(root)
@@ -1014,6 +1133,8 @@ def run(operation, root='.', transport=None, date_from=None, date_to=None, draft
             result = op_shots(root, date_to, date_from, meeting)
         elif operation == 'candidates':
             result = op_candidates(root, date_to, ref, repository)
+        elif operation == 'evidence-dir':
+            result = op_evidence_dir(root, issue, at)
         elif operation == 'push':
             result = op_push(root, draft, shots, captions, date_to, date_from, meeting)
         else:
@@ -1043,13 +1164,16 @@ def main():
     parser.add_argument('--meeting', help='the presentation Monday the route sent as weekMeeting, YYYY-MM-DD; only when the period is the window of the last window answer (shots, push)')
     parser.add_argument('--ref', help='branch, tag or commit whose files the kept prints are compared with; default HEAD (candidates)')
     parser.add_argument('--repository', help='OWNER/REPOSITORY of the product of the summary; prints recorded for another one are refused (candidates)')
+    parser.add_argument('--issue', type=int, help='the issue whose watched browser test saves its prints; the lead one of a family (evidence-dir)')
+    parser.add_argument('--at', help='ISO 8601 instant of the run, with its offset; default now (evidence-dir)')
     parser.add_argument('--draft', help='path of the draft file the push command reads (push)')
     parser.add_argument('--shot', action='append', default=[], help='screenshot to attach; repeatable (push)')
     parser.add_argument('--caption', action='append', default=[], help="caption of the matching --shot, in order (push)")
     args = parser.parse_args()
     result = run(args.operation, args.root, date_from=args.date_from, date_to=args.date_to, draft=args.draft,
                  shots=args.shot, captions=args.caption, meeting=args.meeting, home_set=args.home_set,
-                 home_clear=args.home_clear, ref=args.ref, repository=args.repository, start=args.start, end=args.end)
+                 home_clear=args.home_clear, ref=args.ref, repository=args.repository, start=args.start, end=args.end,
+                 issue=args.issue, at=args.at)
     print(render(result))
     return int(result['exitCode'])
 

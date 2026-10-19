@@ -2,7 +2,7 @@
 """Close-out helper: which issues (and sub-issues) can be closed, and moved to Done on the board, because
 every acceptance criterion in the body is checked; and `tick`, the one operation that writes, which ticks one box.
 
-Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roadmap_sync.py) and prints what
+Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roads.py) and prints what
 the session may propose. Closing and moving are done by the session, with its own `gh`, after the user said yes:
 this helper never closes an issue, never moves a card, and the commands it prints are values to type, not
 something it runs. Its only write is `tick` (below): the `[ ]` of one box of an issue's acceptance criteria turned
@@ -81,7 +81,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import frontlights  # noqa: E402  (the board rules live there; this helper only reads them)
-import roadmap_sync as rs  # noqa: E402  (its reader of GitHub: graphql, board_layout, clean, card_text)
+import roads as rs  # noqa: E402  (its reader of GitHub: graphql, board_layout, clean, card_text)
 
 Refusal = rs.Refusal
 require = rs.require

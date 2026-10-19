@@ -84,7 +84,7 @@ class ReleaseAdoptionTextTests(unittest.TestCase):
     `references/development.md`."""
 
     COMMAND = ('homolog suite --release --mode full --from <record> --base <base> --root <main worktree> '
-               '--config .frontlights/config.json')
+               '--config <config>')
 
     def test_the_release_adopts_a_green_run_of_the_same_tree(self):
         text = flat(SOURCE.read_text(encoding='utf-8'))
