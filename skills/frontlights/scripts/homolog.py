@@ -747,8 +747,21 @@ def issue_number(value):
     return int(value)
 
 
-def suite_folder(root, issue):
-    return Path(root).resolve() / '.frontlights' / 'issues' / str(issue)
+def record_folder(root, issue=None):
+    """The folder of the suite record: `.frontlights/issues/<n>/` of an issue, `.frontlights/release/` without one."""
+    folder = Path(root).resolve() / '.frontlights'
+    return folder / 'release' if issue is None else folder / 'issues' / str(issue)
+
+
+def off_base_tip(root, base):
+    """None when `root` has the local `base` checked out and HEAD is `refs/heads/<base>`; otherwise where it stands,
+    in Portuguese: the release suite is run, and judged, only on the tip of the local base."""
+    code, out, _ = git(root, 'symbolic-ref', '--short', '--quiet', 'HEAD')
+    branch = out.strip() if code == 0 else None
+    head, tip = rev(root, 'HEAD'), rev(root, f'refs/heads/{base}')
+    if branch == base and head is not None and head == tip:
+        return None
+    return f'a worktree principal está em `{branch or "HEAD solta"}`, não na {base} local'
 
 
 def zoned_now():
@@ -812,12 +825,15 @@ def suite_message(record, timeout):
     return f'A suíte {mode} falhou (código {record["exitCode"]}); a saída está em {record["output"]}.'
 
 
-def op_suite(root, config_path, issue, mode, base, concurrent, argv_text):
+def op_suite(root, config_path, issue, mode, base, concurrent, argv_text, release=False):
     import checks   # noqa: PLC0415
     worktree(root)
-    issue = issue_number(issue)
+    issue = None if release else issue_number(issue)
     require(mode in SUITE_MODES, 'o modo da suíte precisa ser impact ou full')
+    require(not release or mode == 'full', '--release só aceita --mode full: a release roda a suíte inteira')
     base = plain_name(base, 'a branch base')
+    place = off_base_tip(root, base) if release else None
+    require(place is None, f'{place}; a suíte da release roda só na ponta da {base} local')
     settings, source = suite_run_settings(load_config(config_path), mode, argv_text)
     if settings is None:
         return {'state': 'unconfigured', 'exitCode': 2,
@@ -825,7 +841,7 @@ def op_suite(root, config_path, issue, mode, base, concurrent, argv_text):
     argv = [argument.replace(BASE_TOKEN, base) for argument in settings['argv']]
     checks.load_user_secrets(config_path)
     evidence = tree_evidence(root)          # before the run: an edit during it makes the record stale
-    folder = suite_folder(root, issue)
+    folder = record_folder(root, issue)
     folder.mkdir(parents=True, exist_ok=True)
     started = zoned_now()
     log = fresh_file(folder, f'suite-{mode}-{started.strftime("%Y%m%d-%H%M%S")}', '.log')
@@ -858,16 +874,15 @@ def read_suite_record(path):
     return data
 
 
-def op_suite_gate(root, config_path, issue, required):
+def judge_suite(root, path, required=None, configured=True):
+    """The suite record at `path` judged against the tree of `root` now, the way `review-gate` does: `current`
+    (exit code 0), `stale`, `red`, or `missing` (no record, or not a full one when `required` is full); without a
+    record and with `configured` false, `unconfigured`. `suite-gate` and `release-plan` share it."""
     import frontlights   # noqa: PLC0415
-    worktree(root)
-    issue = issue_number(issue)
-    suites = suite_block(load_config(config_path))
-    path = suite_folder(root, issue) / 'suite.json'
     record = read_suite_record(path)
-    result = {'recordPath': str(path), 'required': required}
+    result = {'recordPath': str(path)}
     if record is None:
-        if not suites or all(suites.get(mode) is None for mode in SUITE_MODES):
+        if not configured:
             result.update(status='unconfigured', exitCode=2,
                           message='não há registro de suíte e o config não declara homolog.suites')
         else:
@@ -894,15 +909,30 @@ def op_suite_gate(root, config_path, issue, required):
     return result
 
 
+def op_suite_gate(root, config_path, issue, required, release=False, base='main'):
+    worktree(root)
+    issue = None if release else issue_number(issue)
+    suites = suite_block(load_config(config_path))
+    if release:
+        base = plain_name(base, 'a branch base')
+        place = off_base_tip(root, base)
+        require(place is None, f'{place}; a suíte da release só é julgada na ponta da {base} local')
+        required = 'full'
+    configured = bool(suites) and any(suites.get(mode) is not None for mode in SUITE_MODES)
+    result = {'required': required}
+    result.update(judge_suite(root, record_folder(root, issue) / 'suite.json', required, configured))
+    return result
+
+
 # ---------------------------------------------------------------- command line
 
 def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
-        issue=None, mode=None, concurrent=False, argv=None, required=None):
+        issue=None, mode=None, concurrent=False, argv=None, required=None, release=False):
     try:
         if operation == 'suite':
-            result = op_suite(root, config, issue, mode, base, concurrent, argv)
+            result = op_suite(root, config, issue, mode, base, concurrent, argv, release)
         elif operation == 'suite-gate':
-            result = op_suite_gate(root, config, issue, required)
+            result = op_suite_gate(root, config, issue, required, release, base)
         elif operation == 'hook':
             result = op_hook(root, base, install)
         elif operation == 'sync':
@@ -936,12 +966,15 @@ def build_parser():
     for name in ('hook', 'sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', required=True, help="the project's main worktree (suite: the issue's worktree)")
-        if name != 'suite-gate':
-            command.add_argument('--base', default='main',
-                                 help='the base branch, the local homologation (default main); suite: replaces {base}')
+        command.add_argument('--base', default='main',
+                             help='the base branch, the local homologation (default main); suite: replaces {base}; '
+                                  '--release: the local base whose tip the record covers')
         if name in ('suite', 'suite-gate'):
             command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.suites')
-            command.add_argument('--issue', required=True, help='the issue number: the record is .frontlights/issues/<n>/suite.json')
+            record = command.add_mutually_exclusive_group(required=True)
+            record.add_argument('--issue', help='the issue number: the record is .frontlights/issues/<n>/suite.json')
+            record.add_argument('--release', action='store_true',
+                                help='the whole suite of the release on the local base: .frontlights/release/suite.json')
         if name == 'suite':
             command.add_argument('--mode', required=True, choices=SUITE_MODES, help='the suite to run')
             command.add_argument('--concurrent', action='store_true',
@@ -975,7 +1008,8 @@ def main(argv=None):
         result = run(args.operation, args.root, getattr(args, 'base', 'main'), getattr(args, 'remote', 'origin'),
                      getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
-                     getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None))
+                     getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
+                     getattr(args, 'release', False))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

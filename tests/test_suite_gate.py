@@ -258,5 +258,74 @@ class SuiteGateTests(SuiteTestCase):
         self.assertEqual((code, result.get('status')), (0, 'current'))
 
 
+class SuiteReleaseTests(SuiteTestCase):
+    """S3: a suíte inteira da release roda na worktree principal, na main local, e grava
+    `.frontlights/release/suite.json`; só a suíte completa, só na ponta da base."""
+
+    def setUp(self):
+        super().setUp()
+        self.git(self.work, 'switch', '-q', 'main')
+
+    def release(self, config, *flags):
+        return self.cli('suite', '--root', str(self.work), '--config', str(config), '--release', *flags)
+
+    def release_gate(self, config, *flags):
+        return self.cli('suite-gate', '--root', str(self.work), '--config', str(config), '--release', *flags)
+
+    @property
+    def release_record(self):
+        return self.work / '.frontlights' / 'release' / 'suite.json'
+
+    def test_release_writes_the_record_of_the_release_folder(self):
+        code, result = self.release(self.config({'full': ()}), '--mode', 'full')
+        self.assertEqual(code, 0, result)
+        saved = json.loads(self.release_record.read_text(encoding='utf-8'))
+        self.assertEqual((saved['mode'], saved['head']), ('full', self.git(self.work, 'rev-parse', 'main').stdout.strip()))
+        self.assertTrue(os.path.samefile(Path(saved['output']).parent, self.release_record.parent))
+        self.assertFalse(self.record.exists())
+
+    def test_release_refuses_the_impact_suite_and_runs_nothing(self):
+        code, result = self.release(self.config({'impact': (), 'full': ()}), '--mode', 'impact')
+        self.assertEqual(code, 1, result)
+        self.assertIn('--mode full', result['message'])
+        self.assertFalse(self.release_record.exists())
+
+    def test_release_off_the_base_branch_is_refused_and_runs_nothing(self):
+        config = self.config({'full': ()})
+        for target in ('claude/issue-7', '--detach main'):
+            with self.subTest(target=target):
+                self.git(self.work, 'switch', '-q', *target.split())
+                code, result = self.release(config, '--mode', 'full')
+                self.assertEqual(code, 1, result)
+                self.assertIn('main', result['message'])
+                self.assertFalse(self.release_record.exists())
+        self.git(self.work, 'switch', '-q', 'main')
+        code, result = self.release(config, '--mode', 'full', '--base', 'claude/issue-7')
+        self.assertEqual(code, 1, result)
+        self.assertFalse(self.release_record.exists())
+
+    def test_issue_and_release_together_are_refused(self):
+        config = self.config({'full': ()})
+        for operation, flags in (('suite', ('--mode', 'full')), ('suite-gate', ())):
+            with self.subTest(operation=operation):
+                code, result = self.cli(operation, '--root', str(self.work), '--config', str(config), '--issue', '7',
+                                        '--release', *flags)
+                self.assertEqual(code, 1, result)
+                self.assertIn('--release', result['message'])
+                self.assertFalse(self.release_record.exists())
+                self.assertFalse(self.record.exists())
+
+    def test_the_gate_of_the_release_reads_the_release_record(self):
+        config = self.config({'full': ()})
+        code, result = self.release(config, '--mode', 'full')
+        self.assertEqual(code, 0, result)
+        code, gate = self.release_gate(config)
+        self.assertEqual((code, gate.get('status'), gate.get('mode')), (0, 'current', 'full'), gate)
+        self.assertTrue(os.path.samefile(gate['recordPath'], self.release_record))
+        self.commit('app.txt', 'three\n', 'after the release suite')
+        code, gate = self.release_gate(config)
+        self.assertEqual((code, gate.get('status')), (2, 'stale'), gate)
+
+
 if __name__ == '__main__':
     unittest.main()
