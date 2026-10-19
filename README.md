@@ -646,8 +646,8 @@ por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo 
 
 #### Homologar na main local, lançar a release, fechar e limpar
 
-Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte inteira,
-revisão em dia e teste assistido respondido; o passo a passo está em
+Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte por impacto
+em dia, revisão em dia e teste assistido respondido; o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula também os já
@@ -828,10 +828,11 @@ módulo, então vale igual para o `discover` e para o runner. A suíte rápida r
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
-slice, rode os módulos que a slice toca; antes da revisão independente e do merge na main local, a suíte inteira sem a
-variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover -s tests -v`: o runner não
-deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
-pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
+slice, rode os módulos que a slice toca; por issue, o portão do merge na main local é a suíte por impacto (abaixo,
+regra em [`references/development.md`](skills/frontlights/references/development.md), "Which tests run when"); a
+suíte inteira sem a variável roda na release, uma vez, com ou sem CI no projeto, pelo
+`python -m unittest discover -s tests -v`: o runner não deixa a suíte inteira mais rápida do que o `discover` (na
+issue 27, de 964 s a 1241 s pelo runner contra 934 s pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
 `python tests/suite.py --impact <base>` é a suíte por impacto: roda a suíte rápida como acima e, sem a
 variável, só os módulos pesados (`tests.test_serve_ports`, `tests.test_checks_integration`,
@@ -853,7 +854,7 @@ fica fora delas. Os módulos rodam com
 dois aparecem como "fica para a suíte inteira", sem contar como falha. Sai com 0 quando está
 verde, 1 quando o `compileall` ou um módulo falhou (com o comando para rodá-lo sozinho), 2 num erro de uso ou
 do Git e 130 quando é interrompido. Ele só relata, nenhum hook o roda, e confere a árvore de trabalho, não o
-índice; a suíte inteira continua obrigatória antes da revisão independente e do merge na main local.
+índice; por issue vale a suíte por impacto, e a suíte inteira continua obrigatória na release.
 
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`

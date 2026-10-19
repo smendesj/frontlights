@@ -334,9 +334,9 @@ módulos de portas e da prévia do `serve` e de integração do `checks`, cada u
 cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
-Fica para o fim, antes da revisão independente e do merge na main local, a suíte inteira sem a variável, uma vez, pelo
-`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
-obrigatória com ou sem CI no projeto: onde não há CI ela é a única rede; a CI do GitHub deste
+Por issue, o portão é a suíte por impacto do projeto (`references/development.md`, "Which tests run when"); a
+suíte inteira sem a variável roda na release, uma vez, pelo `python -m unittest discover -s tests -v` (o runner
+não a deixa mais rápida do que o `discover`), obrigatória com ou sem CI no projeto; a CI do GitHub deste
 repositório roda o mesmo `discover` e não define a variável.
 
 ## Ponto de retomada e continuação

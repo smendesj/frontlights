@@ -36,7 +36,7 @@ def stage(number):
     return ' '.join(text.split(f'## {number}.')[1].split(f'## {number + 1}.')[0].split())
 
 
-GREEN = {'full_suite': 'green', 'review_gate': 'current', 'browser_gate': 'answered'}
+GREEN = {'suite_gate': 'current', 'review_gate': 'current', 'browser_gate': 'answered'}
 
 
 class LocalMainMergeAuthorizeTests(unittest.TestCase):
@@ -76,8 +76,17 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         op = dict(self.op, gates=dict(GREEN, browser_gate='not_needed'))
         self.assertEqual(frontlights.authorize(self.c, op)['scope_check'], 'pass')
 
+    def test_an_operation_that_still_carries_full_suite_is_refused_naming_suite_gate(self):
+        """Issue 52, S2: o portão da suíte inteira saiu; a chave antiga é recusada antes dos portões, com ou sem
+        `suite_gate`, e a recusa nomeia `suite_gate`."""
+        without = {k: v for k, v in GREEN.items() if k != 'suite_gate'}
+        for gates in (dict(GREEN, full_suite='green'), dict(without, full_suite='green')):
+            with self.subTest(gates=gates), self.assertRaisesRegex(ValueError, r'full_suite is gone.*suite_gate'):
+                frontlights.authorize(self.c, dict(self.op, gates=gates))
+
     def test_a_missing_or_red_gate_refuses_and_names_the_gate(self):
-        reds = {'full_suite': ('red', 'skipped', True, None), 'review_gate': ('stale', 'current ', None),
+        reds = {'suite_gate': ('green', 'stale', 'unconfigured', 'red', 'missing', True, None),
+                'review_gate': ('stale', 'current ', None),
                 'browser_gate': ('pending', 'stale', 'contradiction', 'dispensado', None)}
         for gate, values in reds.items():
             for value in values:
@@ -153,7 +162,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'Nothing of an issue goes to GitHub before the release',
                        'writing the remote main (`origin/main`, the base branch on GitHub)',
                        'the local main is written only by the covered merge',
-                       '`{"full_suite": "green", "review_gate": "current", "browser_gate": "answered"}`',
+                       '`{"suite_gate": "current", "review_gate": "current", "browser_gate": "answered"}`',
                        '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
@@ -168,7 +177,12 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
         body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
         for phrase in ('homologation bench', 'refused as the remote main', '**Bring the local main in first.**',
-                       '`git merge main`', '**Gate 1, the full suite.**', 'never the fast suite',
+                       '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
+                       'the three gates run at the same time on that tip',
+                       'with a screen the review waits for the watched run',
+                       '`homolog suite-gate --root <issue-worktree> --config .frontlights/config.json --issue <n>`',
+                       'The whole suite waits for the release.',
+                       'an operation that still carries `full_suite` is refused, naming `suite_gate`',
                        '**Gate 2, the review.**', '`stale` means a review again, never the merge',
                        '**Gate 3, the watched run.**', '**The check and the merge.**', '`merge_into_local_main`',
                        '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>`',
@@ -197,7 +211,8 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('**Main local e main remota.**',
                        '`merge_into_local_main` só com `target` igual a `base.branch`', 'são recusados como main remota',
                        'nunca de uma slice',
-                       '`full_suite: green`, `review_gate: current` e `browser_gate: answered` ou `not_needed`',
+                       'com os três `gates` de "Into the local main" (`references/development.md`)',
+                       'ou a chave antiga `full_suite`, nomeia o portão na recusa', 'não prova que a suíte rodou',
                        'conferência prévia, não barreira', 'não lê o Git',
                        'confere `edit`, `test`, `checkpoint` e `merge_into_local_main`',
                        'os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"), os únicos permitidos'):
@@ -225,7 +240,7 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertEqual(charter['base']['branch'], 'main')
         op = json.loads(read('skills', 'frontlights', 'examples', 'operation-merge-local-main.json'))
         self.assertEqual((op['kind'], op['target']), ('merge_into_local_main', 'main'))
-        self.assertEqual(set(op['gates']), {'full_suite', 'review_gate', 'browser_gate'})
+        self.assertEqual(set(op['gates']), {'suite_gate', 'review_gate', 'browser_gate'})
         # the example operation passes `authorize` against the example charter once the placeholders are filled
         with tempfile.TemporaryDirectory() as temp:
             charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',

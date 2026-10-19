@@ -22,7 +22,7 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
   runner da issue 27, só Windows): pula esses dois módulos e o da prévia (`test_serve_preview`, issue 34) com o
   motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada; a rodada inteira sem a variável,
-  pelo `discover`, continua obrigatória antes da revisão independente e do merge na main local.
+  pelo `discover`, roda na release; por issue vale a suíte por impacto.
 - `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
   sem agentes, hooks nem servidores MCP.

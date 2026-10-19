@@ -6,7 +6,7 @@
   "branch": "claude/melhoria-x",
   "target": "main",
   "gates": {
-    "full_suite": "green",
+    "suite_gate": "current",
     "review_gate": "current",
     "browser_gate": "not_needed"
   }
