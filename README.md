@@ -833,6 +833,15 @@ variável, uma vez, com ou sem CI no projeto, pelo `python -m unittest discover 
 deixa a suíte inteira mais rápida do que o `discover` (na issue 27, de 964 s a 1241 s pelo runner contra 934 s
 pelo `discover`). A CI do GitHub não define a variável e continua rodando tudo: ela roda o mesmo `discover`.
 
+`python tests/suite.py --impact <base>` é a suíte por impacto: roda a suíte rápida como acima e, sem a
+variável, só os módulos pesados (`tests.test_serve_ports`, `tests.test_checks_integration`,
+`tests.test_serve_preview`) que o diff toca. O diff é o commitado desde a base (`<base>...HEAD`) mais a árvore de
+trabalho, para que uma edição sem commit não fique de fora, e "tocar" segue a escolha do `tests/pre_commit.py`: o
+módulo mudou, cita o nome de um arquivo mudado ou importa um script mudado; o pesado escolhido roda inteiro, na
+fila serial. Uma mudança no próprio runner ou no `tests/pre_commit.py` escolhe os três. O `--list` mostra quais
+rodariam, o `--report` registra o modo, a base e, por pesado, se rodou e por quê, e uma base que o Git não resolve
+sai com 2 sem rodar nada.
+
 Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
 pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao
 `HEAD` (no índice, fora dele e não rastreados), roda o `compileall` e os módulos `tests/test_*.py` que estão
