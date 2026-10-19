@@ -167,7 +167,7 @@ O utilitário do RoadS (`scripts/roads.py`) segue as travas abaixo.
   - `<` e `>` são escapados, para que nenhum comentário seja montado juntando campos;
   - cada campo tem limite de tamanho.
 - **Pastas da semana:** o Frontlights não grava `ROADMAP.md` nem `SPRINT_*.md`. Sob o `scrumRoot` ficam só
-  as pastas da semana com os arquivos pontuais que um passo salva (os prints do resumo), e todo caminho
+  as pastas da semana com os arquivos pontuais que um passo salva (os prints do resumo e os do teste assistido), e todo caminho
   ali precisa ficar dentro da pasta configurada, sem junção nem link simbólico; o placeholder de nuvem do
   OneDrive é aceito.
 - **Completar issues (`gaps`):**

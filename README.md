@@ -308,8 +308,8 @@ uma rota JSON de observações. Integrações ausentes são informadas explicita
 ### Completar as issues que o RoadS mostra
 
 O RoadS mantém o Roadmap a partir das issues abertas, e o Frontlights não escreve `ROADMAP.md` nem
-`SPRINT_*.md`. As pastas da semana sob o `scrumRoot` guardam só arquivos pontuais, como os prints do
-resumo para a diretoria.
+`SPRINT_*.md`. As pastas da semana sob o `scrumRoot` guardam só arquivos pontuais: os prints do resumo
+para a diretoria e os do teste assistido (`evidencias/`).
 
 Quando o projeto tem o bloco `roadmapSync` habilitado, toda sessão `/frontlights` começa perguntando se
 você quer completar no GitHub as issues que o RoadS mostra. O RoadS cria a issue com labels, Status,

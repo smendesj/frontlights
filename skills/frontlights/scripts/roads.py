@@ -5,7 +5,8 @@ Deterministic helper behind the issue-gaps question of /frontlights and the shar
 progress_report.py, closeout.py and cleanup.py: the configuration, the credential, the first-use
 approval, the HTTP transport, path safety under scrumRoot and the GitHub reader. Frontlights no
 longer writes ROADMAP.md or SPRINT_*.md: RoadS keeps the roadmap from the open issues, and the week
-folders under scrumRoot only hold the files a step saves there (the prints of the summary).
+folders under scrumRoot only hold the files a step saves there (the prints of the summary and of the watched
+runs).
 
 Operations (each prints one JSON object on stdout):
   status    configuration, credential presence and approval of the (endpoint URL, secretEnvVar) pair,

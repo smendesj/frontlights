@@ -225,7 +225,7 @@ O contrato com o RoadS (rotas, versão, o que é mudança aditiva e a regra para
 
 O Frontlights não sincroniza roadmap nem sprint: o RoadS mantém o Roadmap a partir das issues abertas, e
 `ROADMAP.md` e `SPRINT_*.md` não são escritos. As pastas da semana sob `roadmapSync.scrumRoot` (nomeadas por
-`weekFolderPattern`) guardam só arquivos pontuais, como os prints do resumo. As chaves da antiga sincronização
+`weekFolderPattern`) guardam só arquivos pontuais: os prints do resumo e os do teste assistido (`evidencias/`). As chaves da antiga sincronização
 (`roadmapFile`, `sprintFilePattern`, `maxSprintItems`, `markCompleted`, `issueTargets`) são ignoradas, e o
 `status` de `scripts/roads.py` as lista em `obsoleteKeys`; a aprovação do par (URL, variável) continua em
 `.frontlights/roadmap-sync/approval.json`.
