@@ -159,8 +159,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
                          `references/development.md`, "The release"); com `homolog suite --release --mode full
                          --from <registro>`, o registro da release é adotado sem rodar: guarda a execução
-                         original e a evidência atual da main local (da origem ficam mode, source, argv,
-                         exitCode, timedOut, seconds, output, concurrent, startedAt e finishedAt), e
+                         original e a evidência atual da main local (copia o registro da origem inteiro
+                         (warnings incluídos), menos base, head e evidence: mode, source, argv, exitCode,
+                         timedOut, seconds, output, concurrent, startedAt e finishedAt vêm dela), e
                          `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem; os juízes o leem como
                          um rodado
   release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa

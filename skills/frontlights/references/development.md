@@ -624,11 +624,13 @@ offers the release again with everything accumulated.
   `adoptedFrom` naming the origin (`docs/protocol.md`), then `release-plan` again, as after a run. The session gives
   the path of the record (the `suite.json` of an issue, in that issue's worktree, or the per-tip record
   `release/suite-<sha>.json` of another release) and never searches for one; it adopts before the cleanup of the
-  worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing, and the session runs the
-  suite as below: an impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head
-  the repository does not know, another commit tree or other evidence files than the tip's, `--from` with `--argv`
-  or `--timeout-seconds`, a tip that is not the local main's, or a dirty main. Without such a record, the session
-  runs the suite as below. In the main worktree, on the local main, run
+  worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing. A refusal of the record (an
+  impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head the repository does
+  not know, another commit tree or other evidence files than the tip's) means the session runs the suite as below. A
+  refusal of the place (a tip that is not the local main's, or a dirty main) is fixed first, by going to the tip or by
+  committing or discarding the change, and the adoption is tried again; `--from` with `--argv` or
+  `--timeout-seconds` is a mistake of the call, redone without them. Without such a record, the session runs the
+  suite as below. In the main worktree, on the local main, run
   `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite --release --mode full --base <base> --root <main worktree> --config .frontlights/config.json`
   on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is refused and nothing
   runs: commit or discard it first), then `release-plan` again: `fullSuite` must be `current`. `missing`, `stale`, `red` or `elsewhere` keeps `ready`

@@ -96,7 +96,13 @@ class ReleaseAdoptionTextTests(unittest.TestCase):
                        'worktree, or the per-tip record `release/suite-<sha>.json` of another release) and never '
                        'searches for one',
                        'before the cleanup of the worktrees (stage 7)',
-                       'A refusal writes nothing, and the session runs the suite as below',
+                       'A refusal writes nothing.',
+                       'A refusal of the record (an impact record, a red or timed-out run, a run with a diff or a '
+                       'file outside the commit, a head the repository does not know, another commit tree or other '
+                       "evidence files than the tip's) means the session runs the suite as below",
+                       "A refusal of the place (a tip that is not the local main's, or a dirty main) is fixed first, "
+                       'by going to the tip or by committing or discarding the change, and the adoption is tried again',
+                       '`--from` with `--argv` or `--timeout-seconds` is a mistake of the call, redone without them',
                        'Without such a record, the session runs the suite as below',
                        'then `release-plan` again, as after a run'):
             with self.subTest(file='development.md', phrase=phrase):
@@ -110,7 +116,8 @@ class ReleaseAdoptionTextTests(unittest.TestCase):
                        'adotado sem rodar',
                        'guarda a execução original e a evidência atual da main local',
                        '`adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem',
-                       'os juízes o leem como um rodado'):
+                       'os juízes o leem como um rodado',
+                       'copia o registro da origem inteiro (warnings incluídos), menos base, head e evidence'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, text)
 
