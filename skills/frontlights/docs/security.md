@@ -313,12 +313,29 @@ O resumo para a diretoria (`scripts/progress_report.py`) executa comandos lidos 
   dado na etapa dos prints, com dados de teste. `draftGuide` e `shotsDir` são caminhos relativos
   dentro do projeto (sem caminho absoluto, `..` ou `~`) e fazem parte do bloco aprovado. Nada é
   enviado antes da aprovação do rascunho completo. Os prints que o teste assistido guardou para o
-  resumo (`.frontlights/issues/<n>/browser/resumo/`) ficam dentro do projeto e não são versionados; a
+  resumo (o `resumo/` da pasta de evidências abaixo) nunca são versionados; a
   operação `candidates` só os lista (sem rede, sem aprovação, nada é copiado) e só o que o usuário
-  escolhe é copiado para a pasta sincronizada, depois de a sessão olhar a imagem de novo à procura de
+  escolhe é copiado para a pasta do resumo, depois de a sessão olhar a imagem de novo à procura de
   nome ou dado de pessoa, login, caminho ou da faixa ANTES/DEPOIS. Um print guardado só é oferecido
   enquanto o código visível que ele mostra tem o id Git que tinha na passada DEPOIS (a conferência é
   um script, não uma barreira: um print de código mudado depois só é barrado se a skill o consultar).
+- **Prints do teste assistido na pasta da sprint (`evidence-dir`):** decisão do mantenedor (19/10/2026). Quando
+  o config do projeto tem `roadmapSync.scrumRoot` e `weekFolderPattern` (com o `roadmapSync` ligado ou não), os
+  prints da rodada (antes, depois e de falha) e os guardados para o resumo vão para
+  `<scrumRoot>/<weekFolderPattern da segunda-feira da rodada>/evidencias/<repositório>/<issue>` (e o `resumo/`
+  dela), não para o `.frontlights` da worktree, que a limpeza apaga. Os registros (`result.json` e os demais)
+  continuam no `.frontlights` e apontam para a pasta em `pastaDosPrints`.
+  - A pasta passa pelas travas de `contained_path` e `safe_folder`: dentro do `scrumRoot`, sem junção, link
+    simbólico nem outro ponto de reparse no caminho (o de nuvem do OneDrive é aceito); `scrumRoot` precisa ser um
+    caminho completo; `<repositório>` é o nome depois da barra de `repository` (letras, dígitos, `.`, `-` e `_`,
+    sem ponto no fim) e `<issue>` um inteiro positivo. Nenhum endereço é lido do texto de uma página.
+  - Sem rede e sem aprovação própria: a pasta vem do config do usuário, fora do repositório, e o
+    `evidence-dir` só cria pastas. Sem `scrumRoot` ou `weekFolderPattern`, os prints ficam no `.frontlights` como
+    antes.
+  - A pasta é sincronizada e compartilhada com a empresa, então os prints saem do computador assim que
+    gravados: valem as regras do teste assistido (só dados de teste, nunca produção, nenhuma senha, dado de pessoa
+    real ou caminho local na tela). A faixa ANTES/DEPOIS e a conta de teste aparecem nos prints crus por
+    desenho; os do resumo são limpos antes de gravados.
 - **Prints na pasta da semana (`weekShots`):** é a única gravação do resumo fora do projeto. O dia da pasta
   vem do último dia do período; um `--meeting` ou um `weekMeeting` do RoadS precisa ser uma segunda-feira
   posterior a esse dia e no máximo oito semanas depois da usual, senão é recusado, para um valor velho
