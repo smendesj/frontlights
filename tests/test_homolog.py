@@ -386,7 +386,7 @@ class LocalMainTextTests(unittest.TestCase):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
                        '"Agora não" deixa a issue homologada na main local',
-                       'a suíte inteira na main local (`homolog suite --release --mode full`) antes da oferta',
+                       'a suíte inteira na main local (`homolog suite --release --mode full`) e o `release-plan` de novo',
                        'release/suite.json', 'release/suite-full-<data-hora>.log'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
