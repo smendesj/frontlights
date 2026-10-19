@@ -1,0 +1,262 @@
+"""A suíte roda pelo Frontlights e o portão diz se ela cobre a ponta (issue 52, S1).
+
+`homolog suite` roda o argv de `homolog.suites.<modo>` do config (impacto ou completa) na worktree, grava a saída
+num log e o registro `.frontlights/issues/<n>/suite.json` com o HEAD e a evidência da árvore; `homolog suite-gate`
+compara esse registro com a ponta de agora: `current`, `stale`, `red`, `missing` ou `unconfigured`.
+
+Seams: as linhas de comando `homolog suite` e `homolog suite-gate` (saída JSON e código de saída), chamadas como
+subprocesso num repositório Git temporário, com um argv falso (um script Python mínimo que sai 0 ou 1, ou dorme).
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+HOMOLOG = ROOT / 'skills' / 'frontlights' / 'scripts' / 'homolog.py'
+FRONTLIGHTS = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
+
+# O argv falso: imprime os próprios argumentos e sai com o código pedido, ou dorme além do prazo.
+FAKE = '''import sys, time
+print('argumentos:', ' '.join(sys.argv[1:]))
+if '--dorme' in sys.argv:
+    time.sleep(30)
+sys.exit(1 if '--falha' in sys.argv else 0)
+'''
+
+
+class SuiteTestCase(unittest.TestCase):
+    """Um repositório temporário com um commit, um config fora dele e o argv falso fora dele."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(self.base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
+                        GIT_TERMINAL_PROMPT='0')
+        (self.base / 'gitconfig').write_text('', encoding='utf-8')
+        self.fake = self.base / 'fake_suite.py'
+        self.fake.write_text(FAKE, encoding='utf-8')
+        self.work = self.base / 'work'
+        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
+        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'),
+                           ('commit.gpgsign', 'false')):
+            self.git(self.work, 'config', key, value)
+        self.commit('app.txt', 'one\n', 'first')
+        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-7')
+        self.commit('app.txt', 'two\n', 'issue 7')
+
+    def git(self, cwd, *args):
+        prefix = ['git', '-C', str(cwd)] if cwd else ['git']
+        done = subprocess.run([*prefix, *args], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              env=self.env, stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(done.returncode, 0, f'git {" ".join(args)}: {done.stderr}')
+        return done
+
+    def commit(self, name, content, message):
+        (self.work / name).write_text(content, encoding='utf-8')
+        self.git(self.work, 'add', name)
+        self.git(self.work, 'commit', '-q', '-m', message)
+
+    def argv(self, *flags):
+        return [sys.executable, str(self.fake), *flags]
+
+    def config(self, suites=None, timeout=60):
+        """Writes the config outside the repository; `suites` maps a mode to the flags of the fake argv."""
+        homolog = {'backupDir': None}
+        if suites is not None:
+            homolog['suites'] = {mode: {'argv': self.argv(*flags), 'timeoutSeconds': timeout}
+                                 for mode, flags in suites.items()}
+        path = self.base / 'config.json'
+        path.write_text(json.dumps({'repository': None, 'homolog': homolog}), encoding='utf-8')
+        return path
+
+    def cli(self, *args, script=HOMOLOG):
+        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=120)
+        try:
+            result = json.loads(done.stdout)
+        except json.JSONDecodeError:
+            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
+        self.assertEqual(result['exitCode'], done.returncode)
+        self.assertNotIn('Traceback', done.stderr)
+        return done.returncode, result
+
+    def suite(self, config, mode, *flags):
+        return self.cli('suite', '--root', str(self.work), '--config', str(config), '--issue', '7',
+                        '--mode', mode, *flags)
+
+    def gate(self, config, *flags):
+        return self.cli('suite-gate', '--root', str(self.work), '--config', str(config), '--issue', '7', *flags)
+
+    @property
+    def record(self):
+        return self.work / '.frontlights' / 'issues' / '7' / 'suite.json'
+
+
+class SuiteRunTests(SuiteTestCase):
+    def test_without_the_mode_configured_nothing_runs_and_the_key_is_named(self):
+        for suites in (None, {'full': ()}):
+            with self.subTest(suites=suites):
+                code, result = self.suite(self.config(suites), 'impact')
+                self.assertEqual(code, 2)
+                self.assertEqual(result['state'], 'unconfigured')
+                self.assertIn('homolog.suites.impact', result['message'])
+                self.assertFalse(self.record.exists())
+
+    def test_impact_replaces_the_base_and_writes_the_record_with_the_tree_evidence(self):
+        code, result = self.suite(self.config({'impact': ('--impacto', '{base}')}), 'impact', '--base', 'main')
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result['state'], 'green')
+        saved = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertEqual(saved, result['record'])
+        self.assertEqual((saved['mode'], saved['base'], saved['exitCode'], saved['source']),
+                         ('impact', 'main', 0, 'config'))
+        self.assertEqual(saved['argv'], self.argv('--impacto', 'main'))
+        head = self.git(self.work, 'rev-parse', 'HEAD').stdout.strip()
+        self.assertEqual((saved['head'], saved['evidence']['head']), (head, head))
+        for key in ('branch', 'diff_sha256', 'files_sha256'):
+            self.assertIn(key, saved['evidence'])
+        self.assertFalse(saved['concurrent'])
+        self.assertIsInstance(saved['seconds'], (int, float))
+        for key in ('startedAt', 'finishedAt'):
+            self.assertRegex(saved[key], r'[+-]\d\d:\d\d$')
+        log = Path(saved['output'])
+        self.assertTrue(os.path.samefile(log.parent, self.record.parent))
+        self.assertIn('argumentos: --impacto main', log.read_text(encoding='utf-8'))
+
+    def test_the_base_defaults_to_main(self):
+        code, result = self.suite(self.config({'impact': ('{base}',)}), 'impact')
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result['record']['argv'][-1], 'main')
+
+    def test_a_failing_suite_is_red_and_exits_one(self):
+        code, result = self.suite(self.config({'full': ('--falha',)}), 'full')
+        self.assertEqual((code, result.get('state')), (1, 'red'))
+        self.assertEqual(json.loads(self.record.read_text(encoding='utf-8'))['exitCode'], 1)
+
+    def test_concurrent_is_recorded(self):
+        code, result = self.suite(self.config({'full': ()}), 'full', '--concurrent')
+        self.assertEqual(code, 0, result)
+        self.assertTrue(json.loads(self.record.read_text(encoding='utf-8'))['concurrent'])
+
+    def test_a_timeout_kills_the_suite_and_exits_one(self):
+        code, result = self.suite(self.config({'full': ('--dorme',)}, timeout=1), 'full')
+        self.assertEqual((code, result.get('state')), (1, 'red'))
+        saved = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertTrue(saved['timedOut'])
+        self.assertIsNone(saved['exitCode'])
+        self.assertLess(saved['seconds'], 20)
+
+    def test_a_full_argv_given_once_runs_without_the_config_and_is_recorded_as_argument(self):
+        given = json.dumps(self.argv('--uma-vez'))
+        code, result = self.suite(self.config(), 'full', '--argv', given)
+        self.assertEqual(code, 0, result)
+        saved = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertEqual((saved['source'], saved['argv']), ('argument', self.argv('--uma-vez')))
+        gate_code, gate = self.gate(self.config())
+        self.assertEqual((gate_code, gate.get('status')), (0, 'current'))
+
+    def test_an_argv_with_impact_is_refused_and_nothing_runs(self):
+        code, result = self.suite(self.config({'impact': ()}), 'impact', '--argv', json.dumps(self.argv()))
+        self.assertEqual(code, 1)
+        self.assertIn('--argv', result['message'])
+        self.assertFalse(self.record.exists())
+
+    def test_a_malformed_suite_in_the_config_is_refused(self):
+        path = self.base / 'config.json'
+        for suites in ({'impact': {'argv': 'python -m unittest'}}, {'impact': {'argv': ['cmd', '/c', 'x']}},
+                       {'full': {'argv': ['python'], 'timeoutSeconds': 0}}, {'outra': {'argv': ['python']}},
+                       {'full': {'argv': ['python'], 'extra': 1}}, ['python']):
+            with self.subTest(suites=suites):
+                path.write_text(json.dumps({'repository': None, 'homolog': {'suites': suites}}), encoding='utf-8')
+                code, result = self.suite(path, 'full')
+                self.assertEqual(code, 1)
+                self.assertIn('homolog.suites', result['message'])
+                self.assertFalse(self.record.exists())
+
+    def test_the_route_through_frontlights_gives_the_same_answer(self):
+        config = self.config()
+        direct = self.suite(config, 'full')
+        routed = self.cli('homolog', 'suite', '--root', str(self.work), '--config', str(config), '--issue', '7',
+                          '--mode', 'full', script=FRONTLIGHTS)
+        self.assertEqual(direct[0], 2)
+        self.assertEqual(direct[1].get('state'), 'unconfigured')
+        self.assertEqual(routed, direct)
+
+
+class SuiteInspectTests(SuiteTestCase):
+    def inspect(self, config):
+        return subprocess.run([sys.executable, str(FRONTLIGHTS), 'inspect', '--config', str(config), '--root',
+                               str(self.work)], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              env=self.env, stdin=subprocess.DEVNULL, timeout=120)
+
+    def test_inspect_accepts_the_suites_and_refuses_a_malformed_one(self):
+        accepted = self.inspect(self.config({'impact': ('{base}',), 'full': ()}))
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        path = self.base / 'config.json'
+        path.write_text(json.dumps({'repository': None, 'homolog': {'suites': {'full': {'argv': 'python x.py'}}}}),
+                        encoding='utf-8')
+        refused = self.inspect(path)
+        self.assertEqual(refused.returncode, 1)
+        self.assertNotIn('Traceback', refused.stderr)
+        self.assertIn('homolog.suites.full.argv', json.loads(refused.stderr)['error'])
+
+
+class SuiteGateTests(SuiteTestCase):
+    def ran(self, mode='impact', *flags):
+        config = self.config({mode: flags})
+        code, result = self.suite(config, mode)
+        self.assertEqual(code, 1 if '--falha' in flags else 0, result)
+        return config
+
+    def test_a_green_record_of_the_tip_is_current(self):
+        config = self.ran()
+        code, result = self.gate(config)
+        self.assertEqual((code, result.get('status')), (0, 'current'))
+        self.assertEqual(result['mode'], 'impact')
+
+    def test_a_commit_after_the_run_makes_it_stale(self):
+        config = self.ran()
+        self.commit('app.txt', 'three\n', 'after the suite')
+        code, result = self.gate(config)
+        self.assertEqual((code, result.get('status')), (2, 'stale'))
+        self.assertIn('head', result['changed'])
+
+    def test_an_uncommitted_edit_after_the_run_makes_it_stale(self):
+        config = self.ran()
+        (self.work / 'app.txt').write_text('edited\n', encoding='utf-8')
+        code, result = self.gate(config)
+        self.assertEqual((code, result.get('status')), (2, 'stale'))
+        self.assertNotIn('head', result['changed'])
+        self.assertEqual(result['files_changed'], ['app.txt'])
+
+    def test_a_failed_suite_of_the_tip_is_red(self):
+        config = self.ran('full', '--falha')
+        code, result = self.gate(config)
+        self.assertEqual((code, result.get('status')), (2, 'red'))
+
+    def test_without_a_record_it_is_missing(self):
+        code, result = self.gate(self.config({'impact': ()}))
+        self.assertEqual((code, result.get('status')), (2, 'missing'))
+
+    def test_without_a_record_and_without_suites_it_is_unconfigured(self):
+        code, result = self.gate(self.config())
+        self.assertEqual((code, result.get('status')), (2, 'unconfigured'))
+
+    def test_require_full_does_not_take_an_impact_record(self):
+        config = self.ran()
+        code, result = self.gate(config, '--require', 'full')
+        self.assertEqual(code, 2)
+        self.assertNotEqual(result['status'], 'current')
+        self.assertEqual(result['mode'], 'impact')
+        full = self.ran('full')
+        code, result = self.gate(full, '--require', 'full')
+        self.assertEqual((code, result.get('status')), (0, 'current'))
+
+
+if __name__ == '__main__':
+    unittest.main()

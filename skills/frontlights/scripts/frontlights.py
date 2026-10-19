@@ -1013,14 +1013,16 @@ def isolated_local_url(value):
 
 
 def validate_homolog_block(config):
-    """Refuse an invalid `homolog` block (`homolog.backupDir`, the backup folder of `homolog bundle`) with the rule
-    of homolog.py. An absent, null or valid block adds nothing to the output, and the folder itself is not checked
-    here: inspect is read-only and `bundle` checks it at run time."""
+    """Refuse an invalid `homolog` block (`homolog.backupDir`, the backup folder of `homolog bundle`, and
+    `homolog.suites`, the suites of `homolog suite`) with the rules of homolog.py. An absent, null or valid block adds
+    nothing to the output, and the folder itself is not checked here: inspect is read-only and `bundle` checks it at
+    run time."""
     if config.get('homolog') is None:
         return
     import homolog
     try:
         homolog.backup_dir(config)
+        homolog.suite_block(config)
     except homolog.Refusal as refusal:
         raise ValueError(str(refusal)) from None
 
@@ -1275,7 +1277,7 @@ def main():
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
     p = sub.add_parser('homolog', help='homolog.py: `hook`, `sync`, `bundle` and `release-plan` of the local main, '
-                                       'the homologation (issue 32)')
+                                       'the homologation (issue 32), and `suite` and `suite-gate` (issue 52)')
     p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
     args = parser.parse_args()
     code = 0
