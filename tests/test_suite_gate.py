@@ -957,6 +957,45 @@ class ReleaseCoveredTests(CoveredTestCase):
         self.assertEqual(plan['fullSuite']['covered'], self.saved()['covered'])
         self.assertIn('2 módulo', plan['message'])
 
+    def test_a_later_fix_worktree_of_the_issue_does_not_hide_the_record_of_the_branch_of_the_issue(self):
+        """Uma correção de revisão ganha a própria worktree e uma entrada da mesma issue, depois da entrada da issue,
+        no registro de autorização; o registro da suíte continua na worktree da branch da issue, e é ele que conta."""
+        worktree = self.issue(1)
+        fix = self.base / 'wt-1-fix1'
+        self.git(self.work, 'worktree', 'add', '-q', '-b', 'claude/issue-1-fix1', str(fix), 'claude/issue-1')
+        self.entries.append({'issue': 1, 'branch': 'claude/issue-1-fix1', 'path': str(fix)})
+        (self.work / '.frontlights' / 'authorization.json').write_text(json.dumps(
+            {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': self.entries}),
+            encoding='utf-8')
+        self.deliver(1)
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
+        covered = self.saved()['covered']
+        self.assertEqual(covered['refused'], [])
+        self.assertTrue(os.path.samefile(covered['from'][0]['path'],
+                                         worktree / '.frontlights' / 'issues' / '1' / 'suite.json'))
+
+    def test_a_later_fix_branch_not_in_the_local_main_does_not_take_the_issue_out_of_the_release(self):
+        """A branch de uma correção posterior da mesma issue, ainda fora da main local, não decide se a issue é da
+        release: vale a branch da issue, que está na main local; o plano a lista e a release pula o que ela cobriu."""
+        self.issue(1)
+        fix = self.base / 'wt-1-fix1'
+        self.git(self.work, 'worktree', 'add', '-q', '-b', 'claude/issue-1-fix1', str(fix), 'claude/issue-1')
+        (fix / 'correcao.txt').write_text('correção ainda fora da main\n', encoding='utf-8')
+        self.git(fix, 'add', '.')
+        self.git(fix, 'commit', '-q', '-m', 'correção em andamento')
+        self.entries.append({'issue': 1, 'branch': 'claude/issue-1-fix1', 'path': str(fix)})
+        (self.work / '.frontlights' / 'authorization.json').write_text(json.dumps(
+            {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': self.entries}),
+            encoding='utf-8')
+        self.deliver(1)
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
+        code, plan = self.cli('release-plan', '--root', str(self.work))
+        self.assertEqual((code, plan['release']), (0, [1]), plan)
+
     def test_a_record_that_does_not_count_contributes_nothing_and_its_reason_is_recorded(self):
         """Cada issue entra na main local logo depois do próprio registro; só a última tem a árvore da ponta."""
         self.issue(1)                                       # verde, mas a ponta andou depois dela

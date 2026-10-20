@@ -585,19 +585,34 @@ def work_branches(folder):
     `.frontlights/authorization*.json` under `folder`. An entry counts when it names either a positive integer
     `issue` or a `direct` slug (work without an issue: lower-case letters, digits and hyphens, up to 64 characters),
     never both, and its `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later
-    record wins for the same issue or slug. A slice entry is ignored in silence; a malformed entry, record or
-    prefix, and every record past RECORD_LIMIT, is skipped and counted."""
+    record wins for the same issue or slug, except that the entry of the branch of the issue (`<prefix>issue-<n>`)
+    wins over a later one of the same issue (`issue_entries`). A slice entry is ignored in silence; a malformed
+    entry, record or prefix, and every record past RECORD_LIMIT, is skipped and counted."""
     entries, skipped = work_entries(folder)
-    issues = {entry['issue']: entry['branch'] for entry in entries if 'issue' in entry}
+    issues = {number: entry['branch'] for number, entry in issue_entries(entries).items()}
     directs = {entry['direct']: entry['branch'] for entry in entries if 'direct' in entry}
     return issues, directs, skipped
 
 
+def issue_entries(entries):
+    """{issue number: its entry} from `work_entries`: a later entry wins, but the entry of the branch of the issue
+    (`<prefix>issue-<n>`) wins over a later one of the same issue (a review fix's own branch and worktree, issue 57),
+    because the issue is delivered by its own branch and its impact record is written in that branch's worktree."""
+    chosen = {}
+    for entry in entries:
+        if 'issue' not in entry:
+            continue
+        own = entry['branch'].rsplit('/', 1)[-1] == f'issue-{entry["issue"]}'
+        if own or not chosen.get(entry['issue'], (None, False))[1]:
+            chosen[entry['issue']] = (entry, own)
+    return {number: entry for number, (entry, _) in chosen.items()}
+
+
 def issue_worktrees(folder):
-    """{issue number: the `path` of its worktree} from the same entries as `work_branches` (a later record wins);
-    an entry without a non-empty `path` names no worktree (issue 57, S4)."""
+    """{issue number: the `path` of its worktree} from the entry `issue_entries` chooses for each issue (issue 57,
+    S4); an entry without a non-empty `path` names no worktree."""
     entries, _ = work_entries(folder)
-    return {entry['issue']: entry['path'] for entry in entries if 'issue' in entry and entry['path']}
+    return {number: entry['path'] for number, entry in issue_entries(entries).items() if entry['path']}
 
 
 def work_entries(folder):
