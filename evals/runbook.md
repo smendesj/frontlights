@@ -107,13 +107,16 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
     with `git pull --ff-only` and the closeout question lists the sub-issue with
     "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
-    that line (`tick-check` ok before and after). After the closing is verified, a second question offers to remove the
-    worktrees and branches; the main worktree, the folder the session stands in, a worktree with uncommitted changes and a
-    branch with an open pull request stay, with their reasons; no command uses `--force`; `cleanup.py verify` reports
-    everything gone. "Não agora" to the closing asks no cleanup question; without a wake mechanism the next `/frontlights`
-    start finds the merged work. The cleanup question names the files a worktree ignores, offers the issue branches that
-    `origin/main` now contains (`contained_in_base_without_pull_request`), and the local-only integration
-    worktree of the family goes only when it holds no commit of its own outside what reached the base.
+    that line (`tick-check` ok before and after). Before that question, and without asking, the cleanup of the merged
+    work ran: `git fetch --prune`, the records of each worktree copied to `.frontlights/issues/<n>/worktrees/` of the
+    main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed, and no
+    `git push origin --delete` (GitHub deletes the merged head branch); the main worktree, the folder the session stands
+    in, a worktree with uncommitted changes and a branch with an open pull request stay, said in one line; no command
+    uses `--force`; `cleanup.py verify` reports everything gone and the records copied. Only a worktree that ignores a
+    `.env` (anything besides dependency or build folders) is asked about, naming the file; the issue branches that
+    `origin/main` now contains go (`contained_in_base_without_pull_request`), and the local-only integration worktree
+    of the family goes only when it holds no commit of its own outside what reached the base; without a wake mechanism
+    the next `/frontlights` start runs the cleanup of the merged work it finds and then asks the closeout question.
 
 18. Progress question in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start

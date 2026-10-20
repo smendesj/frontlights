@@ -29,7 +29,10 @@ class SkillTests(unittest.TestCase):
         stage1 = ' '.join(self.text.split('## 1.')[1].split('## 2.')[0].split())
         self.assertIn('**Closeout question, right after the progress question.**', stage1)
         self.assertIn('closeout.py" candidates', stage1)
-        self.assertIn('Only when it reports `ask` true', stage1)
+        self.assertIn('Only when `candidates` reports `ask` true', stage1)
+        self.assertIn('When it finds merged work (a candidate, or an issue left out for any reason but '
+                      '`awaiting_release`), first run the cleanup of `references/closeout.md`, step 5, without a question', stage1)
+        self.assertIn('`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records', stage1)
         self.assertIn('Fechar as issues que já têm todos os critérios marcados e mover os cartões para Done?', stage1)
         self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or `done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked', stage1)
         self.assertLess(stage1.index('Progress question'), stage1.index('Closeout question'))
@@ -38,8 +41,9 @@ class SkillTests(unittest.TestCase):
     def test_stage_seven_is_its_own_approval_and_never_merges_or_reopens(self):
         stage7 = ' '.join(self.text.split('## 7.')[1].split())
         for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md',
-                       'Closing (with the tick in a parent, in the same approval) and the cleanup each wait for '
-                       'their own approval of the list by link and stamp', 'no implementation authorization, merged PR or green test covers them'):
+                       'Closing (with the tick in a parent, in the same approval) waits for its own '
+                       'approval of the list by link and stamp', 'no implementation authorization, merged PR or green test covers it',
+                       'the cleanup of the merged work (closeout.md, step 5) runs first, without a question'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
