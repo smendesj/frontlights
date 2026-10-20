@@ -651,7 +651,8 @@ Com o merge confirmado, nesta ordem:
    os roda, item por item; um comando que falha deixa o resto daquele item sem rodar. Primeiro `git fetch --prune`;
    depois, para cada worktree com registros do `.frontlights` dentro, a cópia deles para
    `.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da worktree principal (`cleanup.py archive`), numa
-   pasta própria que ele recusa se já tiver arquivo, e só então a remoção
+   pasta própria (se ela já tem uma cópia igual, inteira ou parcial, de uma rodada cuja remoção falhou, ele completa
+   o que falta; se tem arquivo diferente ou a mais, recusa sem copiar nada e o item fica), e só então a remoção
    da worktree e da branch local; por último a branch local da release mesclada. Só entram as worktrees e branches
    das issues e das slices que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
    empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao

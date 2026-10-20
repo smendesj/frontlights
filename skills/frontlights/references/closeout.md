@@ -181,8 +181,11 @@ before `git worktree remove`: `cleanup.py archive --from <worktree>/.frontlights
 records to the main worktree's `.frontlights/issues/<n>/worktrees/<worktree folder>-<short tip>/` (a folder of its
 own per archive; `.frontlights/worktrees/<worktree folder>-<short tip>/` for a worktree named without an issue). The
 destination must lie under the main worktree's `.frontlights` (the main worktree read from Git for the worktree of
-`--from`), and a destination that already holds files is refused (exit 1, nothing copied), so no earlier archive is
-ever overwritten. A failed copy stops that item, so the worktree keeps its records.
+`--from`). A destination whose files are all the same as the records (same paths, same bytes: an earlier round copied
+them, whole or half-way, and the removal failed) is an earlier copy: `archive` copies what it lacks and is ok, so the
+removal runs again. A destination with any differing or extra file is refused (exit 1, nothing copied), so no earlier
+archive is ever overwritten: report it and leave that item, naming the folder for the user to compare; never overwrite
+it. A failed copy stops that item, so the worktree keeps its records.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
 pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch`,
 once that branch contains a commit of its own, it was never pushed and no pull request was

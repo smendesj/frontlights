@@ -43,9 +43,10 @@ Operations (each prints one JSON object on stdout):
           issue, never by a pull request: it can go when that branch (the entry of the same issue without `slice`)
           contains its tip, it was never pushed and no pull request was opened from it.
   archive copy --from <worktree>/.frontlights into --to, a folder under the `.frontlights` folder of the main
-          worktree of that repository (read from Git), that does not exist yet or is empty: one that holds anything is
-          refused, nothing copied, so no earlier archive is ever overwritten. The one operation that writes, and only
-          into --to.
+          worktree of that repository (read from Git), that does not exist yet or is empty. One whose files are all
+          the same as the records (same paths, same bytes: an earlier copy, whole or stopped half-way, whose removal
+          failed) gets the missing files and is ok; one with any differing or extra file is refused, nothing copied,
+          so no earlier archive is ever overwritten. The one operation that writes, and only into --to.
   verify  reread --worktree, --branch and --records values and say whether each worktree is gone (unregistered and
           its folder absent), each local branch is gone, and each records folder holds the copied files.
 
@@ -57,6 +58,7 @@ not gone or not copied yet. A refusal is JSON, never a traceback.
 """
 
 import argparse
+import filecmp
 import fnmatch
 import json
 import os
@@ -634,10 +636,39 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     return result
 
 
+def same_entry(origin, copy):
+    """Whether `copy` is what `shutil.copytree(..., symlinks=True)` makes of `origin`: the same link, or a regular file
+    with the same bytes."""
+    if origin.is_symlink() or copy.is_symlink():
+        return origin.is_symlink() and copy.is_symlink() and os.readlink(origin) == os.readlink(copy)
+    return origin.is_file() and copy.is_file() and filecmp.cmp(origin, copy, shallow=False)
+
+
+def archived_part(origin, target):
+    """The relative paths of the files already in `target` when every one of them is the same as in `origin` (an
+    earlier copy of these records, whole or stopped half-way); None when `target` holds anything else."""
+    present = set()
+    for folder, dirs, files in os.walk(target):
+        here = Path(folder)
+        for name in dirs + files:
+            copy, relative = here / name, (here / name).relative_to(target)
+            if name in dirs and not copy.is_symlink():
+                if not (origin / relative).is_dir() or (origin / relative).is_symlink():
+                    return None
+                continue
+            if not same_entry(origin / relative, copy):
+                return None
+            present.add(relative.as_posix())
+    return present
+
+
 def op_archive(source, destination):
     """Copy the Frontlights records of a worktree (`<worktree>/.frontlights`) into `destination`, a folder under the
-    `.frontlights` folder of the main worktree of the same repository (Git says which), that does not exist yet or is
-    empty: an earlier archive is never overwritten. The one write of this helper, and only into `destination`."""
+    `.frontlights` folder of the main worktree of the same repository (Git says which). A destination that does not
+    exist or is empty gets the copy; one whose files are all the same as the records (same paths, same bytes) is an
+    earlier copy of them (review r2 of issue 63, R2-1: the removal after it failed), so the files it lacks are copied
+    and it is ok; one with any differing or extra file is refused, nothing copied: an earlier archive is never
+    overwritten. The one write of this helper, and only into `destination`."""
     require(source and destination, 'archive needs --from <worktree>/.frontlights and --to <folder>')
     origin, target = Path(source).resolve(), Path(destination).resolve()
     require(origin.name == '.frontlights' and origin.is_dir(), '--from must be the .frontlights folder of a worktree')
@@ -649,18 +680,27 @@ def op_archive(source, destination):
             '--to must be a folder under the .frontlights folder of the main worktree')
     require(not holds(origin, target) and not holds(target, origin), '--from and --to must not hold one another')
     try:
-        occupied = target.exists() and (not target.is_dir() or any(target.iterdir()))
+        present = (set() if not target.exists() else
+                   archived_part(origin, target) if target.is_dir() and not target.is_symlink() else None)
     except OSError:
-        occupied = True
-    require(not occupied, '--to already holds files: nothing was copied, so no earlier archive is overwritten; '
-                          'the worktree keeps its records')
+        present = None
+    require(present is not None, '--to already holds files that differ from these records or that they do not have: '
+                                 'nothing was copied, so no earlier archive is overwritten; the worktree keeps its records')
+
+    def skip(folder, names):   # what an earlier copy already holds, the same (checked above)
+        return [n for n in names if (Path(folder) / n).relative_to(origin).as_posix() in present]
     try:
-        shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True, ignore=skip)
     except (OSError, shutil.Error):
         raise Refusal('the records could not be copied; nothing was removed, so the worktree keeps them')
     copied = sum(1 for p in target.rglob('*') if p.is_file())
-    return {'ok': True, 'exitCode': 0, 'to': rs.clean(target.as_posix(), 300), 'files': copied,
-            'message': f'{copied} file(s) of records are in {target.as_posix()}.'}
+    where = target.as_posix()
+    message = (f'{copied} file(s) of records are in {where}.' if not present else
+               f'{where} already held {len(present)} of these file(s), the same; {copied - len(present)} missing '
+               f'file(s) copied, {copied} in all.' if copied > len(present) else
+               f'{where} already holds these {copied} file(s), the same: the records were already archived; nothing copied.')
+    return {'ok': True, 'exitCode': 0, 'to': rs.clean(where, 300), 'files': copied,
+            'alreadyArchived': len(present), 'message': message}
 
 
 def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):

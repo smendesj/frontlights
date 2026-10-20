@@ -891,6 +891,53 @@ class CliTests(CleanupCase):
                                  '--branch', branch)
         self.assertEqual((code, json.loads(out)['ok']), (1, False))
 
+    def archive(self, source, target):
+        code, out, _ = self.main('archive', '--from', str(source), '--to', str(target))
+        return code, json.loads(out)
+
+    def records(self, folder):
+        return {p.relative_to(folder).as_posix(): p.read_bytes() for p in sorted(folder.rglob('*')) if p.is_file()}
+
+    def test_archive_again_after_the_removal_failed_is_ok_and_keeps_the_records(self):
+        """Review r2 of issue 63 (R2-1): a round copies the records and `git worktree remove` fails; the next round
+        offers the same worktree, tip and `recordsTo`. The second archive finds the same files and says so (exit 0),
+        so the removal goes on; a copy that stopped half-way is completed."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        code, first = self.archive(source, target)
+        self.assertEqual((code, first['ok'], first['files']), (0, True, 2))
+        code, second = self.archive(source, target)
+        self.assertEqual((code, second['ok'], second['exitCode'], second['files']), (0, True, 0, 2))
+        self.assertIn('already', second['message'])
+        self.assertEqual(self.records(target), self.records(source))
+        (target / 'sub' / 'a.txt').unlink()   # a copy that failed half-way
+        code, third = self.archive(source, target)
+        self.assertEqual((code, third['ok'], third['files']), (0, True, 2))
+        self.assertEqual(self.records(target), self.records(source))
+
+    def test_archive_refuses_a_destination_with_a_differing_or_extra_file_and_leaves_it(self):
+        """Review r2 of issue 63 (R2-1): any file of the destination that differs from the source, or that the source
+        does not have, is refused (exit 1), nothing copied, the destination untouched."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        source.mkdir()
+        (source / 'note.txt').write_text('evidence')
+        (source / 'more.txt').write_text('more')
+        for name, files in (('differs', {'note.txt': 'other'}), ('extra', {'note.txt': 'evidence', 'old.txt': 'old'})):
+            with self.subTest(name):
+                target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f'wt12-{name}'
+                target.mkdir(parents=True)
+                for file, text in files.items():
+                    (target / file).write_text(text)
+                before = self.records(target)
+                code, result = self.archive(source, target)
+                self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+                self.assertEqual(self.records(target), before)
+
     def test_usage_mistakes_are_json_refusals_too(self):
         for argv in ([], ['plan'], ['frobnicate', '--config', 'x'], ['plan', '--config', 'x', '--bogus'], ['verify', '--config']):
             with self.subTest(argv=argv):

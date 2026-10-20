@@ -298,7 +298,9 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
 - o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do
   `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/`), sem apagar o que já está
-  lá: recusa um destino que já tem arquivo (nada é copiado), origem que não seja uma pasta `.frontlights` e destino
+  lá: um destino cujos arquivos são todos iguais aos registros (mesmo caminho, mesmos bytes: cópia anterior, inteira
+  ou parcial, cuja remoção falhou) recebe só o que falta; recusa um destino com arquivo diferente ou a mais (nada é
+  copiado, nada é sobrescrito), origem que não seja uma pasta `.frontlights` e destino
   fora do `.frontlights` da worktree principal daquele repositório (lida do Git); ele vem antes do `git worktree
   remove`, e uma cópia que falha deixa a worktree e os registros onde estão;
 - a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
