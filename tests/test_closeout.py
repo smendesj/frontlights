@@ -115,6 +115,8 @@ class FakeGh:
         if self.fail_issues or (self.deny_cards and 'projectItems' in query):
             raise rs.Refusal(REFUSED)
         repo, errors = {}, []
+        if 'defaultBranchRef' in query:
+            repo['defaultBranchRef'] = None if self.default_branch is None else {'name': self.default_branch}
         for alias, number in re.findall(r'(i\d+): issue\(number: (\d+)\)', query):
             raw = self.nodes.get(int(number))
             if raw is None:
@@ -1192,6 +1194,37 @@ class DoneByTheBoardTests(CloseoutCase):
         result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Doing'})})
         self.assertEqual(result['cardsOutsideDone'], [])
         self.assertTrue(result['ok'])
+
+
+class ClosedByTheReleaseTests(CloseoutCase):
+    """Issue 63, S3: after the merge of a release whose pull request carried `Closes #n` for the `closes` of its
+    `release-plan`, the closeout only verifies those issues, and `candidates` sees the rest; an issue of `closes`
+    already closed is never a candidate again, and one GitHub still shows open fails the verify, which reads it again."""
+
+    def test_the_closes_are_verified_and_the_rest_go_to_candidates(self):
+        nodes = {1: node(1, state='CLOSED', card={'Status': 'Done'}), 2: node(2), 3: node(3, text=DONE_PARTIAL)}
+        verified, _ = self.verify(nodes, issues='1')
+        self.assertEqual((verified['ok'], verified['exitCode'], verified['cardsOutsideDone']), (True, 0, []))
+        result, _ = self.candidates(nodes, issues='2,3')
+        self.assertEqual([c['number'] for c in result['candidates']], [2])
+        self.assertEqual([e['number'] for e in result['excluded']], [3])
+        again, _ = self.candidates(nodes, issues='1,2,3')
+        self.assertEqual((again['alreadyDone'], [c['number'] for c in again['candidates']]), (1, [2]))
+
+    def test_an_issue_of_closes_still_open_fails_the_verify(self):
+        verified, _ = self.verify({1: node(1)}, issues='1')
+        self.assertEqual((verified['ok'], verified['exitCode']), (False, 1))
+
+    def test_the_keyword_verdict_of_a_release(self):
+        gh = FakeGh({1: node(1), 2: node(2, parent=1), 3: node(3, text=DONE_ALL + '\n## Pendências conhecidas\n- [ ] x\n')})
+        default, found = closeout.release_keywords(gh, REPO, [1, 2, 3, 4], 'main')
+        self.assertEqual(default, 'main')
+        self.assertEqual({n: e['closing'] for n, e in found.items()},
+                         {1: True, 2: 'sub_issue', 3: 'pending_outside', 4: 'not_found'})
+        self.assertEqual(gh.violations, [])
+        self.assertTrue(all('projectItems' not in q for q in gh.queries()))
+        other = FakeGh({1: node(1)}, default_branch='develop')
+        self.assertEqual(closeout.release_keywords(other, REPO, [1], 'main'), ('develop', {}))
 
 
 class ReviewFindingsTests(CloseoutCase):

@@ -489,8 +489,9 @@ def parse_view(number, node, repository, board, with_cards):
     opened = [c['number'] if c['external'] is None else f"{c['external']}#{c['number']}"
               for c in sorted(children, key=lambda c: (c['external'] is not None, c['number'])) if c['state'] != 'CLOSED']
     prs, _ = page(node.get('closedByPullRequestsReferences'))   # a cut list only hides a caution: never a reason to skip
-    # The pull requests of this plugin carry no closing keyword, so GitHub does not list them above: they show up as
-    # cross references (a pull request that merely cites the issue; an issue that cites it has no number here).
+    # Only the release pull request carries a closing keyword, and only for its `closes`; GitHub does not list the
+    # other pull requests above: they show up as cross references (a pull request that merely cites the issue; an
+    # issue that cites it has no number here).
     mentions, _ = page(node.get('timelineItems'))
     prs = prs + [event['source'] for event in mentions if isinstance(event.get('source'), dict)]
     linked, seen = [], set()
@@ -789,6 +790,61 @@ def closing_order(found, views):
             if waiting[parent] == 0:
                 heapq.heappush(ready, parent)
     return order + sorted(set(found) - set(order))
+
+
+# ---------------------------------------------------------------- closing keyword of the release
+
+def default_branch(gh, repository):
+    """The repository's default branch as GitHub names it, or None when the answer carries no plain name."""
+    owner, name = repository.split('/')
+    data = rs.graphql(gh, 'query { repository(owner: "%s", name: "%s") { defaultBranchRef { name } } }' % (owner, name))
+    branch = (data.get('repository') or {}).get('defaultBranchRef')
+    value = branch.get('name') if isinstance(branch, dict) else None
+    return value if isinstance(value, str) and valid_branch(value) else None
+
+
+def keyword_verdict(view):
+    """True when the release pull request may carry `Closes #n` for this issue: open, of the top level, every box of
+    its acceptance criteria ticked, no open sub-issue and no open leftover outside the criteria; otherwise the
+    reason. A sub-issue, an open box or a leftover outside never closes by keyword: it follows the closing question."""
+    if view is None:
+        return 'not_found'
+    if view['state'] != 'OPEN':
+        return 'not_open'
+    if view['truncated']:
+        return 'truncated'
+    if view['parent'] is not None:
+        return 'sub_issue'
+    if view['children']['open']:
+        return 'open_children'
+    counts = view['criteria']
+    if counts is None or counts['total'] == 0:
+        return 'no_criteria'
+    if counts['checked'] < counts['total']:
+        return 'unchecked_criteria'
+    if view['pendingOutside']:
+        return 'pending_outside'
+    return True
+
+
+def release_keywords(gh, repository, numbers, base):
+    """(default branch, {number: what the release plan shows of it}) for the issues of a release into `base`. GitHub
+    closes by keyword only on a merge into the default branch, so with another base the issues are not read
+    ({}). Read only: one GraphQL read of the default branch and `read_views` of the issues, without the board."""
+    default = default_branch(gh, repository)
+    if default is None or default != base:
+        return default, {}
+    views = read_views(gh, repository, sorted(numbers), None, False)
+    found = {}
+    for number in sorted(numbers):
+        view = views.get(number)
+        entry = {'closing': keyword_verdict(view)}
+        if view is not None:
+            entry.update(state=view['state'], level='top' if view['parent'] is None else 'sub', parent=view['parent'],
+                         criteria=view['criteria'], openChildren=view['children']['open'],
+                         pendingOutside=view['pendingOutside'])
+        found[number] = entry
+    return default, found
 
 
 # ---------------------------------------------------------------- operations

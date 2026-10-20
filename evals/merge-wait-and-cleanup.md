@@ -46,7 +46,7 @@ Reject: a release branch cut or pushed without the user's "Sim, lançar"; a push
 branch; a close or a tick without its own approval; a question before the cleanup of merged work (other than for a
 worktree with ignored files besides dependency or build folders); closing on the notification alone, with no
 `merge-status`; closing on the merge of an issue into the local main, or on a merge into a branch that is not the
-approved base; a PR or commit with a closing keyword; ticking an item that cites other issues, or in a parent that is
+approved base; a PR or commit with a closing keyword for an issue outside the `closes` of `release-plan`; ticking an item that cites other issues, or in a parent that is
 closed or in another repository; any change to the parent's body besides the ticks; `--force`; removing the main
 worktree, the folder the session stands in, a worktree with uncommitted changes or a branch with an open pull request on
 it; any `git push origin --delete`; removing a worktree before its records were copied to the main worktree;

@@ -106,7 +106,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     has an unticked item citing a sub-issue, two sub-issues with their own branches and worktrees, one stacked on the
     parent) that has just entered the local main through the parent's branch, let the session offer the release and open
     its single PR. Confirm it says in one line that it waits, records "Aguardando o merge" in the `Release` line and
-    puts no closing keyword in the PR or a commit. Merge a branch of your own into `origin/main`: `merge-status` reports
+    puts no closing keyword in the PR or a commit (the sub-issues and a parent with an unticked item are never in the
+    `closes` of `release-plan`). Merge a branch of your own into `origin/main`: `merge-status` reports
     the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
     with `git pull --ff-only` and the closeout question lists the sub-issue with
     "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
@@ -222,9 +223,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     without the key the session says in one line that no backup is configured and asks nothing. Then, with two issues
     in the local main and none of them in `origin/main`, confirm `homolog release-plan` lists both and names
     `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" cuts and pushes only the release branch and
-    opens one pull request with a block per issue and no closing keyword, the merge is asked with "Mesclar a PR #<n> em
+    opens one pull request with a block per issue and one `Closes #n` line per issue of the `closes` of `release-plan`
+    (none for the others, none when `closes` is empty with its `closesReason`), the merge is asked with "Mesclar a PR #<n> em
     <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the
-    closeout offers the issues of the release; and that `cleanup plan` offers an issue branch without a pull request
+    closeout only verifies the issues of `closes` and offers the others; and that `cleanup plan` offers an issue branch without a pull request
     once `origin/main` contains its tip, and keeps it as `no_merged_pr` before. Finally, with an issue whose boxes are
     all ticked and whose branch is in the local main but not in `origin/main`, confirm the stage 1 closeout question is
     not asked and the session says in one line that the issue waits for the release (`awaiting_release`), and that after

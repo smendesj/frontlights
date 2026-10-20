@@ -289,7 +289,8 @@ evidência que o fechará. Como altera o escopo da issue, o texto exato é mostr
 aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, releitura e
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
-houver uma aberta, o PR cita a issue sem palavra de fechamento (`Closes`, `Fixes`). Antes
+houver uma aberta, a issue fica fora do `closes` do `release-plan` e o PR a cita sem palavra de fechamento
+(`Closes`, `Fixes`). Antes
 de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
@@ -631,8 +632,13 @@ Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
 independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
 nenhum achado sem destino), ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge (com commit de merge), e
-com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
-fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
+com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR leva `Closes #n` só para as issues do
+`closes` do `release-plan`, uma linha por issue copiada da lista: as de topo com todas as caixas marcadas, nenhuma
+filha aberta e nenhuma pendência fora dos critérios. Para isso o `release-plan` lê o GitHub (só leitura, com o
+`repository` do config); sem essa leitura, ou com uma base que não é a branch padrão do repositório, a lista sai
+vazia com a razão (`closesReason`), e na dúvida não há `Closes`. As outras issues a PR cita pelo número, sem
+palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, e elas seguem a pergunta de
+fechamento. O merge continua uma operação negada, perguntada a você: só ele fecha as issues de `closes`. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
 issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
 a sessão acaba, a pergunta de fechamento do início da próxima sessão encontra o trabalho mesclado.
@@ -655,8 +661,10 @@ Com o merge confirmado, nesta ordem:
    arquivos. O que fica (alteração pendente, PR aberta, branch protegida) é dito numa linha. A worktree de
    integração local da família (nunca enviada, sem PR) entra quando não guarda commit próprio (nem merge com
    conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
-2. **Issue** com todos os critérios marcados: pergunta se pode fechá-la; o cartão vai para Done pelo fluxo "Item
-   closed" do quadro.
+2. **Issue do `closes`**: já fechada pelo `Closes #n` do merge, só é conferida (`closeout.py verify --issues
+   <closes>`), sem pergunta.
+   **Issue** com todos os critérios marcados, fora do `closes`: pergunta se pode fechá-la; o cartão vai para Done
+   pelo fluxo "Item closed" do quadro.
    **Sub-issue** com todos os critérios marcados: pergunta se pode fechá-la e marcar, no corpo da issue pai, o item que a
    cita. Só entra um item que cita apenas essa filha (`parentTicks`, por número de linha); a escrita troca somente `[ ]`
    por `[x]`, com o corpo anterior guardado e conferido por `closeout.py tick-check` antes e depois. Sem item citando a

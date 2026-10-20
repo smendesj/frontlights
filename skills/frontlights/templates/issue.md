@@ -136,4 +136,5 @@ Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sess
 
 Data e hora, branch/PR, hashes exatos de `HEAD` e do diff, comandos e resultados, revisão
 independente, bloqueios restantes e próximo passo. O GitHub continua a fonte oficial; links
-de evidência local não são tickets à parte. Não fechar automaticamente.
+de evidência local não são tickets à parte. Não fechar automaticamente: só a linha `Closes #<n>` da PR da
+release, para uma issue do `closes` do `release-plan`, a fecha, no merge que o usuário aprovou.

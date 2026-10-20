@@ -60,7 +60,9 @@ as its branch; its records live in `.frontlights/direct/<branch, slashes as dash
 operation that names that `direct` (never `issue` too), and `release-plan` lists it in `releaseDirect`.
 
 **Denied operations, asked one at a time** with `AskUserQuestion`, "Sim" first and "Não" second, naming the
-exact operation and the exact command: merging a pull request, closing an issue, changing the board (adding an
+exact operation and the exact command: merging a pull request, closing an issue (the one exception: a `Closes #n`
+line of the release's pull request, for an issue of the `closes` of `release-plan`, closes it only through that
+approved merge; "The release", below), changing the board (adding an
 item, moving a card, editing a field), deploying or publishing to production, editing a migration already
 registered (on the base branch or applied anywhere but the local development database), writing the remote main
 (`origin/main`, the base branch on GitHub) or a protected branch (the local main is written only by the covered
@@ -511,8 +513,9 @@ Follow-ups section. A line in the PR body, a comment or the chat is never a
 destination, so "cited in the PR" does not pass the gate. A finding
 left unfixed leaves by the ladder: most often as an acceptance criterion of the source
 issue, which keeps the issue open until the leftover is treated, completed and ticked
-with evidence; or as a top-level issue. The PR cites the issue without a
-closing keyword, in its body and in the commit messages, while such a criterion is open.
+with evidence; or as a top-level issue. While such a criterion is open the issue is not in the `closes` of
+`release-plan`, so the PR cites it without a closing keyword, in its body and in the commit messages ("The
+release", below).
 
 Refactoring happens here. The reviewer may recommend refactors of the green code;
 the author applies them without changing behavior or adding tests at new seams,
@@ -633,7 +636,14 @@ offers the release again with everything accumulated.
   `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. Exit code 1 without `origin/<base>` (or when Git cannot count the commits): run
-  `homolog sync` first. It only reads.
+  `homolog sync` first. It also reads GitHub (read only, with the `repository` of `--config`, default
+  `<main worktree>/.frontlights/config.json`) for `closes`: the top-level issues of `release` with every box of
+  their acceptance criteria ticked, no open sub-issue and no open leftover outside the criteria (`pendingOutside`
+  0); each issue of `release` in `issues` shows `state`, `level`, `parent`, `criteria` (ticked and total),
+  `openChildren`, `pendingOutside` and `closing` (true, or the reason). Without a GitHub read (no config, no
+  repository, gh failed) or with a base that is not the repository's default branch (GitHub closes by keyword only
+  on a merge into it), `closes` is empty and `closesReason` says why: when in doubt, no `Closes`. `closes` never
+  changes `ready` or the exit code. It writes nothing.
 - **Run the whole suite on the local main.** First, adopt a green run of the same tree. In the usual flow an issue
   has only its impact record, which adoption refuses, so there is usually nothing to adopt: a whole-suite record of an
   issue exists only when the `unconfigured` answer "Rodar a suíte inteira desta vez" ran it, or when someone ran
@@ -694,9 +704,13 @@ offers the release again with everything accumulated.
   attached or committed image, a login or a person's data) and the **Risco do merge**
   once, consolidated for the whole release (a one-way door when a migration or deleted data is in it, a two-way
   door otherwise, and the blast radius); it cites the issues by number, and the body of the pull request is never
-  the destination of a finding (the gate on the findings, above). **No closing keyword.** A pull request opened by Frontlights never
-  carries `Closes`, `Fixes`, `Resolves` or a variant of them, in its body or in its commits: closing an issue has
-  its own approval, and a merge that closed it would skip that approval and ignore the criteria still unticked.
+  the destination of a finding (the gate on the findings, above). **`Closes #n` only from `closes`.** The body
+  carries one `Closes #n` line per issue of the `closes` of the last `release-plan`, copied from that list, never
+  counted by hand; every other issue (a sub-issue, an open box, an open sub-issue, a leftover outside the criteria,
+  or every issue when `closes` is empty) is cited by number without a closing keyword (`Closes`, `Fixes`,
+  `Resolves` or a variant of them), in the body and in the commits, and follows the closing question of stage 7.
+  The merge itself stays a denied operation: the `Closes #n` lines close their issues only through the merge the
+  user approved, and only issues whose criteria are all ticked.
 - **Wait for the merge.** Opening the pull request does not end the work, and the session does not expect to be
   told that it was merged. By default, as soon as the release's pull request is open, the session waits for the
   user's merge. The user can say "não aguardar" at any time: the wait ends and the closeout question of the next
@@ -734,7 +748,8 @@ offers the release again with everything accumulated.
   `references/closeout.md` and run it for the issues of the release: first the cleanup of the merged work (step 5),
   without approval and before any closing question: `git fetch --prune`, the records of each worktree copied to the
   main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed;
-  then the closing (with the tick in a parent, for a sub-issue), with its own approval. An issue whose
+  then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the merge), and the
+  closing of the rest (with the tick in a parent, for a sub-issue) has its own approval. An issue whose
   criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports. The
   cleanup offers the issue branches that `origin/<base>` contains, pull request or not
   (`contained_in_base_without_pull_request`).

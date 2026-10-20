@@ -238,7 +238,10 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
   `dono/nome` validado, e é rodado pela
   sessão, sob as permissões vigentes, só depois da aprovação da lista carimbada e de um `stamp --check` que confere;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
-  própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
+  própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo. A exceção
+  escrita é a linha `Closes #n` da PR da release, só para as issues do `closes` do `homolog release-plan` (de topo,
+  com todas as caixas marcadas, nenhuma filha aberta e nenhuma pendência fora dos critérios): ela fecha a issue
+  apenas pelo merge que o usuário aprovou, que segue uma operação negada perguntada a ele.
 
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
 `[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista carimbada que traz as
@@ -260,6 +263,11 @@ desloque as linhas faria o `tick` marcar outro item. Por isso a sessão confere,
 guarda, que a linha marcada é a que a pessoa viu. Essa conferência vem depois da gravação: ela detecta a linha errada,
 mas não impede a marcação; a divergência é mostrada e perguntada, e desfazer é uma escrita à parte, com aprovação
 própria.
+
+O `homolog release-plan` lê o GitHub só para montar o `closes`: `gh api graphql` sem shell (pelo leitor do
+`closeout.py`), com a conta ativa do `gh` e o `repository` `dono/nome` validado do config, a branch padrão e, por issue
+da release, estado, pai, filhas e a contagem dos critérios; do corpo, só números. Não grava nada no GitHub nem em
+arquivo, e qualquer falha (sem config, sem repositório, `gh` recusado) só esvazia a lista, sem recusar o plano.
 
 A espera do merge é regra da skill: a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente
 (inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada

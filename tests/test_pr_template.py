@@ -1,6 +1,7 @@
 """Modelo de PR sucinto (issue 35): `templates/pr.md`, em português, com três seções (Resumo com o menor visual,
 Evidência com o antes e o depois, Risco do merge com a porta e o raio de impacto), um arquivo de licença no padrão
-de `references/LICENSE-tdd.md` que cita a fonte adaptada, e nenhuma palavra de fechamento.
+de `references/LICENSE-tdd.md` que cita a fonte adaptada, e palavra de fechamento só na linha-modelo `Closes #<n>`
+das issues do `closes` do `release-plan` (issue 63, S3).
 
 Seams: o texto de `templates/pr.md`, de `references/LICENSE-pr.md` e de `SKILL.md` (S1); o de
 `references/development.md` ("The release"), `SKILL.md` etapa 6, `docs/protocol.md`, `README.md`, `docs/acceptance.md`
@@ -94,9 +95,13 @@ class PullRequestTemplateTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, risk)
 
-    def test_the_template_never_carries_a_closing_keyword_and_says_so(self):
-        self.assertIsNone(CLOSING.search(self.text), 'o modelo traz uma palavra de fechamento com referência')
-        for phrase in ('sem palavra de fechamento', '`Closes`', '`Fixes`', '`Resolves`', 'cita a issue pelo número'):
+    def test_the_template_closes_only_the_closes_of_the_release_plan_and_says_so(self):
+        """Issue 63, S3: a única palavra de fechamento do modelo é a linha-modelo `Closes #<n>`, para as issues do
+        `closes` do `release-plan`; as outras a PR cita pelo número, sem palavra."""
+        self.assertEqual([m.group(0) for m in CLOSING.finditer(self.text)], ['Closes #<n>'])
+        for phrase in ('Cada issue do `closes` do `release-plan`', 'copiada da lista, nunca contada à mão',
+                       'só o merge aprovado da PR a fecha', 'a PR cita pelo número, sem palavra de fechamento',
+                       '`Closes`', '`Fixes`', '`Resolves`', 'seguem a pergunta de fechamento da etapa 7'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -216,8 +221,9 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
         self.assertNotIn('a one-way door only with', runbook)
         self.assertIn('prints cited by file name and relative folder, never attached', runbook)
 
-    def test_no_closing_keyword_and_no_finding_in_the_body(self):
-        for phrase in ('**No closing keyword.**', 'never carries `Closes`, `Fixes`, `Resolves` or a variant of them',
+    def test_closes_only_from_the_list_and_no_finding_in_the_body(self):
+        for phrase in ('**`Closes #n` only from `closes`.**', 'copied from that list, never counted by hand',
+                       'without a closing keyword (`Closes`, `Fixes`, `Resolves` or a variant of them)',
                        'the body of the pull request is never the destination of a finding'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.release)
@@ -227,7 +233,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
         self.assertIn('(development.md, "The release")', stage6)
         release = flat(read('skills', 'frontlights', 'references', 'development.md').split('## The release')[1])
         for phrase in ('The body follows `templates/pr.md`', '**Resumo** and **Evidência** once per issue',
-                       '**Risco do merge**', '**No closing keyword.**'):
+                       '**Risco do merge**', '**`Closes #n` only from `closes`.**'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, release)
         self.assertNotIn('`templates/pr.md` when it exists', stage6)
