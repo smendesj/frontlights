@@ -14,7 +14,7 @@
 | Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
 `homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
 (`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
-| Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
+| Fechamento | Somente fechar e marcar no corpo do pai o que a pessoa aprovou na lista mostrada; o cartão vai para Done pelo fluxo "Item closed" do próprio quadro | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
 | Limpeza | Remover, sem pergunta, só o que o `cleanup.py plan` oferece: as worktrees e branches locais das issues, das slices e da release já mescladas na base aprovada, depois de copiar os registros de cada worktree para a principal; nunca a branch remota (o GitHub a apaga) | O plano e os comandos rodados (`git fetch --prune`, `copy_records`, `git worktree remove`, `git branch -D`), a resposta literal de cada candidato com `ask` e a saída do `cleanup.py verify` |
 
 A aprovação de um documento, lista ou tabela é do arquivo com aquele carimbo, nunca do texto colado na
@@ -53,8 +53,10 @@ somente pela afirmação do usuário na sessão atual.
 
 O fechamento (`scripts/closeout.py`, só leitura) propõe fechar toda issue aberta, e toda sub-issue, com a seção
 de critérios de aceitação e todos os itens marcados (e as filhas fechadas ou propostas junto, filhas antes dos
-pais) e mover o cartão para o valor `project.done` (padrão `Status` / `Done`); uma issue já fechada como concluída com o cartão
-fora de Done só é movida; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
+pais); o cartão vai para Done pelo fluxo "Item closed" → Status Done do próprio quadro, nunca pelo Frontlights, e uma
+issue já fechada nunca é candidata, qualquer que seja o cartão; a conferência (`verify`) lê o cartão no valor
+`project.done` (padrão `Status` / `Done`) e diz numa linha (`cardsOutsideDone`) quando ele não chegou a Done, sem
+reprovar a issue; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
 fora como `awaiting_release` até a release que a leva ser mesclada (o `candidates` lê só `rev-parse` e `merge-base`,
 pelo `homolog.py`, e na dúvida não exclui). Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
 conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.

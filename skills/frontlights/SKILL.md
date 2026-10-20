@@ -222,11 +222,11 @@ cannot run, say so in one line and go on). When it finds merged work (a candidat
 reason but `awaiting_release`), first run the cleanup of `references/closeout.md`, step 5, without a question:
 `cleanup.py plan` with `--issues` the `issue_ids` of the authorization records, then the `commands` it offers, in
 order, and its verify. Only when `candidates` reports `ask` true, ask with `AskUserQuestion`: "Fechar as
-issues que já têm todos os critérios marcados e mover os cartões para Done?" Put in the question text
-how many there are and which, and what `board.status` allows. Options: "Sim, mostrar a lista" and
+issues que já têm todos os critérios marcados?" Put in the question text
+how many there are and which. Options: "Sim, mostrar a lista" and
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come
 back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or
-`done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked and the remedy
+`done_option_missing`: then say in one line that the cards could not be checked and the remedy
 (`gh auth refresh -s project`, or fix `project.done`); and when an issue is excluded as `awaiting_release` (every box
 ticked, branch not yet in `origin/<base>`), say in one line that it closes with the release that carries it.
 
@@ -445,7 +445,7 @@ findings left unfixed with the destination of each, risks and next action.
 
 Read `references/closeout.md`. It runs when the stage 1 closeout question is answered yes, when the
 wait of stage 6 finds the release's pull request merged into the approved base (and the local main
-brought up to it with `git pull --ff-only`), or when the user asks to close or move finished
+brought up to it with `git pull --ff-only`), or when the user asks to close finished
 issues. At the merge and at stage 1, the cleanup of the merged work (closeout.md, step 5) runs first, without a
 question: the worktrees and local branches of the issues, slices and release already in the approved base, each
 worktree's records copied to the main worktree first, never a remote branch (GitHub deletes it). Closing (with the

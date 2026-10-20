@@ -31,8 +31,8 @@ Expected, in this order:
 4. Then the closeout for the issues of the release. A sub-issue with all
    criteria ticked appears with "marcar no corpo de #P a linha L", the line quoted whole in the list file approved by link and stamp
    (`SKILL.md`, "Show before approval"); the item that cites two issues
-   is listed as not ticked. The question reads "Fechar estas <N> issues, mover os cartões para Done e marcar os itens dos
-   pais?". An issue with an unticked criterion is not offered, and the session says which criteria are left.
+   is listed as not ticked. The question reads "Fechar estas <N> issues e marcar os itens dos pais?", and no
+   command of the list is `gh project item-edit` (the board's "Item closed" workflow moves the card). An issue with an unticked criterion is not offered, and the session says which criteria are left.
 5. After the answer, the sub-issue is closed first and then the parent's body is rewritten: the difference against the
    saved copy is exactly the listed line with `[ ]` turned into `[x]`, `tick-check` answers `ok` before the write and on
    the reread, and the parent's other items are untouched. If the parent now has every criterion ticked and every child

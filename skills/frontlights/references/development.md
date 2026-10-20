@@ -543,8 +543,8 @@ Update GitHub checkpoints/status only if authorized and supported by current
 evidence; tick an acceptance criterion in the issue body only with evidence for it
 (a test, a measured result, a reviewed diff), because the closeout of stage 7 trusts
 the ticks; a criterion born from a finding is ticked the same way, once the work it
-names is done and its evidence exists. Closing an issue and moving its card are never part of this: they have
-their own approval (`references/closeout.md`). The release's pull request is covered by the standing authorization and still goes through
+names is done and its evidence exists. Closing an issue is never part of this: it has
+its own approval (`references/closeout.md`), and its card goes to Done by the board's own "Item closed" workflow. The release's pull request is covered by the standing authorization and still goes through
 the host's native approval; the branches of issues and slices stay local. The run merges only by the covered
 merges, and anything on the denied list runs only after the user's "Sim" to its own question ("Standing
 authorization and the denied operations", above). Park

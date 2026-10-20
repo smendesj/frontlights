@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Close-out helper: which issues (and sub-issues) can be closed, and moved to Done on the board, because
-every acceptance criterion in the body is checked; and `tick`, the one operation that writes, which ticks one box.
+"""Close-out helper: which issues (and sub-issues) can be closed because every acceptance criterion in the body is
+checked, whether they ended closed with their card in Done; and `tick`, the one operation that writes, which ticks
+one box. The card is moved to Done by the board's own "Item closed" workflow, never by Frontlights.
 
 Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roads.py) and prints what
-the session may propose. Closing and moving are done by the session, with its own `gh`, after the user said yes:
+the session may propose. Closing is done by the session, with its own `gh`, after the user said yes:
 this helper never closes an issue, never moves a card, and the commands it prints are values to type, not
 something it runs. Its only write is `tick` (below): the `[ ]` of one box of an issue's acceptance criteria turned
 into `[x]`, under the authorization to tick criteria with evidence, with the previous body kept in the records.
@@ -12,12 +13,13 @@ every command is built from validated values (numbers, `owner/name`, and the
 board's `done` field and option as `frontlights.board` accepts them).
 
 Operations (each prints one JSON object on stdout):
-  candidates  the issues that can be closed (and moved) now, in the order to close them (sub-issues before
+  candidates  the open issues that can be closed now, in the order to close them (sub-issues before
               their parent), plus the ones left out and why. Scope: --issues 12,13, or --all (every open
               issue of the repository), or, with neither, the issues this project worked on (folders in
               .frontlights/issues, ids in .frontlights/authorization*.json and .frontlights/plan.json)
               together with their sub-issues.
-  verify      reread --issues and say, for each, whether it is closed and its card is in Done.
+  verify      reread --issues and say, for each, whether it is closed and whether its card is in Done
+              (`cardsOutsideDone`: reported in one line, never a failure).
   merge-status  for pull requests named with --prs 12,13, whether each is still open, was merged into the
               approved base (--base, else the repository's default branch), was merged into some other branch
               or was closed unmerged. This is what the session waits on after it opened its pull requests: only
@@ -37,7 +39,7 @@ Operations (each prints one JSON object on stdout):
 
 An open issue is a candidate only when its body has an acceptance-criteria section with at least one
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
-closed issue (completed) whose card is outside Done needs only the move.
+closed issue is never a candidate, whatever its card: it is counted in `alreadyDone`.
 
 The local base is the homologation bench of the project (issue 32): an issue's branch reaches GitHub only through
 the release. So an issue whose branch still exists locally and is not yet contained in `<remote>/<base>` is kept
@@ -60,8 +62,8 @@ never offered for ticking). Only line numbers are reported; the session reads th
 body, so no body text is ever echoed here.
 
 Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read) or, for verify, an issue that is not
-finished yet (`ok` is false and `issues` says which), or, for tick, a write whose reread does not check
-(`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own) or
+closed yet (`ok` is false and `issues` says which; a card outside Done is never one), or, for tick, a write
+whose reread does not check (`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own) or
 whose outcome is unknown (`written` null: gh failed and the reread is neither body, or the reread itself failed).
 A refusal is JSON, never a traceback.
 """
@@ -545,8 +547,8 @@ def unread_board(board):
 
 def board_state(gh, board):
     """The `board` block of the answer, and the board's layout when GitHub could tell. `available`: the done
-    field and option exist; `done_option_missing`: they do not (the real fields are shown) and no move is
-    proposed; `unavailable`: the board could not be read (usually the project scope)."""
+    field and option exist; `done_option_missing`: they do not (the real fields are shown) and verify cannot tell
+    whether a card is in Done; `unavailable`: the board could not be read (usually the project scope)."""
     if board is None:
         return unread_board(None), None
     done = board['done']
@@ -651,18 +653,17 @@ def issue_url(repository, number):
 
 
 def assess(views, repository, board, info, unreleased=None):
-    """Split the scope: the candidates (in closing order), the issues left out with the reason, how many
-    closed issues need nothing, and how many closed ones could not be checked for the move. `unreleased` maps
+    """Split the scope: the candidates (in closing order, all open), the issues left out with the reason, and how
+    many closed issues need nothing (a closed issue is never a candidate, whatever its card). `unreleased` maps
     the issues whose branch is not yet in the remote base to the detail of the `awaiting_release` reason."""
     status = info['status']
     unreleased = unreleased or {}
     cards_known = status in ('available', 'done_option_missing')
-    done_field, done_value = (board['done']['field'], board['done']['value']) if board else (None, None)
+    done_field = board['done']['field'] if board else None
     memo = {}
 
     def cuts(view):
-        names = view['truncated']
-        return [n for n in names if n in ('cards', 'card_values')] if view['state'] == 'CLOSED' else list(names)
+        return [] if view['state'] == 'CLOSED' else list(view['truncated'])
 
     def blockers(view, stack):
         """The open sub-issues that are not candidates in this batch."""
@@ -709,63 +710,47 @@ def assess(views, repository, board, info, unreleased=None):
         return result
 
     def candidate(view):
+        """An open issue to close. Its card is shown, never moved: the board's "Item closed" workflow moves it."""
         number = view['number']
-        closed = view['state'] == 'CLOSED'
         card = view['card']
         current = card.get(done_field) if card is not None else None
-        move = status == 'available' and card is not None and current != done_value
         level = 'top' if view['parent'] is None else 'sub'
         cautions = []
-        if not closed:
-            if any(pr['state'] == 'OPEN' for pr in view['prs']):
-                cautions.append('open_pr')
-            elif not view['prs']:
-                cautions.append('no_pr')
-            if cards_known and card is None and level == 'top':
-                cautions.append('not_on_board')
-            if card is not None and current == done_value:
-                cautions.append('already_done_card')
-            if view['pendingOutside']:
-                cautions.append('pending_outside_criteria')
+        if any(pr['state'] == 'OPEN' for pr in view['prs']):
+            cautions.append('open_pr')
+        elif not view['prs']:
+            cautions.append('no_pr')
+        if cards_known and card is None and level == 'top':
+            cautions.append('not_on_board')
+        if view['pendingOutside']:
+            cautions.append('pending_outside_criteria')
         url = issue_url(repository, number)
-        commands = []
-        if not closed:
-            commands.append({'kind': 'close', 'argv': ['gh', 'issue', 'close', str(number), '--repo', repository,
-                                                       '--reason', 'completed']})
-        if move:
-            commands.append({'kind': 'move', 'argv': ['gh', 'project', 'item-edit', str(board['number']), '--owner',
-                                                      board['owner'], '--url', url, '--field', done_field,
-                                                      '--value', done_value]})
+        commands = [{'kind': 'close', 'argv': ['gh', 'issue', 'close', str(number), '--repo', repository,
+                                               '--reason', 'completed']}]
         return {'number': number, 'title': view['title'], 'url': url, 'level': level, 'parent': view['parent'],
-                'criteria': view['criteria'], 'pendingOutside': 0 if closed else view['pendingOutside'],
+                'criteria': view['criteria'], 'pendingOutside': view['pendingOutside'],
                 'parentTicks': None,
                 'children': {key: view['children'][key] for key in ('total', 'completed', 'open')},
-                'state': view['state'], 'action': 'move_only' if closed else 'close_and_move' if move else 'close',
+                'state': view['state'], 'action': 'close',
                 'prs': view['prs'],
                 'card': None if card is None else {'status': rs.clean(current) if current is not None else None},
                 'onBoard': (card is not None) if cards_known else (False if status == 'unconfigured' else None),
-                'moveToDone': move, 'cautions': cautions, 'commands': commands}
+                'cautions': cautions, 'commands': commands}
 
-    found, excluded, already, unchecked = {}, [], 0, 0
+    found, excluded, already = {}, [], 0
     for number in sorted(views):
         view = views[number]
         kind, detail = verdict(number)
         if kind == 'ok':
             found[number] = candidate(view)
-        elif kind != 'closed':
-            excluded.append({'number': number, 'title': view['title'] if view else None, 'reason': kind, **detail})
-        elif view['stateReason'] != 'COMPLETED' or board is None:
+        elif kind == 'closed':
             already += 1
-        elif status == 'unavailable' or (status == 'done_option_missing' and view['card'] is not None):
-            unchecked += 1
-        elif view['card'] is not None and view['card'].get(done_field) != done_value:
-            found[number] = candidate(view)
         else:
-            already += 1
+            excluded.append({'number': number, 'title': view['title'] if view else None, 'reason': kind, **detail})
     ordered = [found[n] for n in closing_order(found, views)]
     for position, record in enumerate(ordered, 1):
         record['order'] = position
-    return ordered, excluded, already, unchecked
+    return ordered, excluded, already
 
 
 def add_parent_ticks(gh, repository, ordered, views):
@@ -832,14 +817,23 @@ def load_project(config):
 
 def board_note(info):
     if info['status'] == 'unavailable':
-        return f'The board could not be read, so no move to Done is proposed (try: {HINT}).'
+        return f'The board could not be read, so the cards were not checked (try: {HINT}).'
     if info['status'] == 'done_option_missing':
-        return 'The board has no Done option as configured, so no move is proposed (see board).'
+        return 'The board has no Done option as configured, so the cards were not checked against Done (see board).'
     return ''
 
 
+def outside_done_note(numbers):
+    """The one line verify gives for the cards the board's "Item closed" workflow did not move to Done."""
+    if not numbers:
+        return ''
+    named = ', '.join(f'#{n}' for n in numbers)
+    return (f'The card of {named} is not in Done: the board\'s "Item closed" workflow did not move it (turn it on '
+            'in the board\'s Workflows screen; Frontlights does not move cards).')
+
+
 def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base=None, remote=None):
-    """Read only: the issues that can be closed (and moved to Done) now, with the commands to type once the
+    """Read only: the issues that can be closed now, with the commands to type once the
     user approves, in closing order; the issues left out and why (an issue whose branch is not yet in
     `<remote>/<base>` waits for the release)."""
     gh = gh or rs.gh_default
@@ -850,7 +844,7 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
     require(remote is None or valid_remote(remote), '--remote must be a plain remote name, such as origin')
     scope = scope_numbers(root, numbers, all_flag, gh, repository)
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'scope': scope,
-              'board': unread_board(board), 'candidates': [], 'excluded': [], 'alreadyDone': 0, 'closedUnchecked': 0,
+              'board': unread_board(board), 'candidates': [], 'excluded': [], 'alreadyDone': 0,
               'releaseCheck': 'skipped', 'ask': False}
     if not scope['numbers']:
         result['message'] = ('The repository has no open issue, so there is nothing to close.' if scope['mode'] == 'all' else
@@ -863,13 +857,10 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
     views = read_board_views(gh, repository, scope['numbers'], board, info)
     open_numbers = [n for n, view in sorted(views.items()) if view is not None and view['state'] == 'OPEN']
     unreleased, release_status, _, _ = release_check(root, open_numbers, base, remote)
-    ordered, excluded, already, unchecked = assess(views, repository, board, info, unreleased)
+    ordered, excluded, already = assess(views, repository, board, info, unreleased)
     add_parent_ticks(gh, repository, ordered, views)
     result.update(candidates=ordered, excluded=excluded, alreadyDone=already, ask=bool(ordered), releaseCheck=release_status)
-    result['closedUnchecked'] = unchecked
-    moves = sum(c['action'] == 'move_only' for c in ordered)
-    parts = [f'{len(ordered)} issue(s) can be closed or moved to Done ({len(ordered) - moves} to close, {moves} only to move).'
-             if ordered else 'No issue is ready to close.']
+    parts = [f'{len(ordered)} issue(s) can be closed.' if ordered else 'No issue is ready to close.']
     pending = [c['number'] for c in ordered if c['pendingOutside']]
     if pending:
         parts.append('Open leftovers outside the acceptance criteria in ' + ', '.join(f'#{n}' for n in pending)
@@ -886,8 +877,6 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
         parts.append(f'{len(excluded)} excluded (see excluded for the reason of each).')
     if already:
         parts.append(f'{already} closed issue(s) need nothing.')
-    if unchecked:
-        parts.append(f'{unchecked} closed issue(s) could not be checked for the move to Done.')
     if scope['truncated']:
         parts.append('The scope was cut (scope.truncated); name issues with --issues to see the rest.')
     parts.append(board_note(info))
@@ -898,8 +887,9 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
 
 
 def op_verify(config, root='.', explicit=None, gh=None):
-    """Read only: for each issue, whether it is closed and, when it has a card on the board, whether the card
-    is in Done."""
+    """Read only: for each issue, whether it is closed (`ok`) and, when it has a card on the board, whether the
+    card is in Done. A card outside Done is listed in `cardsOutsideDone` and named in one line of the message; it
+    never makes an issue fail, since the board's "Item closed" workflow moves the card, not this session."""
     gh = gh or rs.gh_default
     repository, board = load_project(config)
     require(explicit is not None and explicit != '' and explicit != [],
@@ -922,16 +912,17 @@ def op_verify(config, root='.', explicit=None, gh=None):
         done = (current == done_value) if info['status'] == 'available' and card is not None else None
         entry = {'number': number, 'state': view['state'], 'stateReason': view['stateReason'],
                  'status': rs.clean(current) if current is not None else None, 'closed': closed, 'done': done,
-                 'ok': closed and done is not False}
+                 'ok': closed}
         if any(name in ('cards', 'card_values') for name in view['truncated']):
-            entry.update(status=None, done=None, ok=False, reason='truncated')
+            entry.update(status=None, done=None, reason='truncated')
         entries.append(entry)
     waiting = [e['number'] for e in entries if not e['ok']]
+    outside = [e['number'] for e in entries if e['closed'] and e['done'] is False]
     result = {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
-              'board': info, 'issues': entries}
-    parts = [f'All {len(entries)} issue(s) are closed' + (' and in Done.' if info['status'] == 'available' else '.')
-             if not waiting else
-             f'{len(waiting)} of {len(entries)} issue(s) are not finished yet: ' + ', '.join(f'#{n}' for n in waiting) + '.']
+              'board': info, 'issues': entries, 'cardsOutsideDone': outside}
+    parts = [f'All {len(entries)} issue(s) are closed.' if not waiting else
+             f'{len(waiting)} of {len(entries)} issue(s) are not closed yet: ' + ', '.join(f'#{n}' for n in waiting) + '.']
+    parts.append(outside_done_note(outside))
     parts.append(board_note(info))
     result['message'] = ' '.join(part for part in parts if part)
     return result

@@ -4,11 +4,13 @@ On entering, read `docs/security.md`, "Fechamento e limpeza", and `docs/protocol
 
 Read this when the stage 1 closeout question is answered yes, when the release of stage 6
 (`development.md`, "The release") finds its pull request merged into the approved base and the local main brought
-up to it, or when the user asks to close or move finished issues. Everything the user reads
+up to it, or when the user asks to close finished issues. Everything the user reads
 stays in Portuguese. At the merge of the release and at stage 1, step 5 (the cleanup of the merged work, without a
 question) runs first, before the closing question of step 1. Closing is a write on GitHub with **its own
 approval**: no implementation authorization, no merged PR and no green test stands in for it. The helper only
-reads; the session writes, with its own `gh`, and only what the user approved.
+reads; the session writes, with its own `gh`, and only what the user approved. The card goes to Done by the
+board's own workflow ("Item closed" → Status Done), when the issue closes: this flow only closes and checks, and never
+moves a card.
 
 ## 1. Find the candidates (read only)
 
@@ -42,11 +44,9 @@ the parent's new boxes are what this closeout counts.
 
 An open issue is a **candidate** only when it has an acceptance-criteria section and every criterion of it is
 ticked, and every one of its sub-issues is closed or a candidate in the same batch (children close before
-their parents). A closed issue whose card is not in Done is a candidate to be moved only, but only when it was closed as completed (one
-closed as not planned or as a duplicate needs nothing). Each candidate
-carries its `action` (`close`, `close_and_move`, `move_only`), the criteria count, its PRs (state and
-whether merged), its card status and `cautions`: `open_pr`, `no_pr`, `not_on_board`, `already_done_card`,
-`pending_outside_criteria`.
+their parents). A closed issue is never a candidate, whatever its card: it is counted in `alreadyDone`. Each
+candidate carries its `action` (always `close`), the criteria count, its PRs (state and whether merged), its card
+status and `cautions`: `open_pr`, `no_pr`, `not_on_board`, `pending_outside_criteria`.
 The cautions inform; they never block, and an `open_pr` is called out in the question.
 
 A known leftover is an acceptance criterion like any other (`issues.md`, Follow-ups), so an open one keeps its
@@ -62,9 +62,8 @@ and outside this list. This step never moves them.
 `open_children` with the children, `awaiting_release` with the branch, its tip, the base and the remote when every
 box is ticked but the branch of the issue is not yet in `origin/<base>`, `truncated` when a list was cut, `not_found`
 and `unreadable`): that needs work, a decision or the release, not closing. An `awaiting_release` is said to the
-user in one line (the issue closes with the release that carries it) and never proposed. `order` is 1-based and is the order to close in. `closedUnchecked`
-counts closed issues whose card could not be checked because the board was not readable, and `alreadyDone`
-counts the closed ones that need nothing. Tell the user briefly, never propose it. Ticking a criterion belongs
+user in one line (the issue closes with the release that carries it) and never proposed. `order` is 1-based and is the order to close in. `alreadyDone`
+counts the closed ones, which need nothing. Tell the user briefly, never propose it. Ticking a criterion belongs
 to the verification of the issue, with evidence (a test, a measured result, a reviewed diff), under the
 authorization for routine issue updates; this step trusts the ticks and never ticks one itself. The one tick it
 asks for is not a criterion of the issue being closed but the item of its parent that cites it, below.
@@ -75,9 +74,9 @@ are unchecked items citing it and no other issue, and `shared`, those that cite 
 copy of the parent's body (the Capture command of the recipe in `issues.md`). A sub-issue without `parentTicks`
 (no item of the parent cites it, or the parent is closed, in another repository or unknown) is only closed.
 
-`board.status` says whether cards can be moved: `unconfigured` (no board: close only), `not_read` (nothing in
-scope, so the board was not read), `unavailable` (a `gh`
-without the `project` scope: say so, give `gh auth refresh -s project`, close only),
+`board.status` says whether the cards could be read, for the table and for the verify: `unconfigured` (no board:
+no card is shown or checked), `not_read` (nothing in scope, so the board was not read), `unavailable` (a `gh`
+without the `project` scope: say so, give `gh auth refresh -s project`; the closing goes on),
 `done_option_missing` (the board has no option named as `project.done`: show the field and its real options
 and ask which one is Done; recording the answer in `.frontlights/config.json` as `project.done` is a local
 write, shown first). Without `project.done` the pair is `Status` / `Done`.
@@ -85,25 +84,22 @@ write, shown first). Without `project.done` the pair is `Status` / `Done`.
 ## 2. Show the list and ask
 
 Write to a file, in the user's language, one table with a row per candidate (number, title, top-level or
-sub-issue, criteria n/n, children, PRs, card status → Done, action, cautions, and "fecha com N pendências fora dos
+sub-issue, criteria n/n, children, PRs, card status, action, cautions, and "fecha com N pendências fora dos
 critérios" when `pendingOutside` is above zero) in the `order` of the result, and the exact `commands` that will
 run, and ask its approval by link and stamp (`SKILL.md`, "Show before approval"). A sub-issue with `parentTicks`
-gets, in its row, "marcar no corpo de #P as linhas L" with each of those lines quoted whole, and the lines in `shared` are listed as "não marcadas: citam outras issues". When the
-list holds ticks, the question reads "Fechar estas <N> issues, mover os cartões para Done e marcar os itens dos
-pais?", and "Só fechar, sem mover" writes only the closes (no move and no tick). Then ask with `AskUserQuestion`: "Fechar estas <N> issues e mover os cartões para Done?" with
-"Sim, fechar e mover tudo" first and recommended (recommend "Escolher quais" instead when some candidate has
+gets, in its row, "marcar no corpo de #P as linhas L" with each of those lines quoted whole, and the lines in `shared` are listed as "não marcadas: citam outras issues". Then ask with `AskUserQuestion`: "Fechar estas <N> issues?" with
+"Sim, fechar tudo" first and recommended (recommend "Escolher quais" instead when some candidate has
 `open_pr` or `pendingOutside` above zero), "Escolher quais" (a follow-up question with the candidates, at most four per call; a parent chosen without its
-candidate children is not written, it waits for them, and the user is told so), "Só fechar,
-sem mover" and "Não agora". "Não agora" writes nothing. The helper keeps no memory of the refusal, so the question comes back in every later
+candidate children is not written, it waits for them, and the user is told so) and "Não agora". When the list holds
+ticks, the question reads "Fechar estas <N> issues e marcar os itens dos pais?", and "Só fechar, sem marcar" comes
+before "Não agora" and writes only the closes (no tick). "Não agora" writes nothing. The helper keeps no memory of the refusal, so the question comes back in every later
 session while the list stands, and the user can answer the stage 1 question "Não, seguir com o pedido" each time. Record the answer verbatim with a reference; never answer for the user.
 
 ## 3. Write what was approved
 
 Run the stamp check of the approved list first (`SKILL.md`, "Show before approval"): when it exits 1, nothing is
 written and the list is asked again. In the `order` of the result, for each approved issue run the `commands` exactly as given, each value as one
-double-quoted argument: first `gh issue close <n> --repo <repo> --reason completed`, then, when the card
-moves, `gh project item-edit <number> --owner <owner> --url <issue-url> --field <field> --value <value>`.
-Never close a parent before every one of its children is closed. A failed write is recorded and only the
+double-quoted argument: `gh issue close <n> --repo <repo> --reason completed`. Never close a parent before every one of its children is closed. A failed write is recorded and only the
 missing ones are retried, never by repeating a close that already landed; a child that fails to close holds
 its parent back and both are reported. Pause a few seconds between writes when the batch is large, to stay
 under the secondary rate limit. Add no comment: the closing is already on the issue.
@@ -132,8 +128,10 @@ and children are now complete goes through the same question.
 python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" verify --config <config> --root <project> --issues 12,13
 ```
 
-Report per issue whether it is closed and its card is in Done; list every `ok: false` (the command then exits
-with code 1). GitHub is the source
+Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
+did not reach Done is in `cardsOutsideDone` and in one line of the message: say that line (the board's "Item
+closed" workflow did not move it; suggest turning it on in the board's Workflows screen). It never makes an issue
+fail, and the session does not move the card. GitHub is the source
 of truth: the local `.frontlights/issues/<n>/` snapshots are updated to closed with the time of the read,
 never the other way round. Put the approved list, the user's literal answer, the results and the verify
 output in the handoff, with the `tick-check` result of each parent.
@@ -227,11 +225,14 @@ in the handoff.
 
 ## 6. Let RoadS see it
 
-RoadS reads only the **Status** of the card in the Project, never whether the issue is closed: closing an issue
-without moving its card changes nothing there, and a completed item stays in its sprint, marked done, until the
+RoadS reads only the **Status** of the card in the Project, never whether the issue is closed: the board's "Item
+closed" workflow moves the card to Done when the issue closes, and a card the verify reported outside Done stays
+where it is for RoadS until it is moved on the board. A completed item stays in its sprint, marked done, until the
 sprint rotation removes it. RoadS also refreshes only when it syncs, and a sync within 30 s of the previous one
-returns the old snapshot. So, when cards were moved, tell the user in one line that RoadS shows them after its
-next sync (the board's own "Sincronizar" there); Frontlights does not sync RoadS. Without a usable board (`board.status` `unconfigured`, `unavailable` or `done_option_missing`) say plainly that the close-only fallback will not show in RoadS.
+returns the old snapshot. So, after the closing, tell the user in one line that RoadS shows it after its next sync
+(the board's own "Sincronizar" there); Frontlights does not sync RoadS. Without a usable board (`board.status`
+`unconfigured`, `unavailable` or `done_option_missing`) say plainly that the closing could not be checked against
+the cards RoadS reads.
 
 ## Never
 
@@ -239,8 +240,9 @@ next sync (the board's own "Sincronizar" there); Frontlights does not sync RoadS
   specific one anyway gets the unticked items shown first, and the answer is theirs, outside this list.
 - Reopen, delete, transfer or archive an issue, or edit its body, here; the one body edit is the approved tick of the
   item of a parent that cites a sub-issue closed in the same list (step 3).
-- Close an issue on the strength of the merge alone, or move a card or tick a parent's item that is not in the list the
-  user approved.
+- Close an issue on the strength of the merge alone, or tick a parent's item that is not in the list the user
+  approved.
+- Move a card (`gh project item-edit`): the board's "Item closed" workflow moves it to Done.
 - Remove a worktree or a branch that `cleanup.py plan` did not offer (or, with `ask: true`, that the user did not
   approve), delete a remote branch (`git push origin --delete`: GitHub deletes the merged head branch), use
   `--force`, or remove the main worktree or the folder the session stands in.

@@ -118,8 +118,8 @@ class CloseoutReferenceTests(unittest.TestCase):
 
     def test_the_table_and_the_question_carry_the_ticks(self):
         for phrase in ('"marcar no corpo de #P as linhas L"', '"não marcadas: citam outras issues"',
-                       '"Fechar estas <N> issues, mover os cartões para Done e marcar os itens dos pais?"',
-                       '"Só fechar, sem mover" writes only the closes (no move and no tick)'):
+                       '"Fechar estas <N> issues e marcar os itens dos pais?"',
+                       '"Só fechar, sem marcar" comes before "Não agora" and writes only the closes (no tick)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
