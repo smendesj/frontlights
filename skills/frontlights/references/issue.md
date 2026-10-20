@@ -4,9 +4,7 @@ Stage 4 turns the decisions of stage 3 into the body of one GitHub issue. Read t
 log, the repository instructions and the relevant code; then write, do not interview. The
 decisions were made in the grilling: a decision that is missing from the log is not invented
 and not asked here, it goes back to stage 3 (its solution round or its decision tree). A
-statement in the body that the user never made is a defect. Decisions marked "a revisar"
-(taken by recommendation in learning mode) go in as assumptions to be shown, never as
-approved decisions.
+statement in the body that the user never made is a defect.
 
 ## The only question: the seams
 

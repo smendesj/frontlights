@@ -29,19 +29,6 @@ Options, recommended first according to the size and risk of the work:
 The depth changes how many branches are explored, never the minimum of three
 approaches in the solution round.
 
-Ask the learning-mode question in the same `AskUserQuestion` call as the depth:
-"Ativar o modo aprendizado?", with "Desligado" first and recommended (the default)
-and "Ligado". It helps a user who is still learning to understand the technical
-decisions while making them. Read `references/learning.md` before writing the
-first explanation: right away when the mode is on, otherwise the first time the
-user picks "Explicar antes de decidir" or asks for an explanation, and again
-whenever the user turns the mode on later or the conversation has been compacted,
-in which case read the mode back from the discovery log. The user can turn the
-mode on or off at any time; apply it from the next question, update the log's
-learning-mode line whenever the mode changes and add the change, with the
-question where it happened, to the log's learning-mode changes line. Record both
-choices.
-
 ## The artifact: the picture of each round
 
 Text alone makes the user imagine a screen, a flow or a set of layers from the options.
@@ -123,18 +110,13 @@ existing code, or debt left behind.
 
 ## 3. Solution round (mandatory, every depth)
 
-Propose **at least three genuinely different approaches** in one
-`AskUserQuestion` (three or four options; the tool adds free text). Variations of
+Propose **at least three genuinely different approaches**, and up to four, in one
+`AskUserQuestion`, one per option (the tool adds free text). Variations of
 one idea do not count: differ in strategy, for example minimal change,
 structural refactor, a different architecture or an existing library, or
 configuration instead of code. When the problem truly admits fewer than three
 sensible approaches, say why in the question text and offer the real ones plus
 "Investigar mais antes de decidir".
-
-With learning mode off, the fourth option is "Explicar antes de decidir", so the
-round has exactly three approaches; it takes a slot and never replaces an
-approach below the minimum of three. With learning mode on, explain first (see
-`references/learning.md`) and the round may carry four approaches.
 
 For every approach, the option `preview` shows:
 
@@ -154,7 +136,7 @@ approaches with the reason.
 
 After the approach is chosen, walk its branches in order. Each relevant branch
 is one question with at least three concrete options when three sensible ones
-exist, batched at most four per call (the learning-mode check counts as one).
+exist, up to four real options, batched at most four per call.
 Pick the branches by kind of work:
 
 | Kind | Branches |
@@ -168,11 +150,9 @@ Pick the branches by kind of work:
 Every branch that is asked cites its section of the artifact, added for that question on the
 same URL (the artifact, above).
 
-Technical branches (every branch except scope, priority and other product
-questions) follow the slot rule of `references/learning.md`. With learning mode
-off, the last option is "Explicar antes de decidir" (at most three real
-options); its `preview` only lists what will be explained. With it on, explain
-first and put one "Ficou claro?" check in the same call as up to three decisions.
+When the user asks for more detail in free text ("não entendi", "detalhe no artefato"),
+the session expands that question's section of the artifact on the same URL and asks the
+same question again; that is the only re-ask besides new evidence.
 
 Every branch ends answered or marked "não se aplica, porque…" in the discovery
 log. At Rápida depth, ask only the branches that change the implementation and
@@ -206,7 +186,7 @@ family has no sub-issues left: its boxes are grilled as the slices of one issue.
   up to four sub-issues per call. The parent's chosen approach and the decisions
   already taken are inputs: offer approaches consistent with them, and when a
   sub-issue's decision would change the parent's approach, say so and ask.
-- Depth and learning mode are asked once, in section 0, for the whole family.
+- Depth is asked once, in section 0, for the whole family.
 - When a round settles a `needs-decision` sub-issue, propose removing the label
   and filling its approach as part of the stage 5 update of that issue (a write on
   an existing issue, under the stage 5 approval); never change it on the spot.
@@ -218,16 +198,13 @@ count as open branches. End with one question whose
 options are "Seguir para a issue", "Aprofundar <the most uncertain open
 branch>" and "Aprofundar <the next one>". Keep going while the user chooses to
 deepen, and do not re-ask settled decisions unless new evidence invalidates them
-or the user asked for another explanation in the same call (see
-`references/learning.md`); explain such changes. Decisions marked "a revisar"
-(taken by recommendation in learning mode) come first among the branches offered
-for deepening.
+(or the user asked for more detail, section 4); explain such changes.
 
 ## Recording
 
-Record everything in `templates/discovery.md`: depth, learning mode, conventions
+Record everything in `templates/discovery.md`: depth, conventions
 with example paths, the URL of the artifact and its source path (or "artefato indisponível"), approaches considered (chosen and rejected, with reasons and pattern fit),
-branch decisions, concepts explained, pre-mortem, unresolved questions, approval
+branch decisions, pre-mortem, unresolved questions, approval
 references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing
 authority. For a family, record the approaches and decisions of each sub-issue in the
@@ -235,6 +212,5 @@ same tables, naming the issue number in the first column. Do not start product
 implementation here.
 
 Carry approved decisions, the chosen approach, the recorded conventions and
-unresolved items into stage 4 (the issue) as the input. Decisions marked "a revisar"
-go in as assumptions to be shown, never as approved decisions. A decision log is
+unresolved items into stage 4 (the issue) as the input. A decision log is
 planning evidence, never an issue status database.
