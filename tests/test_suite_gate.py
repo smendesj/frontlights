@@ -723,6 +723,31 @@ class AdoptionTestCase(SuiteTestCase):
 
 
 
+class AdoptionHiddenFileTests(AdoptionTestCase):
+    """Issue 57: sem a comparação de bytes, a adoção confere que nenhum arquivo versionado da worktree do registro
+    está escondido do `git status`, e recusa um registro que não está numa worktree do Git."""
+
+    def test_a_file_hidden_from_git_status_in_the_worktree_of_the_record_is_refused_and_nothing_is_written(self):
+        name = self.git(self.work, 'ls-files').stdout.split()[0]
+        self.git(self.work, 'update-index', '--skip-worktree', name)
+        (self.work / name).write_bytes(b'outro conteudo\n')
+        code, result = self.adopt()
+        self.assertEqual(code, 1, result)
+        self.assertIn(name, result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+
+    def test_a_record_outside_a_git_worktree_is_refused_and_nothing_is_written(self):
+        outside = self.base / 'copia-fora' / 'suite.json'
+        outside.parent.mkdir()
+        outside.write_bytes(Path(self.source).read_bytes())
+        code, result = self.adopt(source=outside)
+        self.assertEqual(code, 1, result)
+        self.assertIn('worktree do git', result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+
+
 class SuiteAdoptionTests(AdoptionTestCase):
     def test_a_green_full_record_of_the_same_tree_is_adopted_without_running(self):
         """S1: os dois registros da release são gravados com a evidência da main local e `adoptedFrom`, nada roda
@@ -759,11 +784,14 @@ class SuiteAdoptionRefusalTests(AdoptionTestCase):
     """S2: `--from` recusa, sem gravar nada, o registro que não vale pela ponta da main local."""
 
     def forged(self, evidence=None, **changes):
-        """A copy of the issue's green record, outside the repository, with `changes` (and `evidence` keys)."""
+        """A copy of the issue's green record, in the `.frontlights/` of the worktree (a record lives in a worktree,
+        issue 57), with `changes` (and `evidence` keys)."""
         record = json.loads(self.source.read_text(encoding='utf-8'))
         record.update(changes)
         record['evidence'].update(evidence or {})
-        path = self.base / f'origem-{len(list(self.base.glob("origem-*.json")))}.json'
+        folder = self.work / '.frontlights' / 'origens'
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f'origem-{len(list(folder.glob("origem-*.json")))}.json'
         path.write_text(json.dumps(record), encoding='utf-8')
         return path
 

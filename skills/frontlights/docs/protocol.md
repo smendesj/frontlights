@@ -178,7 +178,8 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          original e a evidência atual da main local (copia o registro da origem inteiro
                          (warnings incluídos), menos base, head e evidence: mode, source, argv, exitCode,
                          timedOut, seconds, output, concurrent, startedAt e finishedAt vêm dela), e
-                         `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem; os juízes o leem como
+                         `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem (as recusas da adoção
+                         estão em `references/development.md`, "The release"); os juízes o leem como
                          um rodado. Com o marcador `{covered}` no argv de `homolog.suites.full` (só lá, como
                          argumento inteiro, uma vez), ganha `covered` {complete, from [{issue, path, head, tree}],
                          refused [{issue, path, reason}], file}: `complete` lista os ids que os registros de
