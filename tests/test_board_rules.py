@@ -318,60 +318,26 @@ class ConfigShapeTests(RefusalMixin, unittest.TestCase):
 
 
 class DoneSettingTests(unittest.TestCase):
-    """`project.done`: o campo e a opção em que o cartão fica quando a issue é fechada."""
+    """`project.done` saiu (20/10/2026): o fluxo "Item closed" do quadro leva o cartão a Done e o fechamento não lê
+    o quadro, então a chave é desconhecida e nada dela aparece no quadro normalizado nem no inspect."""
 
-    def test_a_board_without_done_gets_status_done(self):
-        self.assertEqual(frontlights.board(project(), 'example/project')['done'], {'field': 'Status', 'value': 'Done'})
+    def test_the_board_has_no_done(self):
+        self.assertNotIn('done', frontlights.board(project(), 'example/project'))
+        self.assertNotIn('done', frontlights.BOARD_KEYS)
+        self.assertFalse(hasattr(frontlights, 'DONE_DEFAULT'))
 
-    def test_a_custom_done_is_kept(self):
-        board = frontlights.board(project(done={'field': 'Situação', 'value': 'Concluído'}), 'example/project')
-        self.assertEqual(board['done'], {'field': 'Situação', 'value': 'Concluído'})
+    def test_a_done_key_is_refused_as_unknown(self):
+        with self.assertRaisesRegex(ValueError, 'project has unknown setting.*done'):
+            frontlights.board(project(done={'field': 'Status', 'value': 'Done'}), 'example/project')
 
-    def test_the_default_is_a_fresh_copy_each_time(self):
-        first = frontlights.board(project(), 'example/project')
-        first['done']['value'] = 'Changed'
-        self.assertEqual(frontlights.board(project(), 'example/project')['done']['value'], 'Done')
-
-    def test_done_is_a_known_setting(self):
-        self.assertIn('done', frontlights.BOARD_KEYS)
-        with self.assertRaisesRegex(ValueError, 'known: .*done'):
-            frontlights.board(project(finished={}), 'example/project')
-
-    def test_done_must_be_an_object_with_field_and_value(self):
-        for bad in (None, 'Done', ['Status', 'Done'], 3, {}, {'field': 'Status'}, {'value': 'Done'},
-                    {'field': '', 'value': 'Done'}, {'field': 'Status', 'value': '   '},
-                    {'field': 5, 'value': 'Done'}, {'field': 'Status', 'value': None}):
-            with self.subTest(bad=bad), self.assertRaisesRegex(ValueError, r'project\.done'):
-                frontlights.board(project(done=bad), 'example/project')
-
-    def test_an_unknown_key_inside_done_is_refused(self):
-        for extra in ({'field': 'Status', 'value': 'Done', 'option': 'x'}, {'field': 'Status', 'valeu': 'Done'}):
-            with self.subTest(extra=extra), self.assertRaisesRegex(ValueError, r'project\.done has unknown setting'):
-                frontlights.board(project(done=extra), 'example/project')
-
-    def test_done_text_is_typeable_like_the_other_board_fields(self):
-        curly = 'x”; calc; “y'
-        for bad in ('Done$(id)', 'Do`ne`', 'Do"ne', 'Do\\ne', 'Do\nne', curly, 'a“b', 'x' * 101):
-            with self.subTest(value=bad), self.assertRaisesRegex(ValueError, r'project\.done\.value'):
-                frontlights.board(project(done={'field': 'Status', 'value': bad}), 'example/project')
-            with self.subTest(field=bad), self.assertRaisesRegex(ValueError, r'project\.done\.field'):
-                frontlights.board(project(done={'field': bad, 'value': 'Done'}), 'example/project')
-        frontlights.board(project(done={'field': 'x' * 100, 'value': "Won't fix (later)"}), 'example/project')
-
-    def test_done_without_a_board_is_ignored(self):
-        self.assertIsNone(frontlights.board(None, 'example/project'))
-
-    def test_inspect_shows_done(self):
+    def test_inspect_shows_no_done(self):
         def fake(argv, cwd=None):
             if argv[:3] == ['gh', 'project', 'view']:
                 return json.dumps({'title': 'Board', 'url': 'https://github.com/orgs/example-org/projects/3'}).encode()
             return b'[]'
-        for configured, shown in ((None, {'field': 'Status', 'value': 'Done'}),
-                                  ({'field': 'Phase', 'value': 'Shipped'}, {'field': 'Phase', 'value': 'Shipped'})):
-            extra = {} if configured is None else {'done': configured}
-            with self.subTest(done=configured), tempfile.TemporaryDirectory() as root,                     patch.object(frontlights, 'run', side_effect=fake):
-                result = frontlights.inspect({'repository': 'example/project', 'project': project(**extra)}, root)
-            self.assertEqual(result['sources']['project']['done'], shown)
+        with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=fake):
+            result = frontlights.inspect({'repository': 'example/project', 'project': project()}, root)
+        self.assertNotIn('done', result['sources']['project'])
 
 
 class CliTests(unittest.TestCase):

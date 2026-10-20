@@ -234,7 +234,7 @@ class FamilyRulesTextTests(unittest.TestCase):
                        "undone and becomes a question);",
                        'the local main and the branches of the issues in progress into the preview branch by '
                        '`serve preview refresh` (a conflict is undone and becomes a question);',
-                       'the branch of the issue into the local main once its three gates are green',
+                       'the branch of the issue into the local main once its watched run is answered or not needed',
                        'the preview branch stays local too'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)

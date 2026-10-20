@@ -64,18 +64,14 @@ def repository_or_local(value):
     return value is None or repository(value)
 
 
-BOARD_KEYS = {'owner', 'number', 'assignee', 'issue_type', 'fields', 'labels', 'issue_type_by_label', 'body_fields', 'done'}
-# Where a closed issue's card sits on the board when the project says nothing else.
-DONE_DEFAULT = {'field': 'Status', 'value': 'Done'}
+BOARD_KEYS = {'owner', 'number', 'assignee', 'issue_type', 'fields', 'labels', 'issue_type_by_label', 'body_fields'}
 
 
 def board(project, repo=...):
     """The issue board every created issue must join, or None when none is configured.
 
     `fields` maps a board field to its default value; None means the value is chosen per
-    issue in the approved plan. `done` names the single-select field and the option a closed
-    issue's card is moved to (default Status / Done). The board is data for gh, never a place
-    to embed credentials.
+    issue in the approved plan. The board is data for gh, never a place to embed credentials.
     """
     if project is None:
         return None
@@ -106,8 +102,7 @@ def board(project, repo=...):
             'assignee': project.get('assignee'), 'issue_type': project.get('issue_type'),
             'labels': label_rules(project.get('labels'), fields),
             'issue_type_by_label': type_rules(project.get('issue_type_by_label')),
-            'body_fields': body_rules(project.get('body_fields')),
-            'done': done_rules(project['done']) if 'done' in project else dict(DONE_DEFAULT)}
+            'body_fields': body_rules(project.get('body_fields'))}
 
 
 # Text that ends up as one argument of a `gh` command a session types. Passed as a single double-quoted
@@ -206,20 +201,6 @@ def type_rules(mapping):
                                               for k, v in mapping.items()),
             f'project.issue_type_by_label must map a label name ({LABEL_RULE}) to an issue type without {UNTYPEABLE_NAMES}')
     return dict(mapping)
-
-
-def done_rules(rule):
-    """`project.done`: the board field and option a closed issue's card moves to. Both are typed into
-    `gh project item-edit`, so they get the same text rule as the other board fields. A null is refused
-    rather than read as the default: leave the key out to get Status / Done."""
-    shape = f'project.done must be an object with field and value, such as {json.dumps(DONE_DEFAULT)}'
-    require(isinstance(rule, dict), shape)
-    unknown = sorted(set(rule) - set(DONE_DEFAULT))
-    require(not unknown, f'project.done has unknown setting(s): {", ".join(map(str, unknown))}; known: field, value')
-    require(set(rule) == set(DONE_DEFAULT), shape)
-    for key in ('field', 'value'):
-        require(typeable(rule[key]), f'project.done.{key} must be {TYPEABLE_RULE}')
-    return {'field': rule['field'], 'value': rule['value']}
 
 
 def body_rules(rules):
@@ -1107,7 +1088,7 @@ def inspect(config, root, config_path=None, summary=False):
                    'choose_per_issue': sorted(k for k, v in project['fields'].items() if v is None),
                    'assignee': project['assignee'], 'issue_type': project['issue_type'],
                    'labels': project['labels'], 'issue_type_by_label': project['issue_type_by_label'],
-                   'body_fields': project['body_fields'], 'done': project['done']}
+                   'body_fields': project['body_fields']}
         try:
             view = json.loads(run(['gh', 'project', 'view', str(project['number']),
                                    '--owner', project['owner'], '--format', 'json']))

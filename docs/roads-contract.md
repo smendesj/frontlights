@@ -150,8 +150,8 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
   ou rotina diária) não consulta o GitHub e devolve o snapshot anterior. Sem sincronizar, recarregar a página só relê o
   que está guardado.
 - **Consequência para o Frontlights.** Fechar uma issue só muda o RoadS quando o fluxo "Item closed" do quadro leva o
-  cartão a Done; um cartão que a conferência do fechamento acusa fora de Done não aparece como concluído lá. Depois do
-  fechamento, o RoadS o mostra na próxima sincronização dele.
+  cartão a Done (o fechamento do Frontlights não lê o quadro). Depois do fechamento, o RoadS o mostra na próxima
+  sincronização dele.
 
 ## Fatos do resumo: a família inteira de cada entrega
 

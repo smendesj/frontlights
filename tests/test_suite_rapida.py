@@ -127,7 +127,7 @@ class FastSuiteTextTests(unittest.TestCase):
     """Seam: os manifestos de texto."""
 
     def test_the_repository_has_no_ci_workflow(self):
-        # Issue 63: a suíte inteira local na main, na release, é a única conferência inteira.
+        # Decisão de 20/10/2026: nenhuma conferência inteira é exigida; a suíte inteira roda à mão, a pedido.
         self.assertFalse(ROOT.joinpath('.github', 'workflows', 'tests.yml').exists())
         self.assertFalse(ROOT.joinpath('.github').exists())
 
@@ -135,42 +135,46 @@ class FastSuiteTextTests(unittest.TestCase):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
         for phrase in ('**Which tests run when.**',
-                       'Per slice, run the test modules the slice touches',
-                       'the fast suite is how the whole is checked between slices',
-                       f'`{VARIABLE}=rapida`',
-                       'skip the modules that start real processes and ports',
-                       'reported as skipped with a reason that names the variable',
-                       'any other value, or no variable, runs everything',
-                       "Per issue, the gate is the project's impact suite",
-                       '(in this repository, `python tests/suite.py --impact {base}`)',
-                       'homolog suite --root <issue-worktree> --config <config> --issue <n> --mode impact --base <base>',
-                       "homolog suite --root <issue-worktree> --config <config> --issue <n> --mode full --base <base> --argv '<the accepted argv>' --timeout-seconds <N>",
-                       '`N` sized to the suite, since a run past it is killed',
-                       'is run once more, alone, after the watched run ends',
-                       '"Declarar as suítes agora"', '"Rodar a suíte inteira desta vez"',
-                       'The whole suite runs at the release ("The release"), the only whole check',
-                       "a project's CI, when there is one, is neither expected nor a gate",
-                       'This repository has no CI workflow', '`tests.test_serve_preview`',
-                       'the six sensitive ones in a serial queue'):
+                       'TDD per slice is the default practice',
+                       'plus the test modules the slice touches and the type checks',
+                       'These tests are evidence, never a gate: no suite holds back the merge into the local main or '
+                       'the release.',
+                       'When the user asks to implement "só com teste assistido", the session writes and runs no tests '
+                       'in that run',
+                       'A broader suite runs only when the user asks for one, through the optional tools',
+                       'homolog suite --root <issue-worktree> --config <config> --issue <n> --mode impact|full --base <base>',
+                       'judged by `homolog suite-gate`',
+                       '`--impact <base>` runs only what the diff touches, by the selection of `tests/pre_commit.py`',
+                       f'`{VARIABLE}=rapida`, Windows only, it skips the modules that start real processes and ports',
+                       '`python -m unittest discover -s tests -v` for the whole',
+                       'a red one is a finding',
+                       "No whole check is required anywhere: a project's CI, when there is one, is neither expected "
+                       'nor a gate, and the watched run of each issue is the evidence.'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
-        for old in ('with or without CI in the project', 'The CI of this repository stays the full check'):
+        for old in ('with or without CI in the project', 'The CI of this repository stays the full check',
+                    "Per issue, the gate is the project's impact suite", 'the only whole check',
+                    '"Rodar a suíte inteira desta vez"'):
             with self.subTest(old=old):
                 self.assertNotIn(old, text)
 
-    def test_the_release_says_its_run_is_the_only_whole_check(self):
+    def test_the_release_requires_no_suite(self):
         # "The release" é a última seção da referência da etapa 6.
         text = flat('skills', 'frontlights', 'references', 'development.md').split('## The release')[1]
-        self.assertIn("This run is the release's only whole check; a CI on the release's pull request, when the "
-                      'project has one, is neither expected nor a gate.', text)
+        self.assertIn('No suite is required for the release (no whole check is: the watched run of each issue is its '
+                      'evidence)', text)
+        self.assertIn('runs only when the user asks for it', text)
+        self.assertNotIn("This run is the release's only whole check", text)
         self.assertNotIn("The CI of the release's pull request stays the full check", text)
 
     def test_the_readme_documents_the_variable_and_the_rule(self):
         text = flat('README.md')
         for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
                        'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
-                       'a suíte inteira sem a variável roda na release, uma vez',
-                       'a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão',
+                       'o TDD de cada slice é a prática padrão e nenhuma suíte é portão: nem no merge na main local, '
+                       'nem na release',
+                       'nenhuma conferência inteira é exigida (a CI de um projeto, quando houver, não é esperada nem é '
+                       'portão)',
                        'Este repositório não tem workflow de CI', '`tests.test_serve_preview`',
                        'os seis sensíveis'):
             with self.subTest(phrase=phrase):
@@ -182,13 +186,12 @@ class FastSuiteTextTests(unittest.TestCase):
 
     def test_the_protocol_documents_the_rule(self):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que a slice toca',
-                       'a suíte rápida é a forma de conferir o todo entre slices',
-                       'a suíte inteira sem a variável roda na release, uma vez',
-                       'a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão',
-                       'este repositório não tem workflow de CI',
-                       'os módulos de portas e da prévia do `serve`',
-                       'os seis sensíveis numa fila serial'):
+        for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que ela toca',
+                       'Esses testes são evidência, nunca portão: nenhuma suíte segura o merge na main local nem a '
+                       'release.',
+                       'são ferramentas opcionais, rodadas só a pedido do usuário',
+                       'nenhuma conferência inteira é exigida, e a CI de um projeto, quando houver, não é esperada nem '
+                       'é portão'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         for old in ('com ou sem CI no projeto', 'A CI do GitHub'):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Close-out helper: which issues (and sub-issues) can be closed because every acceptance criterion in the body is
-checked, whether they ended closed with their card in Done; and `tick`, the one operation that writes, which ticks
-one box. The card is moved to Done by the board's own "Item closed" workflow, never by Frontlights.
+checked, whether they ended closed; and `tick`, the one operation that writes, which ticks one box. The board is
+never read here: the board's own "Item closed" workflow moves the card to Done, never Frontlights.
 
 Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roads.py) and prints what
 the session may propose. Closing is done by the session, with its own `gh`, after the user said yes:
@@ -9,8 +9,7 @@ this helper never closes an issue, never moves a card, and the commands it print
 something it runs. Its only write is `tick` (below): the `[ ]` of one box of an issue's acceptance criteria turned
 into `[x]`, under the authorization to tick criteria with evidence, with the previous body kept in the records.
 Text read from GitHub is data: titles are cleaned and bounded, issue bodies are only counted (never echoed), and
-every command is built from validated values (numbers, `owner/name`, and the
-board's `done` field and option as `frontlights.board` accepts them).
+every command is built from validated values (numbers and `owner/name`).
 
 Operations (each prints one JSON object on stdout):
   candidates  the open issues that can be closed now, in the order to close them (sub-issues before
@@ -18,8 +17,7 @@ Operations (each prints one JSON object on stdout):
               issue of the repository), or, with neither, the issues this project worked on (folders in
               .frontlights/issues, ids in .frontlights/authorization*.json and .frontlights/plan.json)
               together with their sub-issues.
-  verify      reread --issues and say, for each, whether it is closed and whether its card is in Done
-              (`cardsOutsideDone`: reported in one line, never a failure).
+  verify      reread --issues and say, for each, whether it is closed.
   merge-status  for pull requests named with --prs 12,13, whether each is still open, was merged into the
               approved base (--base, else the repository's default branch), was merged into some other branch
               or was closed unmerged. This is what the session waits on after it opened its pull requests: only
@@ -39,7 +37,7 @@ Operations (each prints one JSON object on stdout):
 
 An open issue is a candidate only when its body has an acceptance-criteria section with at least one
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
-closed issue is never a candidate, whatever its card: it is counted in `alreadyDone`.
+closed issue is never a candidate: it is counted in `alreadyDone`.
 
 The local base is the homologation bench of the project (issue 32): an issue's branch reaches GitHub only through
 the release. So an issue whose branch still exists locally and is not yet contained in `<remote>/<base>` is kept
@@ -62,7 +60,7 @@ never offered for ticking). Only line numbers are reported; the session reads th
 body, so no body text is ever echoed here.
 
 Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read) or, for verify, an issue that is not
-closed yet (`ok` is false and `issues` says which; a card outside Done is never one), or, for tick, a write
+closed yet (`ok` is false and `issues` says which), or, for tick, a write
 whose reread does not check (`written` true, `verified` false: show the difference and ask; restoring the saved body is a write of its own) or
 whose outcome is unknown (`written` null: gh failed and the reread is neither body, or the reread itself failed).
 A refusal is JSON, never a traceback.
@@ -82,8 +80,8 @@ import unicodedata
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
-import frontlights  # noqa: E402  (the board rules live there; this helper only reads them)
-import roads as rs  # noqa: E402  (its reader of GitHub: graphql, board_layout, clean, card_text)
+import frontlights  # noqa: E402  (the configuration rules live there; this helper only reads them)
+import roads as rs  # noqa: E402  (its reader of GitHub: graphql, clean)
 
 Refusal = rs.Refusal
 require = rs.require
@@ -93,7 +91,6 @@ MAX_ALL = 1000             # open issues --all reads, and the longest --issues l
 MAX_DEPTH = 8              # levels of sub-issues GitHub allows
 PAGE = 100
 MAX_RECORD_BYTES = 2 * 1024 * 1024
-HINT = 'gh auth refresh -s project'
 NUMBER = re.compile(r'[0-9]{1,9}')
 CURSOR = re.compile(r'[A-Za-z0-9+/=_-]{1,200}')
 PHRASES = ('acceptance criteria', 'criterios de aceitacao', 'criterios de aceite')
@@ -117,13 +114,6 @@ VIEW = '''number state stateReason title url body
   closedByPullRequestsReferences(first: 20, includeClosedPrs: true) { totalCount nodes { number state merged url repository { nameWithOwner } } }
   timelineItems(last: 50, itemTypes: [CROSS_REFERENCED_EVENT]) { totalCount nodes {
     ... on CrossReferencedEvent { source { ... on PullRequest { number state merged url repository { nameWithOwner } } } } } }'''
-CARDS = '''
-  projectItems(first: 20) { totalCount nodes { id
-    project { number owner { ... on Organization { login } ... on User { login } } }
-    fieldValues(first: 50) { totalCount nodes {
-      ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }
-    } }
-  } }'''
 CHILDREN = 'subIssues(first: 100) { totalCount nodes { number repository { nameWithOwner } } }'
 
 
@@ -461,16 +451,16 @@ def scope_numbers(root, explicit, all_flag, gh, repository):
 
 # ---------------------------------------------------------------- reading the issues
 
-def read_views(gh, repository, numbers, board, with_cards):
-    """What the rules need from each issue number: state, parent, sub-issues, linked pull requests, the
-    acceptance-criteria counts and, with `with_cards`, its card on the configured board. A number GitHub does
-    not know comes back as None. A list that did not fit one page is named in `truncated`, because a value cut
-    off would read as absent. The body is counted, never kept."""
-    nodes = read_aliases(gh, repository, numbers, VIEW + (CARDS if with_cards else ''))
-    return {n: None if node is None else parse_view(n, node, repository, board, with_cards) for n, node in nodes.items()}
+def read_views(gh, repository, numbers):
+    """What the rules need from each issue number: state, parent, sub-issues, linked pull requests and the
+    acceptance-criteria counts. The board is never read. A number GitHub does not know comes back as None. A list
+    that did not fit one page is named in `truncated`, because a value cut off would read as absent. The body is
+    counted, never kept."""
+    nodes = read_aliases(gh, repository, numbers, VIEW)
+    return {n: None if node is None else parse_view(n, node, repository) for n, node in nodes.items()}
 
 
-def parse_view(number, node, repository, board, with_cards):
+def parse_view(number, node, repository):
     truncated = []
     kids, short = page(node.get('subIssues'))
     children = []
@@ -503,28 +493,6 @@ def parse_view(number, node, repository, board, with_cards):
             linked.append({'number': pr['number'], 'state': rs.clean(pr['state']) if isinstance(pr.get('state'), str) else None,
                            'merged': pr.get('merged') is True,
                            'url': rs.clean(url) if isinstance(url, str) and url.startswith('https://') else None})
-    card = None
-    if with_cards:
-        items, short = page(node.get('projectItems'))
-        if short:
-            truncated.append('cards')
-        for item in items:
-            project = item.get('project')
-            owner = project.get('owner') if isinstance(project, dict) else None
-            login = owner.get('login') if isinstance(owner, dict) else None
-            if (isinstance(login, str) and type(project.get('number')) is int and project['number'] == board['number']
-                    and login.casefold() == board['owner'].casefold()):
-                card = {}
-                values, short = page(item.get('fieldValues'))
-                if short:
-                    truncated.append('card_values')
-                for value in values:
-                    field = value.get('field')
-                    field = field.get('name') if isinstance(field, dict) else None
-                    text = rs.card_text(value)
-                    if isinstance(field, str) and field and text:
-                        card[field] = text
-                break
     counts, pending = scan(node.get('body'))
     parent = node.get('parent')
     state = node.get('state')
@@ -536,58 +504,7 @@ def parse_view(number, node, repository, board, with_cards):
             'parent': parent['number'] if isinstance(parent, dict) and valid_number(parent.get('number')) else None,
             'parentRepository': other_repository(parent, repository) if isinstance(parent, dict) else None,
             'children': {'total': total, 'completed': completed, 'open': opened, 'nodes': children},
-            'prs': linked, 'card': card, 'cardsRead': with_cards, 'truncated': truncated}
-
-
-def unread_board(board):
-    """The `board` block for a run that found nothing to read: only what the configuration says."""
-    if board is None:
-        return {'status': 'unconfigured', 'owner': None, 'number': None, 'done': None}
-    return {'status': 'not_read', 'owner': board['owner'], 'number': board['number'], 'done': dict(board['done'])}
-
-
-def board_state(gh, board):
-    """The `board` block of the answer, and the board's layout when GitHub could tell. `available`: the done
-    field and option exist; `done_option_missing`: they do not (the real fields are shown) and verify cannot tell
-    whether a card is in Done; `unavailable`: the board could not be read (usually the project scope)."""
-    if board is None:
-        return unread_board(None), None
-    done = board['done']
-    info = {'status': 'available', 'owner': board['owner'], 'number': board['number'], 'done': dict(done)}
-    try:
-        layout = rs.board_layout(gh, board)
-    except Refusal as refusal:
-        return mark_unavailable(info, str(refusal)), None
-    field = layout.get(done['field'])
-    shown = f'"{rs.clean(done["field"])}"'
-    if field is None:
-        reason = f'the board has no field named {shown}'
-    elif field['type'] != 'single_select':
-        reason = f'the board field {shown} is not a single select'
-    elif done['value'] not in field['options']:
-        reason = f'the board field {shown} has no option "{rs.clean(done["value"])}"'
-    else:
-        return info, layout
-    info.update(status='done_option_missing', reason=reason + '; fix project.done in the configuration',
-                fields={rs.clean(name): rs.shown_field(entry) for name, entry in layout.items()})
-    return info, layout
-
-
-def mark_unavailable(info, reason):
-    info.pop('fields', None)
-    info.update(status='unavailable', reason=reason, hint=HINT)
-    return info
-
-
-def read_board_views(gh, repository, numbers, board, info):
-    """The views, with the cards when the board could be read. A card read the project scope refuses is
-    tried again without cards (the board turns `unavailable`); a read that fails either way is a refusal."""
-    if info['status'] in ('available', 'done_option_missing'):
-        try:
-            return read_views(gh, repository, numbers, board, True)
-        except Refusal as refusal:
-            mark_unavailable(info, str(refusal))
-    return read_views(gh, repository, numbers, board, False)
+            'prs': linked, 'truncated': truncated}
 
 
 # ---------------------------------------------------------------- release check
@@ -653,14 +570,11 @@ def issue_url(repository, number):
     return f'https://github.com/{repository}/issues/{number}'
 
 
-def assess(views, repository, board, info, unreleased=None):
+def assess(views, repository, unreleased=None):
     """Split the scope: the candidates (in closing order, all open), the issues left out with the reason, and how
-    many closed issues need nothing (a closed issue is never a candidate, whatever its card). `unreleased` maps
-    the issues whose branch is not yet in the remote base to the detail of the `awaiting_release` reason."""
-    status = info['status']
+    many closed issues need nothing (a closed issue is never a candidate). `unreleased` maps the issues whose
+    branch is not yet in the remote base to the detail of the `awaiting_release` reason."""
     unreleased = unreleased or {}
-    cards_known = status in ('available', 'done_option_missing')
-    done_field = board['done']['field'] if board else None
     memo = {}
 
     def cuts(view):
@@ -711,18 +625,14 @@ def assess(views, repository, board, info, unreleased=None):
         return result
 
     def candidate(view):
-        """An open issue to close. Its card is shown, never moved: the board's "Item closed" workflow moves it."""
+        """An open issue to close. Its card is never read nor moved: the board's "Item closed" workflow moves it."""
         number = view['number']
-        card = view['card']
-        current = card.get(done_field) if card is not None else None
         level = 'top' if view['parent'] is None else 'sub'
         cautions = []
         if any(pr['state'] == 'OPEN' for pr in view['prs']):
             cautions.append('open_pr')
         elif not view['prs']:
             cautions.append('no_pr')
-        if cards_known and card is None and level == 'top':
-            cautions.append('not_on_board')
         if view['pendingOutside']:
             cautions.append('pending_outside_criteria')
         url = issue_url(repository, number)
@@ -733,10 +643,7 @@ def assess(views, repository, board, info, unreleased=None):
                 'parentTicks': None,
                 'children': {key: view['children'][key] for key in ('total', 'completed', 'open')},
                 'state': view['state'], 'action': 'close',
-                'prs': view['prs'],
-                'card': None if card is None else {'status': rs.clean(current) if current is not None else None},
-                'onBoard': (card is not None) if cards_known else (False if status == 'unconfigured' else None),
-                'cautions': cautions, 'commands': commands}
+                'prs': view['prs'], 'cautions': cautions, 'commands': commands}
 
     found, excluded, already = {}, [], 0
     for number in sorted(views):
@@ -830,11 +737,11 @@ def keyword_verdict(view):
 def release_keywords(gh, repository, numbers, base):
     """(default branch, {number: what the release plan shows of it}) for the issues of a release into `base`. GitHub
     closes by keyword only on a merge into the default branch, so with another base the issues are not read
-    ({}). Read only: one GraphQL read of the default branch and `read_views` of the issues, without the board."""
+    ({}). Read only: one GraphQL read of the default branch and `read_views` of the issues."""
     default = default_branch(gh, repository)
     if default is None or default != base:
         return default, {}
-    views = read_views(gh, repository, sorted(numbers), None, False)
+    views = read_views(gh, repository, sorted(numbers))
     found = {}
     for number in sorted(numbers):
         view = views.get(number)
@@ -866,26 +773,11 @@ def load_repository(config):
 
 
 def load_project(config):
-    """(repository, normalised board or None) from the project's configuration file."""
+    """The repository (`owner/name`) of the project's configuration file. The `project` block is still validated,
+    so a broken configuration is refused here as everywhere else, but the board is never read."""
     data, repository = load_repository(config)
-    return repository, frontlights.board(data.get('project'), repository)
-
-
-def board_note(info):
-    if info['status'] == 'unavailable':
-        return f'The board could not be read, so the cards were not checked (try: {HINT}).'
-    if info['status'] == 'done_option_missing':
-        return 'The board has no Done option as configured, so the cards were not checked against Done (see board).'
-    return ''
-
-
-def outside_done_note(numbers):
-    """The one line verify gives for the cards the board's "Item closed" workflow did not move to Done."""
-    if not numbers:
-        return ''
-    named = ', '.join(f'#{n}' for n in numbers)
-    return (f'The card of {named} is not in Done: the board\'s "Item closed" workflow did not move it (turn it on '
-            'in the board\'s Workflows screen; Frontlights does not move cards).')
+    frontlights.board(data.get('project'), repository)
+    return repository
 
 
 def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base=None, remote=None):
@@ -893,14 +785,14 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
     user approves, in closing order; the issues left out and why (an issue whose branch is not yet in
     `<remote>/<base>` waits for the release)."""
     gh = gh or rs.gh_default
-    repository, board = load_project(config)
+    repository = load_project(config)
     numbers = None if explicit is None else parse_numbers(explicit)
     require(not (all_flag and numbers is not None), '--issues and --all cannot be used together; choose one')
     require(base is None or valid_branch(base), '--base must be a plain branch name')
     require(remote is None or valid_remote(remote), '--remote must be a plain remote name, such as origin')
     scope = scope_numbers(root, numbers, all_flag, gh, repository)
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'scope': scope,
-              'board': unread_board(board), 'candidates': [], 'excluded': [], 'alreadyDone': 0,
+              'candidates': [], 'excluded': [], 'alreadyDone': 0,
               'releaseCheck': 'skipped', 'ask': False}
     if not scope['numbers']:
         result['message'] = ('The repository has no open issue, so there is nothing to close.' if scope['mode'] == 'all' else
@@ -908,12 +800,10 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
                              'authorization or plan record), so there is nothing to close. Name issues with '
                              '--issues 12,13 or read every open issue with --all.')
         return result
-    info, _ = board_state(gh, board)
-    result['board'] = info
-    views = read_board_views(gh, repository, scope['numbers'], board, info)
+    views = read_views(gh, repository, scope['numbers'])
     open_numbers = [n for n, view in sorted(views.items()) if view is not None and view['state'] == 'OPEN']
     unreleased, release_status, _, _ = release_check(root, open_numbers, base, remote)
-    ordered, excluded, already = assess(views, repository, board, info, unreleased)
+    ordered, excluded, already = assess(views, repository, unreleased)
     add_parent_ticks(gh, repository, ordered, views)
     result.update(candidates=ordered, excluded=excluded, alreadyDone=already, ask=bool(ordered), releaseCheck=release_status)
     parts = [f'{len(ordered)} issue(s) can be closed.' if ordered else 'No issue is ready to close.']
@@ -935,7 +825,6 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
         parts.append(f'{already} closed issue(s) need nothing.')
     if scope['truncated']:
         parts.append('The scope was cut (scope.truncated); name issues with --issues to see the rest.')
-    parts.append(board_note(info))
     if ordered:
         parts.append('Nothing was written. Ask the user, then run the commands in order; verify afterwards.')
     result['message'] = ' '.join(part for part in parts if part)
@@ -943,45 +832,30 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
 
 
 def op_verify(config, root='.', explicit=None, gh=None):
-    """Read only: for each issue, whether it is closed (`ok`) and, when it has a card on the board, whether the
-    card is in Done. A card outside Done is listed in `cardsOutsideDone` and named in one line of the message; it
-    never makes an issue fail, since the board's "Item closed" workflow moves the card, not this session."""
+    """Read only: for each issue, whether it is closed (`ok`). The board is not read: the board's "Item closed"
+    workflow moves the card to Done, not this session."""
     gh = gh or rs.gh_default
-    repository, board = load_project(config)
+    repository = load_project(config)
     require(explicit is not None and explicit != '' and explicit != [],
             'verify needs the issues to check: pass --issues 12,13')
     numbers = parse_numbers(explicit)
     require(len(numbers) <= MAX_ALL, f'name at most {MAX_ALL} issues')
-    info, _ = board_state(gh, board)
-    views = read_board_views(gh, repository, numbers, board, info)
-    done_field, done_value = (board['done']['field'], board['done']['value']) if board else (None, None)
+    views = read_views(gh, repository, numbers)
     entries = []
     for number in numbers:
         view = views[number]
         if view is None:
-            entries.append({'number': number, 'state': None, 'stateReason': None, 'status': None, 'closed': False,
-                            'done': None, 'ok': False, 'reason': 'not_found'})
+            entries.append({'number': number, 'state': None, 'stateReason': None, 'closed': False, 'ok': False,
+                            'reason': 'not_found'})
             continue
         closed = view['state'] == 'CLOSED'
-        card = view['card']
-        current = card.get(done_field) if card is not None else None
-        done = (current == done_value) if info['status'] == 'available' and card is not None else None
-        entry = {'number': number, 'state': view['state'], 'stateReason': view['stateReason'],
-                 'status': rs.clean(current) if current is not None else None, 'closed': closed, 'done': done,
-                 'ok': closed}
-        if any(name in ('cards', 'card_values') for name in view['truncated']):
-            entry.update(status=None, done=None, reason='truncated')
-        entries.append(entry)
+        entries.append({'number': number, 'state': view['state'], 'stateReason': view['stateReason'],
+                        'closed': closed, 'ok': closed})
     waiting = [e['number'] for e in entries if not e['ok']]
-    outside = [e['number'] for e in entries if e['closed'] and e['done'] is False]
-    result = {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
-              'board': info, 'issues': entries, 'cardsOutsideDone': outside}
-    parts = [f'All {len(entries)} issue(s) are closed.' if not waiting else
-             f'{len(waiting)} of {len(entries)} issue(s) are not closed yet: ' + ', '.join(f'#{n}' for n in waiting) + '.']
-    parts.append(outside_done_note(outside))
-    parts.append(board_note(info))
-    result['message'] = ' '.join(part for part in parts if part)
-    return result
+    message = (f'All {len(entries)} issue(s) are closed.' if not waiting else
+               f'{len(waiting)} of {len(entries)} issue(s) are not closed yet: ' + ', '.join(f'#{n}' for n in waiting) + '.')
+    return {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
+            'issues': entries, 'message': message}
 
 
 def read_pull_requests(gh, repository, numbers):
@@ -1027,7 +901,7 @@ def pull_request_entry(number, node, expected):
 def op_merge_status(config, prs, base=None, gh=None):
     """Read only: where each named pull request stands, against the approved base."""
     gh = gh or rs.gh_default
-    repository, _ = load_project(config)
+    repository = load_project(config)
     require(prs is not None and prs != '' and prs != [], 'merge-status needs the pull requests to check: pass --prs 12,13')
     numbers = parse_numbers(prs, 'pull request numbers must be positive integers, as in --prs 12,13')
     require(len(numbers) <= MAX_ALL, f'name at most {MAX_ALL} pull requests')

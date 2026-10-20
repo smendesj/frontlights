@@ -130,7 +130,10 @@ class HookDocumentationTests(unittest.TestCase):
                 self.assertIn(phrase, readme)
         security = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'security.md').read_text(encoding='utf-8').split())
         self.assertIn('frontlights-prompt-hook.py', security)
-        self.assertIn('é o único hook que o Frontlights instala', security)
+        self.assertIn('O Frontlights não instala hook nenhum.', security)
+        self.assertIn('é um modelo que o usuário copia para o `~/.claude/hooks/`', security)
+        self.assertNotIn('é o único hook que o Frontlights instala', security)
+        self.assertIn('há um hook **opcional**, que a skill não instala', readme)
 
     def test_the_skill_description_names_the_plain_language_triggers(self):
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')

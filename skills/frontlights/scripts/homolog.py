@@ -29,9 +29,8 @@ Operations (each prints one JSON object on stdout):
          `branch_prefix` of the record with the newest `issued_at`, a record without a valid instant ranking last, and
          `claude/` without a valid record, issue 44; `prefix` and `prefixSource` say which; the date in America/Sao_Paulo, the
          machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
-         remote-tracking branch of `--remote`, that already has the name, or that a merged pull request named
-         (`Merge pull request #<n> from <owner>/<name>` among the last MERGE_LIMIT merges of `<remote>/<base>`: a
-         squash merge, or a repository whose merge message is the pull request title, leaves no such subject).
+         remote-tracking branch of `--remote`, that already has the name (GitHub deletes the head branch of a merged
+         pull request and accepts its name again once `git fetch --prune` drops the ref).
          `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
@@ -127,8 +126,6 @@ FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
 RECORD_LIMIT = 200       # authorization records release-plan and bundle read
-MERGE_LIMIT = 1000       # merges of <remote>/<base> whose subjects release-plan reads for names already used
-MERGED_PR = re.compile(r'Merge pull request #[0-9]+ from [^/\s]+/(\S+)')   # GitHub's subject of a merge
 DEFAULT_PREFIX = 'claude/'   # the branch prefix when neither --prefix nor a record names one
 RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
 RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
@@ -572,23 +569,12 @@ def release_date():
     return now.strftime('%Y-%m-%d')
 
 
-def merged_names(root, remote, base):
-    """The head branch names that GitHub's merge subjects (`Merge pull request #<n> from <owner>/<name>`) cite among
-    the last MERGE_LIMIT merges of `<remote>/<base>`; an empty set when Git cannot read them."""
-    code, out, _ = git(root, 'log', '--merges', f'-n{MERGE_LIMIT}', '--format=%s', f'refs/remotes/{remote}/{base}', '--')
-    if code != 0:
-        return set()
-    return {match.group(1) for match in map(MERGED_PR.fullmatch, out.splitlines()) if match}
-
-
-def release_name(root, prefix, remote, base='main'):
-    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch, every remote-tracking branch of
-    `remote`, and every name a merged pull request of `<remote>/<base>` cites, that already carries the name."""
+def release_name(root, prefix, remote):
+    """`<prefix>release-<date>`, then `-2`, `-3`... past every local branch and every remote-tracking branch of
+    `remote` that already carries the name."""
     stem = f'{prefix}release-{release_date()}'
     name, counter = stem, 2
-    used = merged_names(root, remote, base)
-    while (name in used or rev(root, f'refs/heads/{name}') is not None
-           or rev(root, f'refs/remotes/{remote}/{name}') is not None):
+    while rev(root, f'refs/heads/{name}') is not None or rev(root, f'refs/remotes/{remote}/{name}') is not None:
         name = f'{stem}-{counter}'
         counter += 1
     return name
@@ -716,7 +702,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
     release = [i['issue'] for i in issues if pending(i)]
     release_direct = [d['direct'] for d in directs if pending(d)]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
-    name = release_name(root, prefix, remote, base)
+    name = release_name(root, prefix, remote)
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
               'behind': behind, 'issues': issues, 'release': release, 'directs': directs,
               'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,

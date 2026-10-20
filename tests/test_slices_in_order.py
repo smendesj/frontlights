@@ -130,9 +130,12 @@ class SlicesInOrderTextTests(unittest.TestCase):
                        'in dependency order: independent slices run at once',
                        'one TDD loop', '`checkpoint --slice <id>`', 'first open box', 'tick of its box',
                        '`closeout.py tick-check` before and after the write', 'one per issue, when the last slice',
-                       'one per issue, of the whole diff, before the merge into the local main', 'a family that already exists'):
+                       'it is the only gate of the merge into the local main',
+                       'a broader suite and an independent review run only when the user asks for them',
+                       'a family that already exists'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
+        self.assertNotIn('one per issue, of the whole diff, before the merge into the local main', body)
         self.assertLess(text.index('## Slices in order'), text.index('## Dispatch and ownership'))
 
     def test_independent_slices_run_at_once_and_a_dependent_one_is_stacked(self):
@@ -153,14 +156,14 @@ class SlicesInOrderTextTests(unittest.TestCase):
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
         self.assertIn('O teste é um por issue', security)
         self.assertIn('uma vez por issue e antes da revisão independente', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
-        self.assertIn('**Um teste por issue, antes da revisão.**', flat(read('README.md')))
+        self.assertIn('**Um teste por issue, o único portão.**', flat(read('README.md')))
 
     def test_each_slice_has_its_own_worktree_cut_from_the_issue_branch(self):
         """Issue 31, S2: a worktree e a branch de cada CA, o `slice` no charter, um checkpoint por worktree e o
         merge da CA pronta na branch da issue entre os merges cobertos, nos quatro documentos, no handoff e no
         exemplo de autorização."""
         skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
-        for phrase in ('merged into the branch of the issue when its TDD loop closes',):
+        for phrase in ('merged into the branch of the issue when its loop closes', '(TDD by default, never a gate'):
             with self.subTest(where='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         development = read('skills', 'frontlights', 'references', 'development.md')

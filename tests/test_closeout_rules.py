@@ -44,7 +44,12 @@ class SkillTests(unittest.TestCase):
         self.assertLess(stage1.index('fetch --prune origin'), stage1.index('`cleanup.py plan` with'))
         self.assertLess(stage1.index('`cleanup.py plan` with'), stage1.index('closeout.py" candidates'))
         self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', stage1)
-        self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or `done_option_missing`: then say in one line that the cards could not be checked', stage1)
+        self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when an issue is excluded as `awaiting_release`', stage1)
+        # 20/10/2026: the closeout never reads the board, so no board remedy is offered at stage 1
+        self.assertIn('The closeout never reads the board.', stage1)
+        for word in ('board.status', 'done_option_missing', 'project.done', 'gh auth refresh -s project'):
+            with self.subTest(gone=word):
+                self.assertNotIn(word, stage1)
         question = stage1.split('**Closeout question, right after the progress question.**')[1]
         for word in ('mover', 'closedUnchecked', 'item-edit'):
             with self.subTest(word=word):
@@ -84,9 +89,9 @@ class ReferenceTests(unittest.TestCase):
 
     def test_the_candidate_rule_and_the_order(self):
         for phrase in ('every criterion of it is ticked', 'every one of its sub-issues is closed or a candidate in the same batch',
-                       '(children close before their parents)', 'A closed issue is never a candidate, whatever its card',
+                       '(children close before their parents)', 'A closed issue is never a candidate: it is counted in `alreadyDone`',
                        '`excluded` lists what is not ready and why', '`unchecked_criteria` and `no_criteria` with the counts',
-                       'never ticks one itself', 'Without `project.done` the pair is `Status` / `Done`'):
+                       'never ticks one itself'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -110,32 +115,38 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(all(len(label.split()) <= 5 for label in options), options)
 
     def test_the_list_and_the_writes_never_move_a_card(self):
-        # Issue 63: the board's "Item closed" workflow moves the card; the closeout only closes and checks.
+        # Issue 63: the board's "Item closed" workflow moves the card; since 20/10/2026 the closeout never reads it.
         for title in ('2. Show the list and ask', '3. Write what was approved'):
             text = ' '.join(section(self.text, title).split())
             for word in ('mover', 'move', 'item-edit', 'Done'):
                 with self.subTest(section=title, word=word):
                     self.assertNotIn(word, text)
         self.assertIn('The card goes to Done by the board\'s own workflow ("Item closed" → Status Done)', self.flat)
-        self.assertIn('Move a card (`gh project item-edit`): the board\'s "Item closed" workflow moves it to Done', self.flat)
-        self.assertIn('`cardsOutsideDone`', self.flat)
-        self.assertIn('suggest turning it on in the board\'s Workflows screen', self.flat)
+        self.assertIn('Move or read a card (`gh project item-edit`, a board read): the board\'s "Item closed" workflow '
+                      'moves it to Done', self.flat)
+        self.assertIn('this flow never reads the board and never moves a card', self.flat)
+        self.assertIn('The verify reads only the issues, never the board', self.flat)
+        for word in ('cardsOutsideDone', 'board.status', 'done_option_missing', 'not_on_board', 'project.done',
+                     'gh auth refresh -s project', 'card status'):
+            with self.subTest(gone=word):
+                self.assertNotIn(word, self.flat)
 
-    def test_every_reason_and_board_status_the_script_produces_is_documented(self):
+    def test_every_reason_the_script_produces_is_documented(self):
         source = (ROOT / 'skills' / 'frontlights' / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
         for code in ('unchecked_criteria', 'no_criteria', 'open_children', 'truncated', 'not_found', 'unreadable',
-                     'unconfigured', 'not_read', 'unavailable', 'done_option_missing', 'open_pr', 'no_pr', 'not_on_board',
-                     'pending_outside_criteria', 'awaiting_release'):
+                     'open_pr', 'no_pr', 'pending_outside_criteria', 'awaiting_release'):
             with self.subTest(code=code):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')
+        for code in ('not_on_board', 'done_option_missing', 'cardsOutsideDone', 'board_state', 'project.done', 'projectItems'):
+            with self.subTest(gone=code):
+                self.assertNotIn(code, source, 'the closeout reads the board again')
 
     def test_the_reference_tells_that_roads_reads_only_the_card_status_and_shows_it_after_its_sync(self):
         for phrase in ('RoadS reads only the **Status** of the card in the Project, never whether the issue is closed',
                        'the board\'s "Item closed" workflow moves the card to Done when the issue closes',
                        'a sync within 30 s of the previous one returns the old snapshot',
-                       'RoadS shows it after its next sync', 'Frontlights does not sync RoadS',
-                       'the closing could not be checked against the cards RoadS reads'):
+                       'RoadS shows it after its next sync', 'Frontlights does not sync RoadS and does not read the board'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -165,9 +176,12 @@ class RulesInOtherDocsTests(unittest.TestCase):
         self.assertIn('só lê', flat('skills', 'frontlights', 'docs', 'security.md'))
         readme = flat('README.md')
         for phrase in ('### Fechar o que terminou', 'todos os critérios de aceitação marcados', 'sub-issues antes dos pais',
-                       '`done` é opcional', '"Status", "value": "Done"', 'scripts/closeout.py candidates|verify'):
+                       'o fechamento do Frontlights não lê o quadro', 'scripts/closeout.py candidates|verify'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
+        for phrase in ('`done` é opcional', '"Status", "value": "Done"', 'não chegou a Done'):
+            with self.subTest(gone=phrase):
+                self.assertNotIn(phrase, readme)
 
 
 if __name__ == '__main__':

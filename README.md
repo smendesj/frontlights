@@ -183,11 +183,9 @@ e é relida para conferir:
   trocá-lo com `issue_type`. `assignee` usa `@me` para quem está autenticado no `gh`.
 - `python scripts/frontlights.py validate-plan --plan plan.json --config .frontlights/config.json`
   recusa o plano enquanto faltar valor para algum campo.
-- `done` é opcional e diz qual campo e valor significam "concluída": `{"field": "Status", "value": "Done"}`
-  é o padrão. A conferência do fechamento lê o cartão nesse valor (quem o move é o fluxo "Item closed" do
-  quadro, nunca o Frontlights); o campo precisa ser de escolha única
-  e o valor precisa existir entre as opções.
-- O token do `gh` precisa do escopo `project` (`gh auth refresh -s project`).
+- O cartão vai para Done pelo fluxo "Item closed" → Status Done do próprio quadro (ligado na tela Workflows do
+  Project); o fechamento do Frontlights não lê o quadro, e o `project` não tem chave para o valor de "concluída".
+- O token do `gh` precisa do escopo `project` (`gh auth refresh -s project`) para publicar as issues no quadro.
 - Um campo do quadro sem nenhuma opção cadastrada não aceita valor: não o declare em `fields`,
   que passaria a recusar todo plano.
 
@@ -590,18 +588,18 @@ execução, antes de qualquer processo subir. Um `browserTest` que declara só a
 Depois da pergunta das issues do RoadS e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
 que ele trabalhou neste projeto e que já têm **todos os critérios de aceitação marcados**, pergunta se pode
 fechá-las. A lista vem completa, com as sub-issues antes dos pais, os PRs
-ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
-aprovação dessa lista ele fecha (`gh issue close --reason completed`) e relê o GitHub para conferir. O cartão vai
+ligados (aberto, mesclado ou nenhum) e os comandos exatos; só depois da sua
+aprovação dessa lista ele fecha (`gh issue close --reason completed`) e relê as issues para conferir. O cartão vai
 para Done pelo fluxo do próprio quadro ("Item closed" → Status Done, ligado na tela Workflows do Project): o
-Frontlights nunca move cartão, e a conferência diz numa linha quando um cartão não chegou a Done.
+Frontlights nunca lê nem move cartão no fechamento.
 Uma issue sem a seção de critérios, com critério desmarcado ou com filha ainda aberta que não esteja na mesma lista
 nunca entra; uma issue cuja branch ainda não está em `origin/main` (a release que a leva não foi mesclada) fica fora
 como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada nunca entra na lista. Um corpo escrito antes da regra das
 pendências, com uma seção "Pendências conhecidas" fora dos critérios e item aberto nela, entra na lista com o
 aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim é sua, e, se você pedir, mover
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.
-O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: com o fluxo "Item closed" desligado,
-fechar não muda nada lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo;
+O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada (o fluxo "Item closed" do quadro é
+quem leva o cartão a Done), e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo;
 por isso, depois de fechar, o Frontlights avisa que o RoadS só mostra o fechamento depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
@@ -618,8 +616,8 @@ respondido (ou dispensável, sem mudança na tela): a main local é trazida para
 responde, o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
-as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula também os já
-usados por PRs mescladas; a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte
+as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a
+branch da PR mesclada; a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte
 obrigatória), e ele
 pergunta se lança a release com elas agora (o
 passo a passo está em

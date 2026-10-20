@@ -294,7 +294,7 @@ class DocsAndEvalsTests(unittest.TestCase):
                              'A worktree de integração local da família (nunca enviada, sem PR)'),
             ('skills', 'frontlights', 'docs', 'protocol.md'): ('| Release |', '| Limpeza |', 'só `merged_into_base` vale',
                                       'a família entra na main local pela branch do pai, com as filhas dentro',
-                                      'pede nova revisão antes de a issue ser relatada como revisada, entrar na main local',
+                                      'a issue não é relatada como revisada com ela; o portão do merge na main local (o teste assistido)',
                                       '(`parentTicks`', '`closeout.py tick-check` confere antes e depois',
                                       '`scripts/cleanup.py plan|verify`', 'nunca com `--force`',
                                       'roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta',

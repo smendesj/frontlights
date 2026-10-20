@@ -32,31 +32,19 @@ DONE_ALL = '## Acceptance criteria\n\n- [x] First\n- [X] Second\n'
 DONE_PARTIAL = '## Acceptance criteria\n\n- [x] First\n- [ ] Second\n'
 SECRET_BODY = 'PRIVATE-BODY-TEXT-THAT-MUST-NOT-LEAK'
 DEFAULT = object()
-LAYOUT = [{'name': 'Status', 'options': [{'name': 'Todo'}, {'name': 'Doing'}, {'name': 'Done'}]},
-          {'name': 'Notes', 'dataType': 'TEXT'}]
 REFUSED = ('gh refused the GitHub read; check the active account, the repository access and the '
            'project scope (gh auth refresh -s project)')
 
 
 def node(number, *, state='OPEN', reason=None, text=DONE_ALL, title=None, parent=None, children=(), prs=DEFAULT,
-         card=DEFAULT, card_owner='OWNER', totals=None, parent_repo=None, mentions=()):
+         totals=None, parent_repo=None, mentions=()):
     """A GraphQL issue node. `children` holds (number, state[, repository]); `prs` holds (number, state, merged);
-    `card` maps a board field to its value, or is None for 'not on the board'; `totals` overrides a totalCount."""
+    `totals` overrides a totalCount. It carries no card: the closeout never reads the board."""
     totals = totals or {}
     if prs is DEFAULT:
         prs = [(1000 + number, 'MERGED', True)]
-    if card is DEFAULT:
-        card = {'Status': 'Todo'}
     kids = [{'number': c[0], 'state': c[1], **({'repository': {'nameWithOwner': c[2]}} if len(c) > 2 else {})}
             for c in children]
-    items = []
-    if card is not None:
-        values = [{'name': value, 'field': {'name': field}} for field, value in card.items()] + [{}]
-        items.append({'id': f'item-{number}', 'project': {'number': 7, 'owner': {'login': card_owner}},
-                      'fieldValues': {'nodes': values, 'totalCount': totals.get('values', len(values))}})
-    # a card on some other board must never count
-    items.append({'id': 'other', 'project': {'number': 99, 'owner': {'login': 'OWNER'}},
-                  'fieldValues': {'nodes': [{'name': 'Done', 'field': {'name': 'Status'}}], 'totalCount': 1}})
     return {'number': number, 'state': state, 'stateReason': reason or ('COMPLETED' if state == 'CLOSED' else None),
             'title': title if title is not None else f'Issue {number}', 'url': URL % number, 'body': text,
             'parent': ({'number': parent, **({'repository': {'nameWithOwner': parent_repo}} if parent_repo else {})}
@@ -70,8 +58,7 @@ def node(number, *, state='OPEN', reason=None, text=DONE_ALL, title=None, parent
             'closedByPullRequestsReferences': {
                 'totalCount': totals.get('prs', len(prs)),
                 'nodes': [{'number': n, 'state': s, 'merged': m, 'url': f'https://github.com/OWNER/REPOSITORY/pull/{n}'}
-                          for n, s, m in prs]},
-            'projectItems': {'totalCount': totals.get('cards', len(items)), 'nodes': items}}
+                          for n, s, m in prs]}}
 
 
 def pr(number, *, state='OPEN', merged=None, base='main', head=None, oid=None):
@@ -84,15 +71,15 @@ def pr(number, *, state='OPEN', merged=None, base='main', head=None, oid=None):
 
 class FakeGh:
     """Answers `gh api graphql` reads from canned nodes and records every argv. Anything that is not a plain read
-    (another command, a mutation) is recorded in `violations` and fails."""
+    (another command, a mutation) or that reads the board (a project, a card) is recorded in `violations` and
+    fails: the closeout never reads the board."""
 
-    def __init__(self, nodes=None, layout=None, open_numbers=(), deny_project=False, deny_cards=False,
-                 fail_issues=False, cursor=None, pull_requests=None, default_branch='main'):
+    def __init__(self, nodes=None, open_numbers=(), fail_issues=False, cursor=None, pull_requests=None,
+                 default_branch='main'):
         self.nodes = dict(nodes or {})
         self.pull_requests, self.default_branch = dict(pull_requests or {}), default_branch
-        self.layout = LAYOUT if layout is None else layout
         self.open_numbers = list(open_numbers)
-        self.deny_project, self.deny_cards, self.fail_issues, self.cursor = deny_project, deny_cards, fail_issues, cursor
+        self.fail_issues, self.cursor = fail_issues, cursor
         self.calls, self.violations = [], []
 
     def queries(self):
@@ -104,15 +91,14 @@ class FakeGh:
         if argv[:2] != ['api', 'graphql'] or not query or re.search(r'\bmutation\b', query):
             self.violations.append(list(argv))
             raise AssertionError(f'not a read: {argv}')
-        if 'projectV2(number' in query:
-            if self.deny_project:
-                raise rs.Refusal(REFUSED)
-            return {'data': {'owner': {'project': {'id': 'PVT_x', 'fields': {'nodes': self.layout}}}}}
+        if re.search(r'projectV2|projectItems', query):
+            self.violations.append(list(argv))
+            raise AssertionError(f'a read of the board: {argv}')
         if 'issues(states: OPEN' in query:
             return self.page(query)
         if 'pullRequest(number' in query:
             return self.pulls(query)
-        if self.fail_issues or (self.deny_cards and 'projectItems' in query):
+        if self.fail_issues:
             raise rs.Refusal(REFUSED)
         repo, errors = {}, []
         if 'defaultBranchRef' in query:
@@ -123,7 +109,7 @@ class FakeGh:
                 repo[alias] = None
                 errors.append({'type': 'NOT_FOUND', 'path': ['repository', alias], 'message': 'Could not resolve'})
             else:
-                repo[alias] = {k: v for k, v in raw.items() if k != 'projectItems' or 'projectItems' in query}
+                repo[alias] = raw
         answer = {'data': {'repository': repo}}
         if errors:
             answer['errors'] = errors
@@ -164,10 +150,6 @@ def without_the_writer(source):
     """The helper's source without `gh_write`, the one place that runs a command (the write of `tick`), and without
     the import line of the module it uses there."""
     return source.replace(function_source(source, 'gh_write'), '').replace('\nimport subprocess\n', '\n', 1)
-
-
-def fake_board(**overrides):
-    return rs.frontlights.board({**BOARD, **overrides}, REPO)
 
 
 class CloseoutCase(unittest.TestCase):
@@ -562,77 +544,61 @@ class ReadViewsTests(CloseoutCase):
     def test_issues_are_read_twenty_at_a_time_from_the_configured_repository(self):
         numbers = list(range(100, 145))
         gh = FakeGh({n: node(n) for n in numbers})
-        views = closeout.read_views(gh, REPO, numbers, fake_board(), True)
+        views = closeout.read_views(gh, REPO, numbers)
         self.assertEqual(len(gh.calls), 3)
         self.assertTrue(all('repository(owner: "OWNER", name: "REPOSITORY")' in q for q in gh.queries()))
         self.assertEqual(sorted(views), numbers)
 
-    def test_the_query_asks_for_what_the_rules_need_and_cards_only_on_request(self):
+    def test_the_query_asks_for_what_the_rules_need_and_never_for_the_board(self):
         gh = FakeGh({12: node(12)})
-        closeout.read_views(gh, REPO, [12], fake_board(), True)
-        closeout.read_views(gh, REPO, [12], fake_board(), False)
-        with_cards, without = gh.queries()
+        closeout.read_views(gh, REPO, [12])
+        (query,) = gh.queries()
         for field in ('stateReason', 'body', 'parent {', 'subIssuesSummary', 'subIssues(first: 100)',
                       'closedByPullRequestsReferences(first: 20, includeClosedPrs: true)'):
             with self.subTest(field=field):
-                self.assertIn(field, with_cards)
-                self.assertIn(field, without)
-        self.assertIn('projectItems(first: 20)', with_cards)
-        self.assertNotIn('projectItems', without)
+                self.assertIn(field, query)
+        for field in ('projectItems', 'projectV2', 'fieldValues'):
+            with self.subTest(gone=field):
+                self.assertNotIn(field, query)
 
     def test_the_view_keeps_the_facts_and_never_the_body(self):
         text = f'## Acceptance criteria\n- [x] a\n- [ ] b\n{SECRET_BODY}\n'
-        raw = node(12, text=text, parent=7, children=[(13, 'OPEN'), (14, 'CLOSED')], prs=[(30, 'OPEN', False)],
-                   card={'Status': 'Doing'})
-        views = closeout.read_views(FakeGh({12: raw}), REPO, [12], fake_board(), True)
+        raw = node(12, text=text, parent=7, children=[(13, 'OPEN'), (14, 'CLOSED')], prs=[(30, 'OPEN', False)])
+        views = closeout.read_views(FakeGh({12: raw}), REPO, [12])
         view = views[12]
         self.assertEqual((view['number'], view['state'], view['title']), (12, 'OPEN', 'Issue 12'))
         self.assertEqual(view['criteria'], {'checked': 1, 'total': 2})
         self.assertEqual(view['parent'], 7)
-        self.assertEqual(view['card'], {'Status': 'Doing'})
+        self.assertNotIn('card', view)
         self.assertEqual(view['truncated'], [])
         self.assertEqual(view['prs'], [{'number': 30, 'state': 'OPEN', 'merged': False,
                                         'url': 'https://github.com/OWNER/REPOSITORY/pull/30'}])
         self.assertNotIn(SECRET_BODY, json.dumps(views))
 
-    def test_only_the_card_of_the_configured_board_counts_whatever_the_owner_case(self):
-        views = closeout.read_views(FakeGh({12: node(12, card_owner='owner'), 13: node(13, card=None)}), REPO,
-                                    [12, 13], fake_board(), True)
-        self.assertEqual(views[12]['card'], {'Status': 'Todo'})
-        self.assertIsNone(views[13]['card'])
-        elsewhere = closeout.read_views(FakeGh({12: node(12)}), REPO, [12], fake_board(owner='ELSEWHERE'), True)
-        self.assertIsNone(elsewhere[12]['card'])
-        another = closeout.read_views(FakeGh({12: node(12)}), REPO, [12], fake_board(number=8), True)
-        self.assertIsNone(another[12]['card'])
-
     def test_the_sub_issue_fields_travel_with_the_feature_flag_gh_already_sends(self):
         gh = FakeGh({12: node(12)})
-        closeout.read_views(gh, REPO, [12], fake_board(), False)
+        closeout.read_views(gh, REPO, [12])
         self.assertIn('GraphQL-Features: issue_types,sub_issues', gh.calls[0])
         self.assertNotIn('GraphQL-Features: issue_types', gh.calls[0])
 
     def test_a_number_github_does_not_know_is_none(self):
-        views = closeout.read_views(FakeGh({12: node(12)}), REPO, [12, 13], fake_board(), True)
+        views = closeout.read_views(FakeGh({12: node(12)}), REPO, [12, 13])
         self.assertIsNone(views[13])
         self.assertIsNotNone(views[12])
 
     def test_a_list_that_did_not_fit_one_page_is_named(self):
-        cases = ({'children': 101}, {'cards': 21}, {'values': 51})
-        expected = ({'sub_issues'}, {'cards'}, {'card_values'})
-        for totals, names in zip(cases, expected):
-            with self.subTest(totals=totals):
-                views = closeout.read_views(FakeGh({12: node(12, totals=totals)}), REPO, [12], fake_board(), True)
-                self.assertEqual(set(views[12]['truncated']), names)
+        views = closeout.read_views(FakeGh({12: node(12, totals={'children': 101})}), REPO, [12])
+        self.assertEqual(views[12]['truncated'], ['sub_issues'])
 
     def test_more_linked_pull_requests_than_one_page_never_exclude_the_issue(self):
-        views = closeout.read_views(FakeGh({12: node(12, totals={'prs': 25})}), REPO, [12], fake_board(), True)
+        views = closeout.read_views(FakeGh({12: node(12, totals={'prs': 25})}), REPO, [12])
         self.assertEqual(views[12]['truncated'], [])
         result, _ = self.candidates({12: node(12, totals={'prs': 25})})
         self.assertEqual([entry['number'] for entry in result['candidates']], [12])
 
     def test_a_refused_read_is_a_refusal_with_no_gh_output(self):
         with self.assertRaises(rs.Refusal):
-            closeout.read_views(FakeGh({12: node(12)}, fail_issues=True), REPO, [12], fake_board(), True)
+            closeout.read_views(FakeGh({12: node(12)}, fail_issues=True), REPO, [12])
 
     def test_a_malformed_child_or_pull_request_never_crashes_the_read(self):
         raw = node(12)
@@ -640,7 +606,7 @@ class ReadViewsTests(CloseoutCase):
         raw['closedByPullRequestsReferences'] = {'nodes': [None, {'number': 'z'}, {'number': 5, 'state': 'OPEN', 'merged': 'yes'}]}
         raw['subIssuesSummary'] = 'oops'
         raw['parent'] = {'number': 'x'}
-        views = closeout.read_views(FakeGh({12: raw}), REPO, [12], fake_board(), True)
+        views = closeout.read_views(FakeGh({12: raw}), REPO, [12])
         self.assertIn('sub_issues', views[12]['truncated'])
         self.assertIsNone(views[12]['parent'])
 
@@ -663,7 +629,8 @@ class EligibilityTests(CloseoutCase):
             'children': {'total': 0, 'completed': 0, 'open': []},
             'state': 'OPEN', 'action': 'close',
             'prs': [{'number': 1012, 'state': 'MERGED', 'merged': True, 'url': 'https://github.com/OWNER/REPOSITORY/pull/1012'}],
-            'card': {'status': 'Todo'}, 'onBoard': True, 'cautions': [], 'order': 1})
+            'cautions': [], 'order': 1})
+        self.assertNotIn('board', result)
 
     def test_one_unchecked_criterion_keeps_the_issue_out_with_the_counts(self):
         result, _ = self.candidates({12: node(12, text=DONE_PARTIAL)})
@@ -696,7 +663,7 @@ class EligibilityTests(CloseoutCase):
         self.assertEqual(result['excluded'][0]['openChildren'], [13])
 
     def test_a_child_that_is_a_candidate_in_the_same_batch_lets_the_parent_in_and_closes_first(self):
-        nodes = {12: node(12, children=[(13, 'OPEN')]), 13: node(13, parent=12, card=None)}
+        nodes = {12: node(12, children=[(13, 'OPEN')]), 13: node(13, parent=12)}
         result, _ = self.candidates(nodes, issues='12,13')
         self.assertEqual([c['number'] for c in result['candidates']], [13, 12])
         self.assertEqual([c['order'] for c in result['candidates']], [1, 2])
@@ -745,48 +712,27 @@ class EligibilityTests(CloseoutCase):
         self.assertEqual((excluded[10]['reason'], excluded[11]['reason'], excluded[12]['reason']),
                          ('open_children', 'open_children', 'unchecked_criteria'))
 
-    def test_a_closed_issue_outside_done_is_no_candidate_and_needs_nothing(self):
-        result, _ = self.candidates({12: node(12, state='CLOSED', text='no criteria needed', card={'Status': 'Doing'})})
+    def test_a_closed_issue_is_no_candidate_and_needs_nothing(self):
+        result, _ = self.candidates({12: node(12, state='CLOSED', text='no criteria needed')})
         self.assertEqual((result['candidates'], result['excluded'], result['alreadyDone']), ([], [], 1))
         self.assertFalse(result['ask'])
 
-    def test_a_closed_issue_already_done_or_off_the_board_is_ignored_and_counted(self):
-        nodes = {12: node(12, state='CLOSED', card={'Status': 'Done'}), 13: node(13, state='CLOSED', card=None),
-                 14: node(14, state='CLOSED', reason='NOT_PLANNED', card={'Status': 'Doing'})}
+    def test_closed_issues_whatever_the_reason_are_ignored_and_counted(self):
+        nodes = {12: node(12, state='CLOSED'), 13: node(13, state='CLOSED'),
+                 14: node(14, state='CLOSED', reason='NOT_PLANNED')}
         result, _ = self.candidates(nodes, issues='12,13,14')
         self.assertEqual((result['candidates'], result['excluded'], result['alreadyDone']), ([], [], 3))
         self.assertFalse(result['ask'])
 
-    def test_a_sub_issue_has_no_card_and_is_never_moved(self):
-        result, _ = self.candidates({13: node(13, parent=12, card=None)}, issues='13')
-        entry = result['candidates'][0]
-        self.assertEqual((entry['level'], entry['onBoard'], entry['action'], entry['card']), ('sub', False, 'close', None))
-        self.assertNotIn('not_on_board', entry['cautions'])
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-
-    def test_a_sub_issue_that_does_have_a_card_outside_done_is_only_closed(self):
-        result, _ = self.candidates({13: node(13, parent=12, card={'Status': 'Doing'})}, issues='13')
-        entry = result['candidates'][0]
-        self.assertEqual((entry['onBoard'], entry['action'], entry['card']), (True, 'close', {'status': 'Doing'}))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-
-    def test_a_top_level_issue_off_the_board_is_closed_with_a_caution(self):
-        result, _ = self.candidates({12: node(12, card=None)})
-        entry = result['candidates'][0]
-        self.assertEqual((entry['level'], entry['onBoard'], entry['action']), ('top', False, 'close'))
-        self.assertEqual(entry['cautions'], ['not_on_board'])
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-
-    def test_an_open_issue_whose_card_is_already_done_is_only_closed(self):
-        result, _ = self.candidates({12: node(12, card={'Status': 'Done'})})
-        entry = result['candidates'][0]
-        self.assertEqual((entry['action'], entry['cautions']), ('close', []))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-
-    def test_a_card_without_a_status_value_is_shown_as_such(self):
-        result, _ = self.candidates({12: node(12, card={})})
-        entry = result['candidates'][0]
-        self.assertEqual((entry['card'], entry['onBoard'], entry['action']), ({'status': None}, True, 'close'))
+    def test_a_sub_issue_and_a_top_level_issue_are_only_closed_with_no_board_caution(self):
+        for number, extra, level in ((13, {'parent': 12}, 'sub'), (12, {}, 'top')):
+            with self.subTest(level=level):
+                result, _ = self.candidates({number: node(number, **extra)}, issues=str(number))
+                entry = result['candidates'][0]
+                self.assertEqual((entry['level'], entry['action'], entry['cautions']), (level, 'close', []))
+                self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
+                for key in ('card', 'onBoard'):
+                    self.assertNotIn(key, entry)
 
     def test_linked_pull_requests_become_cautions_only_when_they_matter(self):
         cases = {'open': ([(30, 'OPEN', False)], ['open_pr']), 'none': ([], ['no_pr']), 'merged': ([(30, 'MERGED', True)], []),
@@ -831,8 +777,8 @@ class EligibilityTests(CloseoutCase):
         self.assertEqual(([p['number'] for p in entry['prs']], entry['cautions']), ([31], []))
 
     def test_cautions_never_keep_a_candidate_out_and_come_in_a_fixed_order(self):
-        result, _ = self.candidates({12: node(12, prs=[(30, 'OPEN', False)], card=None)})
-        self.assertEqual(result['candidates'][0]['cautions'], ['open_pr', 'not_on_board'])
+        result, _ = self.candidates({12: node(12, prs=[(30, 'OPEN', False)])})
+        self.assertEqual(result['candidates'][0]['cautions'], ['open_pr'])
 
     def test_an_open_known_leftover_written_as_a_criterion_keeps_the_issue_out_until_it_is_ticked(self):
         leftover = '- [%s] Pendência (achado da revisão): the export keeps the filter after reload. Evidence: seam test\n'
@@ -859,9 +805,9 @@ class EligibilityTests(CloseoutCase):
 
     def test_the_leftover_caution_comes_last_and_only_for_an_issue_that_will_be_closed(self):
         text = DONE_ALL + '\n## Pendências conhecidas\n- [ ] first\n'
-        result, _ = self.candidates({12: node(12, text=text, prs=[(30, 'OPEN', False)], card=None)})
-        self.assertEqual(result['candidates'][0]['cautions'], ['open_pr', 'not_on_board', 'pending_outside_criteria'])
-        result, _ = self.candidates({12: node(12, state='CLOSED', text=text, card={'Status': 'Doing'})})
+        result, _ = self.candidates({12: node(12, text=text, prs=[(30, 'OPEN', False)])})
+        self.assertEqual(result['candidates'][0]['cautions'], ['open_pr', 'pending_outside_criteria'])
+        result, _ = self.candidates({12: node(12, state='CLOSED', text=text)})
         self.assertEqual((result['candidates'], result['alreadyDone']), ([], 1))
 
     def test_a_body_without_leftovers_adds_no_caution_and_no_sentence(self):
@@ -869,18 +815,14 @@ class EligibilityTests(CloseoutCase):
         self.assertNotIn('pendingOutside', result['message'])
 
     def test_a_list_that_did_not_fit_one_page_excludes_the_issue_with_the_reason(self):
-        for totals, name in (({'children': 150}, 'sub_issues'), ({'cards': 25}, 'cards'), ({'values': 60}, 'card_values')):
-            with self.subTest(totals=totals):
-                result, _ = self.candidates({12: node(12, totals=totals, children=[(13, 'CLOSED')])})
-                self.assertEqual(result['candidates'], [])
-                self.assertEqual(result['excluded'][0]['reason'], 'truncated')
-                self.assertEqual(result['excluded'][0]['lists'], [name])
+        result, _ = self.candidates({12: node(12, totals={'children': 150}, children=[(13, 'CLOSED')])})
+        self.assertEqual(result['candidates'], [])
+        self.assertEqual(result['excluded'][0]['reason'], 'truncated')
+        self.assertEqual(result['excluded'][0]['lists'], ['sub_issues'])
 
     def test_for_a_closed_issue_no_cut_list_matters(self):
-        for totals in ({'children': 150, 'prs': 9}, {'cards': 25}, {'values': 60}):
-            with self.subTest(totals=totals):
-                result, _ = self.candidates({12: node(12, state='CLOSED', totals=totals)})
-                self.assertEqual((result['excluded'], result['alreadyDone']), ([], 1))
+        result, _ = self.candidates({12: node(12, state='CLOSED', totals={'children': 150, 'prs': 9})})
+        self.assertEqual((result['excluded'], result['alreadyDone']), ([], 1))
 
     def test_a_number_github_does_not_know_is_excluded_as_not_found(self):
         result, _ = self.candidates({12: node(12)}, issues='12,13')
@@ -922,13 +864,9 @@ class EligibilityTests(CloseoutCase):
         self.assertEqual(result['scope']['mode'], 'records')
         self.assertIn('--issues', result['message'])
         self.assertIn('--all', result['message'])
-        # nothing to read: no call at all, and the board block says only what the configuration says
+        # nothing to read: no call at all, and no board block
         self.assertEqual(gh.calls, [])
-        self.assertEqual(result['board'], {'status': 'not_read', 'owner': 'OWNER', 'number': 7,
-                                           'done': {'field': 'Status', 'value': 'Done'}})
-        self.configure(project=None)
-        result, _ = self.candidates(issues=None)
-        self.assertEqual(result['board']['status'], 'unconfigured')
+        self.assertNotIn('board', result)
 
     def test_all_with_no_open_issue_says_so(self):
         result, gh = self.candidates(issues=None, all_flag=True, open_numbers=[])
@@ -958,16 +896,6 @@ class CommandsTests(CloseoutCase):
         for command in result['candidates'][0]['commands']:
             self.assertTrue(all(isinstance(part, str) for part in command['argv']))
 
-    def test_a_configured_done_is_where_the_card_is_read_and_no_command_moves_it(self):
-        self.configure(project={**BOARD, 'done': {'field': 'Phase', 'value': 'Shipped it'}})
-        layout = [{'name': 'Phase', 'options': [{'name': 'Building'}, {'name': 'Shipped it'}]}]
-        result, _ = self.candidates({12: node(12, card={'Phase': 'Building'})}, layout=layout)
-        self.assertEqual(result['board']['status'], 'available')
-        self.assertEqual(result['board']['done'], {'field': 'Phase', 'value': 'Shipped it'})
-        entry = result['candidates'][0]
-        self.assertEqual(entry['card'], {'status': 'Building'})
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-
     def test_the_url_is_built_from_the_configuration_never_taken_from_github(self):
         raw = node(12)
         raw['url'] = 'https://evil.example/x" ; rm -rf ~'
@@ -977,168 +905,74 @@ class CommandsTests(CloseoutCase):
         self.assertIn('12', entry['commands'][0]['argv'])
         self.assertNotIn('evil', json.dumps(result))
 
-    def test_a_unsafe_done_in_the_configuration_is_refused_before_any_call(self):
-        for value in ('Done"; calc; "', 'Do$(id)', 'Do`id`', 'Do\\ne', 'x' * 101):
-            with self.subTest(value=value):
-                self.configure(project={**BOARD, 'done': {'field': 'Status', 'value': value}})
-                result, gh = self.candidates({12: node(12)})
-                self.assertFalse(result['ok'])
-                self.assertEqual(result['exitCode'], 1)
-                self.assertIn('project.done.value', result['message'])
-                self.assertEqual(gh.calls, [])
+    def test_a_done_in_the_configuration_is_an_unknown_setting_refused_before_any_call(self):
+        self.configure(project={**BOARD, 'done': {'field': 'Status', 'value': 'Done'}})
+        result, gh = self.candidates({12: node(12)})
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['exitCode'], 1)
+        self.assertIn('project has unknown setting(s): done', result['message'])
+        self.assertEqual(gh.calls, [])
 
 
 class BoardTests(CloseoutCase):
-    def test_without_a_board_the_cards_are_not_read(self):
-        self.configure(project=None)
-        result, gh = self.candidates({12: node(12)})
-        self.assertEqual(result['board'], {'status': 'unconfigured', 'owner': None, 'number': None, 'done': None})
-        entry = result['candidates'][0]
-        self.assertEqual((entry['onBoard'], entry['action'], entry['cautions']), (False, 'close', []))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-        self.assertTrue(all('projectItems' not in q and 'projectV2' not in q for q in gh.queries()))
+    """20/10/2026: the board's "Item closed" workflow moves the card to Done, so the closeout never reads the board,
+    with or without one configured (the fake fails any project or card read)."""
 
-    def test_done_without_a_board_is_ignored(self):
-        self.configure(project=None, done={'field': 'Phase', 'value': 'Shipped'})
+    def test_with_or_without_a_board_only_the_issues_are_read(self):
+        for project in (DEFAULT, None):
+            with self.subTest(project=project):
+                self.configure(project=project)
+                result, gh = self.candidates({12: node(12), 13: node(13, state='CLOSED')}, issues='12,13')
+                self.assertTrue(result['ok'], result['message'])
+                self.assertNotIn('board', result)
+                self.assertEqual(([c['number'] for c in result['candidates']], result['alreadyDone']), ([12], 1))
+                self.assertTrue(all('projectItems' not in q and 'projectV2' not in q for q in gh.queries()))
+                verified, gh = self.verify({12: node(12, state='CLOSED')})
+                self.assertTrue(verified['ok'])
+                self.assertNotIn('board', verified)
+                self.assertTrue(all('projectItems' not in q and 'projectV2' not in q for q in gh.queries()))
+
+    def test_the_messages_name_no_board_remedy(self):
         result, _ = self.candidates({12: node(12)})
-        self.assertEqual(result['board']['status'], 'unconfigured')
-        self.assertIsNone(result['board']['done'])
+        verified, _ = self.verify({12: node(12, state='CLOSED')})
+        for message in (result['message'], verified['message']):
+            for word in ('gh auth refresh -s project', 'Done', 'board', 'card'):
+                with self.subTest(word=word):
+                    self.assertNotIn(word, message)
 
-    def test_a_board_that_is_there_reports_where_done_is_read(self):
-        result, _ = self.candidates({12: node(12)})
-        self.assertEqual(result['board'], {'status': 'available', 'owner': 'OWNER', 'number': 7,
-                                           'done': {'field': 'Status', 'value': 'Done'}})
-
-    def test_a_missing_project_scope_still_lists_candidates_without_cards(self):
-        result, gh = self.candidates({12: node(12), 13: node(13, state='CLOSED', card={'Status': 'Todo'})}, issues='12,13',
-                                     deny_project=True)
-        self.assertTrue(result['ok'], result['message'])
-        self.assertEqual(result['board']['status'], 'unavailable')
-        self.assertIn('gh auth refresh -s project', result['board']['hint'])
-        self.assertIn('reason', result['board'])
-        entry = result['candidates'][0]
-        self.assertEqual((entry['number'], entry['onBoard'], entry['card'], entry['action']), (12, None, None, 'close'))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-        self.assertEqual(result['alreadyDone'], 1)
-        self.assertNotIn('not_on_board', entry['cautions'])
-        self.assertTrue(all('projectItems' not in q for q in gh.queries() if 'issue(number' in q))
-        self.assertIn('gh auth refresh -s project', result['message'])
-
-    def test_a_card_read_refused_for_scope_is_retried_without_cards(self):
-        result, gh = self.candidates({12: node(12)}, deny_cards=True)
-        self.assertTrue(result['ok'], result['message'])
-        self.assertEqual(result['board']['status'], 'unavailable')
-        issue_queries = [q for q in gh.queries() if 'issue(number' in q]
-        self.assertEqual(len(issue_queries), 2)
-        self.assertIn('projectItems', issue_queries[0])
-        self.assertNotIn('projectItems', issue_queries[1])
-        self.assertEqual([c['kind'] for c in result['candidates'][0]['commands']], ['close'])
-        self.assertIsNone(result['candidates'][0]['onBoard'])
-
-    def test_a_read_that_fails_without_cards_too_is_a_refusal(self):
+    def test_a_read_that_fails_is_a_refusal(self):
         result, _ = self.candidates({12: node(12)}, fail_issues=True)
         self.assertFalse(result['ok'])
         self.assertEqual(result['exitCode'], 1)
         self.assertNotIn('Traceback', json.dumps(result))
 
-    def test_a_done_option_the_board_does_not_have_shows_the_real_options(self):
-        layout = [{'name': 'Status', 'options': [{'name': 'Todo'}, {'name': '<b>Finished' + 'z' * 300}]},
-                  {'name': 'Notes', 'dataType': 'TEXT'}]
-        nodes = {12: node(12), 13: node(13, state='CLOSED', card={'Status': 'Todo'})}
-        result, _ = self.candidates(nodes, issues='12,13', layout=layout)
-        self.assertTrue(result['ok'], result['message'])
-        board = result['board']
-        self.assertEqual(board['status'], 'done_option_missing')
-        self.assertEqual(board['done'], {'field': 'Status', 'value': 'Done'})
-        self.assertIn('Done', board['reason'])
-        self.assertEqual(board['fields']['Status']['type'], 'single_select')
-        self.assertEqual(board['fields']['Status']['options'][0], 'Todo')
-        for text in board['fields']['Status']['options']:
-            self.assertNotRegex(text, r'[<>\x00-\x1f]')
-            self.assertLessEqual(len(text), rs.GAPS_TITLE_LIMIT)
-        self.assertEqual(board['fields']['Notes']['type'], 'text')
-        self.assertEqual([c['number'] for c in result['candidates']], [12])
-        entry = result['candidates'][0]
-        self.assertEqual((entry['action'], entry['onBoard']), ('close', True))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
-        self.assertEqual(result['alreadyDone'], 1)
-
-    def test_a_done_field_that_is_missing_or_not_a_single_select_is_reported_the_same_way(self):
-        for layout in ([{'name': 'Other', 'options': [{'name': 'Done'}]}], [{'name': 'Status', 'dataType': 'TEXT'}],
-                       [{'name': 'Status'}]):
-            with self.subTest(layout=layout):
-                result, _ = self.candidates({12: node(12)}, layout=layout)
-                self.assertEqual(result['board']['status'], 'done_option_missing')
-                self.assertEqual([c['kind'] for c in result['candidates'][0]['commands']], ['close'])
-
-    def test_a_board_github_does_not_know_is_unavailable_not_empty(self):
-        class NoOwner(FakeGh):
-            def __call__(self, argv):
-                if any('projectV2(number' in a for a in argv):
-                    self.calls.append(list(argv))
-                    return {'data': {'owner': None}}
-                return super().__call__(argv)
-        result, _ = self.candidates(gh=NoOwner({12: node(12)}))
-        self.assertTrue(result['ok'], result['message'])
-        self.assertEqual(result['board']['status'], 'unavailable')
-        self.assertIn('not found', result['board']['reason'])
-
-    def test_the_done_default_and_a_custom_done_reach_the_inspect_style_summary(self):
-        result, _ = self.candidates({12: node(12)})
-        self.assertEqual(result['board']['done'], {'field': 'Status', 'value': 'Done'})
-        self.configure(project={**BOARD, 'done': {'field': 'Notes', 'value': 'Done'}})
-        result, _ = self.candidates({12: node(12)})
-        self.assertEqual(result['board']['status'], 'done_option_missing')
-
 
 class VerifyTests(CloseoutCase):
-    def test_a_closed_issue_whose_card_is_done_is_ok(self):
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Done'})})
+    def test_a_closed_issue_is_ok(self):
+        result, _ = self.verify({12: node(12, state='CLOSED')})
         self.assertTrue(result['ok'], result)
         self.assertEqual((result['exitCode'], result['operation']), (0, 'verify'))
-        self.assertEqual(result['issues'], [{'number': 12, 'state': 'CLOSED', 'stateReason': 'COMPLETED', 'status': 'Done',
-                                             'closed': True, 'done': True, 'ok': True}])
-        self.assertEqual(result['cardsOutsideDone'], [])
+        self.assertEqual(result['issues'], [{'number': 12, 'state': 'CLOSED', 'stateReason': 'COMPLETED',
+                                             'closed': True, 'ok': True}])
+        self.assertNotIn('cardsOutsideDone', result)
 
-    def test_only_an_issue_still_open_is_not_finished_and_a_card_outside_done_is_reported(self):
-        nodes = {12: node(12, state='CLOSED', card={'Status': 'Doing'}), 13: node(13), 14: node(14, state='CLOSED', card=None),
-                 15: node(15, state='CLOSED', card={'Status': 'Done'})}
-        result, _ = self.verify(nodes, issues='12,13,14,15')
+    def test_only_an_issue_still_open_is_not_finished(self):
+        nodes = {12: node(12, state='CLOSED'), 13: node(13), 14: node(14, state='CLOSED', reason='NOT_PLANNED')}
+        result, _ = self.verify(nodes, issues='12,13,14')
         self.assertFalse(result['ok'])
         self.assertEqual(result['exitCode'], 1)
-        self.assertEqual(result['cardsOutsideDone'], [12])
         by = {i['number']: i for i in result['issues']}
-        self.assertEqual((by[12]['closed'], by[12]['done'], by[12]['status'], by[12]['ok']), (True, False, 'Doing', True))
-        self.assertEqual((by[13]['closed'], by[13]['done'], by[13]['status'], by[13]['ok'], by[13]['state']),
-                         (False, False, 'Todo', False, 'OPEN'))
-        self.assertEqual((by[14]['closed'], by[14]['done'], by[14]['status'], by[14]['ok']), (True, None, None, True))
-        self.assertTrue(by[15]['ok'])
-        self.assertIn('1 of 4 issue(s) are not closed yet: #13.', result['message'])
-        self.assertIn('The card of #12 is not in Done', result['message'])
+        self.assertEqual((by[12]['closed'], by[12]['ok']), (True, True))
+        self.assertEqual((by[13]['closed'], by[13]['ok'], by[13]['state']), (False, False, 'OPEN'))
+        self.assertEqual((by[14]['closed'], by[14]['ok'], by[14]['stateReason']), (True, True, 'NOT_PLANNED'))
+        self.assertEqual(result['message'], '1 of 3 issue(s) are not closed yet: #13.')
 
     def test_an_issue_that_does_not_exist_is_not_ok_with_a_reason(self):
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Done'})}, issues='12,13')
+        result, _ = self.verify({12: node(12, state='CLOSED')}, issues='12,13')
         self.assertFalse(result['ok'])
         missing = {i['number']: i for i in result['issues']}[13]
-        self.assertEqual((missing['ok'], missing['closed'], missing['done'], missing['state']), (False, False, None, None))
+        self.assertEqual((missing['ok'], missing['closed'], missing['state']), (False, False, None))
         self.assertEqual(missing['reason'], 'not_found')
-
-    def test_without_a_board_or_without_scope_done_is_unknown_and_closed_is_enough(self):
-        self.configure(project=None)
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Doing'})})
-        self.assertEqual(result['board']['status'], 'unconfigured')
-        self.assertEqual((result['issues'][0]['done'], result['issues'][0]['ok']), (None, True))
-        self.configure()
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Doing'})}, deny_project=True)
-        self.assertEqual(result['board']['status'], 'unavailable')
-        self.assertEqual((result['issues'][0]['done'], result['issues'][0]['ok']), (None, True))
-        self.assertTrue(result['ok'])
-
-    def test_a_card_list_that_was_cut_is_not_read_as_empty(self):
-        result, _ = self.verify({12: node(12, state='CLOSED', totals={'cards': 30})})
-        self.assertTrue(result['ok'])
-        self.assertEqual((result['issues'][0]['reason'], result['issues'][0]['done']), ('truncated', None))
-        self.assertEqual(result['cardsOutsideDone'], [])
 
     def test_verify_needs_the_issues_named(self):
         for issues in (None, '', []):
@@ -1150,17 +984,16 @@ class VerifyTests(CloseoutCase):
                 self.assertEqual(gh.calls, [])
 
     def test_verify_never_writes_either(self):
-        result, gh = self.verify({12: node(12, state='CLOSED', card={'Status': 'Done'})})
+        result, gh = self.verify({12: node(12, state='CLOSED')})
         self.assertTrue(all(call[:2] == ['api', 'graphql'] for call in gh.calls))
 
 
 class DoneByTheBoardTests(CloseoutCase):
-    """Issue 63: the board's own "Item closed" workflow moves the card to Done. The close-out only closes and
-    checks: it never builds `gh project item-edit`, a closed issue outside Done is no candidate, and verify says in
-    one line when a card did not reach Done, without failing the issue (the session can no longer fix it)."""
+    """Issue 63: the board's own "Item closed" workflow moves the card to Done. The close-out only closes: it never
+    builds `gh project item-edit` and, since 20/10/2026, never reads a card either."""
 
-    def test_candidates_only_close_and_a_closed_issue_outside_done_is_no_candidate(self):
-        result, _ = self.candidates({12: node(12), 13: node(13, state='CLOSED', card={'Status': 'Doing'})}, issues='12,13')
+    def test_candidates_only_close_and_a_closed_issue_is_no_candidate(self):
+        result, _ = self.candidates({12: node(12), 13: node(13, state='CLOSED')}, issues='12,13')
         self.assertEqual([c['number'] for c in result['candidates']], [12])
         entry = result['candidates'][0]
         self.assertEqual([c['kind'] for c in entry['commands']], ['close'])
@@ -1171,30 +1004,6 @@ class DoneByTheBoardTests(CloseoutCase):
         self.assertNotIn('item-edit', json.dumps(result))
         self.assertNotIn('move', result['message'].lower())
 
-    def test_an_open_issue_whose_card_is_already_done_has_no_caution_about_it(self):
-        result, _ = self.candidates({12: node(12, card={'Status': 'Done'})})
-        self.assertEqual(result['candidates'][0]['cautions'], [])
-
-    def test_verify_reports_a_card_outside_done_in_one_line_and_does_not_fail_the_issue(self):
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Doing'}),
-                                 13: node(13, state='CLOSED', card={'Status': 'Done'})}, issues='12,13')
-        self.assertTrue(result['ok'], result['message'])
-        self.assertEqual(result['exitCode'], 0)
-        self.assertEqual(result['cardsOutsideDone'], [12])
-        issues = self.by_number(result, 'issues')
-        self.assertEqual((issues[12]['ok'], issues[12]['done']), (True, False))
-        self.assertEqual((issues[13]['ok'], issues[13]['done']), (True, True))
-        lines = [line for line in result['message'].split('. ') if '#12' in line]
-        self.assertEqual(len(lines), 1, result['message'])
-        self.assertIn('Workflows', result['message'])
-        self.assertIn('not in Done', result['message'])
-
-    def test_verify_without_a_readable_board_lists_no_card(self):
-        self.configure(project=None)
-        result, _ = self.verify({12: node(12, state='CLOSED', card={'Status': 'Doing'})})
-        self.assertEqual(result['cardsOutsideDone'], [])
-        self.assertTrue(result['ok'])
-
 
 class ClosedByTheReleaseTests(CloseoutCase):
     """Issue 63, S3: after the merge of a release whose pull request carried `Closes #n` for the `closes` of its
@@ -1202,9 +1011,9 @@ class ClosedByTheReleaseTests(CloseoutCase):
     already closed is never a candidate again, and one GitHub still shows open fails the verify, which reads it again."""
 
     def test_the_closes_are_verified_and_the_rest_go_to_candidates(self):
-        nodes = {1: node(1, state='CLOSED', card={'Status': 'Done'}), 2: node(2), 3: node(3, text=DONE_PARTIAL)}
+        nodes = {1: node(1, state='CLOSED'), 2: node(2), 3: node(3, text=DONE_PARTIAL)}
         verified, _ = self.verify(nodes, issues='1')
-        self.assertEqual((verified['ok'], verified['exitCode'], verified['cardsOutsideDone']), (True, 0, []))
+        self.assertEqual((verified['ok'], verified['exitCode']), (True, 0))
         result, _ = self.candidates(nodes, issues='2,3')
         self.assertEqual([c['number'] for c in result['candidates']], [2])
         self.assertEqual([e['number'] for e in result['excluded']], [3])
@@ -1293,10 +1102,10 @@ class RefusalTests(CloseoutCase):
                 self.assertEqual(gh.calls, [])
 
     def test_a_malformed_board_is_refused_not_guessed(self):
-        self.configure(project={**BOARD, 'done': {'field': 'Status', 'valeu': 'Done'}})
+        self.configure(project={**BOARD, 'number': 'seven'})
         result, gh = self.candidates({12: node(12)})
         self.assertFalse(result['ok'])
-        self.assertIn('project.done', result['message'])
+        self.assertIn('project.number', result['message'])
         self.assertEqual(gh.calls, [])
 
     def test_a_configuration_that_cannot_be_read_is_a_refusal_not_a_traceback(self):
@@ -1355,7 +1164,7 @@ class ReadOnlyTests(CloseoutCase):
         (self.root / '.frontlights' / 'issues' / '12').mkdir(parents=True)
         (self.root / '.frontlights' / 'plan.json').write_text(json.dumps({'issues': [{'id': 13}]}), encoding='utf-8')
         before = self.snapshot()
-        nodes = {12: node(12), 13: node(13, state='CLOSED', card={'Status': 'Doing'})}
+        nodes = {12: node(12), 13: node(13, state='CLOSED')}
         for operation, issues in (('candidates', None), ('verify', '12,13')):
             gh = FakeGh(nodes)
             closeout.run(operation, self.config, self.root, issues, False, gh)
@@ -1471,7 +1280,7 @@ class ParentTicksTests(CloseoutCase):
     def test_a_top_level_issue_reads_no_parent(self):
         result, gh = self.candidates({12: node(12)})
         self.assertIsNone(result['candidates'][0]['parentTicks'])
-        self.assertEqual(len(gh.queries()), 2)   # the board layout and the issue
+        self.assertEqual(len(gh.queries()), 1)   # the issue only: the board is never read
 
     def test_a_closed_unknown_or_foreign_parent_is_left_alone(self):
         cases = {'closed': ({12: node(12, parent=5), 5: node(5, state='CLOSED', text=PARENT_BODY)}, True),
@@ -1490,8 +1299,8 @@ class ParentTicksTests(CloseoutCase):
         ticks = {c['number']: c['parentTicks'] for c in result['candidates']}
         self.assertEqual(ticks, {12: None, 13: {'parent': 5, 'lines': [2], 'shared': []}})
 
-    def test_a_closed_sub_issue_outside_done_is_no_candidate_and_its_parent_is_not_read(self):
-        result, gh = self.candidates({12: node(12, state='CLOSED', parent=5, card={'Status': 'Todo'}),
+    def test_a_closed_sub_issue_is_no_candidate_and_its_parent_is_not_read(self):
+        result, gh = self.candidates({12: node(12, state='CLOSED', parent=5),
                                       5: node(5, text=PARENT_BODY)})
         self.assertEqual((result['candidates'], result['alreadyDone']), ([], 1))
         self.assertEqual(self.asked(gh, 5), [])

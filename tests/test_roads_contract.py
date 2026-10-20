@@ -100,9 +100,12 @@ class DocumentShapeTests(unittest.TestCase):
         for phrase in ('Só o Status do Project conta', 'não é lido** para itens de sprint', 'Item de sprint concluído fica',
                        'quando a **rotação** das sprints o retira', 'Grupos são diferentes',
                        'nunca do GitHub ao vivo', 'até 30 s depois de outra',
-                       'Fechar uma issue só muda o RoadS quando o fluxo "Item closed" do quadro leva o cartão a Done'):
+                       'Fechar uma issue só muda o RoadS quando o fluxo "Item closed" do quadro leva o cartão a Done',
+                       'o fechamento do Frontlights não lê o quadro'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
+        # 20/10/2026: the closeout no longer reads the card, so it reports no card outside Done
+        self.assertNotIn('acusa fora de Done', flat)
 
     def test_only_generic_placeholders_appear(self):
         hosts = set(re.findall(r'https?://([^/\s"`)]+)', DOC))

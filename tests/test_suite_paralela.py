@@ -869,29 +869,26 @@ class ParallelSuiteTextTests(unittest.TestCase):
 
     def test_the_protocol_says_the_same(self):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida`', 'numa fila serial',
-                       '`--report <arquivo>` grava o JSON da rodada',
-                       'pelo `python -m unittest discover -s tests -v`',
-                       '(o runner não a deixa mais rápida do que o `discover`)',
-                       'que não define a variável'):
+        for phrase in ('neste repositório `python tests/suite.py`, com `--impact <base>` ou '
+                       '`FRONTLIGHTS_SUITE=rapida`, ou o `python -m unittest discover -s tests -v`) são ferramentas '
+                       'opcionais, rodadas só a pedido do usuário',):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
     def test_the_stage_six_reference_says_the_same_inside_its_section(self):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
-        for phrase in ('the fast suite runs through `python tests/suite.py`', 'in a serial queue',
+        for phrase in ('in the Frontlights repository, `python tests/suite.py`',
                        '`--report <file>` writes the JSON of the run',
-                       'through `python -m unittest discover -s tests -v`',
-                       'the runner does not make the whole suite faster than `discover`',
-                       'which never sets the variable either'):
+                       'or `python -m unittest discover -s tests -v` for the whole'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')
         for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'É a suíte inteira, rodada à mão',
-                       'pelo `discover`, roda na release; por issue vale a suíte por impacto',
+                       'Na etapa 6 (decisão de 20/10/2026), nenhuma suíte é portão: o único portão é o teste '
+                       'assistido de cada issue',
                        '`python -m compileall -q skills/frontlights/scripts tests`', 'issue 27'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)

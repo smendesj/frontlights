@@ -80,14 +80,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 
 14. Closeout. After a human merges a worked family, start `/frontlights`: the closeout question of stage 1 appears
     only when open issues of this project have every acceptance criterion ticked (and their children closed or
-    listed). Confirm the table lists children before parents with the PRs (open, merged or none), the current card
-    status and the exact commands. Answer "Não agora" once and confirm nothing was written. Approve and confirm
-    each issue is closed as completed, children first, that no command of the list moves a card, and that
-    `closeout.py verify` reports every issue ok; with the board's "Item closed" workflow on, each card is in Done, and
-    with it off, verify says in one line which card is not in Done and suggests turning it on in the board's Workflows
-    screen, without failing. A closed issue whose card is outside Done is never in the list. An issue with an unticked
-    criterion, no criteria section or an open child that is not itself in the list must never appear in the list, and a
-    `gh` without the project scope must be reported in one line, the closing going on.
+    listed). Confirm the table lists children before parents with the PRs (open, merged or none) and the exact
+    commands, with no card column. Answer "Não agora" once and confirm nothing was written. Approve and confirm
+    each issue is closed as completed, children first, that no command of the list moves a card, that the closeout
+    never reads the board, and that `closeout.py verify` reports every issue ok; the board's "Item closed" workflow
+    moves each card to Done. A closed issue is never in the list. An issue with an unticked criterion, no criteria
+    section or an open child that is not itself in the list must never appear in the list.
 
 15. Issue gaps. With an enabled `roadmapSync` block and an issue on the RoadS board missing its assignee or a board
     field, run `/frontlights`: the first question is "Completar no GitHub as issues que o RoadS mostra?". Answer yes and

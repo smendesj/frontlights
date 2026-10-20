@@ -139,10 +139,13 @@ class GateDocumentationTests(unittest.TestCase):
     def test_the_rule_is_in_the_development_reference_and_the_handoff(self):
         development = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'development.md')
                                .read_text(encoding='utf-8').split())
-        for phrase in ('review-gate', 'exit code 2', 'before reporting an issue as reviewed', 'before opening or updating a PR',
-                       'Any commit, edit or new file after the review'):
+        for phrase in ('review-gate', 'exit code 2', 'before reporting an issue as reviewed',
+                       'Any commit, edit or new file after the review',
+                       'The independent review runs only when the user asks for one',
+                       'is not a gate of the merge into the local main nor of the release'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
+        self.assertNotIn('before opening or updating a PR', development)
         handoff = (ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md').read_text(encoding='utf-8')
         self.assertIn('review-gate', handoff)
 

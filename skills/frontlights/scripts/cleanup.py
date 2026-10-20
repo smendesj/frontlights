@@ -536,7 +536,7 @@ def assess_release(ctx, branch, github):
 def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None):
     """Read only: what can be removed now, with the commands in the order to run them, and what stays."""
     gh = gh or rs.gh_default
-    repository, _ = closeout.load_project(config)
+    repository = closeout.load_project(config)
     require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
     numbers = closeout.parse_numbers(issues)
     require(base is None or closeout.valid_branch(base), '--base must be a plain branch name')
@@ -780,7 +780,7 @@ def op_archive(source, destination):
 def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):
     """Read only: whether each named worktree and local branch is gone and each records folder holds the copy. The
     remote branch is GitHub's to delete, so it is not read."""
-    repository, _ = closeout.load_project(config)
+    repository = closeout.load_project(config)
     require(worktrees or branches or records, 'verify needs what to check: pass --worktree PATH, --branch NAME and/or --records FOLDER')
     require(all(closeout.valid_branch(b) for b in branches), '--branch must be a plain branch name')
     listing = list_worktrees(root)

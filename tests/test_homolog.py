@@ -1,9 +1,10 @@
 """Homologação na main local (issue 32): a branch da issue é cortada da main local, fica só local e entra nela
-por merge com três portões verdes; nada vai ao GitHub até a release.
+por merge com o teste assistido respondido ou dispensável (o único portão, decisão de 20/10/2026); nada vai ao
+GitHub até a release.
 
 Seams: `frontlights.py authorize` (S1); o texto de `SKILL.md`, `references/development.md`, `docs/protocol.md`,
 `docs/security.md`, `templates/handoff.md`, `examples/authorization.json`, `README.md`, `docs/acceptance.md` e
-`evals/runbook.md` (S1); `scripts/homolog.py` (`hook` e `sync`) e a entrada `frontlights.py homolog` (S2);
+`evals/runbook.md` (S1); `scripts/homolog.py` (`sync`) e a entrada `frontlights.py homolog` (S2);
 `scripts/homolog.py` (`bundle` e `backup_dir`) e a validação de `homolog.backupDir` no `inspect` (S3);
 `scripts/homolog.py` (`release-plan`) e a entrada `frontlights.py homolog release-plan` (S4; a regra do
 `cleanup.py plan` para a branch entregue sem PR está em `test_cleanup.py`).
@@ -44,12 +45,12 @@ def stage(number):
     return ' '.join(text.split(f'## {number}.')[1].split(f'## {number + 1}.')[0].split())
 
 
-GREEN = {'suite_gate': 'current', 'review_gate': 'current', 'browser_gate': 'answered'}
+GREEN = {'browser_gate': 'answered'}
 
 
 class LocalMainMergeAuthorizeTests(unittest.TestCase):
-    """S1: `authorize` aceita o merge da branch da issue na main local só com os três portões verdes; a main
-    remota (`origin/main`) nunca é alvo; uma branch de CA não entra na main local."""
+    """S1: `authorize` aceita o merge da branch da issue na main local só com o teste assistido respondido ou
+    dispensável (`browser_gate`, o único portão; `suite_gate` e `review_gate` são opcionais); a main remota (`origin/main`) nunca é alvo; uma branch de CA não entra na main local."""
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -75,7 +76,7 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         self.op = dict(repository='example/project', issue=1, kind='merge_into_local_main',
                        worktree=str(self.issue), branch='claude/issue-1', target='main', gates=dict(GREEN))
 
-    def test_the_merge_into_the_local_main_passes_with_the_three_gates_green(self):
+    def test_the_merge_into_the_local_main_passes_with_the_watched_run_answered(self):
         result = frontlights.authorize(self.c, self.op)
         self.assertEqual(result['scope_check'], 'pass')
         self.assertFalse(result['permission_granted'])
@@ -84,27 +85,24 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         op = dict(self.op, gates=dict(GREEN, browser_gate='not_needed'))
         self.assertEqual(frontlights.authorize(self.c, op)['scope_check'], 'pass')
 
-    def test_an_operation_that_still_carries_full_suite_is_refused_naming_suite_gate(self):
-        """Issue 52, S2: o portão da suíte inteira saiu; a chave antiga é recusada antes dos portões, com ou sem
-        `suite_gate`, e a recusa nomeia `suite_gate`."""
-        without = {k: v for k, v in GREEN.items() if k != 'suite_gate'}
-        for gates in (dict(GREEN, full_suite='green'), dict(without, full_suite='green')):
-            with self.subTest(gates=gates), self.assertRaisesRegex(ValueError, r'full_suite is gone.*suite_gate'):
-                frontlights.authorize(self.c, dict(self.op, gates=gates))
+    def test_the_suite_and_the_review_gates_are_optional_with_any_value(self):
+        """Decisão de 20/10/2026: `suite_gate` e `review_gate` são aceitos em `gates` com qualquer valor, nunca
+        exigidos nem recusados."""
+        for extra in ({}, {'suite_gate': 'current', 'review_gate': 'current'}, {'suite_gate': 'stale'},
+                      {'review_gate': 'stale'}, {'suite_gate': 'red', 'review_gate': None}):
+            with self.subTest(extra=extra):
+                op = dict(self.op, gates=dict(GREEN, **extra))
+                self.assertEqual(frontlights.authorize(self.c, op)['scope_check'], 'pass')
 
-    def test_a_missing_or_red_gate_refuses_and_names_the_gate(self):
-        reds = {'suite_gate': ('green', 'stale', 'unconfigured', 'red', 'missing', True, None),
-                'review_gate': ('stale', 'current ', None),
-                'browser_gate': ('pending', 'stale', 'contradiction', 'dispensado', None)}
-        for gate, values in reds.items():
-            for value in values:
-                gates = dict(GREEN)
-                if value is None:
-                    del gates[gate]
-                else:
-                    gates[gate] = value
-                with self.subTest(gate=gate, value=value), self.assertRaisesRegex(ValueError, gate):
-                    frontlights.authorize(self.c, dict(self.op, gates=gates))
+    def test_a_missing_or_red_watched_run_refuses_and_names_the_gate(self):
+        for value in ('pending', 'stale', 'contradiction', 'dispensado', 'unconfigured', True, None):
+            gates = dict(GREEN, suite_gate='current', review_gate='current')
+            if value is None:
+                del gates['browser_gate']
+            else:
+                gates['browser_gate'] = value
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'browser_gate'):
+                frontlights.authorize(self.c, dict(self.op, gates=gates))
         with self.assertRaisesRegex(ValueError, 'gates'):
             frontlights.authorize(self.c, {k: v for k, v in self.op.items() if k != 'gates'})
 
@@ -156,12 +154,12 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
 
 class LocalMainTextTests(unittest.TestCase):
     """S1: os quatro documentos, o handoff e o exemplo de autorização dizem que a branch da issue é cortada da
-    main local, fica só local e entra nela com os três portões, e distinguem a main local da remota."""
+    main local, fica só local e entra nela com o teste assistido, e distinguem a main local da remota."""
 
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
         for phrase in ('one issue branch, cut from the local main and kept local',
-                       'the merge of the branch of the issue once its three gates are green, then the bundle',
+                       'the watched run answered or not needed, `authorize`, the merge, then the bundle',
                        '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -170,7 +168,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'Nothing of an issue goes to GitHub before the release',
                        'writing the remote main (`origin/main`, the base branch on GitHub)',
                        'the local main is written only by the covered merge',
-                       '`{"suite_gate": "current", "review_gate": "current", "browser_gate": "answered"}`',
+                       '`gates` `{"browser_gate": "answered"}` (or `not_needed`), the only gate',
                        '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
@@ -178,26 +176,25 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, text)
 
-    def test_the_development_reference_has_the_gates_section_after_the_review(self):
+    def test_the_development_reference_has_the_watched_run_section_after_the_review(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
-        self.assertEqual(text.count('## Into the local main: the three gates'), 1)
+        self.assertEqual(text.count('## Into the local main: the watched run'), 1)
         self.assertLess(text.index('## Review, checkpoints and renewal'), text.index('## Into the local main'))
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
-        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
+        body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
         for phrase in ('homologation bench', 'refused as the remote main', '**Bring the local main in first.**',
-                       '`git merge main`', '**Gate 1, the impact suite.**', 'never the fast suite',
-                       'the three gates run at the same time on that tip',
-                       'with a screen the review waits for the watched run',
-                       '`homolog suite-gate --root <issue-worktree> --config <config> --issue <n> --base <base>`',
-                       'The whole suite waits for the release.',
-                       'an operation that still carries `full_suite` is refused, naming `suite_gate`',
-                       '**Gate 2, the review.**', '`stale` means a review again, never the merge',
-                       '**Gate 3, the watched run.**', '**The check and the merge.**', '`merge_into_local_main`',
+                       '`git merge main`', 'The watched run is the only gate of stage 6: no impact suite and no '
+                       'review is required.', '**The gate, the watched run.**', '**The check and the merge.**',
+                       '`merge_into_local_main`',
                        '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>`',
                        'it never edits the gates to make them pass', '**Record it.**', '"Merge na main local"',
                        'a preflight, not a barrier', 'it reads no Git'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
+        for gone in ('**Gate 1, the impact suite.**', '**Gate 2, the review.**', 'The whole suite waits for the release.',
+                     '`full_suite`'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, body)
         whole = ' '.join(text.split())
         for phrase in ('one merge into the local main per issue', 'delivered by one merge into the local main',
                        'the branches of the issue and of its slices stay local',
@@ -208,15 +205,15 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, whole)
 
-    def test_a_stale_review_reruns_the_impact_suite_beside_the_new_round(self):
-        """Revisão da issue 52, M1: depois de uma revisão vencida, a suíte de impacto roda de novo ao lado da nova
-        rodada de revisão, nunca numa fila antes dela; o `suite-gate` volta a `current` antes do merge."""
+    def test_the_review_runs_only_on_request_and_is_no_gate(self):
+        """Decisão de 20/10/2026: a revisão independente roda só a pedido e não é portão do merge na main local
+        nem da release; uma revisão vencida não chama a suíte de impacto."""
         text = read('skills', 'frontlights', 'references', 'development.md')
         body = ' '.join(text.split('## Review, checkpoints and renewal')[1].split('## Into the local main')[0].split())
-        self.assertIn('with the impact suite rerun on the new tip beside that review round, not before it '
-                      '("Into the local main"); `homolog suite-gate` must answer `current` again before the merge',
-                      body)
-        self.assertNotIn('rerun the impact suite until', body)
+        self.assertIn('The independent review runs only when the user asks for one: it is not dispatched by default '
+                      'and is not a gate of the merge into the local main nor of the release.', body)
+        self.assertIn("whether to review again is the user's call", body)
+        self.assertNotIn('impact suite rerun on the new tip', body)
 
     def test_the_security_notes_cover_the_homolog_suites(self):
         """Revisão da issue 52, B2: o `inspect` aceita `suites` dentro de `homolog`, e o `homolog suite` está entre
@@ -234,7 +231,8 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes',
+        for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com o teste assistido '
+                       'respondido ou dispensável, o único portão',
                        '"Standing authorization and the denied operations"', 'em "Into the local main"',
                        'a saída do `authorize` do merge na main local'):
             with self.subTest(file='protocol', phrase=phrase):
@@ -243,8 +241,11 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('**Main local e main remota.**',
                        '`merge_into_local_main` só com `target` igual a `base.branch`', 'são recusados como main remota',
                        'nunca de uma slice',
-                       'com os três `gates` de "Into the local main" (`references/development.md`)',
-                       'ou a chave antiga `full_suite`, nomeia o portão na recusa', 'não prova que a suíte rodou',
+                       'e com o `gates` de "Into the local main" (`references/development.md`), só o `browser_gate`, '
+                       'o único portão',
+                       'um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão',
+                       'e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência',
+                       'não prova que o teste assistido foi respondido',
                        'conferência prévia, não barreira', 'não lê o Git',
                        'confere `edit`, `test`, `checkpoint` e `merge_into_local_main`',
                        'os merges cobertos de `references/development.md` ("Standing authorization and the denied operations"), os únicos permitidos'):
@@ -259,7 +260,7 @@ class LocalMainTextTests(unittest.TestCase):
         readme = flat('README.md')
         for phrase in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
                        'numa branch por issue, cortada da main local',
-                       'o da branch da issue na main local com os três portões verdes',
+                       'o da branch da issue na main local com o teste assistido respondido',
                        'nada da issue vai ao GitHub antes da release'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
@@ -272,7 +273,7 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertEqual(charter['base']['branch'], 'main')
         op = json.loads(read('skills', 'frontlights', 'examples', 'operation-merge-local-main.json'))
         self.assertEqual((op['kind'], op['target']), ('merge_into_local_main', 'main'))
-        self.assertEqual(set(op['gates']), {'suite_gate', 'review_gate', 'browser_gate'})
+        self.assertEqual(op['gates'], {'browser_gate': 'answered'})
         # the example operation passes `authorize` against the example charter once the placeholders are filled
         with tempfile.TemporaryDirectory() as temp:
             charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',
@@ -281,62 +282,59 @@ class LocalMainTextTests(unittest.TestCase):
                            worktrees=[dict(charter['worktrees'][0], path=temp)])
             self.assertEqual(frontlights.authorize(charter, dict(op, worktree=temp))['scope_check'], 'pass')
 
-    def test_the_hook_and_the_sync_open_stage_six(self):
-        """S2: a skill, a referência, o protocolo, a segurança e o README dizem quando o hook e o sync rodam, o que
-        perguntam, e declaram as três escritas da skill dentro de `.git/`."""
+    def test_the_sync_opens_stage_six(self):
+        """S2 e a decisão de 20/10/2026: a skill, a referência, o protocolo, a segurança e o README dizem quando o
+        sync roda e o que pergunta, que nenhum hook é instalado, e declaram as duas escritas da skill dentro de
+        `.git/`."""
         skill = stage(6)
-        for phrase in ('1. **Hook and sync** (development.md, "The start of stage 6"): `homolog hook`, then `homolog sync` '
-                       'brings `origin/<base>` into the local main',):
-            with self.subTest(file='SKILL.md', phrase=phrase):
-                self.assertIn(phrase, skill)
+        self.assertIn('1. **Sync** (development.md, "The start of stage 6"): `homolog sync` brings `origin/<base>` into '
+                      'the local main.', skill)
+        self.assertNotIn('homolog hook', skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
-        heading = '## The start of stage 6: the pre-push hook and the sync of the local main'
+        heading = '## The start of stage 6: the sync of the local main'
         self.assertLess(text.index(heading), text.index('## Slices in order'))
         body = ' '.join(text.split(heading)[1].split('## Slices in order')[0].split())
-        for phrase in ('"Instalar o hook `pre-push` que recusa enviar a main local?"', '"Sim, instalar"',
-                       'it is never overwritten', 'It is the only hook the skill installs',
-                       '`homolog sync --root <main worktree> --base <base>', 'never pushes',
-                       '"Resolver o conflito agora na worktree principal"', 'gets neither',
+        for phrase in ('`homolog sync --root <main worktree> --base <base>', 'never pushes',
+                       '"Resolver o conflito agora na worktree principal"', '"Seguir sem sincronizar"',
                        '`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
-                       '**The hook.**', '`installed`, `ours`, `foreign`, `path` and `script`', '`foreign: true`',
-                       'refuses with exit code 1', 'a guard and not a barrier', '`--no-verify`',
+                       'The local main is never pushed: a rule of the skill.',
                        '**The sync.**', 'no tracked change pending and no merge in progress',
                        '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
                        'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
+        for gone in ('**The hook.**', 'pre-push', '"Sim, instalar"', '`--no-verify`'):
+            with self.subTest(file='development.md', gone=gone):
+                self.assertNotIn(gone, ' '.join(text.split()))
         security = flat('skills', 'frontlights', 'docs', 'security.md')
-        for phrase in ('instala um único hook', 'Esse `pre-push` é o único hook que o Frontlights instala',
-                       'nunca sobrescreve um hook de outra origem',
-                       'É uma guarda, não uma barreira', 'As escritas da skill dentro de `.git/` são três',
+        for phrase in ('O Frontlights não instala hook nenhum.',
+                       'A regra de que a main local do projeto, a homologação, nunca é enviada é regra da skill, não '
+                       'barreira.', 'As escritas da skill dentro de `.git/` são duas',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
                        'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):
             with self.subTest(file='security.md', phrase=phrase):
                 self.assertIn(phrase, security)
+        self.assertNotIn('Esse `pre-push` é o único hook que o Frontlights instala', security)
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('o hook `pre-push`, a sincronização da main local e a prévia, em "The start of stage 6"',):
-            with self.subTest(file='protocol.md', phrase=phrase):
-                self.assertIn(phrase, protocol)
+        self.assertIn('a sincronização da main local e a prévia, em "The start of stage 6"', protocol)
         readme = flat('README.md')
-        for phrase in ('instala só o hook `pre-push` da homologação', 'O único hook que a skill instala',
-                       'traz `origin/main` para a main local (`homolog sync`'):
+        for phrase in ('A skill não instala hook nenhum', 'traz `origin/main` para a main local (`homolog sync`'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
-        self.assertNotIn('skill não instala hooks, então', readme)
-        self.assertIn('S2: `homolog hook` confere', flat('docs', 'acceptance.md'))
-        self.assertIn('confirm `homolog hook` exits 2', flat('evals', 'runbook.md'))
+        self.assertNotIn('instala só o hook `pre-push` da homologação', readme)
+        self.assertIn('confirm that no hook is installed or asked about', flat('evals', 'runbook.md'))
 
     def test_the_bundle_follows_each_merge_into_the_local_main(self):
         """S3: a skill, a referência, o protocolo, a segurança, o README e o exemplo de config dizem quando o bundle
         é gravado, onde, e que sem a chave nada é gravado."""
-        self.assertIn('once its three gates are green, then the bundle', stage(6))
+        self.assertIn('the merge, then the bundle', stage(6))
         text = read('skills', 'frontlights', 'references', 'development.md')
-        body = ' '.join(text.split('## Into the local main: the three gates')[1].split('## The release')[0].split())
-        for phrase in ('6. **Back it up.**', 'homolog bundle --root <main worktree> --config',
+        body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
+        for phrase in ('4. **Back it up.**', 'homolog bundle --root <main worktree> --config',
                        'the only write the run makes outside the project, and only into that folder',
                        '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
-                       '`configured: false`', 'name the key, ask nothing and go on', '7. **Record it.**',
+                       '`configured: false`', 'name the key, ask nothing and go on', '5. **Record it.**',
                        '"sem backup configurado"'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
@@ -346,7 +344,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'nunca entra neste repositório', 'A chave só diz onde gravar'):
             with self.subTest(file='security.md', phrase=phrase):
                 self.assertIn(phrase, security)
-        self.assertIn('os três portões do merge na main local e o bundle depois dele, em "Into the local main"',
+        self.assertIn('o portão do merge na main local (o teste assistido) e o bundle depois dele, em "Into the local main"',
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('a chave `homolog.backupDir` aponta uma pasta sua, por caminho absoluto', flat('README.md'))
         example = json.loads(read('skills', 'frontlights', 'examples', 'config.json'))
@@ -406,36 +404,33 @@ class LocalMainTextTests(unittest.TestCase):
                        '**`Closes #n` only from `closes`.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
-                       '**Run the whole suite on the local main.**',
-                       'homolog suite --release --mode full --base <base> --root <main worktree> --config <config>',
-                       '`fullSuite` must be `current`',
-                       'the whole suite of the release is green at the tip the release branch was cut from',
-                       '(`python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog suite-gate --release --head '
-                       '<head of the pull request> --base <base> --root <main worktree> --config '
-                       '.frontlights/config.json` answers `current`, from the per-tip record `release/suite-<sha>.json` '
-                       "in the main worktree's `.frontlights/release/`)",
-                       'on a clean tree (a change not committed outside `.frontlights/`, tracked or untracked, is '
-                       'refused and nothing runs: commit or discard it first)',
-                       'Another issue entering the local main, or the suite run for a later release, does not make '
-                       'the pull request unready',
-                       'and `--timeout-seconds <N>` sized to that suite (3600 s without it, which the whole suite of this repository has already exceeded under load)', 'Only a run that finished red becomes a finding'):
+                       'No suite is required for the release (no whole check is: the watched run of each issue is its '
+                       'evidence)',
+                       'the whole suite on the local main (`homolog suite --release --mode full`, judged by `homolog '
+                       'suite-gate --release`) runs only when the user asks for it, and a red one is then a finding '
+                       'with a destination by the ladder',
+                       "The release's pull request is ready when the watched run of every issue in it is recorded "
+                       '(answered or not needed), the pull request has no conflict with the base and no finding lacks '
+                       'a destination.',
+                       'Another issue entering the local main does not make the pull request unready.'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
-        order = [body.index(title) for title in ('**Plan it.**', '**Run the whole suite on the local main.**',
-                                                 '**Offer it.**') if title in body]
-        self.assertEqual(order, sorted(order))
-        self.assertNotIn('(`fullSuite: current`)', body)
+        self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
+        for gone in ('**Run the whole suite on the local main.**', '`fullSuite` must be `current`',
+                     'the whole suite of the release is green at the tip the release branch was cut from'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, body)
         self.assertNotIn('recordedHead', body.split('**Offer the merge when the PR is ready.**')[1].split('**What wakes')[0])
-        self.assertIn('run the impact suite and the type checks', ' '.join(text.split()))
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
                        '"Agora não" deixa a issue homologada na main local',
-                       'ou rodada com `homolog suite --release --mode full`) e o `release-plan` de novo',
-                       'release/suite.json', 'release/suite-full-<data-hora>.log',
+                       'sem suíte obrigatória (a suíte inteira só a pedido do usuário)',
+                       'release/suite.json a suíte inteira da release (`homolog suite --release`, só a pedido do usuário)',
+                       'release/suite-full-<data-hora>.log',
                        'release/suite-<sha>.json cópia do mesmo registro por ponta (o sha completo do head), que a '
                        'execução numa ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a '
-                       'julga, e a PR da release fica pronta por ela'):
+                       'julga'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('| Espera do merge |', protocol)
@@ -447,11 +442,13 @@ class LocalMainTextTests(unittest.TestCase):
         readme = flat('README.md')
         for phrase in ('#### Homologar na main local, lançar a release, fechar e limpar', '`homolog release-plan`',
                        'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)',
-                       'a release só fica pronta com a suíte inteira verde na ponta da main local'):
+                       'a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte '
+                       'obrigatória'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
         self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
-        self.assertIn('o `fullSuite` do `release-plan`', flat('skills', 'frontlights', 'templates', 'handoff.md'))
+        self.assertIn('a suíte inteira na ponta da main local só quando o usuário a pediu',
+                      flat('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 
@@ -482,7 +479,6 @@ class LocalMainTextTests(unittest.TestCase):
 
 HOMOLOG = SKILL / 'scripts' / 'homolog.py'
 FRONTLIGHTS = SKILL / 'scripts' / 'frontlights.py'
-MARKER = '# frontlights pre-push hook v1 (homolog hook)'
 CONFIG = (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'), ('commit.gpgsign', 'false'))
 
 
@@ -508,7 +504,7 @@ def build_commit(env, repo, name, content, message):
 
 
 def build_trio(folder):
-    """The template of the hook, sync and release-plan tests: `origin.git` (bare), `work` pushed to it and `other`
+    """The template of the sync and release-plan tests: `origin.git` (bare), `work` pushed to it and `other`
     cloned from it, all inside `folder`; `gitfixture.copy` points the remotes of a copy at its own `origin.git`."""
     (folder / 'gitconfig').write_text('', encoding='utf-8')
     env = isolated(folder)
@@ -549,9 +545,9 @@ class HomologCli:
         return code, result
 
 
-class HomologHookAndSyncTests(HomologCli, unittest.TestCase):
-    """S2: `homolog hook` instala e confere o pre-push que recusa enviar a main local; `homolog sync` traz
-    `origin/main` para a main local e relata conflito deixando a worktree limpa. Só repositórios temporários: o
+class HomologSyncTests(HomologCli, unittest.TestCase):
+    """S2: `homolog sync` traz `origin/main` para a main local e relata conflito deixando a worktree limpa; o
+    `homolog hook` saiu (decisão de 20/10/2026) e é uma operação desconhecida. Só repositórios temporários: o
     remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica fora da fixture. O trio
     (origin, work, other) é montado uma vez por classe e copiado para cada teste (issue #59)."""
 
@@ -590,120 +586,8 @@ class HomologHookAndSyncTests(HomologCli, unittest.TestCase):
     def sha(self, repo, ref='HEAD'):
         return self.git(repo, 'rev-parse', ref).stdout.strip()
 
-    def hook(self, *flags, real=False):
-        return self.cli('hook', '--root', str(self.work), *flags, real=real)
-
     def sync(self, real=False):
         return self.cli('sync', '--root', str(self.work), real=real)
-
-    def test_check_on_a_fresh_repository_asks_for_the_install(self):
-        code, result = self.hook('--check', real=True)   # the real `homolog.py hook` process
-        self.assertEqual(code, 2, result)
-        self.assertEqual((result['installed'], result['ours'], result['foreign'], result['base']),
-                         (False, False, False, 'main'))
-        self.assertIn(MARKER, result['script'])
-        self.assertIn('refs/heads/main', result['script'])
-        self.assertTrue(result['script'].startswith('#!/bin/sh\n'))
-        self.assertNotIn('\r', result['script'])
-        self.assertFalse(Path(result['path']).exists())
-
-    def test_install_is_idempotent_and_check_then_passes(self):
-        code, first = self.hook('--install')
-        self.assertEqual((code, first['written'], first['installed'], first['ours']), (0, True, True, True))
-        path = Path(first['path'])
-        self.assertEqual(path.read_bytes(), first['script'].encode('utf-8'))
-        code, again = self.hook('--install')
-        self.assertEqual((code, again['written']), (0, True))
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
-                         (0, True, True, False, True))
-        self.assertEqual((first['current'], again['current'], check['outsideRepository']), (True, True, False))
-        self.assertEqual(path.read_bytes(), first['script'].encode('utf-8'))
-
-    def test_a_hook_of_another_base_is_ours_but_not_current_and_install_rewrites_it(self):
-        code, master = self.hook('--install', '--base', 'master')
-        self.assertEqual((code, master['written'], master['current']), (0, True, True))
-        path = Path(master['path'])
-        self.assertIn('refs/heads/master', path.read_text(encoding='utf-8'))
-        code, check = self.hook('--check', '--base', 'main')
-        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
-                         (2, True, True, False, False))
-        self.assertIn('--install', check['message'])
-        self.assertIn('difere', check['message'])
-        self.assertIn('refs/heads/master', path.read_text(encoding='utf-8'))   # --check wrote nothing
-        code, main = self.hook('--install', '--base', 'main')
-        self.assertEqual((code, main['written'], main['ours'], main['current']), (0, True, True, True))
-        self.assertEqual(path.read_bytes(), main['script'].encode('utf-8'))
-        self.assertIn('refs/heads/main', path.read_text(encoding='utf-8'))
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['current']), (0, True))
-
-    def test_a_tampered_hook_that_keeps_the_marker_is_not_current(self):
-        _, installed = self.hook('--install')
-        path = Path(installed['path'])
-        path.write_bytes(installed['script'].replace('exit 1', 'exit 0').encode('utf-8'))
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['installed'], check['ours'], check['foreign'], check['current']),
-                         (2, True, True, False, False))
-        self.assertIn('difere', check['message'])
-        # a CRLF copy of the expected script is still current: only the line endings differ
-        path.write_bytes(installed['script'].replace('\n', '\r\n').encode('utf-8'))
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['current']), (0, True))
-
-    def test_a_hooks_folder_outside_the_repository_is_refused_and_nothing_is_written(self):
-        elsewhere = Path(self.temp.name) / 'hooks-elsewhere'
-        elsewhere.mkdir()
-        self.git(self.work, 'config', 'core.hooksPath', str(elsewhere))
-        code, install = self.hook('--install')
-        self.assertEqual((code, install['ok'], install['written'], install['outsideRepository']), (1, False, False, True))
-        self.assertIn('core.hooksPath', install['message'])
-        self.assertEqual(list(elsewhere.iterdir()), [])
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['ok'], check['outsideRepository'], check['installed']), (2, False, True, False))
-        self.assertEqual(Path(check['path']).parent, elsewhere.resolve())
-        self.assertIn('core.hooksPath', check['message'])
-        self.assertEqual(list(elsewhere.iterdir()), [])
-        self.assertFalse((self.work / '.git' / 'hooks' / 'pre-push').exists())
-        # the user installed our hook there by hand: the check reads it as installed and current, and still writes nothing
-        (elsewhere / 'pre-push').write_bytes(check['script'].encode('utf-8'))
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['ok'], check['installed'], check['current'], check['outsideRepository']),
-                         (0, True, True, True, True))
-        code, install = self.hook('--install')
-        self.assertEqual((code, install['written']), (1, False))
-        self.assertEqual((elsewhere / 'pre-push').read_bytes(), check['script'].encode('utf-8'))
-
-    def test_the_hook_refuses_pushing_the_local_main_and_lets_other_branches_through(self):
-        self.hook('--install')
-        remote_main = self.sha(self.origin, 'main')
-        self.commit(self.work, 'local.txt', 'local\n', 'local work on main')
-        refused = self.git(self.work, 'push', 'origin', 'main', check=False)
-        self.assertNotEqual(refused.returncode, 0)
-        self.assertIn('frontlights', refused.stderr)
-        self.assertEqual(self.sha(self.origin, 'main'), remote_main)
-        self.git(self.work, 'switch', '-q', '-c', 'claude/x')
-        self.commit(self.work, 'x.txt', 'x\n', 'branch work')
-        allowed = self.git(self.work, 'push', 'origin', 'claude/x', check=False)
-        self.assertEqual(allowed.returncode, 0, allowed.stderr)
-        self.assertEqual(self.sha(self.origin, 'claude/x'), self.sha(self.work))
-        disguised = self.git(self.work, 'push', 'origin', 'claude/x:main', check=False)
-        self.assertNotEqual(disguised.returncode, 0)
-        self.assertIn('frontlights', disguised.stderr)
-        self.assertEqual(self.sha(self.origin, 'main'), remote_main)
-
-    def test_a_foreign_hook_is_reported_and_never_overwritten(self):
-        _, fresh = self.hook('--check')
-        path = Path(fresh['path'])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        foreign = b'#!/bin/sh\nexit 0\n'
-        path.write_bytes(foreign)
-        code, check = self.hook('--check')
-        self.assertEqual((code, check['installed'], check['ours'], check['foreign']), (2, True, False, True))
-        code, install = self.hook('--install')
-        self.assertEqual((code, install['written'], install['ok']), (1, False, False))
-        self.assertIn('frontlights', install['message'].lower())
-        self.assertEqual(path.read_bytes(), foreign)
 
     def test_sync_advances_the_local_main_when_the_remote_moved(self):
         before = self.sha(self.work)
@@ -751,10 +635,15 @@ class HomologHookAndSyncTests(HomologCli, unittest.TestCase):
         self.assertIn('main', result['message'])
 
     def test_the_frontlights_entry_gives_the_same_report_as_the_module(self):
-        code, direct = self.hook('--check')
-        routed_code, routed = self.cli('homolog', 'hook', '--check', '--root', str(self.work), script=FRONTLIGHTS)
+        code, direct = self.sync()
+        routed_code, routed = self.cli('homolog', 'sync', '--root', str(self.work), script=FRONTLIGHTS)
         self.assertEqual(routed_code, code)
         self.assertEqual(routed, direct)
+
+    def test_the_hook_operation_is_gone(self):
+        code, result = self.cli('hook', '--root', str(self.work), '--check')
+        self.assertEqual((code, result['ok']), (1, False), result)
+        self.assertFalse((self.work / '.git' / 'hooks' / 'pre-push').exists())
 
 
 class HomologBundleTests(HomologCli, unittest.TestCase):
@@ -1144,28 +1033,16 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertEqual(code, 1 if fail else 0, result)
         return result
 
-    def test_without_the_whole_suite_of_the_tip_the_release_is_not_ready(self):
-        """S3: sem o registro da suíte inteira na ponta da main local, a release não fica pronta (exit 2)."""
+    def test_without_the_whole_suite_the_release_is_still_ready(self):
+        """Decisão de 20/10/2026: a suíte inteira não é exigida pela release; sem o registro dela, a release fica
+        pronta (exit 0) e `fullSuite` diz `missing`, só como informação."""
         self.deliver(1)
         code, result = self.plan()
-        self.assertEqual((code, result['ready']), (2, False), result)
-        self.assertEqual(result['release'], [1])
+        self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
         self.assertEqual(result['fullSuite']['status'], 'missing')
-        self.assertIn('homolog suite --release --mode full', result['message'])
-        self.assertIn(self.sha(self.work)[:7], result['message'])
-
-    def test_the_message_names_the_base_of_the_project_in_the_command(self):
-        """Revisão da issue 52, M2: num projeto cuja base não é main, o comando da suíte inteira que a mensagem
-        manda rodar leva `--base <a base>`; sem ele, a release rodaria (e julgaria) a ponta da main."""
-        self.git(self.work, 'switch', '-q', '-c', 'develop')
-        self.git(self.work, 'push', '-q', 'origin', 'develop')
-        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1')
-        self.commit(self.work, 'issue-1.txt', '1\n', 'issue 1')
-        self.git(self.work, 'switch', '-q', 'develop')
-        self.git(self.work, 'merge', '-q', '--no-ff', '-m', 'merge of issue 1 into the local develop', 'claude/issue-1')
-        code, result = self.plan('--base', 'develop')
-        self.assertEqual((code, result['release'], result['fullSuite']['status']), (2, [1], 'missing'), result)
-        self.assertIn('`homolog suite --release --mode full --base develop --root', result['message'])
+        self.assertIn('Release pronta', result['message'])
+        self.assertIn('Suíte inteira (opcional, não exigida pela release): missing.', result['message'])
+        self.assertNotIn('homolog suite --release --mode full', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
         self.deliver(1)
@@ -1177,9 +1054,10 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertTrue(os.path.samefile(full['recordPath'], self.work / '.frontlights' / 'release' / 'suite.json'))
         self.assertIn('Release pronta', result['message'])
 
-    def test_a_whole_suite_adopted_from_an_issue_of_the_same_tree_makes_the_release_ready(self):
+    def test_a_whole_suite_adopted_from_an_issue_of_the_same_tree_is_current(self):
         """Issue 54, S1: a issue roda a suíte inteira na ponta dela e entra na main local por `--no-ff` sem mudar
-        arquivo; a adoção (`suite --release --mode full --from`) deixa o `release-plan` pronto sem rodar a suíte."""
+        arquivo; a adoção (`suite --release --mode full --from`) deixa o `fullSuite` do `release-plan` em `current`
+        sem rodar a suíte."""
         fake = self.base / 'fake_suite.py'
         fake.write_text('import sys\nsys.exit(1 if "--falha" in sys.argv else 0)\n', encoding='utf-8')
         config = self.base / 'config.json'
@@ -1203,28 +1081,27 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertEqual(result['fullSuite']['adoptedFrom']['head'], issue_head)
         self.assertIn(f'adotada da ponta {issue_head[:7]}', result['fullSuite']['message'])
 
-    def test_a_red_whole_suite_keeps_the_release_back(self):
+    def test_a_red_whole_suite_is_reported_and_does_not_hold_the_release(self):
         self.deliver(1)
         self.full_suite(fail=True)
         code, result = self.plan()
-        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'red'), result)
-        self.assertIn('homolog suite --release --mode full', result['message'])
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'red'), result)
+        self.assertIn('Suíte inteira (opcional, não exigida pela release): red.', result['message'])
 
     def test_a_delivery_after_the_whole_suite_makes_it_stale(self):
         self.deliver(1)
         self.full_suite()
         self.deliver(2)
         code, result = self.plan()
-        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'stale'), result)
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'stale'), result)
         self.assertIn('head', result['fullSuite']['changed'])
-        self.assertIn(self.sha(self.work)[:7], result['message'])
 
     def test_an_uncommitted_edit_after_the_whole_suite_makes_it_stale(self):
         self.deliver(1)
         self.full_suite()
         (self.work / 'README.md').write_text('edited\n', encoding='utf-8')
         code, result = self.plan()
-        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'stale'), result)
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'stale'), result)
         self.assertEqual(result['fullSuite']['files_changed'], ['README.md'])
 
     def test_a_main_worktree_off_the_local_main_is_elsewhere(self):
@@ -1232,11 +1109,10 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.full_suite()
         self.git(self.work, 'switch', '-q', 'claude/issue-1')
         code, result = self.plan()
-        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (2, False, 'elsewhere'), result)
-        self.assertIn('claude/issue-1', result['message'])
-        self.assertIn('homolog suite --release --mode full', result['message'])
+        self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'elsewhere'), result)
+        self.assertIn('claude/issue-1', result['fullSuite']['message'])
 
-    def test_behind_and_nothing_to_release_still_come_before_the_whole_suite(self):
+    def test_behind_and_nothing_to_release_say_nothing_of_the_whole_suite(self):
         code, result = self.plan()
         self.assertEqual(code, 2, result)
         self.assertIn('nada a liberar', result['message'])
@@ -1455,32 +1331,29 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         _, elsewhere = self.plan('--remote', 'upstream')   # another remote does not hold the name
         self.assertEqual(elsewhere['releaseBranch'], name)
 
-    def test_a_name_used_by_a_merged_pull_request_is_never_suggested_again(self):
-        """O nome da release pula também os nomes citados em 'Merge pull request #N from dono/<nome>' no histórico
-        de `origin/main`, mesmo com a branch já apagada nos dois lados; outro formato de assunto não pesa."""
+    def test_a_name_only_in_the_subject_of_a_merged_pull_request_is_free_again(self):
+        """O GitHub apaga a branch de cabeça da PR mesclada e aceita o nome de novo: o nome que só aparece num
+        'Merge pull request #N from dono/<nome>' de `origin/main`, sem branch local nem remote-tracking, volta a ser
+        sugerido."""
         self.deliver(1)
         _, first = self.plan()
         name = first['releaseBranch']
-        for number, merged in ((45, name), (46, f'{name}-2')):
-            self.git(self.other, 'switch', '-q', '-c', 'feature')
-            self.commit(self.other, f'pr-{number}.txt', f'{number}\n', f'pull request {number}')
-            self.git(self.other, 'switch', '-q', 'main')
-            self.git(self.other, 'merge', '-q', '--no-ff', '-m', f'Merge pull request #{number} from OWNER/{merged}', 'feature')
-            self.git(self.other, 'branch', '-q', '-D', 'feature')
-        self.git(self.other, 'switch', '-q', '-c', 'side')
-        self.commit(self.other, 'side.txt', 'side\n', 'side')
+        self.git(self.other, 'switch', '-q', '-c', 'feature')
+        self.commit(self.other, 'pr-45.txt', '45\n', 'pull request 45')
         self.git(self.other, 'switch', '-q', 'main')
-        self.git(self.other, 'merge', '-q', '--no-ff', '-m', f"Merge branch '{name}-3'", 'side')
+        self.git(self.other, 'merge', '-q', '--no-ff', '-m', f'Merge pull request #45 from OWNER/{name}', 'feature')
+        self.git(self.other, 'branch', '-q', '-D', 'feature')
         self.git(self.other, 'push', '-q', 'origin', 'main')
         self.git(self.work, 'fetch', '-q', 'origin')
         _, result = self.plan()
-        self.assertEqual(result['releaseBranch'], f'{name}-3')
+        self.assertEqual(result['releaseBranch'], name)
 
-    def test_the_help_texts_name_the_four_operations(self):
+    def test_the_help_texts_name_the_operations_and_no_hook(self):
         for text in (read('skills', 'frontlights', 'scripts', 'homolog.py').split('"""')[1],
                      read('skills', 'frontlights', 'scripts', 'frontlights.py')):
-            for operation in ('`hook`', '`sync`', '`bundle`', '`release-plan`'):
+            for operation in ('`sync`', '`bundle`', '`release-plan`'):
                 self.assertIn(operation, text)
+            self.assertNotIn('`hook`', text)
         self.assertNotIn('Later slices add', read('skills', 'frontlights', 'scripts', 'homolog.py'))
         self.assertNotIn('`hook` and `sync` of the local main', read('skills', 'frontlights', 'scripts', 'frontlights.py'))
 
@@ -1577,7 +1450,7 @@ class HomologReleaseClosesTests(HomologCli, unittest.TestCase):
         gh = FakeGh({1: node(1, state='CLOSED'), 2: node(2, text='sem critérios'), 3: node(3),
                      4: node(4, totals={'children': 150})})
         code, result = self.routed(gh)
-        self.assertEqual((code, result['ready']), (2, False), result)   # the whole suite is missing: unchanged
+        self.assertEqual((code, result['ready']), (0, True), result)   # `closes` never changes `ready`
         by = {entry['issue']: entry['closing'] for entry in result['issues']}
         self.assertEqual(by, {1: 'not_open', 2: 'no_criteria', 3: True, 4: 'truncated', 5: 'not_found'})
         self.assertEqual(result['closes'], [3])
@@ -1588,7 +1461,7 @@ class HomologReleaseClosesTests(HomologCli, unittest.TestCase):
         code, result = self.routed(gh)
         self.assertEqual(gh.calls, [])
         self.assertEqual((result['closes'], result['closesReason']), ([], 'no_config'), result)
-        self.assertEqual((code, result['ready']), (2, False))
+        self.assertEqual((code, result['ready']), (0, True))
         self.assertIn('sem `Closes #n`', result['closesMessage'])
         self.assertNotIn('closing', result['issues'][0])
 

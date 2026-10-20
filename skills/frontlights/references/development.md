@@ -575,7 +575,7 @@ offers the release again with everything accumulated.
   `ahead` and `behind`, and names the branch `<branch_prefix>release-<date>`: the prefix of the newest authorization
   record by `issued_at` (records without a valid `issued_at` rank below those with one, and ties go to the last
   file name; `claude/` when there is none;
-  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release or that the local main is behind and
+  `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken by a local or remote-tracking branch (GitHub deletes the head branch of a merged pull request, and the name is free again once `git fetch --prune` drops its ref). Exit code 2 says there is nothing to release or that the local main is behind and
   must be synced first: say so in one line; `ready` means there is something to release and the local main is not
   behind. Exit code 1 without `origin/<base>` (or when Git cannot count the commits): run
   `homolog sync` first. It also reads GitHub (read only, with the `repository` of `--config`, default

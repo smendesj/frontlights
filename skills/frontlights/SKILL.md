@@ -230,10 +230,9 @@ cannot run, say so in one line and go on). Only when `candidates` reports `ask` 
 issues que já têm todos os critérios marcados?" Put in the question text
 how many there are and which. Options: "Sim, mostrar a lista" and
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come
-back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or
-`done_option_missing`: then say in one line that the cards could not be checked and the remedy
-(`gh auth refresh -s project`, or fix `project.done`); and when an issue is excluded as `awaiting_release` (every box
-ticked, branch not yet in `origin/<base>`), say in one line that it closes with the release that carries it.
+back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when
+an issue is excluded as `awaiting_release` (every box ticked, branch not yet in `origin/<base>`): say in one line
+that it closes with the release that carries it. The closeout never reads the board.
 
 The user's own request is the starting point and the authority on scope. Accept
 any kind of work: a product feature, a bug, a refactor, research, a one-off

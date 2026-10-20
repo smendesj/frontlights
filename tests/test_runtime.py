@@ -1051,7 +1051,7 @@ def direct_charter(root, *extra, **overrides):
 
 
 class AuthorizeDirectTests(unittest.TestCase):
-    GATES = {'suite_gate': 'current', 'review_gate': 'current', 'browser_gate': 'not_needed'}
+    GATES = {'browser_gate': 'not_needed'}
 
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -1069,8 +1069,8 @@ class AuthorizeDirectTests(unittest.TestCase):
         self.assertEqual(frontlights.authorize(direct_charter(self.root), self.merge)['scope_check'], 'pass')
 
     def test_the_gates_and_the_target_still_hold(self):
-        with self.assertRaisesRegex(ValueError, 'gate review_gate is not green'):
-            frontlights.authorize(direct_charter(self.root), dict(self.merge, gates=dict(self.GATES, review_gate='stale')))
+        with self.assertRaisesRegex(ValueError, 'gate browser_gate is not green'):
+            frontlights.authorize(direct_charter(self.root), dict(self.merge, gates=dict(self.GATES, browser_gate='pending')))
         with self.assertRaisesRegex(ValueError, 'remote main'):
             frontlights.authorize(direct_charter(self.root), dict(self.merge, target='origin/main'))
 

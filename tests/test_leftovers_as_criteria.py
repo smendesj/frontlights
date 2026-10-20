@@ -188,7 +188,8 @@ class GateTests(unittest.TestCase):
 
     def test_every_open_finding_has_a_destination_before_the_report_and_before_the_pr(self):
         for phrase in ('Before an issue is reported as reviewed or complete, and before a PR is opened or updated',
-                       'every open finding of the review, the tests, the live check and any other verification pass',
+                       'every open finding that came up (the watched run, a review the user asked for, the tests that ran, '
+                       'the live check and any other verification pass)',
                        'the ones of earlier rounds included', 'fixed (the commit)', 'new criterion',
                        'top-level issue (its number)', 'not a defect, or dropped by the user'):
             with self.subTest(phrase=phrase):
@@ -224,8 +225,9 @@ class GateTests(unittest.TestCase):
 class SkillAndDevelopmentTests(unittest.TestCase):
     def test_stage_six_makes_the_gate_a_condition_of_the_report_and_of_the_pr(self):
         stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        for phrase in ('every open finding with its destination (the gate of the Follow-ups section of '
-                       '`references/issues.md`)', 'the findings left unfixed with the destination of each'):
+        for phrase in ('every open finding that came up (the watched run, a review the user asked for, tests that ran) '
+                       'with its destination (the gate of the Follow-ups section of `references/issues.md`)',
+                       'the findings left unfixed with the destination of each'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage6)
         development = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split())

@@ -51,10 +51,9 @@ somente pela afirmação do usuário na sessão atual.
 
 O fechamento (`scripts/closeout.py`, só leitura) propõe fechar toda issue aberta, e toda sub-issue, com a seção
 de critérios de aceitação e todos os itens marcados (e as filhas fechadas ou propostas junto, filhas antes dos
-pais); o cartão vai para Done pelo fluxo "Item closed" → Status Done do próprio quadro, nunca pelo Frontlights, e uma
-issue já fechada nunca é candidata, qualquer que seja o cartão; a conferência (`verify`) lê o cartão no valor
-`project.done` (padrão `Status` / `Done`) e diz numa linha (`cardsOutsideDone`) quando ele não chegou a Done, sem
-reprovar a issue; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
+pais); o cartão vai para Done pelo fluxo "Item closed" → Status Done do próprio quadro, nunca pelo Frontlights, e o
+fechamento não lê o quadro; uma issue já fechada nunca é candidata; a conferência (`verify`) relê só as issues e diz
+se cada uma está fechada; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
 fora como `awaiting_release` até a release que a leva ser mesclada (o `candidates` lê só `rev-parse` e `merge-base`,
 pelo `homolog.py`, e na dúvida não exclui). Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
 conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.

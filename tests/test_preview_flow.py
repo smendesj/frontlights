@@ -39,7 +39,7 @@ class PreviewInTheFlowTests(unittest.TestCase):
                        'refreshed after each slice is merged into the branch of its issue'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage6)
-        self.assertLess(stage6.index('**Hook and sync**'), stage6.index('**The preview**'))
+        self.assertLess(stage6.index('**Sync**'), stage6.index('**The preview**'))
         self.assertLess(stage6.index('**The preview**'), stage6.index('**Slices in order**'))
         development = read('skills', 'frontlights', 'references', 'development.md')
         start = between(development, '## The start of stage 6', '## Slices in order')

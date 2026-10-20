@@ -64,29 +64,22 @@ class PullRequestTemplateTests(unittest.TestCase):
         evidence = flat(section(self.text, 'Evidência'))
         for phrase in ('**Antes:**', '**Depois:**', 'prints do teste assistido',
                        'o teste que falhava e passou a passar', 'checkpoint', 'revisão independente',
-                       'os três portões', 'só aponta registros que já existem', 'nunca inventa'):
+                       'o portão do merge na main local, o teste assistido', 'só aponta registros que já existem',
+                       'nunca inventa'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, evidence)
 
-    def test_the_evidence_carries_the_whole_suite_of_the_release(self):
-        """Issue 52, S3: a suíte inteira roda uma vez por release, na ponta da main local, e a Evidência a cita."""
+    def test_the_evidence_requires_no_suite(self):
+        """Decisão de 20/10/2026: o único portão é o teste assistido; a Evidência não pede a suíte inteira da
+        release nem a adoção dela, e os testes e a revisão entram só quando rodaram."""
         evidence = flat(section(self.text, 'Evidência'))
-        for phrase in ('**Suíte inteira da release:**', 'na ponta da main local `<sha curto>`',
-                       'de onde a branch da release foi cortada'):
+        for phrase in ('**Portões:** teste assistido', '**Testes e revisão:** só quando rodaram',
+                       'Apague a linha quando nenhum rodou'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, evidence)
-
-    def test_an_adopted_whole_suite_names_the_origin_tip_and_the_original_run(self):
-        """Issue 54, S3: quando a suíte inteira da release foi adotada (`--from`), a Evidência diz de qual ponta e
-        cita a execução original; o handoff registra a adoção."""
-        evidence = flat(section(self.text, 'Evidência'))
-        for phrase in ('adotada da ponta `<sha curto da origem>`',
-                       '<comando, contagem, saída e tempo da execução original>'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, evidence)
-        handoff = flat(read('skills', 'frontlights', 'templates', 'handoff.md'))
-        self.assertIn('a adoção da suíte inteira, quando houve (`adoptedFrom`: o registro de origem, a ponta e a '
-                      'árvore)', handoff)
+        for gone in ('**Suíte inteira da release:**', 'adotada da ponta'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, evidence)
 
     def test_the_merge_risk_names_the_door_and_the_blast_radius(self):
         risk = flat(section(self.text, 'Risco do merge'))
@@ -223,7 +216,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
 
     def test_the_evidence_points_to_the_records_of_each_issue(self):
         for phrase in ("the prints of each issue's watched run", 'the tests of its checkpoints',
-                       'its three gates', 'records that already exist, never invented'):
+                       'its gate (the watched run)', 'records that already exist, never invented'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.release)
 

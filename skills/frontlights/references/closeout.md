@@ -9,7 +9,7 @@ stays in Portuguese. At the merge of the release and at stage 1, step 5 (the cle
 question) runs first, before the closing question of step 1. Closing is a write on GitHub with **its own
 approval**: no implementation authorization, no merged PR and no green test stands in for it. The helper only
 reads; the session writes, with its own `gh`, and only what the user approved. The card goes to Done by the
-board's own workflow ("Item closed" → Status Done), when the issue closes: this flow only closes and checks, and never
+board's own workflow ("Item closed" → Status Done), when the issue closes: this flow never reads the board and never
 moves a card.
 
 ## 1. Find the candidates (read only)
@@ -50,9 +50,9 @@ the parent's new boxes are what this closeout counts.
 
 An open issue is a **candidate** only when it has an acceptance-criteria section and every criterion of it is
 ticked, and every one of its sub-issues is closed or a candidate in the same batch (children close before
-their parents). A closed issue is never a candidate, whatever its card: it is counted in `alreadyDone`. Each
-candidate carries its `action` (always `close`), the criteria count, its PRs (state and whether merged), its card
-status and `cautions`: `open_pr`, `no_pr`, `not_on_board`, `pending_outside_criteria`.
+their parents). A closed issue is never a candidate: it is counted in `alreadyDone`. Each
+candidate carries its `action` (always `close`), the criteria count, its PRs (state and whether merged) and
+`cautions`: `open_pr`, `no_pr`, `pending_outside_criteria`.
 The cautions inform; they never block, and an `open_pr` is called out in the question.
 
 A known leftover is an acceptance criterion like any other (`issues.md`, Follow-ups), so an open one keeps its
@@ -80,17 +80,10 @@ are unchecked items citing it and no other issue, and `shared`, those that cite 
 copy of the parent's body (the Capture command of the recipe in `issues.md`). A sub-issue without `parentTicks`
 (no item of the parent cites it, or the parent is closed, in another repository or unknown) is only closed.
 
-`board.status` says whether the cards could be read, for the table and for the verify: `unconfigured` (no board:
-no card is shown or checked), `not_read` (nothing in scope, so the board was not read), `unavailable` (a `gh`
-without the `project` scope: say so, give `gh auth refresh -s project`; the closing goes on),
-`done_option_missing` (the board has no option named as `project.done`: show the field and its real options
-and ask which one is Done; recording the answer in `.frontlights/config.json` as `project.done` is a local
-write, shown first). Without `project.done` the pair is `Status` / `Done`.
-
 ## 2. Show the list and ask
 
 Write to a file, in the user's language, one table with a row per candidate (number, title, top-level or
-sub-issue, criteria n/n, children, PRs, card status, action, cautions, and "fecha com N pendências fora dos
+sub-issue, criteria n/n, children, PRs, action, cautions, and "fecha com N pendências fora dos
 critérios" when `pendingOutside` is above zero) in the `order` of the result, and the exact `commands` that will
 run, and ask its approval by link and stamp (`SKILL.md`, "Show before approval"). A sub-issue with `parentTicks`
 gets, in its row, "marcar no corpo de #P as linhas L" with each of those lines quoted whole, and the lines in `shared` are listed as "não marcadas: citam outras issues". Then ask with `AskUserQuestion`: "Fechar estas <N> issues?" with
@@ -135,10 +128,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" verify --config <config> --root
 ```
 
 At the merge of a release, `--issues` takes the `closes` of its `release-plan` together with the issues closed in
-step 3 (an issue of `closes` still open there was already read twice and asked in step 2, step 1 says how). Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
-did not reach Done is in `cardsOutsideDone` and in one line of the message: say that line (the board's "Item
-closed" workflow did not move it; suggest turning it on in the board's Workflows screen). It never makes an issue
-fail, and the session does not move the card. GitHub is the source
+step 3 (an issue of `closes` still open there was already read twice and asked in step 2, step 1 says how). Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). The verify
+reads only the issues, never the board: the board's "Item closed" workflow moves the card. GitHub is the source
 of truth: the local `.frontlights/issues/<n>/` snapshots are updated to closed with the time of the read,
 never the other way round. Put the approved list, the user's literal answer, the results and the verify
 output in the handoff, with the `tick-check` result of each parent.
@@ -247,13 +238,10 @@ in the handoff.
 ## 6. Let RoadS see it
 
 RoadS reads only the **Status** of the card in the Project, never whether the issue is closed: the board's "Item
-closed" workflow moves the card to Done when the issue closes, and a card the verify reported outside Done stays
-where it is for RoadS until it is moved on the board. A completed item stays in its sprint, marked done, until the
-sprint rotation removes it. RoadS also refreshes only when it syncs, and a sync within 30 s of the previous one
-returns the old snapshot. So, after the closing, tell the user in one line that RoadS shows it after its next sync
-(the board's own "Sincronizar" there); Frontlights does not sync RoadS. Without a usable board (`board.status`
-`unconfigured`, `unavailable` or `done_option_missing`) say plainly that the closing could not be checked against
-the cards RoadS reads.
+closed" workflow moves the card to Done when the issue closes. A completed item stays in its sprint, marked done,
+until the sprint rotation removes it. RoadS also refreshes only when it syncs, and a sync within 30 s of the previous
+one returns the old snapshot. So, after the closing, tell the user in one line that RoadS shows it after its next
+sync (the board's own "Sincronizar" there); Frontlights does not sync RoadS and does not read the board.
 
 ## Never
 
@@ -263,7 +251,7 @@ the cards RoadS reads.
   item of a parent that cites a sub-issue closed in the same list (step 3).
 - Close an issue on the strength of the merge alone, or tick a parent's item that is not in the list the user
   approved.
-- Move a card (`gh project item-edit`): the board's "Item closed" workflow moves it to Done.
+- Move or read a card (`gh project item-edit`, a board read): the board's "Item closed" workflow moves it to Done.
 - Remove a worktree or a branch that `cleanup.py plan` did not offer (or, with `ask: true`, that the user did not
   approve), delete a remote branch (`git push origin --delete`: GitHub deletes the merged head branch), use
   `--force`, or remove the main worktree or the folder the session stands in.

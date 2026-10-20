@@ -124,24 +124,21 @@ class StopCriterionTests(unittest.TestCase):
     def test_the_review_is_done_at_zero_serious_and_zero_medium(self):
         for phrase in ('**When the review is done.**', 'done at the first round that reports 0 sérios and 0 médios',
                        'a new acceptance criterion of the source issue', '"Corrigir os baixos agora"',
-                       'Three rounds per issue is the limit', '"Mais uma rodada"', '"Dar destino pela escada"',
-                       'the issue stays out of the local main',
+                       'There is no limit of rounds to keep', '"Mais uma rodada"', '"Dar destino pela escada"',
+                       'a sério or médio without a destination keeps the issue out of the local main by the gate on '
+                       'the findings',
                        'The handoff records each round: its HEAD and its counts'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.review)
 
-    def test_a_recheck_after_the_base_comes_in_stays_outside_the_limit(self):
-        # Achado da sessão coordenadora (rodada 4): a base entrou duas vezes depois de a revisão fechar em 0/0, e
-        # "three rounds at most" podia ser lido como proibição da 4ª rodada que o `review-gate` exige.
-        self.assertIn('A round that only rechecks a base brought in after the review was done (`review.md`, '
-                      '"Rounds") stays outside the limit.', self.review)
+    def test_the_limit_of_rounds_is_gone(self):
+        # Decisão de 20/10/2026: a revisão roda só a pedido e não tem mais limite de rodadas, nem a exceção da
+        # rodada que só reconfere a base.
         stage6 = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development'))
-        # Rodada 5, baixo 2: o parêntese leva as duas condições da regra.
-        self.assertIn('three rounds at most (a round that only rechecks a base brought in after the review was done '
-                      'stays outside)', stage6)
-        # Rodada 5, baixo 3: o defeito que a reconferência acha.
-        self.assertIn('When a recheck finds a sério or médio, its fix gets one round, and a sério or médio still open '
-                      'after it goes to the question of the limit.', self.review)
+        for text in (self.review, stage6):
+            for gone in ('Three rounds per issue is the limit', 'three rounds at most', 'stays outside the limit'):
+                with self.subTest(gone=gone):
+                    self.assertNotIn(gone, text)
 
     def test_the_protocol_and_the_readme_point_to_the_stop_criterion(self):
         # Rodada 5, médio 1, depois da fonte única: a exceção da reconferência vive em development.md, e o
@@ -188,12 +185,11 @@ class OnlyTheReviewerReadsItTests(unittest.TestCase):
 
     def test_skill_md_lists_the_standard_and_the_stop_criterion_in_stage_6(self):
         text = read('skills', 'frontlights', 'SKILL.md')
-        self.assertIn("`references/review.md` (the independent reviewer's standard, named only in the reviewer's "
-                      "brief)", flat(text))
+        self.assertIn("`references/review.md` (the independent reviewer's standard, for a review the user asks for, "
+                      "named only in the reviewer's brief)", flat(text))
         stage6 = flat(section(text, '6. Bounded development'))
-        self.assertIn('The review is done at the first round with 0 sérios and 0 médios, three rounds at most',
-                      stage6)
-        self.assertIn('and the reviewer judges by `references/review.md`', stage6)
+        self.assertIn('The independent review runs only when the user asks for it, judged by `references/review.md` '
+                      '(development.md, "When the review is done")', stage6)
 
 
 class DocumentationTests(unittest.TestCase):
@@ -202,14 +198,16 @@ class DocumentationTests(unittest.TestCase):
     def test_the_protocol_says_it_in_portuguese(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         for phrase in ('O revisor julga pelo padrão de `references/review.md`', 'que só o brief do revisor cita',
-                       'a rodada que só reconfere a base e o destino dos baixos estão numa fonte só',
+                       'A revisão independente roda só a pedido do usuário.',
+                       'a pergunta depois de uma rodada com sério ou médio e o destino dos baixos estão numa fonte só',
                        '`references/development.md`, "When the review is done"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, protocol)
 
     def test_the_readme_says_it_in_portuguese(self):
         readme = flat(read('README.md'))
-        for phrase in ('A revisão independente segue o padrão de `skills/frontlights/references/review.md`',
+        for phrase in ('A revisão independente roda só quando você a pede, e segue o padrão de '
+                       '`skills/frontlights/references/review.md`',
                        'um achado é um defeito com cenário de falha', 'largura de linha, linhas em branco',
                        'são estilo e nunca viram achado', 'Só o brief do revisor cita esse arquivo',
                        'A revisão termina na primeira rodada sem achado sério nem médio',
