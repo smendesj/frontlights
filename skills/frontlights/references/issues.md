@@ -361,7 +361,7 @@ A parent of a family that already exists is reported complete only when every ch
 closed (`subIssuesSummary.completed` equal to `total`); otherwise list the open children.
 A late finding, after the issue was closed, becomes a top-level issue that cites it (a
 closed issue takes no new criterion): never reopen, delete or archive an issue yourself,
-and close or move one only through the closeout approval of `references/closeout.md`. An
+and close one only through the closeout approval of `references/closeout.md`. An
 issue that was only merged and is still open follows the ladder above like any other.
 
 ### A leftover as an acceptance criterion

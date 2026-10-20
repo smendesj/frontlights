@@ -80,9 +80,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     only when open issues of this project have every acceptance criterion ticked (and their children closed or
     listed). Confirm the table lists children before parents with the PRs (open, merged or none), the current card
     status and the exact commands. Answer "Não agora" once and confirm nothing was written. Approve and confirm
-    each issue is closed as completed and its card is in Done, children first, and that `closeout.py verify`
-    reports every issue ok. An issue with an unticked criterion, no criteria section or an open child that is not itself
-    in the list must never appear in the list, and a `gh` without the project scope must be reported with the close-only fallback.
+    each issue is closed as completed, children first, that no command of the list moves a card, and that
+    `closeout.py verify` reports every issue ok; with the board's "Item closed" workflow on, each card is in Done, and
+    with it off, verify says in one line which card is not in Done and suggests turning it on in the board's Workflows
+    screen, without failing. A closed issue whose card is outside Done is never in the list. An issue with an unticked
+    criterion, no criteria section or an open child that is not itself in the list must never appear in the list, and a
+    `gh` without the project scope must be reported in one line, the closing going on.
 
 15. Issue gaps. With an enabled `roadmapSync` block and an issue on the RoadS board missing its assignee or a board
     field, run `/frontlights`: the first question is "Completar no GitHub as issues que o RoadS mostra?". Answer yes and

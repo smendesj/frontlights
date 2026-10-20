@@ -33,8 +33,12 @@ class SkillTests(unittest.TestCase):
         self.assertIn('When it finds merged work (a candidate, or an issue left out for any reason but '
                       '`awaiting_release`), first run the cleanup of `references/closeout.md`, step 5, without a question', stage1)
         self.assertIn('`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records', stage1)
-        self.assertIn('Fechar as issues que já têm todos os critérios marcados e mover os cartões para Done?', stage1)
-        self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or `done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked', stage1)
+        self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', stage1)
+        self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or `done_option_missing`: then say in one line that the cards could not be checked', stage1)
+        question = stage1.split('**Closeout question, right after the progress question.**')[1]
+        for word in ('mover', 'closedUnchecked', 'item-edit'):
+            with self.subTest(word=word):
+                self.assertNotIn(word, question)
         self.assertLess(stage1.index('Progress question'), stage1.index('Closeout question'))
         self.assertLess(stage1.index('Closeout question'), stage1.index('Then choose the lightest path'))
 
@@ -70,7 +74,7 @@ class ReferenceTests(unittest.TestCase):
 
     def test_the_candidate_rule_and_the_order(self):
         for phrase in ('every criterion of it is ticked', 'every one of its sub-issues is closed or a candidate in the same batch',
-                       '(children close before their parents)', 'A closed issue whose card is not in Done is a candidate to be moved only',
+                       '(children close before their parents)', 'A closed issue is never a candidate, whatever its card',
                        '`excluded` lists what is not ready and why', '`unchecked_criteria` and `no_criteria` with the counts',
                        'never ticks one itself', 'Without `project.done` the pair is `Status` / `Done`'):
             with self.subTest(phrase=phrase):
@@ -78,7 +82,6 @@ class ReferenceTests(unittest.TestCase):
 
     def test_the_writes_are_the_documented_commands_in_order_and_verified(self):
         for phrase in ('gh issue close <n> --repo <repo> --reason completed',
-                       'gh project item-edit <number> --owner <owner> --url <issue-url> --field <field> --value <value>',
                        'Never close a parent before every one of its children is closed',
                        'never by repeating a close that already landed', 'Add no comment',
                        'closeout.py" verify', 'GitHub is the source of truth'):
@@ -86,30 +89,43 @@ class ReferenceTests(unittest.TestCase):
                 self.assertIn(phrase, self.flat)
 
     def test_the_approval_is_a_question_with_options_of_at_most_five_words(self):
-        for phrase in ('Fechar estas <N> issues e mover os cartões para Done?', '"Show before approval"',
+        for phrase in ('"Fechar estas <N> issues?"', '"Fechar estas <N> issues e marcar os itens dos pais?"', '"Show before approval"',
                        'Record the answer verbatim', 'never answer for the user'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
         asking = ' '.join(section(self.text, '2. Show the list and ask').split())
         labels = re.findall(r'"([^"]+)"', asking.split('with `AskUserQuestion`:', 1)[1].split('Record')[0])
         options = list(dict.fromkeys(x for x in labels if not x.startswith('Fechar estas')))
-        self.assertEqual(options, ['Sim, fechar e mover tudo', 'Escolher quais', 'Só fechar, sem mover', 'Não agora', 'Não, seguir com o pedido'])
+        self.assertEqual(options, ['Sim, fechar tudo', 'Escolher quais', 'Não agora', 'Só fechar, sem marcar', 'Não, seguir com o pedido'])
         self.assertTrue(all(len(label.split()) <= 5 for label in options), options)
+
+    def test_the_list_and_the_writes_never_move_a_card(self):
+        # Issue 63: the board's "Item closed" workflow moves the card; the closeout only closes and checks.
+        for title in ('2. Show the list and ask', '3. Write what was approved'):
+            text = ' '.join(section(self.text, title).split())
+            for word in ('mover', 'move', 'item-edit', 'Done'):
+                with self.subTest(section=title, word=word):
+                    self.assertNotIn(word, text)
+        self.assertIn('The card goes to Done by the board\'s own workflow ("Item closed" → Status Done)', self.flat)
+        self.assertIn('Move a card (`gh project item-edit`): the board\'s "Item closed" workflow moves it to Done', self.flat)
+        self.assertIn('`cardsOutsideDone`', self.flat)
+        self.assertIn('suggest turning it on in the board\'s Workflows screen', self.flat)
 
     def test_every_reason_and_board_status_the_script_produces_is_documented(self):
         source = (ROOT / 'skills' / 'frontlights' / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
         for code in ('unchecked_criteria', 'no_criteria', 'open_children', 'truncated', 'not_found', 'unreadable',
                      'unconfigured', 'not_read', 'unavailable', 'done_option_missing', 'open_pr', 'no_pr', 'not_on_board',
-                     'already_done_card', 'pending_outside_criteria', 'awaiting_release', 'close_and_move', 'move_only'):
+                     'pending_outside_criteria', 'awaiting_release'):
             with self.subTest(code=code):
                 self.assertIn(f"'{code}'", source, 'the script no longer produces it')
                 self.assertIn(code, self.flat, 'the reference does not explain it')
 
     def test_the_reference_tells_that_roads_reads_only_the_card_status_and_shows_it_after_its_sync(self):
         for phrase in ('RoadS reads only the **Status** of the card in the Project, never whether the issue is closed',
-                       'closing an issue without moving its card changes nothing there',
+                       'the board\'s "Item closed" workflow moves the card to Done when the issue closes',
                        'a sync within 30 s of the previous one returns the old snapshot',
-                       'RoadS shows them after its next sync', 'Frontlights does not sync RoadS', 'the close-only fallback will not show in RoadS'):
+                       'RoadS shows it after its next sync', 'Frontlights does not sync RoadS',
+                       'the closing could not be checked against the cards RoadS reads'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
@@ -125,11 +141,12 @@ class RulesInOtherDocsTests(unittest.TestCase):
     def test_development_ticks_only_with_evidence_and_leaves_closing_to_the_closeout(self):
         text = flat('skills', 'frontlights', 'references', 'development.md')
         self.assertIn('tick an acceptance criterion in the issue body only with evidence for it', text)
-        self.assertIn('Closing an issue and its card are never part of this'.replace('its card', 'moving its card'), text)
+        self.assertIn('Closing an issue is never part of this: it has its own approval', text)
+        self.assertNotIn('moving its card', text)
 
-    def test_follow_ups_close_or_move_only_through_the_closeout(self):
+    def test_follow_ups_close_only_through_the_closeout(self):
         text = flat('skills', 'frontlights', 'references', 'issues.md')
-        self.assertIn('never reopen, delete or archive an issue yourself, and close or move one only through the closeout approval',
+        self.assertIn('never reopen, delete or archive an issue yourself, and close one only through the closeout approval',
                       text)
 
     def test_the_documents_describe_the_step(self):

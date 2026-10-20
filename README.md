@@ -185,7 +185,8 @@ e é relida para conferir:
 - `python scripts/frontlights.py validate-plan --plan plan.json --config .frontlights/config.json`
   recusa o plano enquanto faltar valor para algum campo.
 - `done` é opcional e diz qual campo e valor significam "concluída": `{"field": "Status", "value": "Done"}`
-  é o padrão. O fechamento de issues move o cartão para esse valor; o campo precisa ser de escolha única
+  é o padrão. A conferência do fechamento lê o cartão nesse valor (quem o move é o fluxo "Item closed" do
+  quadro, nunca o Frontlights); o campo precisa ser de escolha única
   e o valor precisa existir entre as opções.
 - O token do `gh` precisa do escopo `project` (`gh auth refresh -s project`).
 - Um campo do quadro sem nenhuma opção cadastrada não aceita valor: não o declare em `fields`,
@@ -588,18 +589,20 @@ execução, antes de qualquer processo subir. Um `browserTest` que declara só a
 
 Depois da pergunta das issues do RoadS e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
 que ele trabalhou neste projeto e que já têm **todos os critérios de aceitação marcados**, pergunta se pode
-fechá-las e mover os cartões para Done. A lista vem completa, com as sub-issues antes dos pais, os PRs
+fechá-las. A lista vem completa, com as sub-issues antes dos pais, os PRs
 ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
-aprovação dessa lista ele fecha (`gh issue close --reason completed`) e move, e relê o GitHub para conferir.
+aprovação dessa lista ele fecha (`gh issue close --reason completed`) e relê o GitHub para conferir. O cartão vai
+para Done pelo fluxo do próprio quadro ("Item closed" → Status Done, ligado na tela Workflows do Project): o
+Frontlights nunca move cartão, e a conferência diz numa linha quando um cartão não chegou a Done.
 Uma issue sem a seção de critérios, com critério desmarcado ou com filha ainda aberta que não esteja na mesma lista
 nunca entra; uma issue cuja branch ainda não está em `origin/main` (a release que a leva não foi mesclada) fica fora
-como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
+como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada nunca entra na lista. Um corpo escrito antes da regra das
 pendências, com uma seção "Pendências conhecidas" fora dos critérios e item aberto nela, entra na lista com o
 aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim é sua, e, se você pedir, mover
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.
-O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: fechar sem mover o cartão não muda nada
-lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo; por isso, depois de mover
-cartões, o Frontlights avisa que o RoadS só os mostra depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
+O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: com o fluxo "Item closed" desligado,
+fechar não muda nada lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo;
+por isso, depois de fechar, o Frontlights avisa que o RoadS só mostra o fechamento depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
 `python scripts/cleanup.py plan|verify ...`, e só leem. As exceções são `python scripts/closeout.py tick --issue <n>
@@ -652,7 +655,8 @@ Com o merge confirmado, nesta ordem:
    arquivos. O que fica (alteração pendente, PR aberta, branch protegida) é dito numa linha. A worktree de
    integração local da família (nunca enviada, sem PR) entra quando não guarda commit próprio (nem merge com
    conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
-2. **Issue** com todos os critérios marcados: pergunta se pode fechá-la e mover o cartão para Done.
+2. **Issue** com todos os critérios marcados: pergunta se pode fechá-la; o cartão vai para Done pelo fluxo "Item
+   closed" do quadro.
    **Sub-issue** com todos os critérios marcados: pergunta se pode fechá-la e marcar, no corpo da issue pai, o item que a
    cita. Só entra um item que cita apenas essa filha (`parentTicks`, por número de linha); a escrita troca somente `[ ]`
    por `[x]`, com o corpo anterior guardado e conferido por `closeout.py tick-check` antes e depois. Sem item citando a

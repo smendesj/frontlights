@@ -228,13 +228,14 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
   filhas fechadas ou propostas junto) e cuja branch, quando ainda existe localmente e `origin/<base>` existe, já está
   contida em `origin/<base>` (senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`,
-  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e só propõe mover um cartão do quadro configurado, para o valor de
-  `project.done`, que passa pela mesma regra de texto digitável dos outros campos do quadro;
+  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e nunca move um cartão: quem o leva a Done é o fluxo
+  "Item closed" do próprio quadro, e a conferência só lê o cartão no valor de `project.done`, que passa pela mesma
+  regra de texto dos outros campos do quadro;
 - conta só os itens da seção de critérios e, do corpo, só números: uma seção legada "Pendências conhecidas" fora
   dos critérios, com item aberto, só vira o aviso `pending_outside_criteria` (com a contagem em `pendingOutside`),
   que informa e não bloqueia; o texto dos itens nunca é impresso;
-- os comandos de escrita (`gh issue close ... --reason completed` e `gh project item-edit`) são montados só com
-  números, o repositório `dono/nome` validado e o campo e o valor do `done` validados, e são rodados pela
+- o comando de escrita (`gh issue close ... --reason completed`) é montado só com números e o repositório
+  `dono/nome` validado, e é rodado pela
   sessão, sob as permissões vigentes, só depois da aprovação da lista carimbada e de um `stamp --check` que confere;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
   própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
