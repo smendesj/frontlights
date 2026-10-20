@@ -88,7 +88,7 @@ Operations (each prints one JSON object on stdout):
          (an issue's `suite.json` or another release's `release/suite-<sha>.json`) that ran green, without timeout, on
          a clean tree: it answers `state: "adopted"` and writes both release records with `adoptedFrom` (the origin path, its
          head and tree). It refuses (exit 1, nothing written) an impact, red or timed-out record, one with a diff or a
-         file outside the commit, an unknown head, another tree or other evidence files than the tip's, a place that
+         file outside the commit, an unknown head or another tree (bytes on disk are not compared), a place that
          is not the clean tip of the local base, and `--from` with `--argv` or `--timeout-seconds`.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
@@ -1041,10 +1041,11 @@ def adoption_refusal(root, base, origin, evidence):
 
 def same_tree_refusal(root, base, origin, evidence, what):
     """None when the suite record `origin` (`what` names its suite in the reason) stands for the tip of the local
-    `base`, whose evidence now is `evidence`: it ran green (exit code 0, no timeout, no error) on a clean tree, its
-    head is known, the tree of that head is the tip's and its file hashes are the tip's now. Otherwise why not, in
-    Portuguese. The adoption (`adoption_refusal`) and the covered modules of the release (`impact_refusal`) share
-    it."""
+    `base`: it ran green (exit code 0, no timeout, no error) on a clean tree, its head is known and the tree of that
+    head is the tip's. Otherwise why not, in Portuguese. The bytes on disk are not compared (issue 57): with
+    `core.autocrlf` two clean worktrees of the same commit tree can hold other line endings, and a clean tree of the
+    same commit tree already holds the same content. The adoption (`adoption_refusal`) and the covered modules of
+    the release (`impact_refusal`) share it; `evidence` is kept in the signature for them."""
     if origin.get('exitCode') != 0 or origin.get('timedOut') is not False or origin.get('error'):
         return f'{what} desse registro não passou (código diferente de 0, prazo estourado ou não rodou)'
     head = origin.get('head')
@@ -1057,8 +1058,6 @@ def same_tree_refusal(root, base, origin, evidence, what):
     tree, tip_tree = tree_of(root, head), tree_of(root, f'refs/heads/{base}')
     if tree != tip_tree:
         return f'ele rodou em outra árvore ({tree[:7]}), e a ponta da {base} local tem a árvore {str(tip_tree)[:7]}'
-    if origin['evidence'].get('files_sha256') != evidence['files_sha256']:
-        return f'o hash dos arquivos da evidência dele não é o da {base} local agora'
     return None
 
 

@@ -803,17 +803,23 @@ class SuiteAdoptionRefusalTests(AdoptionTestCase):
         first = self.git(self.work, 'rev-parse', 'main~1').stdout.strip()
         self.assert_refused_without_writing('outra árvore', source=self.forged({'head': first}, head=first))
 
-    def test_a_record_whose_file_hashes_differ_is_refused_and_the_release_records_stay_as_they_were(self):
-        """Mesma árvore de commit, mas o hash dos arquivos da evidência não é o da main local agora: recusado, e os
-        registros que uma adoção anterior gravou ficam byte a byte como estavam."""
+    def test_a_refused_record_leaves_the_release_records_as_they_were(self):
+        """Uma adoção recusada (outra árvore de commit) não toca os registros que uma adoção anterior gravou: ficam
+        byte a byte como estavam."""
         self.assertEqual(self.adopt()[0], 0)
         records = (self.release_folder / 'suite.json', self.release_folder / f'suite-{self.main_head}.json')
         before = [path.read_bytes() for path in records]
-        code, result = self.adopt(source=self.forged({'files_sha256': 'b' * 64}))
+        first = self.git(self.work, 'rev-parse', 'main~1').stdout.strip()
+        code, result = self.adopt(source=self.forged({'head': first}, head=first))
         self.assertEqual(code, 1, result)
-        self.assertIn('hash dos arquivos', result['message'])
         self.assertIn('nada foi gravado', result['message'])
         self.assertEqual([path.read_bytes() for path in records], before)
+
+    def test_the_same_commit_tree_with_other_bytes_on_disk_is_adopted(self):
+        """Issue 57: mesma árvore de commit e árvores limpas, mas bytes diferentes no disco (o fim de linha que o
+        core.autocrlf põe numa worktree e não na outra): o conteúdo é o mesmo, e a adoção vale."""
+        code, result = self.adopt(source=self.forged({'files_sha256': 'b' * 64}))
+        self.assertEqual((code, result.get('state')), (0, 'adopted'), result)
 
     def test_from_with_argv_or_timeout_seconds_is_refused(self):
         for flags in (('--argv', json.dumps(self.argv())), ('--timeout-seconds', '30')):
@@ -882,7 +888,7 @@ class CoveredTestCase(SuiteTestCase):
         untracked file in it during the run. The authorization record of the main worktree names it."""
         path, branch = self.base / f'wt-{number}', f'claude/issue-{number}'
         self.git(self.work, 'worktree', 'add', '-q', '-b', branch, str(path), 'main')
-        (path / f'issue-{number}.txt').write_text(f'{number}\n', encoding='utf-8')
+        (path / f'issue-{number}.txt').write_bytes(f'{number}\n'.encode())   # LF, whatever the platform
         self.git(path, 'add', '.')
         self.git(path, 'commit', '-q', '-m', f'issue {number}')
         if loose:
@@ -995,6 +1001,20 @@ class ReleaseCoveredTests(CoveredTestCase):
         self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
         code, plan = self.cli('release-plan', '--root', str(self.work))
         self.assertEqual((code, plan['release']), (0, [1]), plan)
+
+    def test_a_file_with_other_line_endings_on_disk_in_the_main_worktree_still_counts(self):
+        """Issue 57: com core.autocrlf, a worktree principal pode ter um arquivo com fim de linha CRLF e a da issue
+        com LF (ou o contrário); as duas estão limpas e têm a mesma árvore de commit, então o impacto conta."""
+        self.issue(1)
+        self.deliver(1)
+        self.git(self.work, 'config', 'core.autocrlf', 'true')
+        name = 'issue-1.txt'
+        (self.work / name).write_bytes((self.work / name).read_bytes().replace(b'\n', b'\r\n'))
+        self.git(self.work, 'add', '-u')   # the CRLF file normalizes to the same blob: nothing is staged
+        self.assertEqual(self.git(self.work, 'diff', '--name-only', 'HEAD').stdout.strip(), '')
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
 
     def test_a_record_that_does_not_count_contributes_nothing_and_its_reason_is_recorded(self):
         """Cada issue entra na main local logo depois do próprio registro; só a última tem a árvore da ponta."""

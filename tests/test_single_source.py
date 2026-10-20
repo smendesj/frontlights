@@ -100,8 +100,9 @@ class ReleaseAdoptionTextTests(unittest.TestCase):
                        'before the cleanup of the worktrees (stage 7)',
                        'A refusal writes nothing.',
                        'A refusal of the record (an impact record, a red or timed-out run, a run with a diff or a '
-                       'file outside the commit, a head the repository does not know, another commit tree or other '
-                       "evidence files than the tip's) means the session runs the suite as below",
+                       'file outside the commit, a head the repository does not know, or another commit tree; the '
+                       'bytes on disk are not compared, since line endings can differ between clean worktrees of '
+                       'one tree) means the session runs the suite as below',
                        "A refusal of the place (a tip that is not the local main's, or a dirty main) is fixed first, "
                        'by going to the tip or by committing or discarding the change, and the adoption is tried again',
                        '`--from` with `--argv` or `--timeout-seconds` is a mistake of the call, redone without them',
