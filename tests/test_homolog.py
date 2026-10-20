@@ -8,6 +8,8 @@ Seams: `frontlights.py authorize` (S1); o texto de `SKILL.md`, `references/devel
 `scripts/homolog.py` (`release-plan`) e a entrada `frontlights.py homolog release-plan` (S4; a regra do
 `cleanup.py plan` para a branch entregue sem PR está em `test_cleanup.py`).
 """
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -15,9 +17,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
+import homolog
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -475,31 +481,90 @@ class LocalMainTextTests(unittest.TestCase):
 HOMOLOG = SKILL / 'scripts' / 'homolog.py'
 FRONTLIGHTS = SKILL / 'scripts' / 'frontlights.py'
 MARKER = '# frontlights pre-push hook v1 (homolog hook)'
+CONFIG = (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'), ('commit.gpgsign', 'false'))
 
 
-class HomologHookAndSyncTests(unittest.TestCase):
+def isolated(base):
+    """The Git environment of a fixture: the empty `gitconfig` of `base` as the global one, no system one."""
+    return dict(os.environ, GIT_CONFIG_GLOBAL=str(Path(base) / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
+                GIT_TERMINAL_PROMPT='0')
+
+
+def build_git(env, cwd, *args):
+    """A checked Git command of the class template, under the isolated environment."""
+    prefix = ['git', '-C', str(cwd)] if cwd else ['git']
+    done = subprocess.run([*prefix, *args], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                          env=env, stdin=subprocess.DEVNULL, timeout=60)
+    if done.returncode != 0:
+        raise AssertionError(f'git {" ".join(args)}: {done.stderr}')
+
+
+def build_commit(env, repo, name, content, message):
+    (repo / name).write_text(content, encoding='utf-8')
+    build_git(env, repo, 'add', name)
+    build_git(env, repo, 'commit', '-q', '-m', message)
+
+
+def build_trio(folder):
+    """The template of the hook, sync and release-plan tests: `origin.git` (bare), `work` pushed to it and `other`
+    cloned from it, all inside `folder`; `gitfixture.copy` points the remotes of a copy at its own `origin.git`."""
+    (folder / 'gitconfig').write_text('', encoding='utf-8')
+    env = isolated(folder)
+    origin, work, other = folder / 'origin.git', folder / 'work', folder / 'other'
+    build_git(env, None, 'init', '-q', '--bare', '-b', 'main', str(origin))
+    build_git(env, None, 'init', '-q', '-b', 'main', str(work))
+    for key, value in CONFIG:
+        build_git(env, work, 'config', key, value)
+    build_commit(env, work, 'README.md', 'first\n', 'first')
+    build_git(env, work, 'remote', 'add', 'origin', str(origin))
+    build_git(env, work, 'push', '-q', '-u', 'origin', 'main')
+    build_git(env, None, 'clone', '-q', str(origin), str(other))
+    for key, value in CONFIG:
+        build_git(env, other, 'config', key, value)
+
+
+class HomologCli:
+    """The `homolog` command line of the tests. By default `homolog.main` runs in this process with the argument
+    list, the stdout captured and the isolated Git environment applied only during the call (the Git that homolog
+    runs inherits it); `real=True`, and every call through `frontlights.py`, starts a real process."""
+
+    def cli(self, *args, script=HOMOLOG, real=False):
+        if real or script != HOMOLOG:
+            done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
+                                  encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL,
+                                  timeout=180)
+            code, stdout, stderr = done.returncode, done.stdout, done.stderr
+        else:
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, self.env, clear=True), contextlib.redirect_stdout(out):
+                code = homolog.main(list(args))
+            stdout, stderr = out.getvalue(), ''
+        try:
+            result = json.loads(stdout)
+        except json.JSONDecodeError:
+            self.fail(f'sem JSON no stdout (saída {code}): {stdout!r} {stderr!r}')
+        self.assertEqual(result['exitCode'], code)
+        return code, result
+
+
+class HomologHookAndSyncTests(HomologCli, unittest.TestCase):
     """S2: `homolog hook` instala e confere o pre-push que recusa enviar a main local; `homolog sync` traz
     `origin/main` para a main local e relata conflito deixando a worktree limpa. Só repositórios temporários: o
-    remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica fora da fixture."""
+    remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica fora da fixture. O trio
+    (origin, work, other) é montado uma vez por classe e copiado para cada teste (issue #59)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, build_trio)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        base = Path(self.temp.name)
-        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
-                        GIT_TERMINAL_PROMPT='0')
-        (base / 'gitconfig').write_text('', encoding='utf-8')
+        base = gitfixture.copy(self.template, Path(self.temp.name), exist_ok=True)
+        self.env = isolated(base)
         self.origin = base / 'origin.git'
         self.work = base / 'work'
         self.other = base / 'other'
-        self.git(None, 'init', '-q', '--bare', '-b', 'main', str(self.origin))
-        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
-        self.configure(self.work)
-        self.commit(self.work, 'README.md', 'first\n', 'first')
-        self.git(self.work, 'remote', 'add', 'origin', str(self.origin))
-        self.git(self.work, 'push', '-q', '-u', 'origin', 'main')
-        self.git(None, 'clone', '-q', str(self.origin), str(self.other))
-        self.configure(self.other)
 
     def git(self, cwd, *args, check=True):
         prefix = ['git', '-C', str(cwd)] if cwd else ['git']
@@ -523,24 +588,14 @@ class HomologHookAndSyncTests(unittest.TestCase):
     def sha(self, repo, ref='HEAD'):
         return self.git(repo, 'rev-parse', ref).stdout.strip()
 
-    def cli(self, *args, script=HOMOLOG):
-        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
-                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=180)
-        try:
-            result = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
-        self.assertEqual(result['exitCode'], done.returncode)
-        return done.returncode, result
+    def hook(self, *flags, real=False):
+        return self.cli('hook', '--root', str(self.work), *flags, real=real)
 
-    def hook(self, *flags):
-        return self.cli('hook', '--root', str(self.work), *flags)
-
-    def sync(self):
-        return self.cli('sync', '--root', str(self.work))
+    def sync(self, real=False):
+        return self.cli('sync', '--root', str(self.work), real=real)
 
     def test_check_on_a_fresh_repository_asks_for_the_install(self):
-        code, result = self.hook('--check')
+        code, result = self.hook('--check', real=True)   # the real `homolog.py hook` process
         self.assertEqual(code, 2, result)
         self.assertEqual((result['installed'], result['ours'], result['foreign'], result['base']),
                          (False, False, False, 'main'))
@@ -652,7 +707,7 @@ class HomologHookAndSyncTests(unittest.TestCase):
         before = self.sha(self.work)
         tip = self.commit(self.other, 'remote.txt', 'remote\n', 'remote work')
         self.git(self.other, 'push', '-q', 'origin', 'main')
-        code, result = self.sync()
+        code, result = self.sync(real=True)   # the real `homolog.py sync` process
         self.assertEqual(code, 0, result)
         self.assertEqual((result['before'], result['after'], result['advanced'], result['fastForward'],
                           result['remoteTip']), (before, tip, True, True, tip))
@@ -700,34 +755,43 @@ class HomologHookAndSyncTests(unittest.TestCase):
         self.assertEqual(routed, direct)
 
 
-class HomologBundleTests(unittest.TestCase):
+class HomologBundleTests(HomologCli, unittest.TestCase):
     """S3: `homolog bundle` grava um bundle Git da main local e das branches de trabalho na pasta de
     `homolog.backupDir`; sem a chave diz que não há pasta e não grava; `inspect` recusa a chave inválida e não
-    muda a saída sem ela. Só repositórios e pastas temporários; a configuração Git da máquina fica fora."""
+    muda a saída sem ela. Só repositórios e pastas temporários; a configuração Git da máquina fica fora. O
+    repositório `work` (o nome dá o do bundle) e a pasta `backup` vazia são montados uma vez por classe e copiados
+    para cada teste (issue #59)."""
+
+    @staticmethod
+    def build(folder):
+        (folder / 'gitconfig').write_text('', encoding='utf-8')
+        env = isolated(folder)
+        work = folder / 'work'
+        (folder / 'backup').mkdir()
+        build_git(env, None, 'init', '-q', '-b', 'main', str(work))
+        for key, value in CONFIG:
+            build_git(env, work, 'config', key, value)
+        build_commit(env, work, 'README.md', 'first\n', 'first')
+        build_git(env, work, 'switch', '-q', '-c', 'claude/issue-1')
+        build_commit(env, work, 'one.txt', 'one\n', 'issue 1')
+        build_git(env, work, 'switch', '-q', '-c', 'claude/issue-1-s2')
+        build_commit(env, work, 'two.txt', 'two\n', 'slice 2')
+        build_git(env, work, 'switch', '-q', 'main')
+        build_git(env, work, 'switch', '-q', '-c', 'other')
+        build_commit(env, work, 'other.txt', 'other\n', 'outside the prefix')
+        build_git(env, work, 'switch', '-q', 'main')
+
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, cls.build)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
-        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(self.base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
-                        GIT_TERMINAL_PROMPT='0')
-        (self.base / 'gitconfig').write_text('', encoding='utf-8')
+        self.base = gitfixture.copy(self.template, Path(self.temp.name), exist_ok=True)
+        self.env = isolated(self.base)
         self.work = self.base / 'work'
         self.backup = self.base / 'backup'
-        self.backup.mkdir()
-        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
-        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'),
-                           ('commit.gpgsign', 'false')):
-            self.git(self.work, 'config', key, value)
-        self.commit('README.md', 'first\n', 'first')
-        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1')
-        self.commit('one.txt', 'one\n', 'issue 1')
-        self.git(self.work, 'switch', '-q', '-c', 'claude/issue-1-s2')
-        self.commit('two.txt', 'two\n', 'slice 2')
-        self.git(self.work, 'switch', '-q', 'main')
-        self.git(self.work, 'switch', '-q', '-c', 'other')
-        self.commit('other.txt', 'other\n', 'outside the prefix')
-        self.git(self.work, 'switch', '-q', 'main')
 
     def git(self, cwd, *args, check=True):
         prefix = ['git', '-C', str(cwd)] if cwd else ['git']
@@ -748,24 +812,15 @@ class HomologBundleTests(unittest.TestCase):
         path.write_text(json.dumps({'repository': None, **extra}), encoding='utf-8')
         return path
 
-    def cli(self, *args, script=HOMOLOG):
-        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
-                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=180)
-        try:
-            result = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
-        self.assertEqual(result['exitCode'], done.returncode)
-        return done.returncode, result
-
-    def bundle(self, config, *flags):
-        return self.cli('bundle', '--root', str(self.work), '--config', str(config), *flags)
+    def bundle(self, config, *flags, real=False):
+        return self.cli('bundle', '--root', str(self.work), '--config', str(config), *flags, real=real)
 
     def written_files(self):
         return sorted(path.name for path in self.backup.iterdir())
 
     def test_bundle_writes_a_verifiable_file_with_the_base_and_the_work_branches(self):
-        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}))
+        # the real `homolog.py bundle` process
+        code, result = self.bundle(self.config(homolog={'backupDir': str(self.backup)}), real=True)
         self.assertEqual(code, 0, result)
         self.assertEqual((result['configured'], result['written'], result['verified']), (True, True, True))
         path = Path(result['path'])
@@ -997,33 +1052,34 @@ class HomologBundleTests(unittest.TestCase):
         self.assertNotIn('homolog', json.loads(done.stdout))
 
 
-class HomologReleasePlanTests(unittest.TestCase):
+class HomologReleasePlanTests(HomologCli, unittest.TestCase):
     """S4: `homolog release-plan` lista as issues que estão na main local e ainda não em `origin/main`, conta os
     commits à frente e atrás e nomeia a branch da release sem criar nada: só lê o Git e os registros. Só
     repositórios temporários: o remoto é um repositório bare no mesmo disco, e a configuração Git da máquina fica
-    fora da fixture."""
+    fora da fixture. O trio (origin, work, other) e o registro de autorização são montados uma vez por classe e
+    copiados para cada teste (issue #59)."""
+
+    @staticmethod
+    def build(folder):
+        build_trio(folder)
+        (folder / 'work' / '.frontlights').mkdir()
+        entries = [{'issue': 1, 'branch': 'claude/issue-1'}, {'issue': 2, 'branch': 'claude/issue-2'},
+                   {'issue': 1, 'branch': 'claude/issue-1-s2', 'slice': 'S2'}]
+        data = {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': entries}
+        (folder / 'work' / '.frontlights' / 'authorization.json').write_text(json.dumps(data), encoding='utf-8')
+
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, cls.build)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
-        self.env = dict(os.environ, GIT_CONFIG_GLOBAL=str(self.base / 'gitconfig'), GIT_CONFIG_NOSYSTEM='1',
-                        GIT_TERMINAL_PROMPT='0')
-        (self.base / 'gitconfig').write_text('', encoding='utf-8')
+        self.base = gitfixture.copy(self.template, Path(self.temp.name), exist_ok=True)
+        self.env = isolated(self.base)
         self.origin = self.base / 'origin.git'
         self.work = self.base / 'work'
         self.other = self.base / 'other'
-        self.git(None, 'init', '-q', '--bare', '-b', 'main', str(self.origin))
-        self.git(None, 'init', '-q', '-b', 'main', str(self.work))
-        self.configure(self.work)
-        self.commit(self.work, 'README.md', 'first\n', 'first')
-        self.git(self.work, 'remote', 'add', 'origin', str(self.origin))
-        self.git(self.work, 'push', '-q', '-u', 'origin', 'main')
-        self.git(None, 'clone', '-q', str(self.origin), str(self.other))
-        self.configure(self.other)
-        (self.work / '.frontlights').mkdir()
-        self.record({'issue': 1, 'branch': 'claude/issue-1'}, {'issue': 2, 'branch': 'claude/issue-2'},
-                    {'issue': 1, 'branch': 'claude/issue-1-s2', 'slice': 'S2'})
 
     def git(self, cwd, *args, check=True):
         prefix = ['git', '-C', str(cwd)] if cwd else ['git']
@@ -1047,16 +1103,6 @@ class HomologReleasePlanTests(unittest.TestCase):
     def sha(self, repo, ref='HEAD'):
         return self.git(repo, 'rev-parse', ref).stdout.strip()
 
-    def cli(self, *args, script=HOMOLOG):
-        done = subprocess.run([sys.executable, str(script), *args], capture_output=True, text=True,
-                              encoding='utf-8', errors='replace', env=self.env, stdin=subprocess.DEVNULL, timeout=180)
-        try:
-            result = json.loads(done.stdout)
-        except json.JSONDecodeError:
-            self.fail(f'sem JSON no stdout (saída {done.returncode}): {done.stdout!r} {done.stderr!r}')
-        self.assertEqual(result['exitCode'], done.returncode)
-        return done.returncode, result
-
     def record(self, *entries, name='authorization.json', **extra):
         """An authorization record in the `.frontlights` of the main worktree with the given `worktrees` entries."""
         data = {'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'claude/', 'worktrees': list(entries), **extra}
@@ -1071,8 +1117,8 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of issue {number} into the local main', branch)
         return branch
 
-    def plan(self, *flags, script=HOMOLOG):
-        return self.cli('release-plan', '--root', str(self.work), *flags, script=script)
+    def plan(self, *flags, script=HOMOLOG, real=False):
+        return self.cli('release-plan', '--root', str(self.work), *flags, script=script, real=real)
 
     def deliver_direct(self, slug):
         """A branch of work without an issue, cut from the local main with one commit, merged back with --no-ff."""
@@ -1083,7 +1129,7 @@ class HomologReleasePlanTests(unittest.TestCase):
         self.git(self.work, 'merge', '-q', '--no-ff', '-m', f'merge of {slug} into the local main', branch)
         return branch
 
-    def full_suite(self, fail=False, root=None):
+    def full_suite(self, fail=False, root=None, real=False):
         """S3: the whole suite of the release recorded in the main worktree, on the local main, by `homolog suite
         --release --mode full` with a fake argv (green, or red with `fail`); the config lives outside the repo."""
         fake = self.base / 'fake_suite.py'
@@ -1092,7 +1138,7 @@ class HomologReleasePlanTests(unittest.TestCase):
         config.write_text(json.dumps({'repository': None, 'homolog': {'backupDir': None}}), encoding='utf-8')
         argv = [sys.executable, str(fake), *(['--falha'] if fail else [])]
         code, result = self.cli('suite', '--root', str(root or self.work), '--config', str(config), '--release',
-                                '--mode', 'full', '--argv', json.dumps(argv))
+                                '--mode', 'full', '--argv', json.dumps(argv), real=real)
         self.assertEqual(code, 1 if fail else 0, result)
         return result
 
@@ -1121,8 +1167,8 @@ class HomologReleasePlanTests(unittest.TestCase):
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
         self.deliver(1)
-        self.full_suite()
-        code, result = self.plan()
+        self.full_suite(real=True)   # the real `homolog.py suite` process
+        code, result = self.plan(real=True)   # the real `homolog.py release-plan` process
         self.assertEqual((code, result['ready']), (0, True), result)
         full = result['fullSuite']
         self.assertEqual((full['status'], full['recordedHead']), ('current', self.sha(self.work)))

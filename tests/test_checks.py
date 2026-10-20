@@ -13,17 +13,34 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import checks
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
 
 SUITE_ARGV = [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-v']
 GIT_ENV = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@example.invalid',
            'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@example.invalid'}
 
 
+# Datas fixas: o commit vazio do modelo é o mesmo commit em todas as classes.
+TEMPLATE_DATE = '2026-01-01T00:00:00+00:00'
+
 _REWRITES = itertools.count(1)
+_TEMPLATE = None    # o repositório-modelo da classe em execução (ChecksTestCase.setUpClass)
 
 
-def git(path, *args):
-    subprocess.run(['git', '-C', str(path), *args], check=True, capture_output=True, env=GIT_ENV)
+def git(path, *args, env=GIT_ENV):
+    subprocess.run(['git', '-C', str(path), *args], check=True, capture_output=True, env=env)
+
+
+def build_template(folder):
+    """Repositório já iniciado, com a identidade da fixture e um commit vazio, pronto para ser copiado. Sem a
+    manutenção automática, cada commit da fixture é um processo, e não dois."""
+    gitfixture.init(folder)
+    git(folder, 'config', 'maintenance.auto', 'false')
+    git(folder, 'commit', '-q', '--allow-empty', '-m', 'template',
+        env={**GIT_ENV, 'GIT_AUTHOR_DATE': TEMPLATE_DATE, 'GIT_COMMITTER_DATE': TEMPLATE_DATE})
+    for sample in (folder / '.git' / 'hooks').glob('*.sample'):     # inertes, e menos para copiar em cada teste
+        sample.unlink()
 
 
 def make_suite(path, tests, message='suite'):
@@ -37,12 +54,17 @@ def make_suite(path, tests, message='suite'):
             body += [f'    def test_{name}(self):', f'        self.assertEqual({1 if fails else 0}, 0)']
     (path / 'tests' / 'test_fake.py').write_text('\n'.join(body) + '\n', encoding='utf-8')
     if not (path / '.git').exists():
-        git(path, 'init', '-q')
+        gitfixture.copy(_TEMPLATE, path, exist_ok=True)     # no lugar do `git init`: o que já está ali fica
     git(path, 'add', '-A')
     git(path, 'commit', '-q', '--allow-empty', '-m', message)
 
 
 class ChecksTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        global _TEMPLATE
+        _TEMPLATE = gitfixture.template(cls, build_template)
+
     def setUp(self):
         # A suíte falsa é reescrita várias vezes: nenhum .pyc pode sobreviver entre as execuções.
         patcher = mock.patch.dict(os.environ, {'PYTHONDONTWRITEBYTECODE': '1'})
@@ -346,8 +368,9 @@ class RecordsTest(ChecksTestCase):
 
 class ConfigValidationTest(ChecksTestCase):
     def assertRefused(self, regression_block, fragment):
-        make_suite(self.base, {'alpha': False})
-        make_suite(self.root, {'alpha': False})
+        if not (self.base / '.git').exists():                # uma vez por teste: os subtestes dividem as duas árvores
+            make_suite(self.base, {'alpha': False})
+            make_suite(self.root, {'alpha': False})
         self.write_config({'regression': regression_block})
         code, result = self.regression()
         self.assertEqual(code, 2)
@@ -467,6 +490,15 @@ class InfrastructureTest(ChecksTestCase):
             return False
         return True
 
+    def alive_after_kill(self, pids, deadline=5.0, step=0.05):
+        """Os pids ainda vivos quando todos morreram ou passaram `deadline` segundos, consultados a cada `step`."""
+        end = time.monotonic() + deadline
+        alive = [p for p in pids if self.pid_alive(p)]
+        while alive and time.monotonic() < end:
+            time.sleep(step)
+            alive = [p for p in alive if self.pid_alive(p)]
+        return alive
+
     def kill_pid(self, pid):
         if os.name == 'nt':
             subprocess.run(['taskkill', '/PID', str(pid), '/F'], capture_output=True)
@@ -490,8 +522,7 @@ class InfrastructureTest(ChecksTestCase):
             self.addCleanup(self.kill_pid, pid)
         self.assertInfrastructure(code, result, 'timeout')
         self.assertLess(elapsed, 14, 'o prazo precisa valer mesmo com neto vivo (dois lados de 2 s)')
-        time.sleep(0.5)
-        self.assertEqual([p for p in pids if self.pid_alive(p)], [])
+        self.assertEqual(self.alive_after_kill(pids), [])
 
     def hostile_script(self):
         """A inicia B, B inicia C (dorme 40 s) e sai; A segue vivo. Grava o pid de C no arquivo recebido."""
@@ -519,8 +550,7 @@ class InfrastructureTest(ChecksTestCase):
         self.assertEqual(len(pids), 2, 'um neto por lado')
         self.assertInfrastructure(code, result, 'timeout')
         self.assertLess(elapsed, 20)
-        time.sleep(0.5)
-        self.assertEqual([p for p in pids if self.pid_alive(p)], [])
+        self.assertEqual(self.alive_after_kill(pids), [])
 
     @unittest.skipUnless(os.name == 'nt', 'Job Object é específico do Windows')
     def test_job_object_failure_falls_back_with_a_warning_in_portuguese(self):
