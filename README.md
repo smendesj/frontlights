@@ -815,13 +815,14 @@ prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 n
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
 slice, rode os módulos que a slice toca; por issue, o portão do merge na main local é a suíte por impacto, e a
-suíte inteira sem a variável roda na release, uma vez, com ou sem CI no projeto. O que cada uma roda está em
+suíte inteira sem a variável roda na release, uma vez, a única conferência inteira: a CI de um projeto, quando
+houver, não é esperada nem é portão. O que cada uma roda está em
 [`references/development.md`](skills/frontlights/references/development.md), "Which tests run when": a suíte por
 impacto (`python tests/suite.py --impact <base>`) roda só o que o diff toca, pela escolha do `tests/pre_commit.py`,
 mais o `tests.test_single_source`, e a release roda só o complemento, pelo
-`python tests/suite.py --skip-covered {covered}`. A CI do GitHub não define a variável e continua rodando tudo, como
-conferência, pelo `python -m unittest discover -s tests -v`: o runner não deixa a suíte inteira mais rápida do que o
-`discover`, e a CI roda o mesmo `discover`.
+`python tests/suite.py --skip-covered {covered}`. Este repositório não tem workflow de CI: fora da release, a suíte
+inteira também roda à mão, pelo `python -m unittest discover -s tests -v`, que não define a variável; o runner não
+deixa a suíte inteira mais rápida do que o `discover`.
 
 Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
 pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao

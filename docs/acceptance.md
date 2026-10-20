@@ -18,19 +18,19 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   dependências ausentes no ambiente, como o Playwright). A contagem de testes e de módulos é a que esse comando
   imprime no fim (`Ran N tests`); este registro não a copia, porque ela mudava a cada commit e dava conflito no
   encontro de issues paralelas.
-  É a suíte inteira e o comando da CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
+  É a suíte inteira, rodada à mão; este repositório não tem workflow de CI. Alguns módulos (`test_serve_ports`, `test_checks_integration`) levam vários
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
   runner da issue 27, só Windows): pula esses dois módulos e o da prévia (`test_serve_preview`, issue 34) com o
   motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada.
   O complemento (`python tests/suite.py --skip-covered {covered}`), e não mais a rodada inteira pelo `discover`, roda na release; por issue vale a suíte por impacto
-  (só o que o diff toca, pela escolha do `tests/pre_commit.py`, mais o `test_single_source`); a rodada inteira pelo
-  `discover` fica para a CI, como conferência. A regra está em `skills/frontlights/references/development.md`,
+  (só o que o diff toca, pela escolha do `tests/pre_commit.py`, mais o `test_single_source`); a suíte inteira local na
+  main, na release, é a única conferência inteira, e a CI de um projeto, quando houver, não é esperada nem é portão. A regra está em `skills/frontlights/references/development.md`,
   "Which tests run when".
 - `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
   sem agentes, hooks nem servidores MCP.
-- Integração contínua no GitHub Actions: configurada para Windows, Python 3.11 e 3.14; localmente só o 3.14 foi rodado,
-  então o resultado da integração contínua desta versão só existe depois da publicação.
+- Integração contínua: o workflow do GitHub Actions saiu do repositório (issue 63); a suíte inteira local na main, na
+  release, é a única conferência inteira. Localmente só o Python 3.14 foi rodado.
 - Os testes usam transporte e datas simulados e **não** homologam o RoadS real; os dados dele estão na seção própria.
 
 ## Matriz do roteiro (sessões reais de 25/09 a 05/10/2026, num projeto de produto real)

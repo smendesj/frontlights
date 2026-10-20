@@ -376,10 +376,10 @@ cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra 
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
 Por issue, o portão é a suíte por impacto do projeto, e a suíte inteira sem a variável roda na release, uma vez,
-obrigatória com ou sem CI no projeto; o que cada uma roda está em `references/development.md`, "Which tests run
-when" e "The release". A CI do GitHub deste repositório fica como a conferência inteira, pelo
-`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`): ela roda o mesmo
-`discover` e não define a variável.
+a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão; o que cada uma roda
+está em `references/development.md`, "Which tests run when" e "The release". Fora da release, a suíte inteira também
+roda à mão, pelo `python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
+que não define a variável; este repositório não tem workflow de CI.
 
 ## Ponto de retomada e continuação
 
