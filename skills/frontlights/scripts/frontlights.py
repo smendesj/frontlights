@@ -362,11 +362,11 @@ def board_resolution(plan, project):
 STATUSES = {'ready', 'running', 'blocked', 'verified', 'proposed'}
 SLICE_ID_RULE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$')
 SLICES_MAX = 5   # a short issue: at most five acceptance-criteria boxes (issue 31, S1)
-# Issue 32, S1, and issue 52, S2: the branch of an issue enters the LOCAL main only with these three gates green.
-# The values are the words the tools print: `homolog suite-gate` (`current`: the impact suite covers the tip),
-# `review-gate` (`current`) and `browser-gate` (`answered`, or `not_needed` when nothing on the screen changed).
-# The whole suite runs at the release, not here. The remote main (`origin/main`) is never a target.
-LOCAL_MAIN_GATES = {'suite_gate': ('current',), 'review_gate': ('current',), 'browser_gate': ('answered', 'not_needed')}
+# Issue 32, S1, and the decision of 20/10/2026: the branch of an issue enters the LOCAL main with one gate green,
+# the watched run: `browser-gate` (`answered`, or `not_needed` when nothing on the screen changed), the word the
+# tool prints. `suite_gate` and `review_gate` (`homolog suite-gate`, `review-gate`) are optional: accepted in
+# `gates` with any value, never required, never refused. The remote main (`origin/main`) is never a target.
+LOCAL_MAIN_GATES = {'browser_gate': ('answered', 'not_needed')}
 # Work without an issue (the Direct path, or a Short one that publishes no issue) is named by a slug of its own: the
 # `direct` of its `worktrees` entries, listed in the charter's `direct_ids`, takes the place of `issue`.
 DIRECT_RULE = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')
@@ -643,7 +643,7 @@ def authorize(charter, operation):
         require(strings(argv) and argv in charter.get('verification_commands', []), 'unapproved verification argv')
     elif kind == 'merge_into_local_main':
         # Issue 32, S1: the branch of the issue (never a slice branch) enters the local main, the base branch
-        # of the charter, only with the three gates green; a remote-tracking name is never the target.
+        # of the charter, only with the watched run green; a remote-tracking name is never the target.
         require(expected is None and given is None,
                 'only the branch of the issue enters the local main, never a slice branch')
         base = charter.get('base')
@@ -659,10 +659,7 @@ def authorize(charter, operation):
             require('/' not in target, f'the remote main is never a target: {target!r} names a remote-tracking branch')
             raise ValueError(f'target {target!r} is not the base branch of the charter ({base["branch"]!r})')
         gates = operation.get('gates')
-        require(isinstance(gates, dict), 'gates required: suite_gate, review_gate and browser_gate, each green')
-        require('full_suite' not in gates,
-                'gate full_suite is gone: the gate is suite_gate, `homolog suite-gate` answering current '
-                '(the full suite runs at the release)')
+        require(isinstance(gates, dict), 'gates required: browser_gate green (suite_gate and review_gate optional)')
         for gate, green in LOCAL_MAIN_GATES.items():
             require(gates.get(gate) in green,
                     f'gate {gate} is not green: {gates.get(gate)!r} (green is {" or ".join(green)})')
@@ -1284,9 +1281,9 @@ def main():
     p = sub.add_parser('drift')
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
-    p = sub.add_parser('homolog', help='homolog.py: `hook`, `sync`, `bundle` and `release-plan` of the local main, '
+    p = sub.add_parser('homolog', help='homolog.py: `sync`, `bundle` and `release-plan` of the local main, '
                                        'the homologation (issue 32), and `suite` and `suite-gate` (issue 52)')
-    p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
+    p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. sync --root .')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')

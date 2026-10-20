@@ -107,8 +107,8 @@ Contas e processos vêm de `browserTest` no `.frontlights/config.json` do projet
 nunca deste texto: aqui não entram login, senha nem URL.
 
 `Toca o frontend:` é uma declaração, e o `browser-gate` a confere com o diff: uma mudança visível
-com `não` vira pergunta. O teste assistido é um por issue, antes da revisão, não um por CA, branch
-ou worktree; a pergunta sai quando a última CA que muda a tela fecha o ciclo e toda CA já fechada
+com `não` vira pergunta. O teste assistido é um por issue, o portão do merge na main local, antes da
+revisão quando ela é pedida, não um por CA, branch ou worktree; a pergunta sai quando a última CA que muda a tela fecha o ciclo e toda CA já fechada
 está mesclada na branch da issue.
 
 ## Dependências
@@ -134,7 +134,7 @@ Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sess
 
 ## Pontos de evidência
 
-Data e hora, branch/PR, hashes exatos de `HEAD` e do diff, comandos e resultados, revisão
-independente, bloqueios restantes e próximo passo. O GitHub continua a fonte oficial; links
+Data e hora, branch/PR, hashes exatos de `HEAD` e do diff, o teste assistido, comandos e resultados e
+revisão independente quando rodaram, bloqueios restantes e próximo passo. O GitHub continua a fonte oficial; links
 de evidência local não são tickets à parte. Não fechar automaticamente: só a linha `Closes #<n>` da PR da
 release, para uma issue do `closes` do `release-plan`, a fecha, no merge que o usuário aprovou.

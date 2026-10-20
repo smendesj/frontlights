@@ -6,8 +6,6 @@
   "branch": "claude/issue-1",
   "target": "main",
   "gates": {
-    "suite_gate": "current",
-    "review_gate": "current",
     "browser_gate": "answered"
   }
 }

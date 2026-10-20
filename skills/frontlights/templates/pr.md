@@ -41,8 +41,9 @@ sem issue da release (o `releaseDirect` do `release-plan`) leva um bloco igual, 
 Por issue, o antes e o depois concretos. Os prints do teste assistido valem mais, quando a mudança aparece na
 tela; depois vem o teste que falhava e passou a passar (o nome dele ou um pseudocódigo do caso), com o comando
 e o resultado medidos. A evidência só aponta registros que já existem: os prints do teste assistido, o
-checkpoint e os comandos de cada CA, a revisão independente e os três portões do merge na main local. A
-sessão nunca inventa evidência nem descreve um teste que não rodou. Um print é citado pelo nome do arquivo e
+checkpoint e os comandos de cada CA quando houve testes, a revisão independente quando o usuário a pediu, e o
+portão do merge na main local, o teste assistido. A sessão nunca inventa evidência nem descreve um teste ou uma
+revisão que não rodou. Um print é citado pelo nome do arquivo e
 pela pasta `.frontlights/issues/<n>/browser/` da worktree da issue (a da issue líder, numa família), com uma
 frase do que ele mostra, e quem revisa o abre no projeto local: nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
 O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.frontlights/direct/<branch>/`
@@ -52,13 +53,9 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
 
 - **Antes:** <print do teste assistido, ou o teste vermelho: comando e falha>
   **Depois:** <print do teste assistido, ou o mesmo teste verde: comando e resultado>
-- **Portões:** suíte por impacto <`suite-gate`, contagem, saída>; revisão independente <rodadas, `review-gate`
-  atual>; teste assistido <resposta do usuário, ou `not_needed`>.
-
-**Suíte inteira da release:** <comando, contagem, saída> na ponta da main local `<sha curto>`, de onde a branch da
-release foi cortada. Quando ela foi adotada (`homolog suite --release --from`), diga "adotada da ponta `<sha curto da
-origem>`" e cite <comando, contagem, saída e tempo da execução original>. Quando ela rodou só o complemento
-(`covered` no registro), diga quantos módulos pulou e de onde vieram <as issues e as pontas dos registros de impacto>.
+- **Portões:** teste assistido <resposta do usuário, ou `not_needed`>.
+- **Testes e revisão:** só quando rodaram: <comando, contagem, saída>; revisão independente <rodadas, `review-gate`
+  atual>. Apague a linha quando nenhum rodou (por exemplo, numa issue feita "só com teste assistido").
 
 ## Risco do merge
 

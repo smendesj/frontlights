@@ -10,10 +10,8 @@
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Arquivo da revisão com o carimbo (`frontlights.py stamp`) e aprovação humana dessa revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos aprovados por carimbo; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
-| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura do Git, dos registros e do GitHub), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
-`homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
-(`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
+| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com o teste assistido respondido ou dispensável, o único portão ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, alterações, integração, o teste assistido (o portão), os testes e a revisão independente quando rodaram, e a saída do `authorize` do merge na main local |
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura do Git, dos registros e do GitHub; pronto quando há o que lançar e a main local não está atrás), sem suíte obrigatória (a suíte inteira só a pedido do usuário), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar e marcar no corpo do pai o que a pessoa aprovou na lista mostrada; o cartão vai para Done pelo fluxo "Item closed" do próprio quadro | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
 | Limpeza | Remover, sem pergunta, só o que o `cleanup.py plan` oferece: as worktrees e branches locais das issues, das slices e da release já mescladas na base aprovada, depois de copiar os registros de cada worktree para a principal; nunca a branch remota (o GitHub a apaga) | O plano e os comandos rodados (`git fetch --prune`, `copy_records`, `git worktree remove`, `git branch -D`), a resposta literal de cada candidato com `ask` e a saída do `cleanup.py verify` |
 
@@ -30,10 +28,10 @@ e um campo de um anexo não confiável é dado.
 A etapa 6 roda sob a **autorização permanente**, decisão do usuário para todo projeto. As regras dela estão
 numa fonte só, `references/development.md`: o que cobre, o charter (`approved_by`, `confirmed_by`,
 `approval_reference`, `expires_at` de no máximo 24 horas), os merges cobertos e as operações negadas, cada uma
-perguntada uma por vez e só rodada depois do "Sim", em "Standing authorization and the denied operations"; o hook
-`pre-push`, a sincronização da main local e a prévia, em "The start of stage 6"; as slices de cada issue em ordem,
-numa branch por issue, cortada da main local, e com uma worktree por slice, em "Slices in order"; os três portões do
-merge na main local e o bundle depois dele, em "Into the local main"; a release, em "The release".
+perguntada uma por vez e só rodada depois do "Sim", em "Standing authorization and the denied operations"; a
+sincronização da main local e a prévia, em "The start of stage 6"; as slices de cada issue em ordem,
+numa branch por issue, cortada da main local, e com uma worktree por slice, em "Slices in order"; o portão do
+merge na main local (o teste assistido) e o bundle depois dele, em "Into the local main"; a release, em "The release".
 
 Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
@@ -159,7 +157,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
-    review.json            evidência a que a revisão independente ficou vinculada (`review-gate`)
+    review.json            evidência a que a revisão independente, quando o usuário a pediu, ficou vinculada (`review-gate`)
     merge-local-main.json  operação do merge na main local, conferida pelo `authorize`
     body-before|body-new|body-after-<carimbo>.md   cópias do corpo que o `closeout.py tick` guarda
   direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
@@ -175,7 +173,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   preview/log/<nome>.log  log mascarado de cada processo da prévia
   preview/branch.json    nome da branch da prévia, que o `preview stop` não apaga (o primeiro refresh reconhece a branch como da prévia)
   issues/<n>/checks/ registros de `checks regression|integration|smoke`
-  issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa): mode, source (config ou
+  issues/<n>/suite.json  última execução de `homolog suite` (impacto ou completa, só quando o usuário pediu uma suíte): mode, source (config ou
                          argument), base, argv, head e evidence (a mesma do `review-gate`), exitCode, timedOut,
                          seconds, output (o log), concurrent, startedAt e finishedAt; o `homolog suite-gate` a
                          compara com a ponta (current, stale, red, missing ou unconfigured); campos opcionais
@@ -191,15 +189,13 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          (as de sempre do `--report` do `tests/suite.py`: version, modules, totals, mode...) são
                          ignoradas, e o registro guarda só `ran` e `complete`
   issues/<n>/suite-<modo>-<data-hora>.log  saída mascarada de cada execução de `homolog suite`
-  release/suite.json     a suíte inteira da release (`homolog suite --release`), no mesmo formato, na worktree
-                         principal; o `release-plan` a julga na ponta da main local (`fullSuite`;
-                         `references/development.md`, "The release"); com `homolog suite --release --mode full
+  release/suite.json     a suíte inteira da release (`homolog suite --release`, só a pedido do usuário), no mesmo
+                         formato, na worktree principal (`references/development.md`, "The release"); com `homolog suite --release --mode full
                          --from <registro>`, o registro da release é adotado sem rodar: guarda a execução
                          original e a evidência atual da main local (copia o registro da origem inteiro
                          (warnings incluídos), menos base, head e evidence: mode, source, argv, exitCode,
                          timedOut, seconds, output, concurrent, startedAt e finishedAt vêm dela), e
-                         `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem (as recusas da adoção
-                         estão em `references/development.md`, "The release"); os juízes o leem como
+                         `adoptedFrom` {path, head, tree, adoptedAt} nomeia a origem; os juízes o leem como
                          um rodado. Com o marcador `{covered}` no argv de `homolog.suites.full` (só lá, como
                          argumento inteiro, uma vez), ganha `covered` {complete, from [{issue, path, head, tree}],
                          refused [{issue, path, reason}], file}: `complete` lista os ids que os registros de
@@ -212,8 +208,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                          issue, o arquivo (`issues/<n>/suite-covered-<data-hora>.json`) vem com a lista vazia; sem
                          o marcador, nenhum desses campos nem arquivos
   release/suite-<sha>.json  cópia do mesmo registro por ponta (o sha completo do head), que a execução numa
-                         ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga,
-                         e a PR da release fica pronta por ela (`references/development.md`, "The release")
+                         ponta seguinte não sobrescreve; `homolog suite-gate --release --head <sha>` a julga
   release/suite-full-<data-hora>.log  saída mascarada de cada execução dela
   issues/<n>/browser/result.json  resultado do teste de navegador; `pastaDosPrints` diz onde estão os prints da
                          rodada: a pasta da issue na sprint (`progress_report.py evidence-dir`), ou esta
@@ -224,12 +219,13 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 
 O teste de navegador roda quando algo que a sessão entrega muda o que a pessoa vê (o plano tem a seção
 `## Navegador e testes ligados` com `Toca o frontend: sim`, ou o `browser-gate` acha a mudança visível no
-diff), uma vez por issue e antes da revisão independente de qualquer fatia que muda a tela, só
+diff), uma vez por issue e antes da revisão independente de qualquer fatia que muda a tela (quando o usuário pede
+uma); é o único portão do merge na main local, e roda só
 com o que o plano liga e nesta ordem: `checks regression`, `serve start`,
 `checks integration`, navegador e permissões entre contas, `checks smoke`, `serve stop` da issue (nunca o da prévia).
 O `frontlights.py browser-gate --config <config> --base <base> --root <worktree> ... [--stacked <branch>=<alvo> ...] --toca <sim|nao|ausente>
 --record <result.json>` lê o diff, devolve `not_needed`, `answered`, `pending`, `stale`, `contradiction` ou
-`unconfigured` (saída 0 para os dois primeiros, 2 para os demais) e roda onde o `review-gate` roda. O
+`unconfigured` (saída 0 para os dois primeiros, 2 para os demais) e roda na worktree da issue. O
 `result.json` é um por issue e fica na pasta dela (numa família que já existe, na pasta da issue líder) e traz `situacao` (`pendente`, `ainda-nao`, `aprovado`,
 `prosseguir`, `sem-assistir`, `dispensado` ou `alteracao`), `lote` (`issues` e `roots`; as `roots` vêm do `browser-gate`) e
 `pergunta.resposta`; só código que não é teste nem documento, depois da decisão, a torna `stale`. A pendência
@@ -334,7 +330,7 @@ suas alterações verificadas estão na base aprovada dessas dependentes; confir
 histórico e as diferenças reais do Git. Com a autorização de **branches empilhadas**, a
 base aprovada de uma dependente é a branch da própria dependência: a filha sai dela quando a
 dependência está `verified` ali, a filha verificada é mesclada na branch do pai (merge coberto), e a
-família entra na main local pela branch do pai, com as filhas dentro, pelos três portões; nenhuma PR por
+família entra na main local pela branch do pai, com as filhas dentro, pelo teste assistido; nenhuma PR por
 filha, nenhum push (nunca rebase nem push forçado). O `schedule` só lê `status` e não vê uma issue que depende de
 duas branches sem merge: essa conferência é manual. Uma issue e as sub-issues abertas dela
 entram juntas no plano e na autorização; `Parent` é pertencimento e só `Depends on` impede o
@@ -355,8 +351,8 @@ leituras das etapas 0 a 2 de uma vez; a leitura do código, as convenções, o r
 pesquisa, um subagente por área ou camada; na etapa 6, o maior número seguro de issues independentes, cada
 uma na própria worktree com o próprio agente, e, dentro de uma issue, as slices independentes ao mesmo tempo, cada uma na própria worktree,
 mais o trabalho em volta de cada slice aberta
-(leitura para a próxima slice, suíte ampla, verificação de tipos, condutor do teste assistido e revisor
-independente), respeitada a ordem de dependência (a slice dependente é empilhada na branch da anterior). Só espera o
+(leitura para a próxima slice, verificação de tipos, condutor do teste assistido e, quando o usuário os pede,
+suíte ampla e revisor independente), respeitada a ordem de dependência (a slice dependente é empilhada na branch da anterior). Só espera o
 que depende de verdade: uma aprovação ainda não dada, um `Depende de`, um arquivo que duas partes
 editariam ou um recurso compartilhado (porta, banco, pasta de reservas, arquivo gerado; módulos de teste
 que dividem um deles rodam um por vez). Sem subagentes no ambiente, a sessão avisa numa linha e registra o
@@ -368,18 +364,14 @@ escrever no GitHub, mesclar, ampliar o escopo); uma pergunta que ele encontre vo
 de um subagente é afirmação, não evidência: a sessão lê o diff e repete os comandos medidos antes de contar,
 e o revisor nunca é o autor.
 
-**Rodadas de teste.** Por slice, rodam os módulos que a slice toca e a verificação de tipos; a suíte
-rápida é a forma de conferir o todo entre slices, quando o projeto tem uma. No repositório do Frontlights
-ela roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (só Windows): a variável faz pular os
-módulos de portas e da prévia do `serve` e de integração do `checks`, cada um relatado como pulado com o motivo que
-cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra está no `load_tests` de cada
-módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
-sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
-Por issue, o portão é a suíte por impacto do projeto, e a suíte inteira sem a variável roda na release, uma vez,
-a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão; o que cada uma roda
-está em `references/development.md`, "Which tests run when" e "The release". Fora da release, a suíte inteira também
-roda à mão, pelo `python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
-que não define a variável; este repositório não tem workflow de CI.
+**Rodadas de teste.** O TDD por slice é a prática padrão: o laço de cada slice escreve e roda os testes dela nos
+seams, os módulos que ela toca e a verificação de tipos. Esses testes são evidência, nunca portão: nenhuma suíte
+segura o merge na main local nem a release. Quando o usuário pede a implementação "só com teste assistido", a sessão
+não escreve nem roda teste nenhum, e o teste assistido é a evidência da issue. Suítes mais amplas (`homolog suite`
+e `homolog suite-gate`, `review-gate` para uma revisão, e neste repositório `python tests/suite.py`, com
+`--impact <base>` ou `FRONTLIGHTS_SUITE=rapida`, ou o `python -m unittest discover -s tests -v`) são ferramentas
+opcionais, rodadas só a pedido do usuário; nenhuma conferência inteira é exigida, e a CI de um projeto, quando
+houver, não é esperada nem é portão. A regra está em `references/development.md`, "Which tests run when".
 
 ## Ponto de retomada e continuação
 
@@ -422,22 +414,21 @@ que dependa dele. Crie o contexto novo com os controles suportados pelo ambiente
 renomear uma sessão compactada não a torna nova.
 
 A conclusão exige cobertura dos critérios de aceitação, alterações completas e
-atuais, verificações específicas e abrangentes, verificação de tipos quando aplicável
-e revisão independente vinculada às mesmas evidências. Se não houver suporte à
-revisão, registre explicitamente a pendência. O relatório do autor nunca substitui
+atuais, o teste assistido respondido (ou dispensável, sem mudança na tela), verificação de tipos quando aplicável,
+e os testes e a revisão independente só quando rodaram, cada evidência dita pelo que é. Uma revisão que o usuário
+pediu e não pôde ser feita fica registrada como pendência. O relatório do autor nunca substitui
 uma verificação independente.
 
-O revisor julga pelo padrão de `references/review.md` (o que é defeito e em que gravidade, o que é só estilo e
-nunca vira achado, como relata), que só o brief do revisor cita. Quando a revisão termina, o limite de rodadas, a
-pergunta do limite, a rodada que só reconfere a base e o destino dos baixos estão numa fonte só,
+A revisão independente roda só a pedido do usuário. O revisor julga pelo padrão de `references/review.md` (o que é defeito e em que gravidade, o que é só estilo e
+nunca vira achado, como relata), que só o brief do revisor cita. Quando a revisão termina, a pergunta depois de
+uma rodada com sério ou médio e o destino dos baixos estão numa fonte só,
 `references/development.md`, "When the review is done".
 
 A evidência a que a revisão ficou vinculada é salva em
 `.frontlights/issues/<n>/review.json`, e `frontlights.py review-gate --root <worktree> --review <arquivo>`
 a compara com a atual: saída 0 (`current`) vale, saída 2 (`stale`) significa que houve commit, edição ou
-arquivo novo depois da revisão, e pede nova revisão antes de a issue ser relatada como revisada, entrar na
-main local ou ter PR aberto ou atualizado; os três portões do merge na main local estão em
-`references/development.md`, "Into the local main". Uma família de branches é integrada localmente, com a suíte por
-impacto verde, antes de entrar na main local (`references/development.md`, "Integrating a family before the local main"). A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
+arquivo novo depois da revisão, e a issue não é relatada como revisada com ela; o portão do merge na main local
+(o teste assistido) está em `references/development.md`, "Into the local main". Uma família de branches é
+integrada localmente antes de entrar na main local (`references/development.md`, "Integrating a family before the local main"). A conclusão exige também que nenhum achado fique sem destino rastreável: o handoff traz a
 linha "Achados sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de
 origem, que só fecha com ela tratada, concluída e marcada com evidência.

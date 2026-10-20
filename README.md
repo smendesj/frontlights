@@ -16,7 +16,7 @@ teste de navegador assistido (aplicado à mão na versão anterior) e a integra�
 exercitados em sessões reais de um projeto de produto; as [evidências de aceitação](docs/acceptance.md) dizem o que está provado, o que
 falta e os limites. A 1.0 sai depois de uma sessão real que cumpra os itens 12 e 13 do
 [roteiro](evals/runbook.md) com esta versão. **Não** são garantidos: a execução sem supervisão (a
-skill instala só o hook `pre-push` da homologação, com o seu "Sim", e nenhum hook de permissão, então o teto de
+skill não instala hook nenhum, nem de permissão, então o teto de
 contexto e o escopo exato das permissões não são impostos por ela), o `authorize` (apenas consultivo) e
 qualquer sistema fora do Windows.
 
@@ -64,9 +64,8 @@ A skill define a ordem das etapas e lê o arquivo de cada etapa em `skills/front
 só quando chega nela. O `CLAUDE.md` da raiz orienta quem trabalha neste repositório; o Claude não
 o carrega nos projetos que usam a skill.
 
-Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). O único hook que a skill
-instala é o `pre-push` da homologação (`homolog hook`), depois do seu "Sim" a uma pergunta que mostra o script;
-nenhuma configuração ou rotina automática de interceptação de permissões é instalada.
+Preserve os pontos de retomada e as cópias de trabalho isoladas do Git (worktrees). A skill não instala hook
+nenhum, nem configuração ou rotina automática de interceptação de permissões.
 
 #### Início por linguagem natural
 
@@ -139,8 +138,8 @@ projeto (a homologação) e ficam só locais até a release. Para o backup da ho
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
 trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa.
-As suítes da homologação ficam em `homolog.suites`: `impact` (o portão de cada issue) e `full` (a suíte inteira da
-release), cada uma com `argv` (lista de argumentos, sem shell; `{base}` vira a branch base) e `timeoutSeconds`; o
+As suítes opcionais da homologação, que só rodam quando você as pede, ficam em `homolog.suites`: `impact` (só o
+que o diff da issue toca) e `full` (a suíte inteira), cada uma com `argv` (lista de argumentos, sem shell; `{base}` vira a branch base) e `timeoutSeconds`; o
 `inspect` as confere. Sem `full.timeoutSeconds` a suíte inteira tem 3600 s, que a deste repositório já passou sob
 carga (o exemplo usa 5400). Configure o RoadS somente quando o
 endereço real de consulta autenticada e o formato da resposta forem conhecidos:
@@ -547,10 +546,10 @@ relatório diz que foi assistido, não aprovado). Ele nunca escolhe por você ne
 resposta. O registro traz `rodadas` e `aprovacao`. Se um caso da DEPOIS falhar, a pergunta de falha
 vem antes e substitui esta.
 
-**Um teste por issue, antes da revisão.** O teste assistido é um por issue (a issue e as sub-issues
+**Um teste por issue, o único portão.** O teste assistido é um por issue (a issue e as sub-issues
 que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes
 e toda fatia já fechada está mesclada na branch da issue (um merge depois do registro reabre a pergunta,
-como `stale`), antes da revisão independente de qualquer uma delas: as fatias só de API ou só de testes não seguram a
+como `stale`), antes da revisão independente de qualquer uma delas, quando você pede uma: as fatias só de API ou só de testes não seguram a
 pergunta, e um `pending` antes disso é esperado e não pergunta nada. O DEPOIS roda no estado entregue das
 fatias que já fecharam o ciclo: a branch da issue, quando toda fatia de tela já está mesclada nela, ou uma worktree de integração
 local, nunca enviada, que junta a branch da issue e as fatias ainda abertas; a integração da família reaproveita essa worktree e não repete o teste.
@@ -614,23 +613,25 @@ worktree para o `.frontlights` da principal antes de a limpeza removê-la.
 
 #### Homologar na main local, lançar a release, fechar e limpar
 
-Cada issue entra na **main local** do projeto, a homologação, por um merge com três portões verdes (suíte por impacto
-em dia, revisão em dia e teste assistido respondido; o passo a passo está em
-[`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-three-gates)), e um bundle da main local e das branches vai para a pasta de
+Cada issue entra na **main local** do projeto, a homologação, por um merge com um único portão, o teste assistido
+respondido (ou dispensável, sem mudança na tela): a main local é trazida para a branch da issue, o teste assistido
+responde, o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
+[`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula também os já
-usados por PRs mescladas; a release só fica pronta com a suíte inteira verde na ponta da main local), e ele
+usados por PRs mescladas; a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte
+obrigatória), e ele
 pergunta se lança a release com elas agora (o
 passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). O
 trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o mesmo caminho, com o campo `direct` no
 registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último nome de arquivo) da main local,
 envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
-com os prints do teste assistido, os testes do checkpoint e os três portões de cada uma, e o Risco do merge consolidado (porta
+com os prints do teste assistido (o portão de cada uma) e os testes e a revisão só quando rodaram, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
-independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
+independente. Quando a PR fica pronta (o teste assistido de cada issue registrado, sem conflito com a base e
 nenhum achado sem destino), ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge (com commit de merge), e
 com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR leva `Closes #n` só para as issues do
 `closes` do `release-plan`, uma linha por issue copiada da lista: as de topo com todas as caixas marcadas, nenhuma
@@ -689,22 +690,22 @@ entrevista (só a pergunta dos seams), aprovado por link e carimbo →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
-configura) → desenvolvimento orientado a testes (TDD), revisão e evidências →
-merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
+configura) → desenvolvimento orientado a testes (TDD, a prática padrão, sem ser portão) e evidências →
+teste assistido, o único portão → merge na main local e bundle de backup → oferta da release (branch de release e PR única),
 espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktrees e branches mescladas (sem pergunta) e fechamento com marcação no pai (com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
 Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
 empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Antes, no início de cada
-etapa 6, confere o hook `pre-push` da homologação (`homolog hook`, instalado só com o seu "Sim" a uma pergunta que
-mostra o script) e traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
+etapa 6, traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
 Ele trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local, cada CA na própria
-worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é um ciclo de TDD, um ponto
+worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é, por padrão, um ciclo de
+TDD (nenhum teste quando você pede a implementação "só com teste assistido"), um ponto
 de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
 aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
 commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
-produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com os
-três portões verdes; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
+produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com o
+teste assistido respondido; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
 negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
 só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em
@@ -719,7 +720,8 @@ não depende de outra coisa, com tantos subagentes quantas forem as partes: as l
 sessão, a leitura do código e o rastreio por camada na entrevista e no plano, as issues independentes na
 implementação (cada uma na própria worktree) e, dentro de uma issue, as CAs independentes ao mesmo tempo, cada uma na própria worktree,
 mais o trabalho em volta de cada CA aberta
-(leitura para a próxima, suíte ampla, verificação de tipos, teste assistido e revisão independente),
+(leitura para a próxima, verificação de tipos, teste assistido e, quando você os pede, suíte ampla e revisão
+independente),
 respeitada a ordem de dependência. Só espera o que depende de verdade:
 uma aprovação, um `Depende de`, um arquivo ou um recurso compartilhado (porta, banco, pasta de reservas).
 As perguntas, as aprovações, as escritas no GitHub e o handoff continuam na sessão coordenadora, que é uma
@@ -774,9 +776,9 @@ definida, entra na entrevista da mesma sessão. Numa família que já existe (is
 publicadas antes da regra das slices), quando uma filha depende do pai, a
 autorização permanente usa **branches empilhadas** (você pode pedir para esperar o pai chegar à main local): a filha sai
 da branch do pai assim que ele está verificado nela; a filha verificada é mesclada na branch do pai, e a família
-entra na main local pela branch do pai, com as filhas dentro, pelos três portões, sem PR por filha e sem push
+entra na main local pela branch do pai, com as filhas dentro, pelo teste assistido, sem PR por filha e sem push
 (nunca rebase nem push forçado; conflitos nos trechos que uma filha divide com outra são resolvidos no merge
-e mostrados ao revisor). A concorrência usada é o número de filhas independentes
+e mostrados no diff). A concorrência usada é o número de filhas independentes
 cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na main local.
 Na entrevista, depois de confirmar o problema (numa só pergunta quando a issue já
 o define), a skill levanta as convenções do código afetado e propõe ao menos três
@@ -818,16 +820,15 @@ módulo, então vale igual para o `discover` e para o runner. A suíte rápida r
 (portas, servidores reais, Chromium, asserções de tempo) numa fila serial, um por vez; cada módulo tem um
 prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 num erro de infraestrutura
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
-variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
-slice, rode os módulos que a slice toca; por issue, o portão do merge na main local é a suíte por impacto, e a
-suíte inteira sem a variável roda na release, uma vez, a única conferência inteira: a CI de um projeto, quando
-houver, não é esperada nem é portão. O que cada uma roda está em
-[`references/development.md`](skills/frontlights/references/development.md), "Which tests run when": a suíte por
-impacto (`python tests/suite.py --impact <base>`) roda só o que o diff toca, pela escolha do `tests/pre_commit.py`,
-mais o `tests.test_single_source`, e a release roda só o complemento, pelo
-`python tests/suite.py --skip-covered {covered}`. Este repositório não tem workflow de CI: fora da release, a suíte
-inteira também roda à mão, pelo `python -m unittest discover -s tests -v`, que não define a variável; o runner não
-deixa a suíte inteira mais rápida do que o `discover`.
+variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Na etapa 6,
+o TDD de cada slice é a prática padrão e nenhuma suíte é portão: nem no merge na main local, nem na release, e
+nenhuma conferência inteira é exigida (a CI de um projeto, quando houver, não é esperada nem é portão); o teste
+assistido de cada issue é a evidência. A suíte por impacto (`python tests/suite.py --impact <base>`, só o que o diff
+toca, pela escolha do `tests/pre_commit.py`), a suíte inteira e a revisão são ferramentas opcionais, rodadas quando
+você as pede; a regra está em
+[`references/development.md`](skills/frontlights/references/development.md), "Which tests run when". Este
+repositório não tem workflow de CI: a suíte inteira roda à mão, pelo `python -m unittest discover -s tests -v`, que
+não define a variável; o runner não deixa a suíte inteira mais rápida do que o `discover`.
 
 Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
 pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao
@@ -840,18 +841,18 @@ fica fora delas. Os módulos rodam com
 dois aparecem como "fica para a suíte inteira", sem contar como falha. Sai com 0 quando está
 verde, 1 quando o `compileall` ou um módulo falhou (com o comando para rodá-lo sozinho), 2 num erro de uso ou
 do Git e 130 quando é interrompido. Ele só relata, nenhum hook o roda, e confere a árvore de trabalho, não o
-índice; por issue vale a suíte por impacto, e a suíte inteira continua obrigatória na release.
+índice.
 
 Uma sub-issue de uma issue já publicada que não está no plano leva `parent_external` (o número do
 pai) no lugar de `parent`. `python scripts/frontlights.py review-gate --root <worktree> --review <arquivo>`
 compara a evidência salva na hora da revisão independente com a atual e sai com código 2 quando houve
 commit, edição ou arquivo novo depois dela.
 
-A revisão independente segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
+A revisão independente roda só quando você a pede, e segue o padrão de `skills/frontlights/references/review.md`: um achado é um defeito com
 cenário de falha, em três gravidades (sério, médio, baixo), e largura de linha, linhas em branco, quebra de
 parágrafo, pontuação e sinônimos são estilo e nunca viram achado. Só o brief do revisor cita esse arquivo; o
-implementador trabalha pela issue. A revisão termina na primeira rodada sem achado sério nem médio; o limite de
-rodadas e o destino dos baixos estão em
+implementador trabalha pela issue. A revisão termina na primeira rodada sem achado sério nem médio; a pergunta
+depois de uma rodada com sério ou médio e o destino dos baixos estão em
 [`references/development.md`](skills/frontlights/references/development.md#review-checkpoints-and-renewal)
 ("When the review is done").
 

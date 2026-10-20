@@ -22,7 +22,8 @@ references are `references/grilling.md` (stage 3),
 `references/issue.md` (stage 4), `references/issues.md` (stage 5),
 `references/development.md` (stage 6, with `tdd-tests.md`, `tdd-mocking.md` and
 `browser-testing.md`),
-`references/review.md` (the independent reviewer's standard, named only in the reviewer's brief),
+`references/review.md` (the independent reviewer's standard, for a review the user asks for, named only in the
+reviewer's brief),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
 `references/issue-gaps.md` (the issue-gaps question of stage 1, when the user
 says yes), `references/progress-report.md` (the progress question that follows it, when the user says yes, and the registration of the block's home).
@@ -136,8 +137,8 @@ a later answer changed run again; code reading, conventions, the field-by-field 
 research, one subagent per area or layer; in stage 6 the highest safe number of independent
 issues, each in its own worktree with its own agent, and, inside an issue, its independent slices,
 each in its own worktree with its own implementer, plus the legwork around the open slice of each: the
-next slice's reading, the broader suite, the type checks, the watched
-run's driver and the independent reviewer (`references/development.md`, "Dispatch and
+next slice's reading, the type checks, the watched run's driver and, when the user asked for them, a
+broader suite and the independent reviewer (`references/development.md`, "Dispatch and
 ownership"). Waiting is for a real dependency only: an approval not yet given, a `Depende de`,
 a file two pieces would both edit, or a shared resource (a port, a database, a reservation
 folder, a generated file; test modules that share one run one at a time). A piece of a couple
@@ -156,8 +157,9 @@ Frontlights' rules are rules of the skill, not barriers, and the host's own perm
 still apply.
 
 **Evidence by its kind.** Label every piece of evidence by what it is (a fixture test, a live
-integration, the user's confirmation, an independent review) and reconcile GitHub at each
-material boundary, so a report claims only what was measured.
+integration, the watched run and the user's answer to it, an independent review) and reconcile GitHub at each
+material boundary, so a report claims only what was measured: a test or a review that did not run is never
+reported as if it had.
 
 ## 0. Update check (no questions)
 
@@ -411,25 +413,24 @@ user gave permanently and for every project (development.md, "Standing authoriza
 denied operations"): the session announces the run in one short block, records the charter and
 goes, in this order:
 
-1. **Hook and sync** (development.md, "The start of stage 6"): `homolog hook`, then `homolog sync`
-   brings `origin/<base>` into the local main.
+1. **Sync** (development.md, "The start of stage 6"): `homolog sync` brings `origin/<base>` into the
+   local main.
 2. **The preview** (same section), in a project whose config has a `preview` block: up before the
    first slice, refreshed after each slice is merged into the branch of its issue.
 3. **Slices in order** (development.md, "Slices in order"): one issue branch, cut from the local
-   main and kept local; one worktree per slice, merged into the branch of the issue when its TDD
-   loop closes; independent slices at once, and the legwork around each open slice fanned out.
+   main and kept local; one worktree per slice, merged into the branch of the issue when its loop
+   closes (TDD by default, never a gate; no tests under "só com teste assistido", development.md, "Which
+   tests run when"); independent slices at once, and the legwork around each open slice fanned out.
 4. **The watched run** (`references/browser-testing.md`): one per issue, when the last slice that
-   changes the screen closes its loop, before any independent review of those slices; the run
-   creates and later removes the test users and data its flow needs. While it is due and
-   unanswered, it is the `teste_assistido` pending of the checkpoint.
-5. **Review and findings** (development.md, "Review, checkpoints and renewal"): the independent
-   review of the whole diff, and every open finding with its destination (the gate of the
-   Follow-ups section of `references/issues.md`). The review is done at the first round with 0 sérios
-   and 0 médios, three rounds at most (a round that only rechecks a base brought in after the review was
-   done stays outside), and the reviewer judges by `references/review.md` (development.md, "When the
-   review is done").
-6. **Into the local main** (development.md, "Into the local main"): the merge of the branch of the
-   issue once its three gates are green, then the bundle.
+   changes the screen closes its loop; the only gate of stage 6. The run creates and later removes
+   the test users and data its flow needs. While it is due and unanswered, it is the
+   `teste_assistido` pending of the checkpoint.
+5. **Findings** (development.md, "Review, checkpoints and renewal"): every open finding that came up
+   (the watched run, a review the user asked for, tests that ran) with its destination (the gate of the
+   Follow-ups section of `references/issues.md`). The independent review runs only when the user asks
+   for it, judged by `references/review.md` (development.md, "When the review is done").
+6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
+   branch of the issue, the watched run answered or not needed, `authorize`, the merge, then the bundle.
 7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 
@@ -441,8 +442,8 @@ the questions of the work itself (the watched run, failures, the findings batch,
 decision) are still asked.
 
 Finish with the report of development.md ("Review, checkpoints and renewal"): per-issue state,
-branch and PR, changes, measured commands and results, the independent review against the exact diff, the
-findings left unfixed with the destination of each, risks and next action.
+branch and PR, changes, the watched run, the measured commands and results and the independent review
+against the exact diff when they ran, the findings left unfixed with the destination of each, risks and next action.
 
 ## 7. Closeout of finished issues (its own approval)
 

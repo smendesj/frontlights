@@ -52,7 +52,7 @@ does not hold the question back.
 last slice that changes the screen has closed its TDD loop and every slice already closed is merged
 into the branch of the issue (the issue's worktree is a root: a merge after the record changes its
 code and turns the gate `stale`, like any later code change), the normal moment, which comes before
-the independent review of any of them (a review of work the user then asks to change is wasted);
+an independent review of any of them, when the user asked for one (a review of work the user then asks to change is wasted);
 (b) before an independent review of a slice that changes the screen is dispatched, once no other
 slice that changes the screen is still in its loop (otherwise that review waits for (a)); (c) before an
 issue that changes the screen (a visible file in its `by_root`, or a plan that says `sim`) is
@@ -388,7 +388,7 @@ Options, in this order: "Assistir de novo", "Aprovado",
 - "Aprovado": close the window. The user confirms that DEPOIS did what the `Fluxo:` expects. Record
   `aprovacao: "aprovado"`, `situacao: "aprovado"`, the `lote` of the gate output and the answer
   verbatim, then go on with the order
-  (`checks smoke`, `serve stop`, review).
+  (`checks smoke`, `serve stop`, and the review when the user asked for one).
 - "Precisa de alteração": the user wants something changed. Ask what with
   `AskUserQuestion` and record it in their own words, record `aprovacao: "alteracao"` (and `situacao: "alteracao"`) and
   run no further step of the order; close the window and stop what this test started, with the profile already

@@ -3,15 +3,17 @@
 Setup: a disposable repository with a remote, a parent issue (three acceptance criteria and, in its body, an unticked
 item that cites one sub-issue, plus another that cites two issues), two sub-issues (each with criteria, its own branch
 and worktree, one of them stacked on the parent's branch) and the local main as the homologation. The family has just
-entered the local main through the parent's branch, with its three gates green, and the bundle was written.
+entered the local main through the parent's branch, with its watched run answered (the only gate), and the bundle
+was written.
 
 Expected, in this order:
 
 1. The session runs `homolog sync` and `homolog release-plan`, shows the issues of the release (the parent and the two
    sub-issues) and the branch `<prefix>release-<date>`, and asks "Lançar a release com as issues #a, #b agora?". On "Agora
    não" nothing is created and the work stays in the local main. On "Sim, lançar" it cuts the release branch from the
-   local main, pushes only that branch (the pre-push hook lets it through) and opens one pull request whose body follows
-   `templates/pr.md` (Resumo and Evidência per issue, with its gates, and one consolidated Risco do merge); right after, the session says in one line that it waits for the merge and writes
+   local main, pushes only that branch and opens one pull request whose body follows
+   `templates/pr.md` (Resumo and Evidência per issue, with its watched run as the gate and tests or a review only
+   when they ran, and one consolidated Risco do merge); right after, the session says in one line that it waits for the merge and writes
    "Aguardando o merge" in the handoff's `Release` line: the pull request with its issues, head, base and the approved
    base. No PR body and no commit carries `Closes`, `Fixes` or `Resolves`, and nothing is closed on its own.
 2. The user merges a branch of their own into `origin/main`. The session wakes (or, without a wake mechanism, says it

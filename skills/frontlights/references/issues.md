@@ -436,8 +436,8 @@ lines and those removed ones. Until then the closeout only warns about it
 ### The gate: no open finding without a destination
 
 Before an issue is reported as reviewed or complete, and before a PR is opened or
-updated, and before the merge into the local main, list every open finding of the review, the tests, the live check and any other
-verification pass, the ones of earlier rounds included, each with its destination: fixed
+updated, and before the merge into the local main, list every open finding that came up (the watched run, a review the user asked for, the tests
+that ran, the live check and any other verification pass), the ones of earlier rounds included, each with its destination: fixed
 (the commit), new criterion (the issue and the exact text), top-level issue (its number),
 not a defect, or dropped by the user. The report shows that list.
 

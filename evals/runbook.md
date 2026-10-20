@@ -31,8 +31,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 5. Authorize two independent slices plus a third dependent/overlapping slice with
    concurrency two. Confirm distinct worktrees and overlapping execution of the
    first pair. Confirm the third waits for verified integration and no slot overrun.
-6. Inspect real red/green/broader/type-check output and exact-diff independent
-   review. Change a file after review and verify completion waits for re-review.
+6. Inspect real red/green/type-check output. Ask for an independent review and confirm it is bound to
+   the exact diff; change a file after it and confirm the review is stale and the issue is not reported as
+   reviewed with it, while nothing else waits for it. Then ask for an issue "só com teste assistido" and
+   confirm no test is written or run and the watched run is the evidence.
 7. Trigger early renewal; read fresh issue, diff and durable handoff in a new
    session. Exercise changed issue scope. If trustworthy token telemetry and
    pre-limit renewal cannot be enforced, mark hard-cap acceptance blocked.
@@ -188,9 +190,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     S1) in a project whose suite has two modules sharing a port reservation folder, confirm the session launches
     the read-only helpers of stages 0 to 2 in one message, one reading subagent per layer before the solution
     round, and in stage 6 one implementer in S1's worktree with, in the same message, read-only workers
-    preparing S2 and S3; when S1 closes its loop its branch is merged into the issue branch and the broader modules
-    run at once except the two that share the folder, which run one after the other; S2 and S3 then run at once,
-    each in its own worktree; the reviewer is a different agent from the implementer and the session reruns
+    preparing S2 and S3; when S1 closes its loop its branch is merged into the issue branch and the type checks run
+    at once (a broader suite only when the user asked for one, the two modules that share the folder one after the
+    other); S2 and S3 then run at once, each in its own worktree; a reviewer, only when the user asked for a review,
+    is a different agent from the implementer and the session reruns
     the commands the workers report; no worker asks the user, writes GitHub or edits outside its paths; and a
     host without subagents is reported as a capacity limit in one line.
 26. Short issues (`evals/vertical-slices.md`, issue 31). Approve a body whose honest cut needs six slices: confirm
@@ -212,13 +215,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     with more than five open children cut into top-level issues linked by `--blocked-by`.
 27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
     from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session
-    brings the local main into the branch, runs the impact suite at that tip (`suite-gate` `current`), has the independent review bound to it
-    (`review-gate` `current`) and `browser-gate` `answered` or `not_needed`, writes the `merge_into_local_main`
-    operation and runs `authorize` before `git merge --no-ff` on the local main; an operation with a red gate, a
+    brings the local main into the branch, gets `browser-gate` `answered` or `not_needed` (no suite and no review
+    asked for), writes the `merge_into_local_main` operation with `gates` `{"browser_gate": ...}` only and runs
+    `authorize` before `git merge --no-ff` on the local main; an operation with the watched run not answered, a
     slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's
-    "Merge na main local" line carries the three gates, the `authorize` output and the merge commit. Then, at the
-    start of a stage 6 in a clone with a remote, confirm `homolog hook` exits 2 and the question shows the script,
-    "Sim" installs it and `git push origin main` is refused while a work branch still pushes; and that `homolog sync`
+    "Merge na main local" line carries the watched run, the `authorize` output and the merge commit. Then, at the
+    start of a stage 6 in a clone with a remote, confirm that no hook is installed or asked about and that `homolog sync`
     advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
     the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that
     the merge into the local main is followed by one `.bundle` file there which `git bundle verify` accepts, and that
@@ -246,7 +248,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 29. Pull request template (issue 35). On a disposable release with two homologated issues, one of them with a
     watched run, confirm the body of the release's pull request follows `templates/pr.md`: Resumo and Evidência once
     per issue (the smallest visual; before and after from the prints of the watched run and the red-to-green test of
-    the checkpoint, with the three gates; prints cited by file name and relative folder, never attached), one Risco do
+    the checkpoint when it ran, with the watched run as the gate; prints cited by file name and relative folder, never attached), one Risco do
     merge consolidated for the release (a one-way door when a migration or deleted data is in it, a two-way door
     otherwise, and the blast radius), no `Closes`, `Fixes` or `Resolves` in the body or the commits,
     and no finding left only in the body.
@@ -258,7 +260,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the user's request, takes it down; and that the watched run copies the development database with `copyDatabase`,
     runs ANTES and DEPOIS in sequence in the isolated instance, never on the preview's ports nor in its tab, and drops
     the copy with `dropDatabase` at the end.
-31. Review stop criterion. On a disposable issue whose first review reports one médio and two baixos of line
+31. Review stop criterion. On a disposable issue whose review the user asked for, and whose first review reports one médio and two baixos of line
     width, confirm the baixos of style never reach the report, the médio is fixed, the second round reviews only
     the delta and the earlier finding, the review ends there with 0 sérios and 0 médios, the remaining baixos go to
     the findings batch as new acceptance criteria of the issue with "Corrigir os baixos agora" offered, and the

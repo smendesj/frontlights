@@ -6,20 +6,12 @@ aqui ficam os limites de aplicação dessas regras.
 
 ## Hooks e escritas em `.git/`
 
-O Frontlights instala um único hook, e só depois do "Sim" a uma pergunta que mostra o script: o `pre-push`
-de `homolog hook` (`scripts/homolog.py`), que recusa enviar a main local do projeto, a homologação, e qualquer
-push cujo destino seja `refs/heads/<base>`; ele fica no caminho que o Git resolve para `hooks/pre-push`
-(`core.hooksPath` inclusive, mas só dentro do diretório Git do repositório: com um `core.hooksPath` que aponte para
-fora, nada é escrito), leva uma linha de marca que o identifica, é conferido byte a byte com o script esperado
-(outra base ou corpo editado viram pergunta e reinstalação), nunca sobrescreve um hook de outra
-origem (o `--install` recusa, e a sessão mostra o script para o usuário juntar à mão) e é conferido no início
-de cada etapa 6. É uma guarda, não uma barreira: `--no-verify` e a interface do GitHub passam por ele, e a
-regra de que a main local nunca é enviada continua regra da skill. Esse `pre-push` é o único hook que o
-Frontlights instala; o de lembrete, `templates/frontlights-prompt-hook.py`, é um
+O Frontlights não instala hook nenhum. A regra de que a main local do projeto, a homologação, nunca é enviada
+é regra da skill, não barreira. O hook de lembrete, `templates/frontlights-prompt-hook.py`, é um
 modelo que o usuário copia para o `~/.claude/hooks/` e registra no próprio `settings.json`; ele só
 injeta um texto no turno, lê o prompt e o conteúdo do transcrito (só para procurar duas marcas de que o
-Frontlights já foi aberto) e sai sempre com 0, sem bloquear. As escritas da skill dentro de `.git/` são três e
-só essas: esse hook, com o "Sim"; a linha `/.frontlights/` em `.git/info/exclude` quando a pasta `.workflows/`
+Frontlights já foi aberto) e sai sempre com 0, sem bloquear. As escritas da skill dentro de `.git/` são duas e
+só essas: a linha `/.frontlights/` em `.git/info/exclude` quando a pasta `.workflows/`
 é renomeada (`SKILL.md`, etapa 2); e as reservas de porta do `serve` em `frontlights-serve/ports/` no
 diretório comum do Git (`docs/protocol.md`).
 
@@ -67,8 +59,7 @@ registrada: repositório, issue, branch e worktree exatos, validade, monitoramen
 tipo de operação, caminhos sob responsabilidade da tarefa e argumentos de verificação.
 Ele rejeita branches protegidas, caminhos fora do escopo, arquivos de controle,
 qualquer merge que não seja o da branch da issue (ou do trabalho sem issue, pelo seu `direct`) na main local com
-os três portões verdes
-(`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
+o teste assistido respondido ou dispensável (`merge_into_local_main`, abaixo), implantação, publicação de versões, operações destrutivas e tipos não
 suportados. Sempre retorna `permission_granted: false`. Mesmo a PR da release e as
 atualizações de issues autorizadas continuam sujeitas à aprovação nativa do ambiente, pois o Frontlights
 não controla com segurança todas as ferramentas externas. Execute essas ações
@@ -76,16 +67,15 @@ somente pelas ferramentas nativas aprovadas da sessão coordenadora, com as
 permissões humanas e nativas vigentes.
 
 **Main local e main remota.** A main local do projeto (a branch base do charter, na worktree principal) é a
-homologação: acumula as issues que passaram nos três portões, e a issue fecha só com a release que a leva
+homologação: acumula as issues cujo teste assistido foi respondido (ou não era preciso), e a issue fecha só com a release que a leva
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
 remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
-nunca de uma slice) e com os três `gates` de "Into the local main" (`references/development.md`); um valor fora
-deles, ou a chave antiga `full_suite`, nomeia o portão na recusa.
+nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
+`browser_gate`, o único portão; um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão, e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
-o Git, não prova que a suíte rodou nem que a revisão é atual (quem prova são os comandos relatados, o
-`review-gate` e o `browser-gate`), e um modelo que não o chame não é impedido por ele.
+o Git, não prova que o teste assistido foi respondido (quem prova é o `browser-gate`), e um modelo que não o chame não é impedido por ele.
 
 ## `homolog sync` e `homolog bundle`
 
@@ -202,7 +192,8 @@ O utilitário do RoadS (`scripts/roads.py`) segue as travas abaixo.
 
 ## Revisão e sobras
 
-O `review-gate` confere o **frescor** da revisão (HEAD, branch, diff e arquivos iguais aos da evidência salva), não
+A revisão independente roda só quando o usuário a pede e não é portão. Quando roda, o `review-gate` confere o
+**frescor** da revisão (HEAD, branch, diff e arquivos iguais aos da evidência salva), não
 quem a fez: um arquivo de revisão tirado depois de uma correção faz uma revisão velha parecer atual, e quem salva
 o arquivo precisa salvá-lo na hora em que o revisor se vinculou. Um HEAD destacado tem `branch` vazio e é aceito.
 
@@ -460,7 +451,8 @@ homologação (`homolog suite`) também executam comandos lidos do `.frontlights
   resposta do usuário à pergunta de fechamento ("Aprovado", "Pode prosseguir", "Assistir de novo"
   ou "Precisa de alteração"): o Frontlights nunca grava `aprovacao: "aprovado"` por conta própria,
   nem trata o silêncio ou o fim da janela como resposta, e "Pode prosseguir" não vira aprovação no
-  relatório. O teste é um por issue (nunca um por slice, branch ou worktree), antes da revisão, e o `browser-gate` confere no diff (não no texto do
+  relatório. O teste é um por issue (nunca um por slice, branch ou worktree), antes da revisão quando o usuário pede uma, é o
+único portão do merge na main local, e o `browser-gate` confere no diff (não no texto do
   plano) se algo visível mudou e se a decisão registrada ainda vale; ele é uma regra da skill conferida por
   um script, não uma barreira: um modelo que não o chame não é impedido por ele. A dispensa do teste (`dispensado`) é
   decisão explícita do usuário, gravada com a resposta literal; sem ela, nenhuma revisão de fatia que muda a

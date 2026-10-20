@@ -1,6 +1,7 @@
 # The independent reviewer's standard
 
-This file is the standard of the independent reviewer of stage 6. The brief that dispatches the reviewer names it;
+This file is the standard of the independent reviewer of stage 6, for a review that runs only when the user asks
+for one (`development.md`, "Review, checkpoints and renewal"). The brief that dispatches the reviewer names it;
 the implementer works from the issue, its seams and its tests, so the code is written to the issue and judged by
 a standard its author did not aim at. Write the report in the user's language.
 

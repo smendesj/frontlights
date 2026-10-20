@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
 """Homologation helper (issue 32): the local base branch (`main`) is the homologation bench of the project. It is
-never pushed; the release leaves by a branch of its own and one pull request. This module guards that rule in Git
-and keeps the bench current with the remote. Every Git call is a list argv run without a shell, with a timeout and
-GIT_TERMINAL_PROMPT=0. `run` knows six operations, `hook`, `sync`, `bundle`, `release-plan`, `suite` and
-`suite-gate`; an unknown one is a refusal.
+never pushed; the release leaves by a branch of its own and one pull request. This module keeps the bench
+current with the remote and plans the release. Every Git call is a list argv run without a shell, with a timeout and
+GIT_TERMINAL_PROMPT=0. `run` knows five operations, `sync`, `bundle`, `release-plan`, `suite` and `suite-gate`;
+an unknown one is a refusal.
 
 Operations (each prints one JSON object on stdout):
-  hook   --check (the default): is the `pre-push` hook that refuses pushing the local base installed, is it ours
-         (its first lines carry MARKER) and is it current (byte for byte the script for `--base`, line endings
-         aside)? A hook that is ours but not current (another base baked in, or edited) is a question (exit 2):
-         `--install` rewrites it. --install writes the hook when missing or already ours (idempotent), creates
-         the hooks folder when needed and never overwrites a hook that is not ours: the user merges the two by
-         hand. The hook must live inside the common Git dir of the repository: when `core.hooksPath` points
-         elsewhere, `--check` reports `outsideRepository` (exit 2) and `--install` refuses (exit 1); nothing is
-         written outside the repository. The hook is POSIX sh with the base baked in; it refuses a push when any
-         ref line has the local or the remote ref equal to `refs/heads/<base>` (`git push origin main` and
-         `git push origin x:main` alike) and lets every other branch through.
   sync   bring `<remote>/<base>` into the local base: the worktree must have the base checked out, be clean
          (untracked files are fine) and have no merge in progress; then `git fetch <remote>` and `git merge
          --no-edit <remote>/<base>`, a fast-forward when possible. A conflict is aborted at once, the worktree is
@@ -45,10 +35,11 @@ Operations (each prints one JSON object on stdout):
          `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped; `fullSuite` not `current`). `fullSuite` judges `.frontlights/release/suite.json`
-         at the tip of the local base the way `suite-gate --release` does: `current`, `missing`, `stale`, `red`, or
-         `elsewhere` when the main worktree is not on that tip; with `recordPath`, `recordedHead` and what changed.
-         It is checked last, after behind, nothing ahead and no issue branch. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
+         no issue branch mapped). `fullSuite` is information only (the whole suite is not a requirement of the
+         release; the only gate of stage 6 is the watched run): it judges `.frontlights/release/suite.json` at the
+         tip of the local base the way `suite-gate --release` does, `current`, `missing`, `stale`, `red`, or
+         `elsewhere` when the main worktree is not on that tip, with `recordPath`, `recordedHead` and what changed,
+         and never changes `ready` or the exit code. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
          the same way, in `directs` and `releaseDirect`, and makes the release ready too. `closes` (issue 63) lists
          the top-level issues of `release` the pull request closes with `Closes #n`: open, every box of the acceptance
          criteria ticked, no open sub-issue, no open leftover outside the criteria; each issue of `release` in
@@ -116,7 +107,7 @@ Operations (each prints one JSON object on stdout):
          `--release`, or not a full sha, is refused (exit 1).
 
 Exit codes: 0 done; 1 refused or failed (bad usage, a precondition not met, Git failing); 2 a question for the
-session (hook missing or foreign on --check; a conflict on sync; a release that is not ready). A refusal is JSON,
+session (a conflict on sync; a release that is not ready). A refusal is JSON,
 never a traceback.
 """
 
@@ -152,24 +143,9 @@ FULL_SUITE_TIMEOUT = 3600                       # the whole suite without a conf
 EMPTY_DIFF = hashlib.sha256(b'').hexdigest()    # `diff_sha256` of the evidence of a tree with no tracked change
 CONTROL = re.compile(r'[\x00-\x1f\x7f]')
 REPARSE_POINT = 0x400                           # FILE_ATTRIBUTE_REPARSE_POINT
-MARKER_LINES = 3         # the marker sits among the first lines of the hook
-MARKER = '# frontlights pre-push hook v1 (homolog hook)'
-NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]*')   # a plain branch or remote name: safe inside the hook's quotes
+NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]*')   # a plain branch or remote name
 OID = re.compile(r'[0-9a-f]{40,64}')
 DIRECT = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')   # the slug of work without an issue (frontlights.DIRECT_RULE)
-HOOK = '''#!/bin/sh
-{marker}
-# The local {base} is the homologation bench of the project: it is never pushed. The release leaves by a branch
-# of its own and one pull request. Installed by `frontlights.py homolog hook --install`; `--check` verifies it.
-base="refs/heads/{base}"
-while read -r local_ref local_sha remote_ref remote_sha; do
-  if [ "$local_ref" = "$base" ] || [ "$remote_ref" = "$base" ]; then
-    echo "frontlights: a {base} local é a homologação e nunca é enviada; a release sobe por uma branch própria e uma PR única." >&2
-    exit 1
-  fi
-done
-exit 0
-'''
 
 
 class Refusal(Exception):
@@ -235,93 +211,6 @@ def status_lines(root):
     code, out, _ = git(root, 'status', '--porcelain', '--untracked-files=no')
     require(code == 0, 'o git não leu o estado da worktree')
     return [line for line in out.splitlines() if line.strip()]
-
-
-# ---------------------------------------------------------------- hook
-
-def hook_script(base):
-    return HOOK.format(marker=MARKER, base=base)
-
-
-def git_path(root, *args, what):
-    """A path Git reports (`rev-parse --git-path ...`, `--git-common-dir`), absolute against `root` and resolved."""
-    code, out, _ = git(root, 'rev-parse', *args)
-    require(code == 0 and out.strip(), f'o git não disse onde fica {what}')
-    path = Path(out.strip())
-    return (path if path.is_absolute() else Path(root) / path).resolve()
-
-
-def hook_path(root):
-    """Where Git looks for the pre-push hook: honours core.hooksPath and linked worktrees."""
-    return git_path(root, '--git-path', 'hooks/pre-push', what='o hook pre-push')
-
-
-def common_dir(root):
-    """The common Git dir of the repository (`.git` of the main worktree), shared by every linked worktree."""
-    return git_path(root, '--git-common-dir', what='o diretório Git do repositório')
-
-
-def inside(path, folder):
-    """True when `path` is `folder` or below it; both already resolved, compared case-insensitively on Windows."""
-    path, folder = os.path.normcase(str(path)), os.path.normcase(str(folder))
-    return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
-
-
-def hook_state(path, expected):
-    """(installed, ours, foreign, current): a file whose first lines carry MARKER is ours; any other file is
-    foreign; ours and equal to `expected` (CRLF read as LF) is current. A hook installed for another base, or
-    edited after the install, is ours but not current."""
-    if not path.is_file():
-        return False, False, False, False
-    with open(path, encoding='utf-8', errors='replace', newline='') as handle:
-        content = handle.read().replace('\r\n', '\n')
-    ours = any(line.strip() == MARKER for line in content.split('\n', MARKER_LINES)[:MARKER_LINES])
-    return True, ours, not ours, ours and content == expected
-
-
-def op_hook(root, base, install):
-    worktree(root)
-    base = plain_name(base, 'a branch base')
-    path = hook_path(root)
-    outside = not inside(path, common_dir(root))
-    script = hook_script(base)
-    installed, ours, foreign, current = hook_state(path, script)
-    result = {'installed': installed, 'ours': ours, 'foreign': foreign, 'current': current, 'path': str(path),
-              'base': base, 'script': script, 'outsideRepository': outside}
-    if outside and current and not install:
-        # The user installed our hook by hand in a hooks folder outside the repository: it is there and current,
-        # which is all the check asks; the skill still never writes there.
-        result.update(exitCode=0, message=f'O hook pre-push do Frontlights está instalado em {path} (pasta de '
-                                          'core.hooksPath fora do diretório Git; a skill não escreve ali).')
-    elif outside:
-        # core.hooksPath (often a global one) sends the hooks to a folder outside the repository: the skill never
-        # writes there, in either mode.
-        result['exitCode'] = 1 if install else 2
-        result['message'] = (f'A pasta de hooks ({path.parent}) fica fora do diretório Git do repositório por '
-                             'core.hooksPath; a skill não escreve nada ali' + (', e nada foi escrito' if install else '')
-                             + '. Ajuste core.hooksPath ou instale o hook à mão.')
-    elif foreign:
-        result['exitCode'] = 1 if install else 2
-        result['message'] = (f'Há um hook pre-push em {path} que não é do Frontlights; ele nunca é sobrescrito'
-                             + (', e nada foi escrito' if install else '') + ': junte os dois à mão.')
-    elif install:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w', encoding='utf-8', newline='\n') as handle:
-            handle.write(script)
-        os.chmod(path, 0o755)
-        result.update(installed=True, ours=True, current=True, exitCode=0,
-                      message=f'Hook pre-push do Frontlights instalado em {path}: a {base} local nunca é enviada.')
-    elif current:
-        result.update(exitCode=0, message=f'O hook pre-push do Frontlights está instalado em {path}.')
-    elif installed:
-        result.update(exitCode=2, message=f'O hook pre-push em {path} é do Frontlights, mas difere do script esperado '
-                                          f'para a {base} (outra branch base, ou editado); `homolog hook --install` '
-                                          'o reescreve.')
-    else:
-        result.update(exitCode=2, message=f'Não há hook pre-push em {path}; `homolog hook --install` o instala.')
-    if install:
-        result['written'] = not (outside or foreign)
-    return result
 
 
 # ---------------------------------------------------------------- sync
@@ -805,7 +694,16 @@ def release_closes(root, config_path, base, release, issues, gh=None):
                           'As outras seguem a pergunta de fechamento da etapa 7.')
 
 
+def suite_sentence(suite):
+    """What the release message says of the whole suite: information only, never a requirement of the release."""
+    if suite.get('status') == 'current':
+        return skipped_sentence(suite.get('covered'))
+    return f' Suíte inteira (opcional, não exigida pela release): {suite.get("status")}.'
+
+
 def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=None):
+    """What the release would carry. `ready` and the exit code depend only on the local base being ahead, not
+    behind, with an issue or a direct work in it; `fullSuite` is reported as information and never blocks."""
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
@@ -839,13 +737,6 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
         result.update(exitCode=2, message=f'A {base} local tem {ahead} commit(s) além de {remote}/{base}, mas nenhuma '
                                           'branch de issue das autorizações está neles; confira os registros em '
                                           '.frontlights/ ou aponte --records para a pasta certa.')
-    elif result['fullSuite']['status'] != 'current':
-        result.update(exitCode=2, message=f'A suíte inteira não cobre a ponta da {base} local ({local[:7]}): '
-                                          f'{result["fullSuite"]["message"]}; adote um registro inteiro verde da '
-                                          f'mesma árvore (`homolog suite --release --mode full --from <registro> '
-                                          f'--base {base} --root <worktree principal> --config <config>`) ou '
-                                          f'rode `homolog suite --release --mode full --base {base} --root <worktree '
-                                          f'principal> --config <config>` na {base} local, e o release-plan de novo.')
     else:
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:
@@ -853,7 +744,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
         result.update(ready=True, exitCode=0,
                       message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
                               f'ainda fora de {remote}/{base}; a branch da release é {name}.'
-                              f'{skipped_sentence(result["fullSuite"].get("covered"))}')
+                              f'{suite_sentence(result["fullSuite"])}')
     return result
 
 
@@ -1480,7 +1371,7 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
 
 # ---------------------------------------------------------------- command line
 
-def run(operation, root, base='main', remote='origin', install=False, config=None, prefix=None, records=None,
+def run(operation, root, base='main', remote='origin', config=None, prefix=None, records=None,
         issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None,
         head=None, source=None):
     try:
@@ -1489,8 +1380,6 @@ def run(operation, root, base='main', remote='origin', install=False, config=Non
                               remote)
         elif operation == 'suite-gate':
             result = op_suite_gate(root, config, issue, required, release, base, head)
-        elif operation == 'hook':
-            result = op_hook(root, base, install)
         elif operation == 'sync':
             result = op_sync(root, base, remote)
         elif operation == 'bundle':
@@ -1519,7 +1408,7 @@ def build_parser():
     parser = JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('hook', 'sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
+    for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', required=True, help="the project's main worktree (suite: the issue's worktree)")
         command.add_argument('--base', default='main',
@@ -1545,10 +1434,6 @@ def build_parser():
             command.add_argument('--require', choices=('full',), help='only a full suite record counts')
             command.add_argument('--head', help='with --release: the full sha of a tip; judges release/suite-<sha>.json '
                                                 'wherever the main worktree stands')
-        elif name == 'hook':
-            mode = command.add_mutually_exclusive_group()
-            mode.add_argument('--check', action='store_true', help='report the hook without writing (the default)')
-            mode.add_argument('--install', action='store_true', help='write the hook when missing or already ours')
         elif name == 'sync':
             command.add_argument('--remote', default='origin', help='the remote the base is fetched from (default origin)')
         elif name == 'bundle':
@@ -1571,7 +1456,7 @@ def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
         result = run(args.operation, args.root, getattr(args, 'base', 'main'), getattr(args, 'remote', 'origin'),
-                     getattr(args, 'install', False), getattr(args, 'config', None), getattr(args, 'prefix', None),
+                     getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
                      getattr(args, 'release', False), getattr(args, 'timeout_seconds', None),

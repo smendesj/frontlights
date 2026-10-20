@@ -9,7 +9,7 @@ versão 0.6.1; os registros antigos desta página, que citavam os nomes da époc
 
 Homologação para **uso supervisionado no Windows**: uma pessoa acompanha a sessão e responde às perguntas.
 Não é homologada, e não se promete: a execução sem supervisão com teto de contexto garantido e escopo exato
-das permissões (o Frontlights instala só o hook `pre-push` da homologação, com o "Sim", nenhum hook de permissão, e não isola ferramentas; veja `docs/security.md`), qualquer
+das permissões (o Frontlights não instala hook nenhum, nem de permissão, e não isola ferramentas; veja `docs/security.md`), qualquer
 sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo).
 
 ## Verificação automatizada
@@ -22,15 +22,16 @@ sistema fora do Windows e o uso do `authorize` como barreira (ele é consultivo)
   minutos. A suíte rápida roda por `python tests/suite.py` com `FRONTLIGHTS_SUITE=rapida` (variável da issue 25,
   runner da issue 27, só Windows): pula esses dois módulos e o da prévia (`test_serve_preview`, issue 34) com o
   motivo, roda os seguros em paralelo e os seis sensíveis numa fila serial, e `--report <arquivo>` grava o JSON da rodada.
-  O complemento (`python tests/suite.py --skip-covered {covered}`), e não mais a rodada inteira pelo `discover`, roda na release; por issue vale a suíte por impacto
-  (só o que o diff toca, pela escolha do `tests/pre_commit.py`, mais o `test_single_source`); a suíte inteira local na
-  main, na release, é a única conferência inteira, e a CI de um projeto, quando houver, não é esperada nem é portão. A regra está em `skills/frontlights/references/development.md`,
+  Na etapa 6 (decisão de 20/10/2026), nenhuma suíte é portão: o único portão é o teste assistido de cada issue, o
+  TDD por slice é a prática padrão e a suíte por impacto (`python tests/suite.py --impact <base>`), a inteira e a
+  revisão independente rodam só a pedido do usuário; nenhuma conferência inteira é exigida, e a CI de um projeto,
+  quando houver, não é esperada nem é portão. A regra está em `skills/frontlights/references/development.md`,
   "Which tests run when".
 - `python -m compileall -q skills/frontlights/scripts tests`: passou (não há verificador de tipos externo).
 - (até a 0.28.1, quando era plugin) `claude plugin validate .`: passou; `claude --plugin-dir . plugin details frontlights` carregava uma skill,
   sem agentes, hooks nem servidores MCP.
-- Integração contínua: o workflow do GitHub Actions saiu do repositório (issue 63); a suíte inteira local na main, na
-  release, é a única conferência inteira. Localmente só o Python 3.14 foi rodado.
+- Integração contínua: o workflow do GitHub Actions saiu do repositório (issue 63); nenhuma conferência inteira é
+  exigida na release (decisão de 20/10/2026). Localmente só o Python 3.14 foi rodado.
 - Os testes usam transporte e datas simulados e **não** homologam o RoadS real; os dados dele estão na seção própria.
 
 ## Matriz do roteiro (sessões reais de 25/09 a 05/10/2026, num projeto de produto real)
