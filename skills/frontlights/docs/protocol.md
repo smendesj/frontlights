@@ -6,9 +6,9 @@
 | --- | --- | --- |
 | Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
-| Descoberta | Entrevistar, ler código, registrar decisões e publicar o artefato (uma página por grilling, na mesma URL, só com dados fictícios) | Resultado, limites e escolhas aprovados; a URL do artefato no log de descoberta (ou "artefato indisponível", sem a ferramenta; "não se aplica", quando nenhuma rodada toca tela, fluxo ou camadas) |
+| Descoberta | Entrevistar, ler código, registrar decisões e publicar o artefato (uma página por grilling, na mesma URL; trecho de código real com segredo mascarado, nunca dado real) | Resultado, limites e escolhas aprovados; a URL do artefato e o caminho da fonte no log de descoberta (ou "artefato indisponível", sem a ferramenta) |
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
-| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling; sem seção, dito uma vez, quando o log do grilling diz "não se aplica") e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
+| Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
 | Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
@@ -128,6 +128,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 .frontlights/
   config.json
   discovery.md
+  artifact.html    fonte local do artefato do grilling, editada a cada seção e publicada na mesma URL
   issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
   plan.json
   authorization.json
@@ -136,6 +137,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   issues/<numero-no-github>/
     issue.json
     handoff.md
+    artifact.html          fonte do artefato do grilling quando a issue já está publicada
     checkpoint.json
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt

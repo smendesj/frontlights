@@ -47,37 +47,50 @@ choices.
 Text alone makes the user imagine a screen, a flow or a set of layers from the options.
 So there is one **artifact** per grilling: a private page published with the host's artifact
 tool (`Artifact` in Claude Code, a claude.ai page that also opens on the phone), created at
-the first round that touches a screen, a flow or the layers and updated at every later round
-**on the same URL**, never one page per round. It carries one section per question that
-touches a screen, a flow or the layers, numbered in the order of those questions and titled
-by the question (so "seção 2" is the second question that touched the screen), with:
+the problem round with the **before** and then updated **on the same URL**, never one page per
+round. The before is the screen built from the real template of the component (its HTML, the CSS
+that styles it and the fields it shows, read from the repository), never a free sketch; when there
+is no screen, a diagram of the flow, of the layers or of the current rule.
 
-- the **before** of the screen, built from the real template of the component (its HTML,
-  the CSS that styles it and the fields it shows, read from the repository), never a free
-  sketch;
-- the **after** for each approach of the solution round and, in the decision tree, for each
-  option that changes what the user sees;
-- without a screen, a diagram of the flow and of the layers, before and after.
+The page then gains **one section per decision question**: the solution round and every branch
+of the decision tree, the pre-mortem included. Confirmation questions, the depth question and the
+closing "Seguimos?" get no section. Sections are numbered in that order, the before first, then the
+decision questions, and titled by the question (so "seção 3" is the second decision question); in
+stage 5 the slices' sections follow them (`references/issues.md`, the quiz).
 
-The page lives outside the machine, so it carries only fictitious data: made-up names, numbers
-and texts; no real record, secret, endpoint, person or client enters it. The question cites
-the section ("artefato, seção 2: depois por abordagem"; without a screen, "seção 1: fluxo e
-camadas, antes" and "seção 2: fluxo e camadas, depois por abordagem"); the option `preview` stays the text of the
-option, so "artefato" is the page, "preview" is the field. The URL is recorded in the
-discovery log (`templates/discovery.md`, "Artifact URL") at the first publication and does
-not change afterwards. Never a real screenshot of the running product (that belongs to the
-watched run) and never an inline widget: the page is the only visual. When the host has no
-artifact tool, say so in one line, go on in text, and record "artefato indisponível" in the log.
-When no round of the grilling touches a screen, a flow or the layers (a document, say), there
-is no artifact, and the log line reads "não se aplica".
+Every section follows `templates/grilling-section.html`; its fields are fixed, and a field with
+nothing to say is omitted: what the question decides; the concepts in plain words; where the
+project already does this (path:line and an excerpt of the project's real code); what each option
+changes; the before and after when there is a screen (the **after** for each approach of the
+solution round and, in the decision tree, for each option that changes what the user sees); the
+recommendation, labelled as opinion; and the choice, recorded after the answer.
+
+**One local source, small edits.** The page source lives in `.frontlights/artifact.html`
+(untracked; for a published issue, in its records folder, `.frontlights/issues/<n>/artifact.html`).
+Each section is added with a small edit of that file and published on the same URL: never rewrite
+the whole page each round. The discovery log records the URL and the source path at the first
+publication (`templates/discovery.md`, "Artifact URL and source path"), and neither changes
+afterwards. When the local file is missing (a new session, a compaction), read the published page
+back with the artifact tool's read and go on editing that copy.
+
+**Code, never data.** The page lives outside the machine. A real excerpt of the project's code (up
+to about 15 lines, with its path) may enter it, with the value of any secret (password, token, key,
+connection string) replaced by `***`; real records, people's data, real endpoints and client or
+organization names stay out of the page, code excerpts included, and the screens are filled with
+made-up names, numbers and texts.
+
+The question cites its section ("artefato, seção 2"; without a screen, "seção 1: fluxo e camadas,
+antes"); the option `preview` stays the text of the option, so "artefato" is the page, "preview" is
+the field. Never a real screenshot of the running product (that belongs to the watched run) and
+never an inline widget: the page is the only visual. When the host has no artifact tool, say so in
+one line, go on in text, and record "artefato indisponível" in the log.
 
 ## 1. Problem round
 
 1. Summarize the observation or issue, source/timestamp, affected users and the
-   observed pain. When the change touches a screen, a flow or the layers, publish the
-   artifact with the **before** (above) before the problem is confirmed, so the user
-   confirms what they see, not what they imagine, and the confirmation question cites
-   its section.
+   observed pain. Publish the artifact with the **before** (above) before the problem is
+   confirmed, so the user confirms what they see, not what they imagine, and the
+   confirmation question cites its section.
 2. Separate evidence from inference and untested assumptions. Read relevant code
    and existing issues; identify duplicates, contradictions and missing context.
 3. When an issue already answers outcome, users, success measure and boundaries,
@@ -130,8 +143,8 @@ For every approach, the option `preview` shows:
   (why, and the cost of the divergence);
 - effort, risk, reversibility and compatibility;
 - how it would be tested, at which public seam;
-- the section of the artifact that shows the **after** of this approach, when the
-  approach touches a screen, a flow or the layers (the artifact, above).
+- the section of the artifact that shows what this approach changes and, when there is a
+  screen, its **after** (the artifact, above).
 
 Recommend first, with the reason in one line. Prefer the approach that follows
 the project's pattern unless section 2 justifies breaking it. Record rejected
@@ -152,8 +165,8 @@ Pick the branches by kind of work:
 | Integration | contract and versioning, authentication (never secrets in the repository), failure and retry, test doubles vs. live verification, rate and cost |
 | Document | audience, structure, sources of truth, maintenance owner |
 
-A branch that touches a screen, a flow or the layers cites the section of the artifact
-that shows it, updated for that round on the same URL (the artifact, above).
+Every branch that is asked cites its section of the artifact, added for that question on the
+same URL (the artifact, above).
 
 Technical branches (every branch except scope, priority and other product
 questions) follow the slot rule of `references/learning.md`. With learning mode
@@ -169,7 +182,8 @@ record the rest as assumptions to be shown in the plan.
 
 Ask: "Supondo que isto falhe em produção, o motivo mais provável é <Z>. Como
 tratamos?" with three options, for example mitigate now, accept and monitor, or
-change the approach.
+change the approach. Like every decision question, it cites its section of the
+artifact (the artifact, above).
 
 ## Sub-issues of the issue (same session)
 
@@ -212,8 +226,7 @@ for deepening.
 ## Recording
 
 Record everything in `templates/discovery.md`: depth, learning mode, conventions
-with example paths, the URL of the artifact (or "artefato indisponível", or "não se
-aplica"), approaches considered (chosen and rejected, with reasons and pattern fit),
+with example paths, the URL of the artifact and its source path (or "artefato indisponível"), approaches considered (chosen and rejected, with reasons and pattern fit),
 branch decisions, concepts explained, pre-mortem, unresolved questions, approval
 references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing

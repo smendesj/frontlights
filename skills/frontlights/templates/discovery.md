@@ -11,7 +11,7 @@
 - Grilling depth (rápida / padrão / exaustiva):
 - Learning mode (ligado / desligado):
 - Learning mode changes (nenhuma, ou cada troca e a pergunta em que ocorreu):
-- Artifact URL (one per grilling, the same URL every round; "artefato indisponível" when the host has no artifact tool; "não se aplica" when no round touches a screen, a flow or the layers):
+- Artifact URL and source path (one per grilling, the same URL every round; the source in `.frontlights/artifact.html`, or `.frontlights/issues/<n>/artifact.html` for a published issue; "artefato indisponível" when the host has no artifact tool):
 
 ## Project conventions
 
