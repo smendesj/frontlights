@@ -89,7 +89,8 @@ Operations (each prints one JSON object on stdout):
          (an issue's `suite.json` or another release's `release/suite-<sha>.json`) that ran green, without timeout, on
          a clean tree: it answers `state: "adopted"` and writes both release records with `adoptedFrom` (the origin path, its
          head and tree). It refuses (exit 1, nothing written) an impact, red or timed-out record, one with a diff or a
-         file outside the commit, an unknown head or another tree (bytes on disk are not compared), a place that
+         file outside the commit, an unknown head or another tree (bytes on disk are not compared), one outside a Git
+         worktree or whose worktree has a tracked file hidden from `git status` (skip-worktree, assume-unchanged), a place that
          is not the clean tip of the local base, and `--from` with `--argv` or `--timeout-seconds`.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
@@ -1076,7 +1077,8 @@ def adopt_suite(root, base, from_record):
     reason = adoption_refusal(root, base, origin, evidence)
     if reason is None:
         code, top, _ = git(path.parent, 'rev-parse', '--show-toplevel')
-        reason = hidden_refusal(top.strip()) if code == 0 and top.strip() else None
+        reason = (hidden_refusal(top.strip()) if code == 0 and top.strip() else
+                  'a pasta do registro não está numa worktree do git, e não há como ver arquivos escondidos do git status')
     require(reason is None, f'{path} não vale pela ponta da {base} local: {reason}; nada foi gravado')
     tree = tree_of(root, origin['head'])
     record = dict(origin, base=base, head=evidence['head'], evidence=evidence,
