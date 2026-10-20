@@ -14,8 +14,8 @@ Expected, in this order:
    command and what it returned. "Cited in the PR body" is refused as a destination for (a)
    and (c), with the reason (PR text is not tracked and is out of sight after the merge).
 2. (a) and (c) become acceptance criteria of the source issue, inside its acceptance-criteria
-   section, never in a section of their own. The batch question shows the exact text of each
-   (`- [ ] Pendência (achado da revisão): ... Evidência que fecha: ...`) and offers one option
+   section, never in a section of their own. The batch file, approved by link and stamp (`SKILL.md`, "Show before approval"), holds the exact text of each
+   (`- [ ] Pendência (achado da revisão): ... Evidência que fecha: ...`) and the question offers one option
    that approves the proposed destinations; nothing is written before the answer, and the
    user's answer is recorded verbatim.
 3. The write saves the previous body, adds only the new items after the last criterion and
@@ -33,7 +33,7 @@ criteria, with an open item, and every criterion ticked. Expected: the closeout 
 candidate with `pending_outside_criteria`, the table says "fecha com N pendências fora dos
 critérios", "Escolher quais" is the recommended option, and the question says that moving the
 items into the criteria is available. Nothing is moved unless the user asks; then the move is
-a write of its own with its text shown and approved first, whose only differences are the
+a write of its own with its text approved first by link and stamp, whose only differences are the
 added criteria and the removed legacy items.
 
 Reject: a finding reported as "cited in the PR" and nothing else; a leftover written in a

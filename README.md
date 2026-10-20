@@ -261,8 +261,8 @@ nova. O lote inteiro é decidido numa única pergunta.
 
 **Conversão de famílias.** Antes de agir numa família (pai com sub-issues abertas), o Frontlights
 oferece convertê-la numa issue só, com uma CA por filha aberta; um pedido como "arrume as issues
-do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois são mostrados por
-inteiro, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
+do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois vão inteiros num
+arquivo carimbado, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
 filhas são fechadas como "Convertida em CA S<k> da #<n>" e saem do quadro só com o "Sim" de cada
 operação, e uma família com mais de cinco filhas vira duas ou mais issues de topo ligadas por
 blocked-by. Nunca uma sub-issue nova.
@@ -646,7 +646,7 @@ Com o merge confirmado, em aprovações separadas, nesta ordem:
    de uma issue que chegou ao GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da
    branch, que não são protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota só é
    apagada se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit. Nunca usa `--force`; a
-   lista e os comandos são mostrados na íntegra antes, e `cleanup.py verify` confere depois. Uma worktree com registros
+   lista e os comandos vão num arquivo carimbado e aprovado antes, e `cleanup.py verify` confere depois. Uma worktree com registros
    do `.frontlights` dentro leva esses registros junto, e os arquivos que o Git ignora (um `.env`, `node_modules`)
    também: o aviso lista os nomes antes da pergunta. A worktree de integração local da família (nunca enviada, sem PR)
    entra quando não guarda commit próprio (nem merge com conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
@@ -660,7 +660,7 @@ Verificação de atualização da skill (sem pergunta; mostra o comando de atual
 quando há versão nova no GitHub) →
 pedido e dimensionamento → inspeção → entrevista de decisões (com um artefato visual, uma página privada
 na mesma URL do início ao fim) → corpo da issue escrito sem nova
-entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
+entrevista (só a pergunta dos seams), aprovado por link e carimbo →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
@@ -711,21 +711,28 @@ cada refresh: o `serve preview` e o `inspect` recusam `"port": "auto"` nos proce
 recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia.
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
-página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na
-primeira rodada que toca tela, fluxo ou camadas e atualizado a cada rodada que toca uma delas, com uma seção
-por pergunta: o antes da tela montado do template real do componente, o depois por abordagem e, sem tela, o
-diagrama de fluxo e de camadas; na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do artefato
-que mostra o que ela entrega. Só dados fictícios entram na página; a URL fica no log de descoberta (ou "artefato
-indisponível", ou "não se aplica", quando nenhuma rodada toca tela, fluxo ou camadas, e aí a lista das CAs segue
-sem seção); "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a sessão avisa numa
-linha e segue em texto.
+página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
+do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
+camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
+árvore, o pré-mortem incluído; confirmações, a pergunta da profundidade e o "Seguimos?" do fim não ganham seção.
+Cada seção segue o modelo `templates/grilling-section.html` (o que a pergunta decide, os conceitos em palavras
+simples, onde o projeto já faz isso, o que cada opção muda, o antes e depois quando há tela, a recomendação
+marcada como opinião e a escolha), e um campo sem nada a dizer é omitido. Cada seção entra por uma edição
+pequena da fonte local (`.frontlights/artifact.html`, fora do versionamento) publicada na mesma URL, nunca
+reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação), a sessão lê de volta a página
+publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
+artefato que mostra o que ela entrega, numerada depois das seções do grilling. Entra trecho de código real do
+projeto (até 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
+(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra. A URL e o caminho da fonte
+ficam no log de descoberta; "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a
+sessão avisa numa linha, segue em texto e registra "artefato indisponível".
 
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.
 As slices da issue são os critérios de aceitação: uma caixa por slice, em ordem de dependência,
 com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
 e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
-só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
+só depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
 contrair, e todo critério falha no commit de partida. Uma issue curta tem no máximo cinco CAs,
 cada uma uma fatia vertical completa e curta; a sexta vira issues de topo ligadas por blocked-by, e a
 caixa de pendência não conta no teto.
@@ -752,19 +759,14 @@ quebra o padrão do projeto e o custo disso. Em seguida, a skill percorre os ram
 de decisão da abordagem escolhida, e é o usuário quem decide quando parar. O
 padrão existente é o preferido; ele só é quebrado quando for comprovadamente pior
 para o caso.
-A mesma pergunta que define a profundidade oferece o modo aprendizado, desligado
-por padrão, para quem ainda está aprendendo a programar e quer entender as
-decisões enquanto as toma. Ligado, antes de cada decisão técnica a skill explica
-em texto o conceito em linguagem simples, por que o projeto faz assim, um trecho
-comentado do próprio código e o que cada opção muda, e fecha cada rodada com um
-"Ficou claro?". Desligado, a última opção de cada pergunta técnica é "Explicar
-antes de decidir". Depois de duas reexplicações da mesma rodada, aparece "Seguir
-a recomendação": a decisão fica marcada como "a revisar" e entra no corpo da issue como
-suposição, não como decisão aprovada. O modo pode ser ligado ou desligado a
-qualquer momento, e os conceitos explicados ficam registrados no `discovery.md`.
+Cada pergunta de decisão do grilling tem a sua seção no artefato (veja "Artefato visual"), que
+explica a escolha: o que ela decide, os conceitos, onde o projeto já faz isso, o que cada opção
+muda e a recomendação como opinião. Quem quiser mais detalhe pede em texto livre ("não entendi",
+"detalhe no artefato"): a sessão amplia a mesma seção, na mesma URL, e repete a pergunta.
 Toda pergunta ao usuário usa `AskUserQuestion`, sempre com opções. A conversa
-segue no idioma do usuário. Nada é aprovado sem que o texto completo tenha
-sido mostrado antes. O GitHub é a fonte oficial;
+segue no idioma do usuário. Documento, lista ou tabela se aprova por link e carimbo (`frontlights.py stamp`), nunca colado
+na conversa; a regra está em `SKILL.md`, "Show before approval". Comandos seguem por inteiro
+dentro da pergunta. O GitHub é a fonte oficial;
 os arquivos Markdown e JSON locais são registros e pontos de retomada, não um
 segundo sistema de tickets.
 

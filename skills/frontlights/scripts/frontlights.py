@@ -1228,6 +1228,10 @@ def load(path):
 
 
 def main():
+    if sys.argv[1:2] == ['stamp']:
+        # Delegated whole, so its options may come before the file (a REMAINDER would leave them to this parser).
+        import stamp
+        return stamp.main(sys.argv[2:])  # prints its own JSON
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('validate-plan', 'schedule'):
@@ -1283,6 +1287,10 @@ def main():
     p = sub.add_parser('homolog', help='homolog.py: `hook`, `sync`, `bundle` and `release-plan` of the local main, '
                                        'the homologation (issue 32), and `suite` and `suite-gate` (issue 52)')
     p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. hook --root . --check')
+    p = sub.add_parser('stamp', add_help=False,
+                       help='stamp.py: binds the approval of a document to its exact content (issue 61); '
+                            'delegated before this parser runs')
+    p.add_argument('stamp_args', nargs=argparse.REMAINDER, help='the file and its options, e.g. spec.md --check')
     args = parser.parse_args()
     code = 0
     try:

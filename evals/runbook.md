@@ -16,8 +16,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    and a duplicate proposed outcome. Verify no mutation occurred during discovery.
 3. Interview, then let stage 4 write the issue body: confirm it asks nothing but the seams, that
    the body carries Problema, Solução, Decisões de implementação, Decisões de teste and Fora de
-   escopo, and that nothing in it was not decided in the interview; approve its exact revision and
-   inspect the proposed issues. Decline one publication approval; confirm no issues were written.
+   escopo, and that nothing in it was not decided in the interview; confirm the body is approved by
+   link and stamp (`SKILL.md`, "Show before approval"): a file, the stamp in the question, at most five
+   lines next to the link, the real diff from r2 on, and a write refused after the file changes until
+   it is approved again; approve its exact revision and inspect the proposed issues. Decline one publication approval; confirm no issues were written.
    Approve the final plan.
 4. Run the horizontal-ticket input from `vertical-slices.md`; confirm the numbered list of the
    slices and the quiz come before the body, inspect the revised vertical outcomes (one box per
@@ -44,26 +46,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    external writes gated; do not label full AFK acceptance passed.
 10. Remove the junction, restart and verify the project data and its Git history remain intact
     (the skill does not depend on GuardianS or alter it; nothing of it is checked here).
-11. Learning mode. Answer "Ligado" to "Ativar o modo aprendizado?" in the same
-    call as the depth. Confirm `references/learning.md` was read before the first
-    explanation, and that each technical question is preceded by chat text with
-    the concept in plain words, why the project does it that way, a commented
-    excerpt with its path (about fifteen lines, no secrets) and what each option
-    changes. Confirm one "Ficou claro?" shares the call with at most three
-    decisions, and that no call ever holds more than four questions. Answer
-    "Entendi" once and confirm the decisions stand. Pick "Explicar de outro
-    jeito" twice: the decisions in that call are asked again, and "Seguir a
-    recomendação" (its description says the decision is marked "a revisar")
-    appears only after the second re-explanation and records the decision as
-    "tomada pela recomendação, a revisar" under Decisions and Open decisions,
-    and as the first branch offered at the closing. Repeat with "Desligado": the solution round shows exactly
-    three approaches plus "Explicar antes de decidir". Pick that option on one
-    of several questions in a call: the explanation comes, the same question
-    returns without the option together with the check, and the other answers
-    stand. Confirm no explanation or excerpt contains a secret, the discovery
-    log records the mode and one row per concept, and the explanations are
-    readable on the phone. The textual tests only prove these rules are written
-    down; this step proves they are followed.
+11. (Removed in issue #61: each decision's explanation now lives in its section of the artifact, item 28.)
 12. Issue family and stacked branches (a family that already exists). Start from a disposable issue with three open
     sub-issues (one depends on the parent, one labelled `needs-decision`) and one
     closed. Confirm the stage 2 line names the open ones, the grilling gives the
@@ -123,7 +106,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     puts no closing keyword in the PR or a commit. Merge a branch of your own into `origin/main`: `merge-status` reports
     the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
     with `git pull --ff-only` and the closeout question lists the sub-issue with
-    "marcar no corpo de #P a linha L", the line shown in full, and the approved write changes the parent body only on
+    "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
     that line (`tick-check` ok before and after). After the closing is verified, a second question offers to remove the
     worktrees and branches; the main worktree, the folder the session stands in, a worktree with uncommitted changes and a
     branch with an open pull request stay, with their reasons; no command uses `--force`; `cleanup.py verify` reports
@@ -216,7 +199,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     remote command) and keeps it as `slice_not_in_issue_branch` before; and the watched run is asked once for the
     issue, when its last screen slice closes. Finally, the conversion of families (`evals/family-conversion.md`):
     the offer before acting on a family, the batch request, one approval per family, the before and the after
-    shown in full, the old body kept, the children closed and archived only after their own "Sim", and a family
+    whole in the stamped file, the old body kept, the children closed and archived only after their own "Sim", and a family
     with more than five open children cut into top-level issues linked by `--blocked-by`.
 27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
     from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session
@@ -242,13 +225,14 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the release is merged the same issue is offered for closing.
 28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33). On a
     disposable request that changes one screen, confirm the session publishes one artifact at the problem round
-    with the before built from the real template and fictitious data only, updates it on the same URL at the
-    solution round (one after per approach) and at each branch that changes what the user sees, records the URL
-    once in the discovery log, draws a flow-and-layers diagram when there is no screen, and, at the stage 5 quiz,
-    lists for each slice the section of the artifact that shows what it delivers while asking the same quiz;
-    and that a host without the artifact tool gets one line and "artefato indisponível" in the log, never a
-    silent skip; and that a request touching no screen, flow or layer gets no page, "não se aplica" in the log
-    and a stage 5 list that says once it carries no section.
+    with the before built from the real template and fictitious data only, adds on the same URL one section per
+    decision question (the solution round with one after per approach, every branch asked and the pre-mortem),
+    each following `templates/grilling-section.html` and added by a small edit of `.frontlights/artifact.html`,
+    with real code excerpts whose secret values are masked as `***`, records the URL and the source path once in
+    the discovery log, draws a flow-and-layers diagram when there is no screen, reads the published page back
+    when the local source is missing, and, at the stage 5 quiz, lists for each slice the section of the artifact
+    that shows what it delivers while asking the same quiz; and that a host without the artifact tool gets one
+    line and "artefato indisponível" in the log, never a silent skip (issue 61).
 29. Pull request template (issue 35). On a disposable release with two homologated issues, one of them with a
     watched run, confirm the body of the release's pull request follows `templates/pr.md`: Resumo and Evidência once
     per issue (the smallest visual; before and after from the prints of the watched run and the red-to-green test of

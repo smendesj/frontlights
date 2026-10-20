@@ -67,9 +67,9 @@ is in their language; quote the helper's English messages only when useful.
      on it (`notOnBoard`) or is of a type the write commands cannot set: report it, never try it.
      `skipped` also lists issues too large to read in one page (labels, assignees or board values
      cut off): leave them to the user.
-4. **Approve and write.** Show the whole table (issue, what is present, every value to write) under
-   the show-before-approval rule and ask with `AskUserQuestion` (approve all, approve only what `fill`
-   settles, revise, write nothing). Only an explicit yes writes, and only the rows approved. Write with
+4. **Approve and write.** Write the whole table (issue, what is present, every value to write) to a file,
+   ask its approval by link and stamp (`SKILL.md`, "Show before approval") with `AskUserQuestion` (approve all, approve only what `fill`
+   settles, revise, write nothing). Only an explicit yes writes, only the rows approved, and only after the stamp check. Write with
    the commands of `references/issues.md` for an existing issue (`gh issue edit` with `--add-label`,
    `--add-assignee` and `--type`; `gh project item-add` when `addToBoard`; `gh project item-edit`
    per field, by the type in `fields[<name>].type`: `--value` for a single select, `--text`,

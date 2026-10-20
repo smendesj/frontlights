@@ -28,7 +28,7 @@ class ReleaseManifestTests(unittest.TestCase):
         for folder in ('scripts', 'templates', 'examples', 'docs', 'references'):
             self.assertTrue((ROOT / 'skills' / 'frontlights' / folder).is_dir(), folder)
         self.assertFalse((ROOT / '.claude-plugin').exists())
-        for name in ('grilling', 'issue', 'issues', 'development', 'issue-gaps', 'learning'):
+        for name in ('grilling', 'issue', 'issues', 'development', 'issue-gaps'):
             self.assertFalse((ROOT / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').exists())
             self.assertIn(f'references/{name}.md', text)
             self.assertTrue((ROOT / 'skills' / 'frontlights' / 'references' / f'{name}.md').is_file())
@@ -68,122 +68,61 @@ class ReleaseManifestTests(unittest.TestCase):
             with self.subTest(template=template):
                 self.assertIn(heading, (ROOT / 'skills' / 'frontlights' / 'templates' / template).read_text(encoding='utf-8'))
 
-    def test_learning_reference_defines_when_to_explain_how_to_check_and_what_to_record(self):
-        text = (ROOT / 'skills' / 'frontlights' / 'references' / 'learning.md').read_text(encoding='utf-8')
-        headings = ('## What every explanation must have', '## When to explain',
-                    '## Understanding check', '## Record')
-        for heading in headings:
-            self.assertIn(heading, text)
-        positions = [text.index(heading) for heading in headings]
-        self.assertEqual(positions, sorted(positions))
-        flat = ' '.join(text.split())
-        self.assertIn('Read this file before writing the first explanation', flat.split(headings[0])[0])
-        bodies = {}
-        for heading, following in zip(headings, headings[1:] + (None,)):
-            body = flat.split(heading)[1]
-            bodies[heading] = body.split(following)[0] if following else body
-        expected = {
-            headings[0]: ('mark the comments as yours', "never inside an option's `preview`",
-                          'Never include secrets', 'short enough to read on a phone'),
-            headings[1]: ('"Explicar antes de decidir"', 'at most three real options',
-                          'a question asked again never carries the explain option',
-                          'The other answers given in that call stand',
-                          'never holds more than four questions',
-                          'when the call carries the check and four decisions are pending',
-                          'that next call carries a check only if an explanation was written '
-                          'since the last check',
-                          'is never permission to decide for them'),
-            headings[2]: ('one "Ficou claro?" covering every concept explained in the round',
-                          'up to three decisions', '"Entendi"', '"Explicar de outro jeito"',
-                          'no limit on re-explanations', 'are not final',
-                          'This is the learning-mode exception to not re-asking settled decisions',
-                          'After two re-explanations of the same round have been given',
-                          'to every later check of that round',
-                          '"Seguir a recomendação"',
-                          'its description says the decision is marked "a revisar"',
-                          'tell the user which option was taken for each decision',
-                          'tomada pela recomendação, a revisar'),
-            headings[3]: ('Concepts explained', 'each change of it', 'Never record secrets'),
-        }
-        for heading, phrases in expected.items():
-            for phrase in phrases:
-                with self.subTest(section=heading, phrase=phrase):
-                    self.assertIn(phrase, bodies[heading])
+    def test_learning_mode_is_gone_from_the_skill_readme_and_runbook(self):
+        skill = ROOT / 'skills' / 'frontlights'
+        self.assertFalse((skill / 'references' / 'learning.md').exists())
+        files = sorted(skill.rglob('*.md')) + [ROOT / 'README.md', ROOT / 'evals' / 'runbook.md']
+        banned = ('learning', 'aprendizado', 'Explicar antes de decidir', 'Ficou claro',
+                  '"a revisar"', 'Seguir a recomendação', 'Concepts explained', 'conceitos explicados')
+        for path in files:
+            flat = ' '.join(path.read_text(encoding='utf-8').split())
+            for phrase in banned:
+                with self.subTest(file=str(path.relative_to(ROOT)), phrase=phrase):
+                    self.assertNotIn(phrase.lower(), flat.lower())
 
-    def test_follow_recommendation_label_fits_the_five_word_limit_everywhere(self):
-        old = 'Seguir com a recomendação e marcar a revisar'
-        learning = (ROOT / 'skills' / 'frontlights' / 'references' / 'learning.md').read_text(encoding='utf-8')
-        runbook = (ROOT / 'evals' / 'runbook.md').read_text(encoding='utf-8')
-        for name, text in (('learning.md', learning), ('runbook.md', runbook)):
-            flat = ' '.join(text.split())
-            with self.subTest(file=name):
-                self.assertNotIn(old, flat)
-                self.assertIn('"Seguir a recomendação"', flat)
-        label = re.search(r'add "([^"]+)" to every later check', ' '.join(learning.split())).group(1)
-        self.assertLessEqual(len(label.split()), 5)
-
-    def test_readme_describes_learning_mode(self):
-        flat = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
-        for phrase in ('modo aprendizado', 'desligado por padrão', '"Explicar antes de decidir"',
-                       '"Ficou claro?"', '"Seguir a recomendação"', '"a revisar"',
-                       'suposição, não como decisão aprovada'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, flat)
-
-    def test_grilling_offers_learning_mode_with_depth_and_keeps_three_approaches(self):
+    def test_grilling_asks_the_depth_alone_and_expands_a_section_on_request(self):
         skill = ROOT / 'skills' / 'frontlights'
         flat = ' '.join((skill / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
         depth = flat.split('## 0. Depth')[1].split('## The artifact')[0]
-        for phrase in ('"Qual profundidade de grilling?"', '"Ativar o modo aprendizado?"',
-                       'in the same `AskUserQuestion` call', '"Desligado"',
-                       'Read `references/learning.md` before writing the first explanation',
-                       'or the conversation has been compacted',
-                       'read the mode back from the discovery log',
-                       "update the log's learning-mode line whenever the mode changes",
-                       "add the change, with the question where it happened, to the log's "
-                       'learning-mode changes line',
-                       'turn the mode on or off at any time', 'Record both choices.'):
-            with self.subTest(section='depth', phrase=phrase):
-                self.assertIn(phrase, depth)
-        self.assertLess(depth.index('"Ativar o modo aprendizado?"'), depth.index('Read `references/learning.md`'))
+        self.assertIn('"Qual profundidade de grilling?"', depth)
+        self.assertNotIn('Ativar', depth)
         solution = flat.split('## 3. Solution round')[1].split('## 4. Decision tree')[0]
         for phrase in ('at least three genuinely different approaches',
-                       'With learning mode off, the fourth option is "Explicar antes de decidir", '
-                       'so the round has exactly three approaches'):
+                       'and up to four, in one `AskUserQuestion`, one per option'):
             with self.subTest(section='solution', phrase=phrase):
                 self.assertIn(phrase, solution)
         tree = flat.split('## 4. Decision tree')[1].split('## 5. Pre-mortem')[0]
-        for phrase in ('batched at most four per call', 'the learning-mode check counts as one',
-                       'every branch except scope, priority and other product questions',
-                       'the last option is "Explicar antes de decidir" (at most three real options)',
-                       'its `preview` only lists what will be explained',
-                       'one "Ficou claro?" check in the same call as up to three decisions'):
+        for phrase in ('batched at most four per call', 'up to four real options',
+                       'asks for more detail in free text', '"não entendi"', '"detalhe no artefato"',
+                       "expands that question's section of the artifact on the same URL",
+                       'asks the same question again',
+                       'the only re-ask besides new evidence'):
             with self.subTest(section='tree', phrase=phrase):
                 self.assertIn(phrase, tree)
+        runbook = ' '.join((ROOT / 'evals' / 'runbook.md').read_text(encoding='utf-8').split())
+        self.assertIn('11. (Removed in issue #61', runbook)
+        self.assertIn('Depth is asked once, in section 0, for the whole family.', flat)
         closing = flat.split('## 6. Closing')[1].split('## Recording')[0]
-        for phrase in ('asked for another explanation in the same call', 'marked "a revisar"'):
-            with self.subTest(section='closing', phrase=phrase):
-                self.assertIn(phrase, closing)
+        self.assertIn('do not re-ask settled decisions unless new evidence invalidates them', closing)
         recording = flat.split('## Recording')[1]
-        self.assertIn('concepts explained', recording)
-        self.assertIn('as assumptions to be shown, never as approved decisions', recording)
-        skill_text = (skill / 'SKILL.md').read_text(encoding='utf-8')
-        self.assertIn('`references/learning.md` is read only when the user turns learning mode on '
-                      'in the grilling or asks for an explanation there.', ' '.join(skill_text.split()))
-        stage3 = ' '.join(skill_text.split('## 3.')[1].split('## 4.')[0].split())
-        self.assertIn('together with the learning mode (off by default', stage3)
+        self.assertIn('Record everything in `templates/discovery.md`: depth, conventions', recording)
+        stage3 = ' '.join((skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0].split())
+        self.assertIn('Read `references/grilling.md`. Ask the depth, confirm the problem', stage3)
 
-    def test_discovery_template_records_learning_mode_and_concepts_explained(self):
+    def test_readme_says_each_decision_question_has_its_explaining_section(self):
+        flat = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
+        for phrase in ('Cada pergunta de decisão do grilling tem a sua seção no artefato',
+                       'a recomendação como opinião', 'em texto livre', 'amplia a mesma seção'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat)
+
+    def test_discovery_template_keeps_the_depth_without_learning_mode(self):
         text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'discovery.md').read_text(encoding='utf-8')
-        self.assertIn('- Learning mode (ligado / desligado):', text)
-        self.assertLess(text.index('- Grilling depth'), text.index('- Learning mode'))
-        self.assertIn('- Learning mode changes (nenhuma, ou cada troca e a pergunta em que ocorreu):', text)
-        self.assertLess(text.index('- Learning mode ('), text.index('- Learning mode changes'))
-        self.assertLess(text.index('- Learning mode changes'), text.index('## Project conventions'))
-        self.assertIn('## Concepts explained', text)
-        self.assertIn('| Concept | Summary | Where it came up |', text)
-        self.assertLess(text.index('## Decisions'), text.index('## Concepts explained'))
-        self.assertLess(text.index('## Concepts explained'), text.index('## Pre-mortem'))
+        self.assertNotIn('Learning mode', text)
+        self.assertNotIn('Concepts explained', text)
+        self.assertIn('- Grilling depth (rápida / padrão / exaustiva):', text)
+        self.assertLess(text.index('- Grilling depth'), text.index('## Project conventions'))
+        self.assertLess(text.index('## Decisions'), text.index('## Pre-mortem'))
 
     def test_example_config_carries_only_generic_placeholders(self):
         example = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
