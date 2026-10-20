@@ -695,7 +695,7 @@ class PluginContractTests(unittest.TestCase):
                        '1 MB', '1920', 'at most 40', 'push --draft <file>', 'sign-in line'):
             self.assertIn(needle, text)
         self.assertLess(text.index('**Draft.**'), text.index('**Prints.**'))
-        self.assertLess(text.index('**Prints.**'), text.index('**Show the complete draft.**'))
+        self.assertLess(text.index('**Prints.**'), text.index('**Show the draft by link.**'))
 
     def test_example_config_has_only_the_generic_disabled_block(self):
         config = json.loads(self.read('skills', 'frontlights', 'examples', 'config.json'))

@@ -209,12 +209,12 @@ o arquivo precisa salvá-lo na hora em que o revisor se vinculou. Um HEAD destac
 Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue de origem ou uma
 issue de topo, nunca uma sub-issue nova. Isso é uma
 escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permissões vigentes, só depois de o
-texto exato ser mostrado e aprovado no lote dos achados; o corpo anterior fica guardado, só se acrescenta (a
+arquivo exato, com o carimbo, ser aprovado no lote dos achados (`SKILL.md`, "Show before approval"); o corpo anterior fica guardado, só se acrescenta (a
 migração de uma seção legada, pedida por você, também remove os itens movidos, e a linha `Bloqueada:` de uma
 slice que destravou é apagada antes da marcação), a releitura confere a diferença e nenhum utilitário do
 Frontlights faz essa escrita. A conversão de uma família em issue + CAs (`references/issues.md`,
-"Converting a family") é a única exceção: o corpo do pai é substituído, só depois de o antes e o depois
-serem mostrados por inteiro e aprovados, uma aprovação por família; o corpo anterior fica guardado em
+"Converting a family") é a única exceção: o corpo do pai é substituído, só depois de o antes e o depois,
+num arquivo carimbado, serem aprovados, uma aprovação por família; o corpo anterior fica guardado em
 `.frontlights/issues/<n>/`, a diferença é relida, e o fechamento das filhas convertidas e o ajuste do
 quadro continuam operações negadas, cada uma com a própria pergunta e o "Sim". O Frontlights não impede a sessão de
 encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
@@ -235,12 +235,12 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
   que informa e não bloqueia; o texto dos itens nunca é impresso;
 - os comandos de escrita (`gh issue close ... --reason completed` e `gh project item-edit`) são montados só com
   números, o repositório `dono/nome` validado e o campo e o valor do `done` validados, e são rodados pela
-  sessão, sob as permissões vigentes, só depois da aprovação da lista completa;
+  sessão, sob as permissões vigentes, só depois da aprovação da lista carimbada e de um `stamp --check` que confere;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
   própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
 
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
-`[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista que mostra as
+`[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista carimbada que traz as
 linhas. O corpo anterior fica guardado, o `closeout.py tick-check` (só lê dois arquivos locais) confere, antes e
 depois de escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado.
 

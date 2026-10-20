@@ -7,20 +7,21 @@
 | Atualização da skill (sem pergunta) | Consultar o commit publicado no remoto Git e mostrar o comando de atualização, sem executá-lo | Resultado do `update-check` |
 | Inspeção | Ler o projeto atual e as fontes configuradas | Fontes, horários e limitações |
 | Descoberta | Entrevistar, ler código, registrar decisões e publicar o artefato (uma página por grilling, na mesma URL; trecho de código real com segredo mascarado, nunca dado real) | Resultado, limites e escolhas aprovados; a URL do artefato e o caminho da fonte no log de descoberta (ou "artefato indisponível", sem a ferramenta) |
-| Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Texto integral mostrado e aprovação humana da revisão exata; nada publicado |
+| Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Arquivo da revisão com o carimbo (`frontlights.py stamp`) e aprovação humana dessa revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois o corpo completo; etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos mostrados; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
 | Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
 `homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
 (`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
-| Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do GitHub |
-| Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos mostrados na íntegra, aprovação própria e nova leitura do Git e do GitHub |
+| Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
+| Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da remoção e nova leitura do Git e do GitHub |
 
-Uma aprovação vale só depois de o usuário ver o conteúdo completo na sessão.
-Antes da pergunta, o texto integral vai para a conversa, o arquivo é enviado pela
-ferramenta de envio do ambiente, quando houver, e o texto se repete no `preview` da
-opção de aprovação. Toda pergunta tem opções, e todo texto ao usuário sai no idioma dele.
+A aprovação de um documento, lista ou tabela é por link e carimbo, pela regra de `SKILL.md`,
+"Show before approval": o arquivo vai para `.frontlights/`, a pergunta nomeia a revisão e o
+carimbo, e a resposta literal fica em `.frontlights/approvals.json` (`frontlights.py stamp --approve`).
+Comandos seguem por inteiro dentro da pergunta. Toda pergunta tem opções, e todo texto ao usuário
+sai no idioma dele.
 
 Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
 solicitações remotas não significa consentimento: ele vem só da resposta do usuário,
@@ -271,10 +272,10 @@ dele; o `status` informa `source`, `operationsRoot` e `homeState`, e as demais o
 aprovação do bloco, `window`, `collect`, conferência dos números pelo usuário, arquivo de textos
 (guia `draftGuide` e fatos coletados), prints em `shotsDir` com `captions.json` (ou, com
 `weekShots`, na pasta do resumo que `shots --to` resolve, com a issue de cada print e pelo menos um
-por entrega visível fora de `proximo`), rascunho mostrado na íntegra, aprovação e `push --draft` (com
+por entrega visível fora de `proximo`), rascunho aprovado por link e carimbo, `stamp --check` e `push --draft` (com
 `--to` quando há `weekShots`). A pasta é a da segunda-feira seguinte à semana do último dia do período,
 com uma subpasta `<dd_MM>` por resumo; o contrato com o RoadS está em `docs/roads-contract.md`.
-Nada é enviado sem a aprovação do rascunho completo. O período é só o do `window`, com hora: começa no
+Nada é enviado sem a aprovação do rascunho carimbado. O período é só o do `window`, com hora: começa no
 instante exato em que os números do resumo anterior foram coletados e chega aos coletores por
 `collect --start <start> --end <end>`; as datas vêm sempre do `window`, e depois de qualquer correção roda
 `window` de novo. Com `draftOtherPeriod` (o resumo anterior ainda como rascunho no RoadS), a sessão para e

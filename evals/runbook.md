@@ -16,8 +16,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    and a duplicate proposed outcome. Verify no mutation occurred during discovery.
 3. Interview, then let stage 4 write the issue body: confirm it asks nothing but the seams, that
    the body carries Problema, Solução, Decisões de implementação, Decisões de teste and Fora de
-   escopo, and that nothing in it was not decided in the interview; approve its exact revision and
-   inspect the proposed issues. Decline one publication approval; confirm no issues were written.
+   escopo, and that nothing in it was not decided in the interview; confirm the body is approved by
+   link and stamp (`SKILL.md`, "Show before approval"): a file, the stamp in the question, at most five
+   lines next to the link, the real diff from r2 on, and a write refused after the file changes until
+   it is approved again; approve its exact revision and inspect the proposed issues. Decline one publication approval; confirm no issues were written.
    Approve the final plan.
 4. Run the horizontal-ticket input from `vertical-slices.md`; confirm the numbered list of the
    slices and the quiz come before the body, inspect the revised vertical outcomes (one box per
@@ -104,7 +106,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     puts no closing keyword in the PR or a commit. Merge a branch of your own into `origin/main`: `merge-status` reports
     the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
     with `git pull --ff-only` and the closeout question lists the sub-issue with
-    "marcar no corpo de #P a linha L", the line shown in full, and the approved write changes the parent body only on
+    "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
     that line (`tick-check` ok before and after). After the closing is verified, a second question offers to remove the
     worktrees and branches; the main worktree, the folder the session stands in, a worktree with uncommitted changes and a
     branch with an open pull request stay, with their reasons; no command uses `--force`; `cleanup.py verify` reports
@@ -197,7 +199,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     remote command) and keeps it as `slice_not_in_issue_branch` before; and the watched run is asked once for the
     issue, when its last screen slice closes. Finally, the conversion of families (`evals/family-conversion.md`):
     the offer before acting on a family, the batch request, one approval per family, the before and the after
-    shown in full, the old body kept, the children closed and archived only after their own "Sim", and a family
+    whole in the stamped file, the old body kept, the children closed and archived only after their own "Sim", and a family
     with more than five open children cut into top-level issues linked by `--blocked-by`.
 27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
     from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session

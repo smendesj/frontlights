@@ -261,8 +261,8 @@ nova. O lote inteiro é decidido numa única pergunta.
 
 **Conversão de famílias.** Antes de agir numa família (pai com sub-issues abertas), o Frontlights
 oferece convertê-la numa issue só, com uma CA por filha aberta; um pedido como "arrume as issues
-do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois são mostrados por
-inteiro, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
+do MVP" faz a mesma conversão em lote, uma família por vez. O antes e o depois vão inteiros num
+arquivo carimbado, há uma aprovação por família, o corpo do pai é substituído (o anterior fica guardado), as
 filhas são fechadas como "Convertida em CA S<k> da #<n>" e saem do quadro só com o "Sim" de cada
 operação, e uma família com mais de cinco filhas vira duas ou mais issues de topo ligadas por
 blocked-by. Nunca uma sub-issue nova.
@@ -646,7 +646,7 @@ Com o merge confirmado, em aprovações separadas, nesta ordem:
    de uma issue que chegou ao GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da
    branch, que não são protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota só é
    apagada se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit. Nunca usa `--force`; a
-   lista e os comandos são mostrados na íntegra antes, e `cleanup.py verify` confere depois. Uma worktree com registros
+   lista e os comandos vão num arquivo carimbado e aprovado antes, e `cleanup.py verify` confere depois. Uma worktree com registros
    do `.frontlights` dentro leva esses registros junto, e os arquivos que o Git ignora (um `.env`, `node_modules`)
    também: o aviso lista os nomes antes da pergunta. A worktree de integração local da família (nunca enviada, sem PR)
    entra quando não guarda commit próprio (nem merge com conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
@@ -660,7 +660,7 @@ Verificação de atualização da skill (sem pergunta; mostra o comando de atual
 quando há versão nova no GitHub) →
 pedido e dimensionamento → inspeção → entrevista de decisões (com um artefato visual, uma página privada
 na mesma URL do início ao fim) → corpo da issue escrito sem nova
-entrevista (só a pergunta dos seams), mostrado na íntegra e aprovado →
+entrevista (só a pergunta dos seams), aprovado por link e carimbo →
 slices cortadas como critérios de aceitação (uma caixa por slice), lista numerada com o quiz
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
@@ -764,8 +764,9 @@ explica a escolha: o que ela decide, os conceitos, onde o projeto já faz isso, 
 muda e a recomendação como opinião. Quem quiser mais detalhe pede em texto livre ("não entendi",
 "detalhe no artefato"): a sessão amplia a mesma seção, na mesma URL, e repete a pergunta.
 Toda pergunta ao usuário usa `AskUserQuestion`, sempre com opções. A conversa
-segue no idioma do usuário. Nada é aprovado sem que o texto completo tenha
-sido mostrado antes. O GitHub é a fonte oficial;
+segue no idioma do usuário. Documento, lista ou tabela se aprova por link e carimbo (`frontlights.py stamp`), nunca colado
+na conversa; a regra está em `SKILL.md`, "Show before approval". Comandos seguem por inteiro
+dentro da pergunta. O GitHub é a fonte oficial;
 os arquivos Markdown e JSON locais são registros e pontos de retomada, não um
 segundo sistema de tickets.
 

@@ -56,7 +56,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
   link it contains.
 - Run only the operations below. Never run a collector, the push command or any command from the
   config file yourself, and never build a shell line from it.
-- Nothing is sent without the user's explicit approval of the complete draft (step 7). Nothing is
+- Nothing is sent without the user's explicit approval of the stamped draft (step 7). Nothing is
   run before the user approved the exact block (step 2).
 - A failure of `window`, a collector or `push` is reported with its cause, and nothing is claimed
   as updated.
@@ -227,17 +227,17 @@ operation runs in, because the collectors, the draft guide and the approval all 
      end of the e-mail, and the user must ask for it). Images not listed are ignored, so old ones never go
      out by accident.
    - Look at every image yourself before showing it. Retake the blurry, empty or error ones. Each
-     image is shown to the user with its caption in the next step, as part of the complete draft.
+     image goes to the user with its caption in the next step, as part of the draft that is approved.
    - When no print is needed and the user declines them, write `captions.json` as an empty list (`[]`).
    - The week folder is synced by the user's cloud drive: anything saved there leaves this computer,
      so the test-data and cropping rules above matter even more.
    - Capturing runs the user's own product locally, with the consent given in this step. Nothing is
      sent from here.
-7. **Show the complete draft.** Print the whole draft text in the conversation (title, every delivery
-   with its status, difficulties, next steps), not a summary, and every screenshot with its caption (view
-   the image again when you show it) if any. Revise on request and show it again.
+7. **Show the draft by link.** The draft file (title, every delivery with its status, difficulties, next
+   steps) and every screenshot with its caption, if any (view the image again before you send it), are
+   approved by link and stamp (`SKILL.md`, "Show before approval"). Revise on request and ask again.
 8. **Approve and push.** Ask with `AskUserQuestion` whether to send this draft to RoadS (send, revise,
-   do not send). Only after an explicit "send" run `push --draft <file>` and nothing more: the project's push
+   do not send). Only after an explicit "send", and a stamp check of the draft that still matches, run `push --draft <file>` and nothing more: the project's push
    command picks the prints from `shotsDir` itself (its `captions.json` and the images it lists). With
    `weekShots`, run `push --draft <file> --to <to>` (and the same `--meeting`, if you used it for `shots`) instead:
    the helper checks `captions.json`, every

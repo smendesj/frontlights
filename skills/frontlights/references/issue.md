@@ -35,20 +35,21 @@ work of the decision tree already cover features, bugs, refactors, integrations 
 trivial change on the Short path may keep one compact body.
 
 When the work touches a screen field, button or action, include the trace table of
-`references/issues.md` (consumer in the back as `file:line`, database column, test) and show it
-in full before approval; a row without evidence, or an inconclusive trace, is not an approvable
+`references/issues.md` (consumer in the back as `file:line`, database column, test), whole in the
+file that is approved; a row without evidence, or an inconclusive trace, is not an approvable
 body. Trace every acceptance criterion to an approved decision, and do not smuggle unresolved
 product choices into technical assumptions. The acceptance criteria themselves are cut in stage
 5, from this body.
 
 ## Approval
 
-Show the complete revision before asking: the full text in the conversation, the file sent with
-the host's file-sending tool when one exists, and the text (or as much as fits) in the `preview`
-of the approve option. A summary or a path is not showing it. Then ask explicit approval with
-`AskUserQuestion`, with options, and preserve the response reference. Keep the approved text in
+Ask approval of the revision by link and stamp, under `SKILL.md`, "Show before approval": the
+body in `.frontlights/issue.md`, with each previous revision kept as a file, its
+stamp in the question, and next to the link the sections and decisions of r1 or, from r2 on, the
+real diff against the previous revision. A summary or a path is not approval. Ask explicit approval
+with `AskUserQuestion`, with options, and record the answer with `stamp --approve`. Keep the approved text in
 `.frontlights/issue.md` until stage 5 publishes it: this approval publishes nothing and does not
 authorize code, because the GitHub write is the approval of stage 5. Later material changes
 invalidate downstream approvals. Every revision of an approved body (r2, r2.1, and so on) is a
-new approval of the exact text shown in full; a decision written into a local revision without
-being shown is not approved.
+new approval of the exact file with its stamp; a decision written into a local revision that is
+not in the stamped file is not approved.
