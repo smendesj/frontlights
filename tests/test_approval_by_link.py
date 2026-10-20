@@ -90,7 +90,8 @@ class TheRuleTests(unittest.TestCase):
         text = rule()
         for phrase in ('the issue body of stage 4 and its revisions', 'the plan and the bodies of stage 5',
                        'the conversion of a family', 'the findings batch and its leftover criteria',
-                       'the closeout list and the cleanup list', 'the issue-gaps table', 'the RoadS progress-report draft',
+                       'the closeout list, the issue-gaps table', 'the RoadS progress-report draft',
+                       'the cleanup of merged work asks nothing',
                        'Commands are not documents', 'references/browser-testing.md', 'the denied operations',
                        'stay in full inside the question'):
             with self.subTest(phrase=phrase):

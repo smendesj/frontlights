@@ -102,15 +102,20 @@ class StandingAuthorizationTests(unittest.TestCase):
                       'question', development)
 
     def test_the_approvals_with_their_own_stage_keep_them(self):
-        self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary) keep them",
-                      flat('skills', 'frontlights', 'references', 'development.md'))
-        self.assertIn('da limpeza, das issues do RoadS e do resumo', flat('README.md'))
+        development = flat('skills', 'frontlights', 'references', 'development.md')
+        self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout, issue gaps and summary) keep them",
+                      development)
+        self.assertIn('deleting anything but the test data the run created and the cleanup of merged work '
+                      '(`references/closeout.md`, step 5', development)
+        self.assertIn('do fechamento, das issues do RoadS e do resumo (a limpeza do trabalho mesclado roda sem pergunta)',
+                      flat('README.md'))
 
     def test_the_merge_is_offered_when_the_pr_is_ready(self):
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('**Offer the merge when the PR is ready.**', '"Mesclar a PR #<n> em <base>?"',
                        '"Sim, mesclar" first and "Não, aguardar o merge" second', '`gh pr merge <n> --merge`',
-                       "never `--admin`, `--auto` or `--delete-branch`", 'On "Não", the wait goes on unchanged'):
+                       "never `--admin`, `--auto` or `--delete-branch`: the remote branch goes by GitHub's automatic deletion of merged head branches",
+                       'On "Não", the wait goes on unchanged'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
         self.assertIn('ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge', flat('README.md'))

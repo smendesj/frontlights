@@ -15,7 +15,7 @@
 `homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
 (`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
-| Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da remoção e nova leitura do Git e do GitHub |
+| Limpeza | Remover, sem pergunta, só o que o `cleanup.py plan` oferece: as worktrees e branches locais das issues, das slices e da release já mescladas na base aprovada, depois de copiar os registros de cada worktree para a principal; nunca a branch remota (o GitHub a apaga) | O plano e os comandos rodados (`git fetch --prune`, `copy_records`, `git worktree remove`, `git branch -D`), a resposta literal de cada candidato com `ask` e a saída do `cleanup.py verify` |
 
 A aprovação de um documento, lista ou tabela é do arquivo com aquele carimbo, nunca do texto colado na
 conversa; os passos estão em `SKILL.md`, "Show before approval". Comandos seguem por inteiro dentro da
@@ -68,9 +68,12 @@ vale (merge em outra branch, PR fechada sem merge ou não encontrada não fecha 
 pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release; "Agora não" deixa a issue
 homologada na main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma
 sub-issue, a mesma aprovação do fechamento inclui marcar no corpo do pai o item que a cita (`parentTicks`; o
-`closeout.py tick-check` confere antes e depois), e a limpeza das worktrees e branches (`scripts/cleanup.py
-plan|verify`, nunca com `--force`) tem aprovação própria, depois do fechamento escrito e conferido
-(`references/closeout.md`).
+`closeout.py tick-check` confere antes e depois). A limpeza das worktrees e branches (`scripts/cleanup.py
+plan|verify`, nunca com `--force`) roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta
+(`references/closeout.md`, passo 5): `git fetch --prune`, os registros de cada worktree copiados para
+`.frontlights/issues/<n>/worktrees/<pasta>/` da principal, e a remoção das worktrees e das branches locais das
+issues, das slices e da release mesclada; nunca `git push origin --delete`, porque o GitHub apaga a branch de
+cabeça da PR mesclada. Só pergunta o candidato com arquivo ignorado fora de dependência ou build (`ask`).
 
 ### Quadro e publicação
 
@@ -139,6 +142,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
                    bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/
+    worktrees/<pasta>/  cópia do `.frontlights` de cada worktree da issue, feita pela limpeza antes de removê-la
     issue.json
     handoff.md
     artifact.html          fonte do artefato do grilling quando a issue já está publicada

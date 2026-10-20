@@ -264,30 +264,36 @@ A espera do merge é regra da skill: a sessão age só sobre a resposta do `merg
 (inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada
 sem merge ou uma PR desconhecida nunca propõe fechar nada.
 
-A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
+A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`:
 - usa `git --no-optional-locks` sem shell (`worktree list`, `status`, `rev-parse`, `remote get-url`, `merge-base`,
-  `rev-list`) e `gh api graphql`, e não remove, grava nem muda nada (nem o índice do Git); os nomes de branch que entram
-  nas consultas passam por uma regra de caracteres simples, e o texto que vem do GitHub chega limpo e limitado;
+  `rev-list`, `for-each-ref`) e `gh api graphql`, e o `plan` e o `verify` não removem, gravam nem mudam nada (nem o
+  índice do Git); os nomes de branch que entram nas consultas passam por uma regra de caracteres simples, e o texto
+  que vem do GitHub chega limpo e limitado;
 - só propõe remover o que está registrado como worktree e existe (ou uma branch local cuja worktree já se foi), que não é
   a worktree principal, nem a pasta em que o próprio processo roda, nem está travada ou em uso em outra worktree, sem
   alteração pendente (nem arquivo novo), numa branch não protegida (`main`, `master`, a base aprovada e
   `protected_branches`, com a mesma regra do `authorize`), cujo tip é a cabeça de uma PR mesclada que chegou à base
   aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
   contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
-  `contained_in_base_without_pull_request`; a avaliação não roda comando remoto, e o `git push origin --delete` só
-  entra para uma branch enviada no fluxo antigo cuja branch remota ainda aponta para o mesmo commit), sem PR aberta a partir da branch nem
-  em cima dela; a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo
-  commit; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso `ignored_files` lista os nomes; a worktree
-  de integração local (`--integration`) só entra sem PR, nunca enviada e sem commit próprio fora das PRs entregues (um merge conta como próprio quando
-  carrega conteúdo, como um conflito resolvido à mão);
-- os comandos (`git worktree remove`, `git branch -D`, `git push origin --delete`) são montados só com um caminho de
-  worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não carregue, e rodados a
-  partir da worktree principal; nunca com `--force`. O `branch -D` é necessário porque um merge com squash deixa a branch
-  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido
-  na base aprovada;
-- remover é uma aprovação própria da lista completa, depois do fechamento escrito e conferido; um comando que falha é
-  registrado e nunca repetido com força; os registros do `.frontlights` dentro de uma worktree somem com ela, e o aviso
-  `frontlights_records` vai na pergunta.
+  `contained_in_base_without_pull_request`), sem PR aberta a partir da branch nem em cima dela; a branch local da
+  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; a branch remota nunca
+  entra: o GitHub apaga a branch de cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch
+  --prune` tira a referência que sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
+  `ignored_files` lista os nomes; a worktree de integração local (`--integration`) só entra sem PR, nunca enviada e
+  sem commit próprio fora das PRs entregues (um merge conta como próprio quando carrega conteúdo, como um conflito
+  resolvido à mão);
+- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git branch -D`) são montados
+  só com um caminho de worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não
+  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca `git push origin --delete`. O
+  `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
+  oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
+- o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta dentro do
+  `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>/`), sem apagar o que já está lá, e recusa
+  origem que não seja uma pasta `.frontlights` e destino fora de uma; ele vem antes do `git worktree remove`, e uma
+  cópia que falha deixa a worktree e os registros onde estão;
+- a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
+  negadas): só o candidato com arquivo ignorado fora de pastas de dependência ou build (`ask: true`) espera o "Sim";
+  um comando que falha é registrado e nunca repetido com força, e o resto daquele item não roda.
 
 ## Resumo para a diretoria
 
@@ -326,7 +332,7 @@ O resumo para a diretoria (`scripts/progress_report.py`) executa comandos lidos 
   o config do projeto tem `roadmapSync.scrumRoot` e `weekFolderPattern` (com o `roadmapSync` ligado ou não), os
   prints da rodada (antes, depois e de falha) e os guardados para o resumo vão para
   `<scrumRoot>/<weekFolderPattern da segunda-feira da rodada>/evidencias/<repositório>/<issue>` (e o `resumo/`
-  dela), não para o `.frontlights` da worktree, que a limpeza apaga. Os registros (`result.json` e os demais)
+  dela), não para o `.frontlights` da worktree, que a limpeza remove (depois de copiá-lo para `.frontlights/issues/<n>/worktrees/` da principal). Os registros (`result.json` e os demais)
   continuam no `.frontlights` e apontam para a pasta em `pastaDosPrints`.
   - A pasta passa pelas travas de `contained_path` e `safe_folder`: dentro do `scrumRoot`, sem junção, link
     simbólico nem outro ponto de reparse no caminho (o de nuvem do OneDrive é aceito); `scrumRoot` precisa ser um

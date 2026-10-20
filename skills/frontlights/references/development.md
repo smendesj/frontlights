@@ -65,10 +65,12 @@ item, moving a card, editing a field), deploying or publishing to production, ed
 registered (on the base branch or applied anywhere but the local development database), writing the remote main
 (`origin/main`, the base branch on GitHub) or a protected branch (the local main is written only by the covered
 merge, with its three gates green), turning on a setting, key or flag in production, and deleting anything but
-the test data the run created. Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
+the test data the run created and the cleanup of merged work (`references/closeout.md`, step 5: the worktrees and
+local branches of the issues, slices and release already merged into the approved base, removed without a question,
+never a remote branch). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
 silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
-own stage (the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary) keep them. The
+own stage (the issue's text, issue plan and publication, closeout, issue gaps and summary) keep them. The
 host's own permission prompts are not Frontlights' to remove and still apply.
 
 ## The start of stage 6: the pre-push hook and the sync of the local main
@@ -643,7 +645,8 @@ offers the release again with everything accumulated.
   `adoptedFrom` naming the origin (`docs/protocol.md`), then `release-plan` again, as after a run. The session gives
   the path of the record (the `suite.json` of an issue, in that issue's worktree, or the per-tip record
   `release/suite-<sha>.json` of another release) and never searches for one; it adopts before the cleanup of the
-  worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing. A refusal of the record (an
+  worktrees (stage 7), which removes the issue's worktree (its records are copied to the main worktree's
+  `.frontlights/issues/<n>/worktrees/` first). A refusal writes nothing. A refusal of the record (an
   impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head the repository does
   not know, or another commit tree; the bytes on disk are not compared, since line endings can differ between clean
   worktrees of one tree) means the session runs the suite as below. A record outside a Git worktree, or whose worktree has a tracked file hidden from `git status` (skip-worktree,
@@ -709,8 +712,9 @@ offers the release again with everything accumulated.
   pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
-  merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its
-  own approval). On "Sim", run them, then `merge-status` as below. On "Não", the wait goes on unchanged.
+  merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`: the remote branch goes by
+  GitHub's automatic deletion of merged head branches, and the local one by the cleanup of `closeout.md`, step 5). On "Sim", run them, then `merge-status` as below. On "Não", the wait goes on
+  unchanged.
 - **What wakes the session.** Whatever the host offers: a subscription to the pull request's activity, or a
   background monitor that runs `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" merge-status --config <config>
   --prs <n> --base <approved base>` every few minutes. Either is only a trigger. On every wake run `merge-status`
@@ -727,10 +731,12 @@ offers the release again with everything accumulated.
 - **At the merge.** With the release's pull request `ready`: in the main worktree, on the local main, `git pull
   --ff-only origin <base>` (the local main was already inside the release, so it moves forward without a merge
   commit; if it does not fast-forward, stop and ask instead of merging or resetting). Then read
-  `references/closeout.md` and run it for the issues of the release: the closing (with the tick in a parent, for
-  a sub-issue) and the cleanup of worktrees and branches are two separate approvals, in that order. An issue whose
+  `references/closeout.md` and run it for the issues of the release: first the cleanup of the merged work (step 5),
+  without approval and before any closing question: `git fetch --prune`, the records of each worktree copied to the
+  main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed;
+  then the closing (with the tick in a parent, for a sub-issue), with its own approval. An issue whose
   criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports. The
-  cleanup now offers the issue branches that `origin/<base>` contains, pull request or not
+  cleanup offers the issue branches that `origin/<base>` contains, pull request or not
   (`contained_in_base_without_pull_request`).
 - **Other work goes on.** The wait never blocks independent issues. It ends when the release's pull request is
   merged or closed, or when the user ends it.
