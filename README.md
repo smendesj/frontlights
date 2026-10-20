@@ -711,14 +711,21 @@ cada refresh: o `serve preview` e o `inspect` recusam `"port": "auto"` nos proce
 recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia.
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
-página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na
-primeira rodada que toca tela, fluxo ou camadas e atualizado a cada rodada que toca uma delas, com uma seção
-por pergunta: o antes da tela montado do template real do componente, o depois por abordagem e, sem tela, o
-diagrama de fluxo e de camadas; na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do artefato
-que mostra o que ela entrega. Só dados fictícios entram na página; a URL fica no log de descoberta (ou "artefato
-indisponível", ou "não se aplica", quando nenhuma rodada toca tela, fluxo ou camadas, e aí a lista das CAs segue
-sem seção); "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a sessão avisa numa
-linha e segue em texto.
+página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
+do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
+camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
+árvore, o pré-mortem incluído; confirmações, a pergunta da profundidade e o "Seguimos?" do fim não ganham seção.
+Cada seção segue o modelo `templates/grilling-section.html` (o que a pergunta decide, os conceitos em palavras
+simples, onde o projeto já faz isso, o que cada opção muda, o antes e depois quando há tela, a recomendação
+marcada como opinião e a escolha), e um campo sem nada a dizer é omitido. Cada seção entra por uma edição
+pequena da fonte local (`.frontlights/artifact.html`, fora do versionamento) publicada na mesma URL, nunca
+reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação), a sessão lê de volta a página
+publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
+artefato que mostra o que ela entrega, numerada depois das seções do grilling. Entra trecho de código real do
+projeto (até cerca de 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
+(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra. A URL e o caminho da fonte
+ficam no log de descoberta; "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a
+sessão avisa numa linha, segue em texto e registra "artefato indisponível".
 
 Uma issue vertical entrega um resultado observável de ponta a ponta, incluindo as
 camadas necessárias, em vez de separar tickets apenas por banco de dados, API ou tela.

@@ -42,11 +42,14 @@ pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights 
 ## Artefato do grilling
 
 A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
-host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso leva só dados fictícios.
-O antes é montado do template real do componente (HTML e CSS lidos do repositório), mas nenhum dado real,
-segredo, endpoint, nome de pessoa, cliente ou organização entra na página; os prints do produto em execução
-são do teste assistido, nunca do artefato. Sem ferramenta de artefatos, a sessão segue em texto e registra
-"artefato indisponível" no log de descoberta. É regra da skill, não barreira: nenhum script monta a página.
+host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso separa código de dado.
+Código entra: um trecho real do código do projeto, de até cerca de 15 linhas e com o caminho, com o valor de
+todo segredo (senha, token, chave, string de conexão) trocado por `***`. Dado nunca entra: o antes é montado do
+template real do componente (HTML e CSS lidos do repositório) e preenchido com dados inventados, e nenhum
+registro real, dado de pessoa, endpoint real, nome de cliente ou organização entra na página, nem dentro de um
+trecho de código. A fonte da página fica em `.frontlights/artifact.html`, fora do versionamento. Os prints do
+produto em execução são do teste assistido, nunca do artefato. Sem ferramenta de artefatos, a sessão segue em
+texto e registra "artefato indisponível" no log de descoberta. É regra da skill, não barreira: nenhum script monta a página.
 
 ## Subagentes
 

@@ -1,0 +1,63 @@
+<!--
+  Modelo de seção do artefato do grilling (references/grilling.md, "The artifact").
+  Um fragmento por pergunta de decisão, acrescentado com uma edição pequena de
+  .frontlights/artifact.html (ou .frontlights/issues/<n>/artifact.html) e publicado na mesma URL.
+  Os campos são fixos e seguem esta ordem; um campo sem nada a dizer é omitido.
+  Só classes e tokens de CSS da página, nada de estilo inline. Troque cada marcador <...>
+  e apague este comentário. Código real do projeto entra (até cerca de 15 linhas, com o caminho),
+  com o valor de todo segredo trocado por ***; registro real, dado de pessoa, endpoint real e
+  nome de cliente ou organização nunca entram.
+-->
+<section class="secao" id="secao-<n>">
+  <h2 class="secao-titulo">Seção <n>: <pergunta></h2>
+
+  <div class="campo campo-decide">
+    <h3>O que esta pergunta decide</h3>
+    <p><o que muda conforme a resposta, em uma ou duas frases></p>
+  </div>
+
+  <div class="campo campo-conceitos">
+    <h3>Conceitos</h3>
+    <dl>
+      <dt><termo></dt>
+      <dd><o termo em palavras simples></dd>
+    </dl>
+  </div>
+
+  <div class="campo campo-projeto">
+    <h3>Onde o projeto já faz</h3>
+    <p class="caminho"><code><caminho/do/arquivo>:<linha></code></p>
+    <pre class="codigo"><code><trecho real do código do projeto, até cerca de 15 linhas, segredos como ***></code></pre>
+  </div>
+
+  <div class="campo campo-opcoes">
+    <h3>O que cada opção muda</h3>
+    <ul class="opcoes">
+      <li><strong><opção></strong>: <o que ela muda: arquivos, camadas, comportamento, custo></li>
+    </ul>
+  </div>
+
+  <div class="campo campo-antes-depois">
+    <h3>Antes e depois</h3>
+    <div class="comparacao">
+      <figure class="antes">
+        <figcaption>Antes</figcaption>
+        <div class="tela"><a tela atual, montada do template real, com dados inventados></div>
+      </figure>
+      <figure class="depois">
+        <figcaption>Depois: <opção></figcaption>
+        <div class="tela"><a tela com esta opção, com dados inventados></div>
+      </figure>
+    </div>
+  </div>
+
+  <div class="campo campo-recomendacao">
+    <h3>Recomendação (opinião)</h3>
+    <p><a opção recomendada e o motivo em uma linha></p>
+  </div>
+
+  <div class="campo campo-escolha">
+    <h3>Escolha</h3>
+    <p><a opção escolhida, registrada depois da resposta></p>
+  </div>
+</section>

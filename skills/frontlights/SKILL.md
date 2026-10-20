@@ -314,12 +314,12 @@ when it is. Sub-issues join the same interview instead of being left out: one
 labelled `needs-decision`, or whose body names no approach, gets its own solution
 round in this session; the ones that already settle theirs are confirmed together
 in one question (`references/grilling.md`). There is one artifact per grilling: a private page
-published with the host's artifact tool, created at the first round that touches a screen, a flow
-or the layers and updated on the same URL, with one section per such question (the before of the
-screen built from the real template, the after per approach, a diagram of the flow and of the
-layers without a screen), only fictitious data, and the URL in the discovery log
-(`references/grilling.md`, "The artifact"); without the tool, say so in one line and go on in
-text, and when no round touches a screen, a flow or the layers the log reads "não se aplica".
+published with the host's artifact tool, created at the problem round with the before (the screen
+built from the real template, or a diagram of the flow, the layers or the current rule) and updated
+on the same URL with one section per decision question, each following
+`templates/grilling-section.html` and added by a small edit of the local source; real code excerpts
+with secrets masked, never real data, and the URL and the source path in the discovery log
+(`references/grilling.md`, "The artifact"); without the tool, say so in one line and go on in text.
 Keep facts, inferences and assumptions separate. Optional
 research and prototypes are driven by uncertainty and stay out of the product until
 stage 6.
@@ -354,8 +354,7 @@ to its consumer in the back and its column in the database; a layer is "not touc
 with that evidence, and an inconclusive trace blocks the approval of the plan until it is
 proven (`references/issues.md`). Show first the numbered list of the slices (title, depends
 on, what it delivers and the section of the artifact with what it delivers, on the same URL as
-the grilling; no section, said once, when the grilling's log reads "não se aplica";
-`references/issues.md`) and ask the quiz with `AskUserQuestion`: is the granularity right, are
+the grilling and numbered after the grilling's sections; `references/issues.md`) and ask the quiz with `AskUserQuestion`: is the granularity right, are
 the dependencies real, should any slice merge or split; a slice with no answer to "what can
 be demoed" is horizontal and goes back to the cut without an extra question. Then show the
 complete body of every issue under the show-before-approval rule and ask approval for the
