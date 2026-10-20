@@ -129,6 +129,11 @@ class ServeTestCase(unittest.TestCase):
         reset_serve_state()
         self.addCleanup(reset_serve_state)
         self.addCleanup(self.stop_leftovers)
+        # in this process only (a real serve keeps its 0.2 s): the health and kill loops look again sooner; no
+        # assertion depends on that interval, the deadlines stay as they are
+        poll = mock.patch.object(serve, 'POLL_SECONDS', 0.05)
+        poll.start()
+        self.addCleanup(poll.stop)
 
     def stop_leftovers(self):
         """A registry with a live pid may hold a process tree: a real stop. Otherwise stop has nothing to kill."""
