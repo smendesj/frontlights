@@ -938,6 +938,87 @@ class CliTests(CleanupCase):
                 self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
                 self.assertEqual(self.records(target), before)
 
+    def junction(self, link, to):
+        if os.name != 'nt':
+            self.skipTest('junctions exist only on Windows')
+        done = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(to)], capture_output=True, timeout=30)
+        if done.returncode != 0:
+            self.skipTest('mklink /J failed here')
+
+    def test_archive_refuses_a_junction_in_the_destination_or_the_source_and_writes_nothing_outside(self):
+        """Review r3 of issue 63 (R3-1): on Windows a junction is not a symlink, so a junction planted in the
+        destination (or one of its parents, or the source) would let the copy write, or read, outside `.frontlights`.
+        Each case is refused (exit 1) and the folder outside stays as it was."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice')
+        outside = Path(tempfile.mkdtemp(prefix='outside-'))
+        self.addCleanup(shutil.rmtree, outside, True)
+        worktrees = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
+        worktrees.mkdir(parents=True)
+        # inside the destination: `sub` leads outside, empty
+        inner = worktrees / 'wt12-inner'
+        inner.mkdir()
+        self.junction(inner / 'sub', outside)
+        code, result = self.archive(source, inner)
+        self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse((inner / 'note.txt').exists())
+        # inside the destination, with the same files as the source's `sub`
+        (outside / 'a.txt').write_text('slice')
+        code, result = self.archive(source, inner)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(sorted(p.name for p in outside.iterdir()), ['a.txt'])
+        os.rmdir(inner / 'sub')
+        (outside / 'a.txt').unlink()
+        # the destination itself is a junction
+        self.junction(worktrees / 'wt12-self', outside)
+        code, result = self.archive(source, worktrees / 'wt12-self')
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(list(outside.iterdir()), [])
+        # a parent of the destination is a junction
+        self.junction(worktrees / 'parent', outside)
+        code, result = self.archive(source, worktrees / 'parent' / 'wt12-x')
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(list(outside.iterdir()), [])
+        # a junction in the source is refused rather than copied through
+        (outside / 'secret.txt').write_text('not records')
+        self.junction(source / 'link', outside)
+        target = worktrees / 'wt12-source'
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertFalse((target / 'link' / 'secret.txt').exists())
+
+    def test_archive_completes_after_a_copy_interrupted_on_a_temporary_file(self):
+        """Review r3 of issue 63 (R3-2): each file is copied to a temporary name and renamed into place, so a final
+        file is never incomplete; a temporary file left by an interrupted run is removed and the next archive is ok."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice, the whole of it')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        (target / 'sub').mkdir(parents=True)
+        (target / 'note.txt').write_text('evidence')
+        (target / 'sub' / cleanup.archive_temp_name('a.txt')).write_text('slice, the')   # interrupted, truncated
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok'], result['files']), (0, True, 2))
+        self.assertEqual(self.records(target), self.records(source))
+        copied = []
+        real_replace = os.replace
+
+        def replace(src, dst):
+            copied.append((Path(src).name, Path(dst).name))
+            return real_replace(src, dst)
+        fresh = target.parent / 'wt12-fresh'
+        with patch.object(cleanup.os, 'replace', replace):
+            code, result = self.archive(source, fresh)
+        self.assertEqual((code, result['ok'], result['files']), (0, True, 2))
+        self.assertIn((cleanup.archive_temp_name('a.txt'), 'a.txt'), copied)
+        self.assertEqual(self.records(fresh), self.records(source))
+
     def test_usage_mistakes_are_json_refusals_too(self):
         for argv in ([], ['plan'], ['frobnicate', '--config', 'x'], ['plan', '--config', 'x', '--bogus'], ['verify', '--config']):
             with self.subTest(argv=argv):

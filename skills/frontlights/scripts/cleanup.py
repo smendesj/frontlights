@@ -636,6 +636,30 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     return result
 
 
+ARCHIVE_TEMP = re.compile(r'^\..+\.frontlights-archive-tmp$')
+
+
+def archive_temp_name(name):
+    """The temporary name a file of `archive` is copied under, in its own folder, before it is renamed into place."""
+    return f'.{name}.frontlights-archive-tmp'
+
+
+def is_link(path):
+    """A symlink, or a Windows junction (which `is_symlink` does not see)."""
+    return os.path.islink(path) or is_junction(path)
+
+
+def is_junction(path):
+    """A Windows junction (`os.path.isjunction`, Python 3.12 and later; none before it is read)."""
+    return bool(getattr(os.path, 'isjunction', lambda _: False)(path)) and not os.path.islink(path)
+
+
+def within(path, folder):
+    """Whether the real path of `path` is `folder` or lies under it."""
+    real, home = norm(path), norm(folder)
+    return real == home or real.startswith(home.rstrip(os.sep) + os.sep)
+
+
 def same_entry(origin, copy):
     """Whether `copy` is what `shutil.copytree(..., symlinks=True)` makes of `origin`: the same link, or a regular file
     with the same bytes."""
@@ -645,21 +669,38 @@ def same_entry(origin, copy):
 
 
 def archived_part(origin, target):
-    """The relative paths of the files already in `target` when every one of them is the same as in `origin` (an
-    earlier copy of these records, whole or stopped half-way); None when `target` holds anything else."""
-    present = set()
+    """`(present, leftovers)`: the relative paths of the files already in `target` when every one of them is the same
+    as in `origin` (an earlier copy of these records, whole or stopped half-way), and the temporary files an
+    interrupted copy left there (review r3 of issue 63, R3-2); None when `target` holds anything else, a junction, or
+    an entry other than a symlink whose real path leaves `target` (R3-1: the copy would write through it)."""
+    present, leftovers = set(), []
     for folder, dirs, files in os.walk(target):
         here = Path(folder)
         for name in dirs + files:
             copy, relative = here / name, (here / name).relative_to(target)
+            if is_junction(copy) or (not copy.is_symlink() and not within(copy, target)):
+                return None
             if name in dirs and not copy.is_symlink():
-                if not (origin / relative).is_dir() or (origin / relative).is_symlink():
+                if not (origin / relative).is_dir() or is_link(origin / relative):
                     return None
+                continue
+            if (not copy.is_symlink() and copy.is_file() and ARCHIVE_TEMP.match(name)
+                    and not os.path.lexists(origin / relative)):
+                leftovers.append(copy)
                 continue
             if not same_entry(origin / relative, copy):
                 return None
             present.add(relative.as_posix())
-    return present
+    return present, leftovers
+
+
+def copy_whole(src, dst):
+    """The `copy_function` of `archive`: copy under a temporary name in the same folder, then rename into place, so a
+    final file is never an incomplete copy (review r3 of issue 63, R3-2)."""
+    temporary = os.path.join(os.path.dirname(dst), archive_temp_name(os.path.basename(dst)))
+    shutil.copy2(src, temporary)
+    os.replace(temporary, dst)
+    return dst
 
 
 def op_archive(source, destination):
@@ -668,8 +709,13 @@ def op_archive(source, destination):
     exist or is empty gets the copy; one whose files are all the same as the records (same paths, same bytes) is an
     earlier copy of them (review r2 of issue 63, R2-1: the removal after it failed), so the files it lacks are copied
     and it is ok; one with any differing or extra file is refused, nothing copied: an earlier archive is never
-    overwritten. The one write of this helper, and only into `destination`."""
+    overwritten. A symlink or junction between the main `.frontlights` and the destination (the destination included),
+    a junction inside the destination or in the records, or an entry of the destination whose real path leaves it, is
+    refused too (review r3 of issue 63, R3-1). Each file is copied under a temporary name and renamed into place; a
+    temporary file an interrupted run left in the destination is removed (R3-2). The one write of this helper, and only
+    into `destination`."""
     require(source and destination, 'archive needs --from <worktree>/.frontlights and --to <folder>')
+    raw = Path(os.path.abspath(destination))
     origin, target = Path(source).resolve(), Path(destination).resolve()
     require(origin.name == '.frontlights' and origin.is_dir(), '--from must be the .frontlights folder of a worktree')
     records = Path(list_worktrees(origin.parent)[0]['path']).resolve() / '.frontlights'
@@ -679,18 +725,33 @@ def op_archive(source, destination):
     require(norm(records) != norm(target) and any(norm(records) == norm(p) for p in target.parents),
             '--to must be a folder under the .frontlights folder of the main worktree')
     require(not holds(origin, target) and not holds(target, origin), '--from and --to must not hold one another')
+    linked = ('a symlink or junction on the way to --to leads the copy elsewhere: nothing was copied; the worktree '
+              'keeps its records')
     try:
-        present = (set() if not target.exists() else
-                   archived_part(origin, target) if target.is_dir() and not target.is_symlink() else None)
+        for step in (raw, *raw.parents):   # from the destination up to the main `.frontlights`, both included
+            if os.path.normcase(str(step)) == os.path.normcase(str(records)):
+                break
+            require(not (os.path.lexists(step) and is_link(step)), linked)
+            if norm(step) == norm(records):
+                break
+        for folder, dirs, files in os.walk(origin):
+            require(not any(is_junction(Path(folder) / n) for n in dirs + files),
+                    'the records hold a junction, which is not copied through: nothing was copied; the worktree keeps them')
+        found = ((set(), []) if not target.exists() else
+                 archived_part(origin, target) if target.is_dir() and not is_link(target) else None)
     except OSError:
-        present = None
-    require(present is not None, '--to already holds files that differ from these records or that they do not have: '
-                                 'nothing was copied, so no earlier archive is overwritten; the worktree keeps its records')
+        raise Refusal(linked)
+    require(found is not None, '--to already holds files that differ from these records or that they do not have, or '
+                               'a link that leaves it: nothing was copied, so no earlier archive is overwritten; the '
+                               'worktree keeps its records')
+    present, leftovers = found
 
     def skip(folder, names):   # what an earlier copy already holds, the same (checked above)
         return [n for n in names if (Path(folder) / n).relative_to(origin).as_posix() in present]
     try:
-        shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True, ignore=skip)
+        for leftover in leftovers:   # a temporary file of an interrupted run, inside the destination
+            leftover.unlink()
+        shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True, ignore=skip, copy_function=copy_whole)
     except (OSError, shutil.Error):
         raise Refusal('the records could not be copied; nothing was removed, so the worktree keeps them')
     copied = sum(1 for p in target.rglob('*') if p.is_file())

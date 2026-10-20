@@ -302,7 +302,10 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   ou parcial, cuja remoção falhou) recebe só o que falta; recusa um destino com arquivo diferente ou a mais (nada é
   copiado, nada é sobrescrito), origem que não seja uma pasta `.frontlights` e destino
   fora do `.frontlights` da worktree principal daquele repositório (lida do Git); ele vem antes do `git worktree
-  remove`, e uma cópia que falha deixa a worktree e os registros onde estão;
+  remove`, e uma cópia que falha deixa a worktree e os registros onde estão; recusa também symlink ou junção no caminho até o destino
+  (o próprio destino incluído), junção dentro do destino ou na origem e entrada do destino cujo caminho real sai dele
+  (nada é copiado), e grava cada arquivo com nome temporário e o renomeia, de modo que nenhum arquivo final fica pela
+  metade (o temporário que uma cópia interrompida deixou é apagado na próxima);
 - a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
   negadas): só o candidato com arquivo ignorado fora de pastas de dependência ou build (`ask: true`) espera o "Sim";
   um comando que falha é registrado e nunca repetido com força, e o resto daquele item não roda.
