@@ -8,7 +8,7 @@ de saída, os instantes gravados pelos módulos marcadores (fila serial e limite
 parcial, os erros de infraestrutura (módulo que não importa, filho sem a linha `Ran`, crash) com saída 2, e o
 Ctrl+Break que mata os filhos (PIDs gravados pelos módulos falsos, conferidos depois). S3: o relatório JSON de
 `--report <arquivo>` (topo, módulos, totais, prazo estourado, pasta inexistente, interrupção) e os manifestos de
-texto (README, protocolo, referência da etapa 6, `docs/acceptance.md` e o workflow da CI). Revisão independente:
+texto (README, protocolo, referência da etapa 6, `docs/acceptance.md` e a ausência das frases da CI, issue 63). Revisão independente:
 o veredito lido no bloco final do unittest (texto depois do resumo, cores, runner aninhado numa mensagem de falha),
 o filho morto pelo próprio Ctrl+Break (0xC000013A) como interrupção, o prazo não finito recusado e o comando para
 rodar sozinho com o caminho absoluto. Nada aqui roda a suíte real: sobre a pasta `tests/` só se usa `--list`.
@@ -858,7 +858,7 @@ class ParallelSuiteTextTests(unittest.TestCase):
                        'vale igual para o `discover` e para o runner',
                        'pelo `python -m unittest discover -s tests -v`',
                        'o runner não deixa a suíte inteira mais rápida do que o `discover`',
-                       'roda o mesmo `discover`'):
+                       'que não define a variável'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         readme = read('README.md')
@@ -873,7 +873,7 @@ class ParallelSuiteTextTests(unittest.TestCase):
                        '`--report <arquivo>` grava o JSON da rodada',
                        'pelo `python -m unittest discover -s tests -v`',
                        '(o runner não a deixa mais rápida do que o `discover`)',
-                       'roda o mesmo `discover` e não define a variável'):
+                       'que não define a variável'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
@@ -884,13 +884,13 @@ class ParallelSuiteTextTests(unittest.TestCase):
                        '`--report <file>` writes the JSON of the run',
                        'through `python -m unittest discover -s tests -v`',
                        'the runner does not make the whole suite faster than `discover`',
-                       'runs the same `discover` and never sets the variable'):
+                       'which never sets the variable either'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')
-        for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'É a suíte inteira e o comando da CI',
+        for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'É a suíte inteira, rodada à mão',
                        'pelo `discover`, roda na release; por issue vale a suíte por impacto',
                        '`python -m compileall -q skills/frontlights/scripts tests`', 'issue 27'):
             with self.subTest(phrase=phrase):
@@ -903,10 +903,16 @@ class ParallelSuiteTextTests(unittest.TestCase):
         self.assertIsNone(re.search(r'\d+ testes em \d+ módulos', text))
         self.assertIn('A contagem de testes e de módulos é a que esse comando imprime no fim', text)
 
-    def test_the_ci_keeps_the_discover_and_never_calls_the_runner(self):
-        workflow = read('.github', 'workflows', 'tests.yml')
-        self.assertIn('python -m unittest discover -s tests -v', workflow)
-        self.assertNotIn('tests/suite.py', workflow)
+    def test_no_text_still_says_the_ci_runs_the_discover(self):
+        # Issue 63: o workflow saiu; nenhum texto diz mais que a CI roda o `discover` ou fica como conferência.
+        texts = {'README.md': flat('README.md'), 'protocol.md': flat('skills', 'frontlights', 'docs', 'protocol.md'),
+                 'development.md': flat('skills', 'frontlights', 'references', 'development.md'),
+                 'acceptance.md': flat('docs', 'acceptance.md')}
+        for name, text in texts.items():
+            for old in ('roda o mesmo `discover`', 'runs the same `discover`', 'o comando da CI',
+                        'fica para a CI', 'stays the full check', 'Integração contínua no GitHub Actions'):
+                with self.subTest(file=name, old=old):
+                    self.assertNotIn(old, text)
 
 
 if __name__ == '__main__':

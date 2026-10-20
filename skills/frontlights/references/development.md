@@ -203,12 +203,13 @@ desta vez" (`homolog suite --root <issue-worktree> --config <config> --issue <n>
 is killed: without it and without `homolog.suites.full.timeoutSeconds` the run gets 3600 s, which the whole suite of
 this repository has already exceeded under load). `<config>` is always the main worktree's
 `.frontlights/config.json`, by its absolute path: it is usually untracked and absent from an issue's worktree. The whole suite
-runs at the release ("The release"), with or without CI in the project. In this repository it is
+runs at the release ("The release"), the only whole check: a project's CI, when there is one, is neither expected
+nor a gate. In this repository it is
 `python tests/suite.py --skip-covered {covered}`: the complement, through the parallel runner, of what the impact of
 the release's issues already ran whole on the same tree, every other module run, the heavy ones in the serial queue
 and without the variable; the runner does not make the whole suite faster than `discover`, and the time saved is what
-it skips. The CI of this repository stays the full check: it runs the whole suite through
-`python -m unittest discover -s tests -v`, and runs the same `discover` and never sets the variable either.
+it skips. This repository has no CI workflow: outside the release, the whole suite also runs by hand through
+`python -m unittest discover -s tests -v`, which never sets the variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
@@ -678,7 +679,8 @@ offers the release again with everything accumulated.
   worktree already gone) adds nothing, and its reason is kept. The release record names what was skipped, where it
   came from and what did not count (`covered`, `docs/protocol.md`); `suite-gate --release` and `release-plan` judge it
   as the whole suite of the tip and say how many modules it skipped. So this run, like the adoption, comes before the
-  cleanup of the worktrees. The CI of the release's pull request stays the full check and runs everything. Without the
+  cleanup of the worktrees. This run is the release's only whole check; a CI on the release's pull request, when the project has one, is
+  neither expected nor a gate. Without the
   marker the suite runs whole, as before. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
