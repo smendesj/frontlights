@@ -567,8 +567,8 @@ delivery, so this costs at most one extra capture per delivery.
 - **Where.** The `summaryDir` that `evidence-dir` printed for the run (section "Evidence"): `resumo/` of the issue's
   folder (the lead issue's for a family) in the sprint folder, or, in a project without a sprint folder,
   `.frontlights/issues/<n>/browser/resumo/` of the project's **main worktree** (the first one `git worktree list`
-  shows), never of a linked one: the cleanup of the delivered worktrees takes their `.frontlights` records with
-  them, and the summary comes days later. A `candidates.json` lists each print:
+  shows), never of a linked one: the cleanup of the delivered worktrees removes them (their `.frontlights` records survive
+  only as a copy under `.frontlights/issues/<n>/worktrees/`), and the summary comes days later. A `candidates.json` lists each print:
   `[{"file": "<image in this folder>", "caption": "<one plain sentence in Portuguese>", "issue": <slice>,
   "cover": <delivery>, "repository": "<OWNER/REPOSITORY>", "takenAt": "<ISO 8601 instant with its offset>", "head": "<DEPOIS head>",
   "visibleFiles": {"<visible file>": "<git blob id>"}}]`.

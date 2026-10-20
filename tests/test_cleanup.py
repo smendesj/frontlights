@@ -234,7 +234,7 @@ class SliceWorktreeTests(CleanupCase):
         result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: {'heads': []}})
         self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}, {issue_branch: ['no_merged_pr']})
         entry = {c['branch']: c for c in result['candidates']}[s1_branch]
-        self.assertEqual((entry['issue'], entry['cautions'], entry['deleteRemoteBranch'], entry['pullRequests']),
+        self.assertEqual((entry['issue'], entry['cautions'], entry['ask'], entry['pullRequests']),
                          (12, ['slice_merged_into_issue_branch'], False, []))
         self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
 
@@ -262,17 +262,17 @@ class RemovableTests(CleanupCase):
         path, branch, tip = self.worktree('wt12')
         result, _ = self.plan({branch: merged(tip)})
         entry = self.only(result)
-        self.assertTrue(result['ask'])
+        self.assertFalse(result['ask'])   # the cleanup of merged work asks nothing
         self.assertEqual((entry['issue'], entry['branch'], entry['tip'], entry['pullRequests']), (12, branch, tip, [7]))
-        self.assertEqual((entry['removeWorktree'], entry['deleteRemoteBranch'], entry['cautions']), (True, True, []))
+        self.assertEqual((entry['removeWorktree'], entry['ask'], entry['cautions']), (True, False, []))
         argvs = [c['argv'] for c in entry['commands']]
-        self.assertEqual([a[:2] for a in argvs], [['git', '-C']] * 3)
+        self.assertEqual([a[:2] for a in argvs], [['git', '-C']] * 2)
         self.assertEqual({cleanup.norm(a[2]) for a in argvs}, {cleanup.norm(self.root)})   # always from the main worktree
         self.assertEqual(argvs[0][3:5], ['worktree', 'remove'])
         self.assertEqual(cleanup.norm(argvs[0][5]), cleanup.norm(path))
         self.assertEqual(argvs[1][3:], ['branch', '-D', branch])
-        self.assertEqual(argvs[2][3:], ['push', 'origin', '--delete', branch])
-        self.assertTrue(all(c['argv'][0] == 'git' for c in entry['commands']))
+        prune = {'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', argvs[0][2], 'fetch', '--prune', 'origin']}
+        self.assertEqual(result['commands'], [prune] + entry['commands'])
 
     def test_nothing_is_ever_removed_by_the_plan_and_no_command_forces_anything(self):
         path, branch, tip = self.worktree('wt12')
@@ -292,27 +292,31 @@ class RemovableTests(CleanupCase):
         self.assertFalse(before['ok'])
         self.assertEqual(before['exitCode'], 1)
         self.assertEqual([e['gone'] for e in before['entries']], [False, False])
-        for command in entry['commands'][:2]:   # the remote branch lives only on GitHub in this fixture
+        for command in entry['commands']:
             subprocess.run(command['argv'], check=True, capture_output=True)
         after = cleanup.run('verify', self.config, self.root, None, None, [str(path)], [branch], FakeGh())
         self.assertTrue(after['ok'], after)
         self.assertEqual([e['gone'] for e in after['entries']], [True, True])
-        self.assertEqual((after['entries'][1]['localGone'], after['entries'][1]['remoteGone']), (True, True))
 
-    def test_a_remote_branch_that_is_gone_or_has_moved_is_not_deleted_and_is_said(self):
+    def test_the_remote_branch_is_never_touched_whatever_github_says_of_it(self):
         path, branch, tip = self.worktree('wt12')
-        for remote, caution in ((None, 'remote_branch_gone'), ('a' * 40, 'remote_branch_moved')):
+        for remote in (None, tip, 'a' * 40):
             with self.subTest(remote=remote):
-                entry = self.only(self.plan({branch: merged(tip, remote=remote)})[0])
-                self.assertEqual((entry['deleteRemoteBranch'], entry['cautions']), (False, [caution]))
+                result, _ = self.plan({branch: merged(tip, remote=remote)})
+                entry = self.only(result)
+                self.assertEqual(entry['cautions'], [])
                 self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
+                self.assertNotIn('push', [a for c in result['commands'] for a in c['argv']])
 
-    def test_records_kept_inside_the_worktree_are_a_caution_that_does_not_block(self):
+    def test_records_kept_inside_the_worktree_are_copied_to_the_main_before_it_is_removed(self):
         path, branch, tip = self.worktree('wt12')
         (path / '.frontlights').mkdir()
         (path / '.frontlights' / 'note.txt').write_text('evidence')
         entry = self.only(self.plan({branch: merged(tip)})[0])
-        self.assertEqual(entry['cautions'], ['frontlights_records'])
+        self.assertEqual((entry['cautions'], entry['ask']), (['frontlights_records'], False))
+        self.assertEqual([c['kind'] for c in entry['commands']], ['copy_records', 'remove_worktree', 'delete_branch'])
+        self.assertEqual(cleanup.norm(entry['recordsTo']),
+                         cleanup.norm(self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f'wt12-{tip[:7]}'))
 
     def test_a_squash_merged_branch_is_removable_because_its_tip_is_the_head_of_the_merged_pull_request(self):
         path, branch, tip = self.worktree('wt12')
@@ -324,7 +328,7 @@ class RemovableTests(CleanupCase):
         self.git('worktree', 'remove', str(path))
         entry = self.only(self.plan({branch: merged(tip)})[0])
         self.assertEqual((entry['removeWorktree'], entry['path'], [c['kind'] for c in entry['commands']]),
-                         (False, None, ['delete_branch', 'delete_remote_branch']))
+                         (False, None, ['delete_branch']))
 
     def test_what_is_already_gone_is_counted_and_asks_nothing(self):
         path, branch, tip = self.worktree('wt12')
@@ -355,7 +359,7 @@ class IgnoredAndOriginTests(CleanupCase):
         with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
             exclude.write('\n'.join(patterns) + '\n')
 
-    def test_ignored_files_go_away_with_the_worktree_so_they_are_named_in_a_caution_that_does_not_block(self):
+    def test_ignored_files_go_away_with_the_worktree_so_they_are_named_and_a_secret_among_them_asks(self):
         self.ignore('*.env', 'node_modules/')
         path, branch, tip = self.worktree('wt12')
         (path / 'secret.env').write_text('TOKEN=1')
@@ -364,6 +368,7 @@ class IgnoredAndOriginTests(CleanupCase):
         entry = self.only(self.plan({branch: merged(tip)})[0])
         self.assertEqual(entry['cautions'], ['ignored_files'])
         self.assertEqual((entry['ignoredCount'], sorted(entry['ignored'])), (2, ['node_modules/', 'secret.env']))
+        self.assertEqual((entry['ask'], entry['askIgnored']), (True, ['secret.env']))
         self.assertEqual([c['kind'] for c in entry['commands']][0], 'remove_worktree')
 
     def test_the_frontlights_folder_has_its_own_caution_and_is_not_listed_as_an_ignored_file(self):
@@ -380,22 +385,11 @@ class IgnoredAndOriginTests(CleanupCase):
         self.assertNotIn('ignored_files', entry['cautions'])
         self.assertNotIn('ignoredCount', entry)
 
-    def test_the_remote_branch_is_deleted_only_when_origin_is_the_configured_repository(self):
+    def test_without_an_origin_there_is_nothing_to_prune(self):
         path, branch, tip = self.worktree('wt12')
-        for url, deletes in ((f'git@github.com:{REPO}.git', True), (f'https://github.com/{REPO.lower()}', True),
-                             ('https://github.com/OTHER/REPOSITORY.git', False), ('not a url', False)):
-            with self.subTest(url=url):
-                self.git('remote', 'set-url', 'origin', url)
-                entry = self.only(self.plan({branch: merged(tip)})[0])
-                self.assertEqual(entry['deleteRemoteBranch'], deletes)
-                self.assertEqual([c['kind'] for c in entry['commands']].count('delete_remote_branch'), int(deletes))
-                self.assertEqual(entry['cautions'], [] if deletes else ['origin_is_not_the_repository'])
-
-    def test_the_push_url_is_the_one_that_counts(self):
-        path, branch, tip = self.worktree('wt12')
-        self.git('config', 'remote.origin.pushurl', 'https://github.com/OTHER/REPOSITORY.git')   # fetch URL still ours
-        entry = self.only(self.plan({branch: merged(tip)})[0])
-        self.assertEqual((entry['deleteRemoteBranch'], entry['cautions']), (False, ['origin_is_not_the_repository']))
+        self.git('remote', 'remove', 'origin')
+        result, _ = self.plan({branch: merged(tip)})
+        self.assertEqual([c['kind'] for c in result['commands']], ['remove_worktree', 'delete_branch'])
 
     def test_ignored_names_come_unquoted_even_with_spaces_and_accents(self):
         self.ignore('*.sqlite')
@@ -450,7 +444,7 @@ class IntegrationTests(CleanupCase):
         result, _ = self.plan(info, issues='12,13', integrations=[str(integ)])
         self.assertEqual(len(result['candidates']), 3, result)
         last = result['candidates'][-1]
-        self.assertEqual((last['issue'], last['branch'], last['cautions'], last['deleteRemoteBranch']),
+        self.assertEqual((last['issue'], last['branch'], last['cautions'], last['ask']),
                          (None, 'claude/integ', ['local_only_integration'], False))
         self.assertEqual([c['kind'] for c in last['commands']], ['remove_worktree', 'delete_branch'])
 
@@ -621,14 +615,13 @@ class MoreStayTests(CleanupCase):
         entry = self.only(self.plan({branch: merged(tip)})[0])
         self.assertEqual((entry['branch'], entry['cautions']), (branch, ['branch_differs_from_authorization']))
 
-    def test_verify_says_a_remote_branch_that_is_still_there_is_not_gone(self):
+    def test_verify_reads_only_the_local_branch_the_remote_one_is_githubs(self):
         path, branch, tip = self.worktree('wt12')
         self.git('worktree', 'remove', str(path))
         self.git('branch', '-D', branch)
-        there = cleanup.run('verify', self.config, self.root, None, None, (), [branch], FakeGh({branch: {'remote': tip}}))
-        self.assertEqual((there['ok'], there['entries'][0]['localGone'], there['entries'][0]['remoteGone']), (False, True, False))
-        gone = cleanup.run('verify', self.config, self.root, None, None, (), [branch], FakeGh({}))
-        self.assertEqual((gone['ok'], gone['entries'][0]['gone']), (True, True))
+        gh = FakeGh({branch: {'remote': tip}})
+        result = cleanup.run('verify', self.config, self.root, None, None, (), [branch], gh)
+        self.assertEqual((result['ok'], result['entries'][0]['gone'], gh.calls), (True, True, []))
 
 
 class ChainTests(CleanupCase):
@@ -898,6 +891,168 @@ class CliTests(CleanupCase):
                                  '--branch', branch)
         self.assertEqual((code, json.loads(out)['ok']), (1, False))
 
+    def archive(self, source, target):
+        code, out, _ = self.main('archive', '--from', str(source), '--to', str(target))
+        return code, json.loads(out)
+
+    def records(self, folder):
+        return {p.relative_to(folder).as_posix(): p.read_bytes() for p in sorted(folder.rglob('*')) if p.is_file()}
+
+    def test_archive_again_after_the_removal_failed_is_ok_and_keeps_the_records(self):
+        """Review r2 of issue 63 (R2-1): a round copies the records and `git worktree remove` fails; the next round
+        offers the same worktree, tip and `recordsTo`. The second archive finds the same files and says so (exit 0),
+        so the removal goes on; a copy that stopped half-way is completed."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        code, first = self.archive(source, target)
+        self.assertEqual((code, first['ok'], first['files']), (0, True, 2))
+        code, second = self.archive(source, target)
+        self.assertEqual((code, second['ok'], second['exitCode'], second['files']), (0, True, 0, 2))
+        self.assertIn('already', second['message'])
+        self.assertEqual(self.records(target), self.records(source))
+        (target / 'sub' / 'a.txt').unlink()   # a copy that failed half-way
+        code, third = self.archive(source, target)
+        self.assertEqual((code, third['ok'], third['files']), (0, True, 2))
+        self.assertEqual(self.records(target), self.records(source))
+
+    def test_archive_refuses_a_destination_with_a_differing_or_extra_file_and_leaves_it(self):
+        """Review r2 of issue 63 (R2-1): any file of the destination that differs from the source, or that the source
+        does not have, is refused (exit 1), nothing copied, the destination untouched."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        source.mkdir()
+        (source / 'note.txt').write_text('evidence')
+        (source / 'more.txt').write_text('more')
+        for name, files in (('differs', {'note.txt': 'other'}), ('extra', {'note.txt': 'evidence', 'old.txt': 'old'})):
+            with self.subTest(name):
+                target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f'wt12-{name}'
+                target.mkdir(parents=True)
+                for file, text in files.items():
+                    (target / file).write_text(text)
+                before = self.records(target)
+                code, result = self.archive(source, target)
+                self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+                self.assertEqual(self.records(target), before)
+
+    def junction(self, link, to):
+        if os.name != 'nt':
+            self.skipTest('junctions exist only on Windows')
+        done = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(to)], capture_output=True, timeout=30)
+        if done.returncode != 0:
+            self.skipTest('mklink /J failed here')
+
+    def test_archive_refuses_a_junction_in_the_destination_or_the_source_and_writes_nothing_outside(self):
+        """Review r3 of issue 63 (R3-1): on Windows a junction is not a symlink, so a junction planted in the
+        destination (or one of its parents, or the source) would let the copy write, or read, outside `.frontlights`.
+        Each case is refused (exit 1) and the folder outside stays as it was."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice')
+        outside = Path(tempfile.mkdtemp(prefix='outside-'))
+        self.addCleanup(shutil.rmtree, outside, True)
+        worktrees = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
+        worktrees.mkdir(parents=True)
+        # inside the destination: `sub` leads outside, empty
+        inner = worktrees / 'wt12-inner'
+        inner.mkdir()
+        self.junction(inner / 'sub', outside)
+        code, result = self.archive(source, inner)
+        self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse((inner / 'note.txt').exists())
+        # inside the destination, with the same files as the source's `sub`
+        (outside / 'a.txt').write_text('slice')
+        code, result = self.archive(source, inner)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(sorted(p.name for p in outside.iterdir()), ['a.txt'])
+        os.rmdir(inner / 'sub')
+        (outside / 'a.txt').unlink()
+        # the destination itself is a junction
+        self.junction(worktrees / 'wt12-self', outside)
+        code, result = self.archive(source, worktrees / 'wt12-self')
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(list(outside.iterdir()), [])
+        # a parent of the destination is a junction
+        self.junction(worktrees / 'parent', outside)
+        code, result = self.archive(source, worktrees / 'parent' / 'wt12-x')
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(list(outside.iterdir()), [])
+        # a junction in the source is refused rather than copied through
+        (outside / 'secret.txt').write_text('not records')
+        self.junction(source / 'link', outside)
+        target = worktrees / 'wt12-source'
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertFalse((target / 'link' / 'secret.txt').exists())
+
+    def test_archive_completes_after_a_copy_interrupted_on_a_temporary_file(self):
+        """Review r3 of issue 63 (R3-2): each file is copied to a temporary name and renamed into place, so a final
+        file is never incomplete; a temporary file left by an interrupted run is removed and the next archive is ok."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        (source / 'sub').mkdir(parents=True)
+        (source / 'note.txt').write_text('evidence')
+        (source / 'sub' / 'a.txt').write_text('slice, the whole of it')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        (target / 'sub').mkdir(parents=True)
+        (target / 'note.txt').write_text('evidence')
+        (target / 'sub' / cleanup.archive_temp_name('a.txt')).write_text('slice, the')   # interrupted, truncated
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok'], result['files']), (0, True, 2))
+        self.assertEqual(self.records(target), self.records(source))
+        copied = []
+        real_replace = os.replace
+
+        def replace(src, dst):
+            copied.append((Path(src).name, Path(dst).name))
+            return real_replace(src, dst)
+        fresh = target.parent / 'wt12-fresh'
+        with patch.object(cleanup.os, 'replace', replace):
+            code, result = self.archive(source, fresh)
+        self.assertEqual((code, result['ok'], result['files']), (0, True, 2))
+        self.assertIn((cleanup.archive_temp_name('a.txt'), 'a.txt'), copied)
+        self.assertEqual(self.records(fresh), self.records(source))
+
+    def test_archive_refuses_a_source_entry_named_like_the_temporary_file_and_copies_nothing(self):
+        """Review r4 of issue 63 (R4-1, criterion P1): the source holds `a.txt` and `.a.txt.frontlights-archive-tmp`.
+        Copied as they come, the second would be taken for the temporary file of the first and one record lost (or,
+        were it a link leading outside, written through). It is refused (exit 1), nothing copied, the destination
+        untouched; and the temporary file is created exclusively, so one already there is never written through."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        source.mkdir()
+        (source / 'a.txt').write_text('slice')
+        (source / cleanup.archive_temp_name('a.txt')).write_text('another record')
+        worktrees = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
+        target = worktrees / 'wt12-abc1234'
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+        self.assertFalse(target.exists())
+        earlier = worktrees / 'wt12-earlier'
+        earlier.mkdir(parents=True)
+        (earlier / 'kept.txt').write_text('kept')
+        (source / 'kept.txt').write_text('kept')
+        code, result = self.archive(source, earlier)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(self.records(earlier), {'kept.txt': b'kept'})
+        # the temporary file is created exclusively: one already there (here a planted file) is not overwritten
+        (source / cleanup.archive_temp_name('a.txt')).unlink()
+        (source / 'kept.txt').unlink()
+        destination = worktrees / 'wt12-busy'
+        destination.mkdir()
+        planted = destination / cleanup.archive_temp_name('a.txt')
+        with self.assertRaises(FileExistsError):
+            planted.write_text('planted')
+            cleanup.copy_whole(str(source / 'a.txt'), str(destination / 'a.txt'))
+        self.assertEqual(planted.read_text(), 'planted')
+        self.assertFalse((destination / 'a.txt').exists())
+
     def test_usage_mistakes_are_json_refusals_too(self):
         for argv in ([], ['plan'], ['frobnicate', '--config', 'x'], ['plan', '--config', 'x', '--bogus'], ['verify', '--config']):
             with self.subTest(argv=argv):
@@ -934,19 +1089,17 @@ class DeliveredWithoutPullRequestTests(CleanupCase):
         result, _ = self.plan({branch: {'heads': []}})
         entry = self.only(result)
         self.assertEqual((entry['issue'], entry['branch'], entry['tip'], entry['pullRequests']), (12, branch, tip, []))
-        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']), (['contained_in_base_without_pull_request'], False))
+        self.assertEqual((entry['cautions'], entry['ask']), (['contained_in_base_without_pull_request'], False))
         self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
         self.assertFalse(any('push' in c['argv'] for c in entry['commands']))
 
-    def test_a_branch_pushed_under_the_old_flow_and_delivered_without_a_pull_request_still_reports_its_remote(self):
+    def test_a_branch_pushed_under_the_old_flow_and_delivered_without_a_pull_request_leaves_its_remote_alone(self):
         path, branch, tip = self.delivered()
-        entry = self.only(self.plan({branch: {'heads': [], 'remote': 'a' * 40}})[0])
-        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']),
-                         (['contained_in_base_without_pull_request', 'remote_branch_moved'], False))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
-        entry = self.only(self.plan({branch: {'heads': [], 'remote': tip}})[0])
-        self.assertEqual((entry['cautions'], entry['deleteRemoteBranch']), (['contained_in_base_without_pull_request'], True))
-        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch', 'delete_remote_branch'])
+        for remote in ('a' * 40, tip):
+            with self.subTest(remote=remote):
+                entry = self.only(self.plan({branch: {'heads': [], 'remote': remote}})[0])
+                self.assertEqual(entry['cautions'], ['contained_in_base_without_pull_request'])
+                self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
 
     def test_an_issue_branch_outside_the_base_still_needs_a_pull_request(self):
         path, branch, tip = self.worktree('issue-12')
@@ -973,6 +1126,189 @@ class DeliveredWithoutPullRequestTests(CleanupCase):
         with patch.object(cleanup, 'is_ancestor', lambda *args: None):
             result, _ = self.plan({branch: {'heads': []}})
         self.assertEqual(self.reasons(result), [['ancestry_unverifiable']])
+
+
+class MergedWorkTests(CleanupCase):
+    """Issue 63, S1: a limpeza do trabalho mesclado roda sozinha e sem branch remota. Depois do merge da release, o
+    plano traz `git fetch --prune`, a cópia dos registros de cada worktree para `.frontlights/issues/<n>/` antes de
+    removê-la, a remoção das worktrees e das branches locais da issue, das slices e da release mesclada, e nenhum
+    `git push origin --delete`; só pergunta quem tem arquivo ignorado fora de dependência ou build. O `origin` é um
+    repositório nu local que faz o papel do GitHub (merge e exclusão automática da branch da release)."""
+
+    RELEASE = 'claude/release-2026-10-20'
+
+    def released(self):
+        """An issue worktree with a slice merged into it, the issue merged into the local main, the release branch cut
+        from main, pushed, merged on the origin and deleted there (GitHub's automatic deletion), and main pulled."""
+        bare = self.base / 'origin.git'
+        self.git('clone', '-q', '--bare', str(self.root), str(bare))
+        self.git('remote', 'set-url', 'origin', str(bare))
+        self.git('fetch', '-q', 'origin')
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        s1_path = self.base / 'issue-12-s1'
+        s1_branch = 'claude/issue-12-s1'
+        self.git('worktree', 'add', '-q', '-b', s1_branch, str(s1_path), issue_branch)
+        (s1_path / 's1.txt').write_text('s1')
+        self.git('add', '.', cwd=s1_path)
+        self.git('commit', '-q', '-m', 's1', cwd=s1_path)
+        self.entries.append({'issue': 12, 'path': str(s1_path), 'branch': s1_branch, 'slice': 'S1', 'ownership': ['src']})
+        self.authorize()
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        for path, name in ((issue_path, 'review.json'), (s1_path, 'progress.json')):
+            (path / '.frontlights' / 'issues' / '12').mkdir(parents=True)
+            (path / '.frontlights' / 'issues' / '12' / name).write_text('{"evidence": true}', encoding='utf-8')
+        self.git('merge', '-q', '--no-ff', '-m', 'issue 12', issue_branch)
+        self.git('branch', self.RELEASE, 'main')
+        self.git('push', '-q', '-u', 'origin', self.RELEASE)
+        release_tip = self.git('rev-parse', self.RELEASE)
+        self.git('update-ref', 'refs/heads/main', release_tip, cwd=bare)          # the merge of the release on GitHub
+        self.git('update-ref', '-d', f'refs/heads/{self.RELEASE}', cwd=bare)      # its automatic deletion
+        self.git('pull', '-q', '--ff-only', 'origin', 'main')
+        info = {issue_branch: {'heads': []}, s1_branch: {'heads': []},
+                self.RELEASE: {'heads': [pull(70, oid=release_tip)]}}
+        return (issue_path, issue_branch), (s1_path, s1_branch), info
+
+    def test_after_the_release_merge_the_plan_brings_the_whole_cleanup_in_order_and_verify_sees_it_done(self):
+        (issue_path, issue_branch), (s1_path, s1_branch), info = self.released()
+        result, _ = self.plan(info)
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(result['excluded'], [])
+        self.assertFalse(result['ask'])
+        main = cleanup.norm(self.root)
+        kinds = [c['kind'] for c in result['commands']]
+        self.assertEqual(kinds, ['fetch_prune', 'copy_records', 'remove_worktree', 'delete_branch',
+                                 'copy_records', 'remove_worktree', 'delete_branch', 'delete_branch'])
+        self.assertEqual(result['commands'][0]['argv'][3:], ['fetch', '--prune', 'origin'])
+        branches = [c['argv'][-1] for c in result['commands'] if c['kind'] == 'delete_branch']
+        self.assertEqual(branches, [s1_branch, issue_branch, self.RELEASE])
+        removed = [cleanup.norm(c['argv'][-1]) for c in result['commands'] if c['kind'] == 'remove_worktree']
+        self.assertEqual(removed, [cleanup.norm(s1_path), cleanup.norm(issue_path)])
+        release = result['candidates'][-1]
+        self.assertEqual((release['branch'], release['release'], release['removeWorktree'], release['cautions']),
+                         (self.RELEASE, True, False, ['merged_release_branch']))
+        flat_argv = [a for c in result['commands'] for a in c['argv']]
+        self.assertNotIn('push', flat_argv)
+        self.assertNotIn('--force', flat_argv)
+        self.assertNotIn('-f', flat_argv)
+        for command in result['commands']:
+            if command['argv'][0] == 'git':
+                self.assertEqual(cleanup.norm(command['argv'][2]), main)
+            subprocess.run(command['argv'], check=True, capture_output=True)
+        archive = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
+        tips = {c['branch']: c['tip'] for c in result['candidates']}
+        issue_records = archive / f"issue-12-{tips[issue_branch][:7]}"
+        s1_records = archive / f"issue-12-s1-{tips[s1_branch][:7]}"
+        self.assertEqual(json.loads((issue_records / 'issues' / '12' / 'review.json').read_text(encoding='utf-8')),
+                         {'evidence': True})
+        self.assertTrue((s1_records / 'issues' / '12' / 'progress.json').is_file())
+        self.assertEqual(self.git('branch', '--list', '-r', f'origin/{self.RELEASE}'), '')   # pruned by the fetch
+        after = cleanup.run('verify', self.config, self.root, None, None, [str(issue_path), str(s1_path)],
+                            [issue_branch, s1_branch, self.RELEASE], FakeGh(),
+                            records=[str(issue_records), str(s1_records)])
+        self.assertTrue(after['ok'], after)
+        self.assertEqual([e['kind'] for e in after['entries']], ['worktree'] * 2 + ['branch'] * 3 + ['records'] * 2)
+
+    def test_each_command_names_the_item_it_belongs_to(self):
+        """Review r1 of issue 63 (R1-3): every command of `commands` carries the branch of its candidate in `item`
+        (null only for the fetch, which belongs to no item), so a failure skips the rest of that item."""
+        _, _, info = self.released()
+        result, _ = self.plan(info)
+        self.assertEqual(result['commands'][0]['kind'], 'fetch_prune')
+        self.assertIsNone(result['commands'][0]['item'])
+        expected = [c['branch'] for c in result['candidates'] for _ in c['commands']]
+        self.assertEqual([c['item'] for c in result['commands'][1:]], expected)
+        for candidate in result['candidates']:
+            with self.subTest(branch=candidate['branch']):
+                self.assertEqual({c['item'] for c in candidate['commands']}, {candidate['branch']})
+
+    def test_the_records_of_each_worktree_go_to_a_folder_of_their_own_tip(self):
+        """Review r1 of issue 63 (R1-2): `recordsTo` carries the short tip of the worktree, so a later worktree of the
+        same folder name never lands on records archived before."""
+        (issue_path, issue_branch), _, info = self.released()
+        result, _ = self.plan(info)
+        entry = next(c for c in result['candidates'] if c['branch'] == issue_branch)
+        expected = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f"issue-12-{entry['tip'][:7]}"
+        self.assertEqual(cleanup.norm(entry['recordsTo']), cleanup.norm(expected))
+        copy = next(c for c in entry['commands'] if c['kind'] == 'copy_records')
+        self.assertEqual(copy['argv'][-1], entry['recordsTo'])
+
+    def test_archive_refuses_a_destination_that_already_holds_records(self):
+        """Review r1 of issue 63 (R1-2): a destination that exists and is not empty is refused, nothing copied."""
+        path, _, _ = self.worktree('wt12')
+        (path / '.frontlights').mkdir()
+        (path / '.frontlights' / 'note.txt').write_text('new')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        target.mkdir(parents=True)
+        (target / 'note.txt').write_text('old')
+        result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(target))
+        self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+        self.assertEqual(((target / 'note.txt').read_text(), sorted(p.name for p in target.iterdir())), ('old', ['note.txt']))
+        empty = target.parent / 'wt12-def5678'
+        empty.mkdir()
+        result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(empty))
+        self.assertEqual((result['ok'], (empty / 'note.txt').read_text()), (True, 'new'))
+
+    def test_archive_refuses_a_frontlights_folder_outside_the_main_worktree(self):
+        """Review r1 of issue 63 (R1-6): the destination lies under the main worktree's `.frontlights`, the main
+        worktree read from Git for the worktree of --from; a `.frontlights` elsewhere is refused."""
+        path, _, _ = self.worktree('wt12')
+        (path / '.frontlights').mkdir()
+        (path / '.frontlights' / 'note.txt').write_text('evidence')
+        for target in (self.base / 'other' / '.frontlights' / 'issues' / '12', path / 'sub' / '.frontlights' / 'x',
+                       self.root / 'sub' / '.frontlights' / 'x'):
+            with self.subTest(target=str(target)):
+                result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(target))
+                self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+                self.assertFalse(target.exists())
+
+    def test_archive_copies_only_a_frontlights_folder_into_a_frontlights_folder(self):
+        path, _, _ = self.worktree('wt12')
+        (path / '.frontlights').mkdir()
+        (path / '.frontlights' / 'note.txt').write_text('evidence')
+        inside = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12'
+        for source, target in ((path, inside), (path / '.frontlights', self.base / 'elsewhere'),
+                               (path / '.frontlights', path / '.frontlights' / 'x')):
+            with self.subTest(source=source.name, target=target.name):
+                result = cleanup.run('archive', None, source=str(source), destination=str(target))
+                self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+                self.assertFalse(inside.exists())
+        result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(inside))
+        self.assertEqual((result['ok'], result['files'], (inside / 'note.txt').read_text()), (True, 1, 'evidence'))
+
+    def test_verify_says_records_that_were_not_copied(self):
+        result = cleanup.run('verify', self.config, self.root, None, None, (), (), FakeGh(),
+                             records=[str(self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'nada')])
+        self.assertEqual((result['ok'], result['exitCode'], result['entries'][0]['copied']), (False, 1, False))
+
+    def test_only_ignored_files_besides_dependency_or_build_folders_make_a_candidate_ask(self):
+        with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
+            exclude.write('node_modules/\n__pycache__/\ndist/\n*.env\n')
+        path, branch, tip = self.worktree('wt12')
+        for folder in ('node_modules', '__pycache__', 'dist'):
+            (path / folder).mkdir()
+            (path / folder / 'x').write_text('x')
+        result, _ = self.plan({branch: merged(tip)})
+        entry = self.only(result)
+        self.assertEqual((entry['ask'], result['ask']), (False, False))
+        self.assertIn('remove_worktree', [c['kind'] for c in result['commands']])
+        (path / 'secret.env').write_text('TOKEN=1')
+        result, _ = self.plan({branch: merged(tip)})
+        entry = self.only(result)
+        self.assertEqual((entry['ask'], entry['askReason'], entry['askIgnored'], result['ask']),
+                         (True, 'ignored_files_besides_dependencies', ['secret.env'], True))
+        self.assertEqual([c['kind'] for c in result['commands']], ['fetch_prune'])   # asked first, run after a yes
+        self.assertEqual([c['kind'] for c in entry['commands']], ['remove_worktree', 'delete_branch'])
+
+    def test_a_release_branch_not_yet_merged_or_checked_out_is_left_alone(self):
+        self.git('branch', self.RELEASE, 'main')
+        stray = self.base / 'rel'
+        self.git('worktree', 'add', '-q', '-b', 'claude/release-2026-10-21', str(stray))
+        (stray / 'r.txt').write_text('r')
+        self.git('add', '.', cwd=stray)
+        self.git('commit', '-q', '-m', 'r', cwd=stray)
+        result, _ = self.plan({self.RELEASE: {'heads': [pull(70, 'OPEN', oid=self.main_tip)]}})
+        self.assertEqual([c['branch'] for c in result['candidates']], [])
+        self.assertNotIn('claude/release-2026-10-21', [e['branch'] for e in result['excluded']])
 
 
 if __name__ == '__main__':

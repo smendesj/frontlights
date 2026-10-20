@@ -185,7 +185,8 @@ e é relida para conferir:
 - `python scripts/frontlights.py validate-plan --plan plan.json --config .frontlights/config.json`
   recusa o plano enquanto faltar valor para algum campo.
 - `done` é opcional e diz qual campo e valor significam "concluída": `{"field": "Status", "value": "Done"}`
-  é o padrão. O fechamento de issues move o cartão para esse valor; o campo precisa ser de escolha única
+  é o padrão. A conferência do fechamento lê o cartão nesse valor (quem o move é o fluxo "Item closed" do
+  quadro, nunca o Frontlights); o campo precisa ser de escolha única
   e o valor precisa existir entre as opções.
 - O token do `gh` precisa do escopo `project` (`gh auth refresh -s project`).
 - Um campo do quadro sem nenhuma opção cadastrada não aceita valor: não o declare em `fields`,
@@ -288,7 +289,8 @@ evidência que o fechará. Como altera o escopo da issue, o texto exato é mostr
 aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, releitura e
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
-houver uma aberta, o PR cita a issue sem palavra de fechamento (`Closes`, `Fixes`). Antes
+houver uma aberta, a issue fica fora do `closes` do `release-plan` e o PR a cita sem palavra de fechamento
+(`Closes`, `Fixes`). Antes
 de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
@@ -588,23 +590,27 @@ execução, antes de qualquer processo subir. Um `browserTest` que declara só a
 
 Depois da pergunta das issues do RoadS e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
 que ele trabalhou neste projeto e que já têm **todos os critérios de aceitação marcados**, pergunta se pode
-fechá-las e mover os cartões para Done. A lista vem completa, com as sub-issues antes dos pais, os PRs
+fechá-las. A lista vem completa, com as sub-issues antes dos pais, os PRs
 ligados (aberto, mesclado ou nenhum), o status atual do cartão e os comandos exatos; só depois da sua
-aprovação dessa lista ele fecha (`gh issue close --reason completed`) e move, e relê o GitHub para conferir.
+aprovação dessa lista ele fecha (`gh issue close --reason completed`) e relê o GitHub para conferir. O cartão vai
+para Done pelo fluxo do próprio quadro ("Item closed" → Status Done, ligado na tela Workflows do Project): o
+Frontlights nunca move cartão, e a conferência diz numa linha quando um cartão não chegou a Done.
 Uma issue sem a seção de critérios, com critério desmarcado ou com filha ainda aberta que não esteja na mesma lista
 nunca entra; uma issue cuja branch ainda não está em `origin/main` (a release que a leva não foi mesclada) fica fora
-como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada só é movida se foi fechada como concluída. Um corpo escrito antes da regra das
+como `awaiting_release`, e o Frontlights só avisa. Uma issue já fechada nunca entra na lista. Um corpo escrito antes da regra das
 pendências, com uma seção "Pendências conhecidas" fora dos critérios e item aberto nela, entra na lista com o
 aviso "fecha com N pendências fora dos critérios": a decisão de fechar assim é sua, e, se você pedir, mover
 essas pendências para os critérios é uma escrita à parte, com texto aprovado antes.
-O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: fechar sem mover o cartão não muda nada
-lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo; por isso, depois de mover
-cartões, o Frontlights avisa que o RoadS só os mostra depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
+O RoadS lê só o **Status** do cartão no Project, nunca se a issue está fechada: com o fluxo "Item closed" desligado,
+fechar não muda nada lá, e um item concluído fica na sprint (marcado como concluído) até a rotação semanal removê-lo;
+por isso, depois de fechar, o Frontlights avisa que o RoadS só mostra o fechamento depois da próxima sincronização dele. Nenhuma autorização de implementação, merge ou teste verde
 substitui essa aprovação. Os utilitários são
 `python scripts/closeout.py candidates|verify|merge-status|tick-check ...` e
-`python scripts/cleanup.py plan|verify ...`, e só leem. A exceção é `python scripts/closeout.py tick --issue <n>
+`python scripts/cleanup.py plan|verify ...`, e só leem. As exceções são `python scripts/closeout.py tick --issue <n>
 --box S<k>` (ou `--line <N>`), que marca uma caixa de critério com evidência: captura o corpo, troca só aquele `[ ]`
-por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo anterior em `.frontlights/issues/<n>/`.
+por `[x]`, confere com o `tick-check` antes e depois de gravar e guarda o corpo anterior em `.frontlights/issues/<n>/`;
+e `python scripts/cleanup.py archive --from <worktree>/.frontlights --to <pasta>`, que copia os registros de uma
+worktree para o `.frontlights` da principal antes de a limpeza removê-la.
 
 #### Homologar na main local, lançar a release, fechar e limpar
 
@@ -626,32 +632,51 @@ Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar
 momento): ele avisa em uma linha o que espera, registra "Aguardando o merge" no handoff e segue com o trabalho
 independente. Quando a PR fica pronta (os portões de cada issue registrados, sem conflito com a base e
 nenhum achado sem destino), ele pergunta se pode mesclá-la; só o seu "Sim" faz o merge (com commit de merge), e
-com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR nunca leva palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, porque
-fechar uma issue tem aprovação própria. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
+com o "Não" a espera continua. Depois do merge, `git pull --ff-only` traz a main local até ele. A PR leva `Closes #n` só para as issues do
+`closes` do `release-plan`, uma linha por issue copiada da lista: as de topo com todas as caixas marcadas, nenhuma
+filha aberta e nenhuma pendência fora dos critérios. Para isso o `release-plan` lê o GitHub (só leitura, com o
+`repository` do config); sem essa leitura, ou com uma base que não é a branch padrão do repositório, a lista sai
+vazia com a razão (`closesReason`), e na dúvida não há `Closes`. As outras issues a PR cita pelo número, sem
+palavra de fechamento (`Closes`, `Fixes`, `Resolves`) no corpo nem nos commits, e elas seguem a pergunta de
+fechamento. O merge continua uma operação negada, perguntada a você: só ele fecha as issues de `closes`. O aviso do ambiente (uma inscrição na PR ou um monitor em segundo plano) é só o
 gatilho: a cada despertar roda `closeout.py merge-status`, e só vale o merge **na branch base aprovada**. Merge de uma
 issue na main local, PR fechada sem merge ou PR não encontrada não fecham nada: a issue fecha com a release que a leva. Se o ambiente não oferece gatilho, ou
 a sessão acaba, a pergunta de fechamento do início da próxima sessão encontra o trabalho mesclado.
 
-Com o merge confirmado, em aprovações separadas, nesta ordem:
+Com o merge confirmado, nesta ordem:
 
-1. **Issue** com todos os critérios marcados: pergunta se pode fechá-la e mover o cartão para Done.
+1. **Limpeza**, logo depois do `git pull --ff-only` e sem pergunta (também no início de toda sessão nova cujos
+   registros de autorização listam issues, depois de um `git fetch --prune origin`: o plano sozinho julga o que foi
+   mesclado, inclusive a issue já fechada pelo `Closes #n`): `cleanup.py plan` traz os comandos em ordem e a sessão
+   os roda, item por item; um comando que falha deixa o resto daquele item sem rodar. Primeiro `git fetch --prune`;
+   depois, para cada worktree com registros do `.frontlights` dentro, a cópia deles para
+   `.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da worktree principal (`cleanup.py archive`), numa
+   pasta própria (se ela já tem uma cópia igual, inteira ou parcial, de uma rodada cuja remoção falhou, ele completa
+   o que falta; se tem arquivo diferente ou a mais, recusa sem copiar nada e o item fica), e só então a remoção
+   da worktree e da branch local; por último a branch local da release mesclada. Só entram as worktrees e branches
+   das issues e das slices que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
+   empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao
+   GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são
+   protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota nunca é apagada pela
+   limpeza: o GitHub apaga a branch da PR mesclada sozinho (a opção "Automatically delete head branches" do
+   repositório). Nunca usa `--force`, e `cleanup.py verify` confere depois que tudo sumiu e que os registros foram
+   copiados. Os arquivos que o Git ignora (um `.env`, `node_modules`) vão embora com a worktree: só pergunta antes
+   a worktree que tem arquivo ignorado fora de pastas de dependência ou build (um `.env`, por exemplo), nomeando os
+   arquivos. O que fica (alteração pendente, PR aberta, branch protegida) é dito numa linha. A worktree de
+   integração local da família (nunca enviada, sem PR) entra quando não guarda commit próprio (nem merge com
+   conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
+2. **Issue do `closes`**: já fechada pelo `Closes #n` do merge, só é conferida (`closeout.py verify --issues
+   <closes>`), sem pergunta; se o `verify` ainda a vê aberta depois de relê-la uma vez, ela entra na pergunta de
+   fechamento, com a razão numa linha.
+   **Issue** com todos os critérios marcados, fora do `closes`: pergunta se pode fechá-la; o cartão vai para Done
+   pelo fluxo "Item closed" do quadro.
    **Sub-issue** com todos os critérios marcados: pergunta se pode fechá-la e marcar, no corpo da issue pai, o item que a
    cita. Só entra um item que cita apenas essa filha (`parentTicks`, por número de linha); a escrita troca somente `[ ]`
    por `[x]`, com o corpo anterior guardado e conferido por `closeout.py tick-check` antes e depois. Sem item citando a
    filha, ela só fecha. Depois, o pai pode passar a ser candidato e entra na mesma pergunta. Issue com critério
    desmarcado não é oferecida: o Frontlights diz quais faltam.
-2. **Limpeza**, só depois de o fechamento ser escrito e conferido: pergunta se pode remover as worktrees e branches criados
-   que deixaram de ser necessários (`cleanup.py plan`). Só entram os que têm o tip igual à cabeça de uma PR mesclada que
-   chegou à base aprovada (o filho empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch
-   de uma issue que chegou ao GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da
-   branch, que não são protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota só é
-   apagada se `origin` é o repositório configurado e ela ainda aponta para esse mesmo commit. Nunca usa `--force`; a
-   lista e os comandos vão num arquivo carimbado e aprovado antes, e `cleanup.py verify` confere depois. Uma worktree com registros
-   do `.frontlights` dentro leva esses registros junto, e os arquivos que o Git ignora (um `.env`, `node_modules`)
-   também: o aviso lista os nomes antes da pergunta. A worktree de integração local da família (nunca enviada, sem PR)
-   entra quando não guarda commit próprio (nem merge com conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
 
-Responder "Não agora" ao fechamento não gera a pergunta da limpeza. A espera é regra da skill, não barreira do Frontlights:
+A limpeza não depende da resposta ao fechamento. A espera é regra da skill, não barreira do Frontlights:
 nada a impõe mecanicamente, e o gatilho do ambiente nunca vale como prova do merge.
 
 ## Fluxo de trabalho e utilitários
@@ -666,7 +691,7 @@ antes do corpo, plano aprovado e publicado numa escrita por issue → autorizaç
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
 configura) → desenvolvimento orientado a testes (TDD), revisão e evidências →
 merge na main local com três portões verdes e bundle de backup → oferta da release (branch de release e PR única),
-espera do merge dela e, com ele confirmado, `pull --ff-only`, fechamento, marcação no pai e limpeza das worktrees (cada um com aprovação própria).
+espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktrees e branches mescladas (sem pergunta) e fechamento com marcação no pai (com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
 Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
@@ -685,7 +710,8 @@ só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em
 [`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
 As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
-aprovações do texto da issue, do plano de issues, do fechamento, da limpeza, das issues do RoadS e do resumo. Os pedidos de
+aprovações do texto da issue, do plano de issues, do fechamento, das issues do RoadS e do resumo (a limpeza do
+trabalho mesclado roda sem pergunta). Os pedidos de
 permissão do próprio Claude Code não são do Frontlights e continuam valendo.
 
 **Paralelismo máximo.** Em toda etapa, e em todo projeto, o Frontlights lança ao mesmo tempo tudo o que
@@ -794,13 +820,14 @@ prazo (`--module-timeout`), e o runner sai com 1 quando um teste falha e com 2 n
 (prazo estourado, módulo que não importa). `--report <arquivo>` grava um JSON com início, fim, HEAD,
 variável, trabalhadores e, por módulo, fila, tempo, contagens e resultado, como evidência da rodada. Por
 slice, rode os módulos que a slice toca; por issue, o portão do merge na main local é a suíte por impacto, e a
-suíte inteira sem a variável roda na release, uma vez, com ou sem CI no projeto. O que cada uma roda está em
+suíte inteira sem a variável roda na release, uma vez, a única conferência inteira: a CI de um projeto, quando
+houver, não é esperada nem é portão. O que cada uma roda está em
 [`references/development.md`](skills/frontlights/references/development.md), "Which tests run when": a suíte por
 impacto (`python tests/suite.py --impact <base>`) roda só o que o diff toca, pela escolha do `tests/pre_commit.py`,
 mais o `tests.test_single_source`, e a release roda só o complemento, pelo
-`python tests/suite.py --skip-covered {covered}`. A CI do GitHub não define a variável e continua rodando tudo, como
-conferência, pelo `python -m unittest discover -s tests -v`: o runner não deixa a suíte inteira mais rápida do que o
-`discover`, e a CI roda o mesmo `discover`.
+`python tests/suite.py --skip-covered {covered}`. Este repositório não tem workflow de CI: fora da release, a suíte
+inteira também roda à mão, pelo `python -m unittest discover -s tests -v`, que não define a variável; o runner não
+deixa a suíte inteira mais rápida do que o `discover`.
 
 Antes de cada commit neste repositório, rode `python tests/pre_commit.py` (só Windows, como o runner). Ele
 pega em segundos o commit vermelho por erro de script ou de texto: lista os arquivos mudados em relação ao

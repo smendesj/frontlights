@@ -228,16 +228,20 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
   filhas fechadas ou propostas junto) e cuja branch, quando ainda existe localmente e `origin/<base>` existe, já está
   contida em `origin/<base>` (senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`,
-  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e só propõe mover um cartão do quadro configurado, para o valor de
-  `project.done`, que passa pela mesma regra de texto digitável dos outros campos do quadro;
+  pelo `homolog.py`, sem shell, e na dúvida nada é excluído), e nunca move um cartão: quem o leva a Done é o fluxo
+  "Item closed" do próprio quadro, e a conferência só lê o cartão no valor de `project.done`, que passa pela mesma
+  regra de texto dos outros campos do quadro;
 - conta só os itens da seção de critérios e, do corpo, só números: uma seção legada "Pendências conhecidas" fora
   dos critérios, com item aberto, só vira o aviso `pending_outside_criteria` (com a contagem em `pendingOutside`),
   que informa e não bloqueia; o texto dos itens nunca é impresso;
-- os comandos de escrita (`gh issue close ... --reason completed` e `gh project item-edit`) são montados só com
-  números, o repositório `dono/nome` validado e o campo e o valor do `done` validados, e são rodados pela
+- o comando de escrita (`gh issue close ... --reason completed`) é montado só com números e o repositório
+  `dono/nome` validado, e é rodado pela
   sessão, sob as permissões vigentes, só depois da aprovação da lista carimbada e de um `stamp --check` que confere;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
-  própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo.
+  própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo. A exceção
+  escrita é a linha `Closes #n` da PR da release, só para as issues do `closes` do `homolog release-plan` (de topo,
+  com todas as caixas marcadas, nenhuma filha aberta e nenhuma pendência fora dos critérios): ela fecha a issue
+  apenas pelo merge que o usuário aprovou, que segue uma operação negada perguntada a ele.
 
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
 `[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista carimbada que traz as
@@ -260,34 +264,52 @@ guarda, que a linha marcada é a que a pessoa viu. Essa conferência vem depois 
 mas não impede a marcação; a divergência é mostrada e perguntada, e desfazer é uma escrita à parte, com aprovação
 própria.
 
+O `homolog release-plan` lê o GitHub só para montar o `closes`: `gh api graphql` sem shell (pelo leitor do
+`closeout.py`), com a conta ativa do `gh` e o `repository` `dono/nome` validado do config, a branch padrão e, por issue
+da release, estado, pai, filhas e a contagem dos critérios; do corpo, só números. Não grava nada no GitHub nem em
+arquivo, e qualquer falha (sem config, sem repositório, `gh` recusado) só esvazia a lista, sem recusar o plano.
+
 A espera do merge é regra da skill: a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente
 (inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada
 sem merge ou uma PR desconhecida nunca propõe fechar nada.
 
-A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê:
+A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`:
 - usa `git --no-optional-locks` sem shell (`worktree list`, `status`, `rev-parse`, `remote get-url`, `merge-base`,
-  `rev-list`) e `gh api graphql`, e não remove, grava nem muda nada (nem o índice do Git); os nomes de branch que entram
-  nas consultas passam por uma regra de caracteres simples, e o texto que vem do GitHub chega limpo e limitado;
+  `rev-list`, `for-each-ref`) e `gh api graphql`, e o `plan` e o `verify` não removem, gravam nem mudam nada (nem o
+  índice do Git); os nomes de branch que entram nas consultas passam por uma regra de caracteres simples, e o texto
+  que vem do GitHub chega limpo e limitado;
 - só propõe remover o que está registrado como worktree e existe (ou uma branch local cuja worktree já se foi), que não é
   a worktree principal, nem a pasta em que o próprio processo roda, nem está travada ou em uso em outra worktree, sem
   alteração pendente (nem arquivo novo), numa branch não protegida (`main`, `master`, a base aprovada e
   `protected_branches`, com a mesma regra do `authorize`), cujo tip é a cabeça de uma PR mesclada que chegou à base
   aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
   contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
-  `contained_in_base_without_pull_request`; a avaliação não roda comando remoto, e o `git push origin --delete` só
-  entra para uma branch enviada no fluxo antigo cuja branch remota ainda aponta para o mesmo commit), sem PR aberta a partir da branch nem
-  em cima dela; a branch remota só entra se `origin` é o repositório configurado e ela ainda aponta para esse mesmo
-  commit; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso `ignored_files` lista os nomes; a worktree
-  de integração local (`--integration`) só entra sem PR, nunca enviada e sem commit próprio fora das PRs entregues (um merge conta como próprio quando
-  carrega conteúdo, como um conflito resolvido à mão);
-- os comandos (`git worktree remove`, `git branch -D`, `git push origin --delete`) são montados só com um caminho de
-  worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não carregue, e rodados a
-  partir da worktree principal; nunca com `--force`. O `branch -D` é necessário porque um merge com squash deixa a branch
-  "não mesclada" para o Git, e por isso só é oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido
-  na base aprovada;
-- remover é uma aprovação própria da lista completa, depois do fechamento escrito e conferido; um comando que falha é
-  registrado e nunca repetido com força; os registros do `.frontlights` dentro de uma worktree somem com ela, e o aviso
-  `frontlights_records` vai na pergunta.
+  `contained_in_base_without_pull_request`), sem PR aberta a partir da branch nem em cima dela; a branch local da
+  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; a branch remota nunca
+  entra: o GitHub apaga a branch de cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch
+  --prune` tira a referência que sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
+  `ignored_files` lista os nomes; a worktree de integração local (`--integration`) só entra sem PR, nunca enviada e
+  sem commit próprio fora das PRs entregues (um merge conta como próprio quando carrega conteúdo, como um conflito
+  resolvido à mão);
+- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git branch -D`) são montados
+  só com um caminho de worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não
+  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca `git push origin --delete`. O
+  `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
+  oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
+- o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do
+  `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/`), sem apagar o que já está
+  lá: um destino cujos arquivos são todos iguais aos registros (mesmo caminho, mesmos bytes: cópia anterior, inteira
+  ou parcial, cuja remoção falhou) recebe só o que falta; recusa um destino com arquivo diferente ou a mais (nada é
+  copiado, nada é sobrescrito), origem que não seja uma pasta `.frontlights` e destino
+  fora do `.frontlights` da worktree principal daquele repositório (lida do Git); ele vem antes do `git worktree
+  remove`, e uma cópia que falha deixa a worktree e os registros onde estão; recusa também symlink ou junção no caminho até o destino
+  (o próprio destino incluído), junção dentro do destino ou na origem e entrada do destino cujo caminho real sai dele
+  (nada é copiado), e grava cada arquivo com nome temporário, criado de modo exclusivo e sem seguir link, e o renomeia,
+  de modo que nenhum arquivo final fica pela metade (o temporário que uma cópia interrompida deixou é apagado na
+  próxima); uma entrada da origem com o nome do padrão temporário é recusada (nada é copiado);
+- a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
+  negadas): só o candidato com arquivo ignorado fora de pastas de dependência ou build (`ask: true`) espera o "Sim";
+  um comando que falha é registrado e nunca repetido com força, e o resto daquele item não roda.
 
 ## Resumo para a diretoria
 
@@ -326,7 +348,7 @@ O resumo para a diretoria (`scripts/progress_report.py`) executa comandos lidos 
   o config do projeto tem `roadmapSync.scrumRoot` e `weekFolderPattern` (com o `roadmapSync` ligado ou não), os
   prints da rodada (antes, depois e de falha) e os guardados para o resumo vão para
   `<scrumRoot>/<weekFolderPattern da segunda-feira da rodada>/evidencias/<repositório>/<issue>` (e o `resumo/`
-  dela), não para o `.frontlights` da worktree, que a limpeza apaga. Os registros (`result.json` e os demais)
+  dela), não para o `.frontlights` da worktree, que a limpeza remove (depois de copiá-lo para `.frontlights/issues/<n>/worktrees/` da principal). Os registros (`result.json` e os demais)
   continuam no `.frontlights` e apontam para a pasta em `pastaDosPrints`.
   - A pasta passa pelas travas de `contained_path` e `safe_folder`: dentro do `scrumRoot`, sem junção, link
     simbólico nem outro ponto de reparse no caminho (o de nuvem do OneDrive é aceito); `scrumRoot` precisa ser um

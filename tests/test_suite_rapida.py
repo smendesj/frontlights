@@ -2,7 +2,7 @@
 
 Seams: o runner por módulo (quantos testes o `unittest` carrega e roda, por nome e por `discover`, com e
 sem `FRONTLIGHTS_SUITE=rapida`, e o motivo do pulo) e os manifestos de texto (a referência da etapa 6, o
-README, o protocolo e o workflow da CI). Nenhum teste aqui roda os módulos lentos de verdade: sem a
+README, o protocolo e a ausência de workflow de CI, issue 63). Nenhum teste aqui roda os módulos lentos de verdade: sem a
 variável, só se conta o que o carregador carrega.
 """
 import os
@@ -126,10 +126,10 @@ class FastSuiteRunnerTests(unittest.TestCase):
 class FastSuiteTextTests(unittest.TestCase):
     """Seam: os manifestos de texto."""
 
-    def test_the_ci_workflow_runs_the_whole_suite_without_the_variable(self):
-        workflow = read('.github', 'workflows', 'tests.yml')
-        self.assertIn('python -m unittest discover -s tests -v', workflow)
-        self.assertNotIn(VARIABLE, workflow)
+    def test_the_repository_has_no_ci_workflow(self):
+        # Issue 63: a suíte inteira local na main, na release, é a única conferência inteira.
+        self.assertFalse(ROOT.joinpath('.github', 'workflows', 'tests.yml').exists())
+        self.assertFalse(ROOT.joinpath('.github').exists())
 
     def test_the_stage_six_reference_says_when_each_run_is_used(self):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
@@ -148,21 +148,36 @@ class FastSuiteTextTests(unittest.TestCase):
                        '`N` sized to the suite, since a run past it is killed',
                        'is run once more, alone, after the watched run ends',
                        '"Declarar as suítes agora"', '"Rodar a suíte inteira desta vez"',
-                       'The whole suite runs at the release ("The release"), with or without CI in the project',
-                       'with or without CI in the project', '`tests.test_serve_preview`',
+                       'The whole suite runs at the release ("The release"), the only whole check',
+                       "a project's CI, when there is one, is neither expected nor a gate",
+                       'This repository has no CI workflow', '`tests.test_serve_preview`',
                        'the six sensitive ones in a serial queue'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        for old in ('with or without CI in the project', 'The CI of this repository stays the full check'):
+            with self.subTest(old=old):
+                self.assertNotIn(old, text)
+
+    def test_the_release_says_its_run_is_the_only_whole_check(self):
+        # "The release" é a última seção da referência da etapa 6.
+        text = flat('skills', 'frontlights', 'references', 'development.md').split('## The release')[1]
+        self.assertIn("This run is the release's only whole check; a CI on the release's pull request, when the "
+                      'project has one, is neither expected nor a gate.', text)
+        self.assertNotIn("The CI of the release's pull request stays the full check", text)
 
     def test_the_readme_documents_the_variable_and_the_rule(self):
         text = flat('README.md')
         for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
                        'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
                        'a suíte inteira sem a variável roda na release, uma vez',
-                       'com ou sem CI no projeto', 'A CI do GitHub não define a variável', '`tests.test_serve_preview`',
+                       'a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão',
+                       'Este repositório não tem workflow de CI', '`tests.test_serve_preview`',
                        'os seis sensíveis'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        for old in ('com ou sem CI no projeto', 'A CI do GitHub'):
+            with self.subTest(old=old):
+                self.assertNotIn(old, text)
         self.assertIn('python -m unittest discover -s tests -v', read('README.md'))
 
     def test_the_protocol_documents_the_rule(self):
@@ -170,10 +185,15 @@ class FastSuiteTextTests(unittest.TestCase):
         for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que a slice toca',
                        'a suíte rápida é a forma de conferir o todo entre slices',
                        'a suíte inteira sem a variável roda na release, uma vez',
-                       'obrigatória com ou sem CI no projeto', 'os módulos de portas e da prévia do `serve`',
+                       'a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão',
+                       'este repositório não tem workflow de CI',
+                       'os módulos de portas e da prévia do `serve`',
                        'os seis sensíveis numa fila serial'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        for old in ('com ou sem CI no projeto', 'A CI do GitHub'):
+            with self.subTest(old=old):
+                self.assertNotIn(old, text)
 
 
 if __name__ == '__main__':

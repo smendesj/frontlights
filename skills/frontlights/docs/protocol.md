@@ -11,11 +11,11 @@
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos aprovados por carimbo; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura do Git, dos registros e do GitHub), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
 `homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
 (`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
-| Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
-| Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da remoção e nova leitura do Git e do GitHub |
+| Fechamento | Somente fechar e marcar no corpo do pai o que a pessoa aprovou na lista mostrada; o cartão vai para Done pelo fluxo "Item closed" do próprio quadro | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
+| Limpeza | Remover, sem pergunta, só o que o `cleanup.py plan` oferece: as worktrees e branches locais das issues, das slices e da release já mescladas na base aprovada, depois de copiar os registros de cada worktree para a principal; nunca a branch remota (o GitHub a apaga) | O plano e os comandos rodados (`git fetch --prune`, `copy_records`, `git worktree remove`, `git branch -D`), a resposta literal de cada candidato com `ask` e a saída do `cleanup.py verify` |
 
 A aprovação de um documento, lista ou tabela é do arquivo com aquele carimbo, nunca do texto colado na
 conversa; os passos estão em `SKILL.md`, "Show before approval". Comandos seguem por inteiro dentro da
@@ -53,8 +53,10 @@ somente pela afirmação do usuário na sessão atual.
 
 O fechamento (`scripts/closeout.py`, só leitura) propõe fechar toda issue aberta, e toda sub-issue, com a seção
 de critérios de aceitação e todos os itens marcados (e as filhas fechadas ou propostas junto, filhas antes dos
-pais) e mover o cartão para o valor `project.done` (padrão `Status` / `Done`); uma issue já fechada como concluída com o cartão
-fora de Done só é movida; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
+pais); o cartão vai para Done pelo fluxo "Item closed" → Status Done do próprio quadro, nunca pelo Frontlights, e uma
+issue já fechada nunca é candidata, qualquer que seja o cartão; a conferência (`verify`) lê o cartão no valor
+`project.done` (padrão `Status` / `Done`) e diz numa linha (`cardsOutsideDone`) quando ele não chegou a Done, sem
+reprovar a issue; uma issue com todas as caixas marcadas cuja branch ainda não está em `origin/main` fica
 fora como `awaiting_release` até a release que a leva ser mesclada (o `candidates` lê só `rev-parse` e `merge-base`,
 pelo `homolog.py`, e na dúvida não exclui). Quem escreve é a sessão, com o `gh` dela e depois da aprovação da lista, e a
 conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.
@@ -62,15 +64,26 @@ conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.
 A release é oferecida ao fim de cada issue homologada e segue `references/development.md`, "The release": o
 `homolog release-plan` (só leitura) nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização
 mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o
-último nome de arquivo), a PR única leva o corpo do modelo
-`templates/pr.md`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
+último nome de arquivo) e devolve `closes`, lido do GitHub (só leitura, com o `repository` do `--config`, padrão
+`.frontlights/config.json` da raiz): as issues de topo da release com todas as caixas marcadas, nenhuma filha aberta e
+nenhuma pendência fora dos critérios; cada issue da release em `issues` traz `state`, `level`, `parent`, `criteria`,
+`openChildren`, `pendingOutside` e `closing` (`true` ou a razão: `sub_issue`, `no_criteria`, `unchecked_criteria`,
+`open_children`, `pending_outside`, `not_open`, `not_found`, `truncated`). Sem leitura do GitHub, ou com uma base que
+não é a branch padrão, `closes` sai vazio e `closesReason` diz por quê (`nothing_to_release`, `no_config`,
+`no_repository`, `github_unavailable`, `base_not_default`), com a frase em `closesMessage`; `ready` e o código de
+saída não mudam. E a PR única leva o corpo do modelo
+`templates/pr.md`, com uma linha `Closes #n` por issue de `closes`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
 vale (merge em outra branch, PR fechada sem merge ou não encontrada não fecha nada). Com o merge confirmado, `git
-pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release; "Agora não" deixa a issue
+pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release: o `verify --issues
+<closes>` só confere as de `closes`, e o `candidates` vê as outras; "Agora não" deixa a issue
 homologada na main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma
 sub-issue, a mesma aprovação do fechamento inclui marcar no corpo do pai o item que a cita (`parentTicks`; o
-`closeout.py tick-check` confere antes e depois), e a limpeza das worktrees e branches (`scripts/cleanup.py
-plan|verify`, nunca com `--force`) tem aprovação própria, depois do fechamento escrito e conferido
-(`references/closeout.md`).
+`closeout.py tick-check` confere antes e depois). A limpeza das worktrees e branches (`scripts/cleanup.py
+plan|verify`, nunca com `--force`) roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta
+(`references/closeout.md`, passo 5): `git fetch --prune`, os registros de cada worktree copiados para
+`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da principal, e a remoção das worktrees e das branches locais das
+issues, das slices e da release mesclada; nunca `git push origin --delete`, porque o GitHub apaga a branch de
+cabeça da PR mesclada. Só pergunta o candidato com arquivo ignorado fora de dependência ou build (`ask`).
 
 ### Quadro e publicação
 
@@ -139,6 +152,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
                    bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/
+    worktrees/<pasta>-<tip curto>/  cópia do `.frontlights` de cada worktree da issue, feita pela limpeza antes de removê-la
     issue.json
     handoff.md
     artifact.html          fonte do artefato do grilling quando a issue já está publicada
@@ -362,10 +376,10 @@ cita a variável (qualquer outro valor, ou a ausência dela, roda tudo; a regra 
 módulo e vale igual para o `discover`), e o runner roda os módulos seguros em paralelo e os seis
 sensíveis numa fila serial, um por vez; `--report <arquivo>` grava o JSON da rodada como evidência.
 Por issue, o portão é a suíte por impacto do projeto, e a suíte inteira sem a variável roda na release, uma vez,
-obrigatória com ou sem CI no projeto; o que cada uma roda está em `references/development.md`, "Which tests run
-when" e "The release". A CI do GitHub deste repositório fica como a conferência inteira, pelo
-`python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`): ela roda o mesmo
-`discover` e não define a variável.
+a única conferência inteira: a CI de um projeto, quando houver, não é esperada nem é portão; o que cada uma roda
+está em `references/development.md`, "Which tests run when" e "The release". Fora da release, a suíte inteira também
+roda à mão, pelo `python -m unittest discover -s tests -v` (o runner não a deixa mais rápida do que o `discover`),
+que não define a variável; este repositório não tem workflow de CI.
 
 ## Ponto de retomada e continuação
 

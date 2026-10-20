@@ -22,8 +22,10 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 import homolog
+import roads as rs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gitfixture
+from test_closeout import DONE_ALL, DONE_PARTIAL, FakeGh, node
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -401,7 +403,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
                        '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
                        '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
-                       '**No closing keyword.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
+                       '**`Closes #n` only from `closes`.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
                        '**Run the whole suite on the local main.**',
@@ -1503,6 +1505,132 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertEqual(direct['operation'], 'release-plan')
         routed_code, routed = self.cli('homolog', 'release-plan', '--root', str(self.work), script=FRONTLIGHTS)
         self.assertEqual((routed_code, routed), (code, direct))
+
+
+class HomologReleaseClosesTests(HomologCli, unittest.TestCase):
+    """Issue 63, S3: o `release-plan` lê o GitHub (só leitura) e devolve `closes`, as issues de topo da release
+    prontas (todas as caixas marcadas, nenhuma filha aberta, nenhuma pendência fora dos critérios), que a PR da
+    release leva como `Closes #n`; sem leitura do GitHub a lista sai vazia com a razão e o plano não muda. Git real
+    (o trio da classe-mãe), gh falso (`FakeGh` de test_closeout): nenhuma chamada real ao gh."""
+
+    LEFTOVER = DONE_ALL + '\n## Pendências conhecidas\n\n- [ ] sobra\n'
+
+    # the fixture and the helpers of the release-plan tests, without running those tests again
+    build = staticmethod(HomologReleasePlanTests.build)
+    setUpClass = HomologReleasePlanTests.__dict__['setUpClass']
+    git, commit, sha = HomologReleasePlanTests.git, HomologReleasePlanTests.commit, HomologReleasePlanTests.sha
+    record, deliver = HomologReleasePlanTests.record, HomologReleasePlanTests.deliver
+    full_suite = HomologReleasePlanTests.full_suite
+
+    def setUp(self):
+        HomologReleasePlanTests.setUp(self)
+        self.config = self.work / '.frontlights' / 'config.json'
+
+    def deliver_five(self):
+        self.record(*({'issue': n, 'branch': f'claude/issue-{n}'} for n in range(1, 6)))
+        for number in range(1, 6):
+            self.deliver(number)
+
+    def write_config(self, repository='OWNER/REPOSITORY', path=None):
+        path = path or self.config
+        path.write_text(json.dumps({'repository': repository}), encoding='utf-8')
+        return path
+
+    def five(self):
+        return FakeGh({1: node(1), 2: node(2, parent=9), 3: node(3, text=DONE_PARTIAL),
+                       4: node(4, children=[(8, 'OPEN')]), 5: node(5, text=self.LEFTOVER)})
+
+    def routed(self, gh, *flags):
+        """`frontlights.py homolog release-plan` neste processo, com o gh falso no lugar do `gh_default`."""
+        out = io.StringIO()
+        argv = ['frontlights.py', 'homolog', 'release-plan', '--root', str(self.work), *flags]
+        with mock.patch.object(rs, 'gh_default', gh), mock.patch.object(sys, 'argv', argv), \
+                mock.patch.dict(os.environ, self.env, clear=True), contextlib.redirect_stdout(out):
+            code = frontlights.main()
+        self.assertEqual(gh.violations, [])
+        result = json.loads(out.getvalue())
+        self.assertEqual(result['exitCode'], code)
+        return code, result
+
+    def test_closes_lists_only_the_ready_top_level_issues(self):
+        self.deliver_five()
+        self.write_config()
+        self.full_suite()
+        gh = self.five()
+        code, result = self.routed(gh)
+        self.assertEqual((code, result['ready'], result['release']), (0, True, [1, 2, 3, 4, 5]), result)
+        self.assertEqual((result['closes'], result['closesReason']), ([1], None), result)
+        self.assertIn('Closes #1', result['closesMessage'])
+        by = {entry['issue']: entry for entry in result['issues']}
+        self.assertEqual({n: by[n]['closing'] for n in by},
+                         {1: True, 2: 'sub_issue', 3: 'unchecked_criteria', 4: 'open_children', 5: 'pending_outside'})
+        self.assertEqual((by[1]['state'], by[1]['level'], by[1]['parent'], by[1]['criteria']),
+                         ('OPEN', 'top', None, {'checked': 2, 'total': 2}))
+        self.assertEqual((by[2]['level'], by[2]['parent']), ('sub', 9))
+        self.assertEqual(by[3]['criteria'], {'checked': 1, 'total': 2})
+        self.assertEqual(by[4]['openChildren'], [8])
+        self.assertEqual((by[5]['pendingOutside'], by[1]['pendingOutside']), (1, 0))
+
+    def test_closed_missing_or_criterionless_issues_never_close(self):
+        self.deliver_five()
+        self.write_config()
+        gh = FakeGh({1: node(1, state='CLOSED'), 2: node(2, text='sem critérios'), 3: node(3),
+                     4: node(4, totals={'children': 150})})
+        code, result = self.routed(gh)
+        self.assertEqual((code, result['ready']), (2, False), result)   # the whole suite is missing: unchanged
+        by = {entry['issue']: entry['closing'] for entry in result['issues']}
+        self.assertEqual(by, {1: 'not_open', 2: 'no_criteria', 3: True, 4: 'truncated', 5: 'not_found'})
+        self.assertEqual(result['closes'], [3])
+
+    def test_without_a_config_nothing_is_read_and_closes_is_empty(self):
+        self.deliver(1)
+        gh = self.five()
+        code, result = self.routed(gh)
+        self.assertEqual(gh.calls, [])
+        self.assertEqual((result['closes'], result['closesReason']), ([], 'no_config'), result)
+        self.assertEqual((code, result['ready']), (2, False))
+        self.assertIn('sem `Closes #n`', result['closesMessage'])
+        self.assertNotIn('closing', result['issues'][0])
+
+    def test_a_config_without_repository_reads_nothing(self):
+        self.deliver(1)
+        self.write_config(repository=None)
+        gh = self.five()
+        _, result = self.routed(gh)
+        self.assertEqual(gh.calls, [])
+        self.assertEqual((result['closes'], result['closesReason']), ([], 'no_repository'), result)
+
+    def test_a_failed_read_keeps_the_plan_and_empties_closes(self):
+        self.deliver(1)
+        self.write_config()
+        self.full_suite()
+        gh = FakeGh({1: node(1)}, fail_issues=True)
+        code, result = self.routed(gh)
+        self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
+        self.assertEqual((result['closes'], result['closesReason']), ([], 'github_unavailable'), result)
+        self.assertIn('Release pronta', result['message'])
+
+    def test_a_base_that_is_not_the_default_branch_closes_nothing(self):
+        self.deliver(1)
+        self.write_config()
+        gh = FakeGh({1: node(1)}, default_branch='develop')
+        _, result = self.routed(gh)
+        self.assertEqual((result['closes'], result['closesReason']), ([], 'base_not_default'), result)
+        self.assertIn('develop', result['closesMessage'])
+        self.assertFalse([q for q in gh.queries() if 'issue(number' in q])
+
+    def test_nothing_to_release_reads_nothing(self):
+        self.write_config()
+        gh = self.five()
+        _, result = self.routed(gh)
+        self.assertEqual(gh.calls, [])
+        self.assertEqual((result['closes'], result['closesReason']), ([], 'nothing_to_release'), result)
+
+    def test_config_names_a_file_outside_the_root(self):
+        self.deliver(1)
+        outside = self.write_config(path=self.base / 'config.json')
+        _, result = self.routed(FakeGh({1: node(1)}), '--config', str(outside))
+        self.assertEqual((result['closes'], result['closesReason']), ([1], None), result)
 
 
 if __name__ == '__main__':

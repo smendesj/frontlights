@@ -100,8 +100,8 @@ text, and is reread before it is posted.
 **Show before approval.** The approval of a document, a list or a table is asked by link and
 stamp, never by pasting the full text into the conversation. This covers the issue body of stage 4
 and its revisions, the plan and the bodies of stage 5, the conversion of a family, the findings
-batch and its leftover criteria, the closeout list and the cleanup list, the issue-gaps table and
-the RoadS progress-report draft. Before each approval:
+batch and its leftover criteria, the closeout list, the issue-gaps table and
+the RoadS progress-report draft (the cleanup of merged work asks nothing: `references/closeout.md`, step 5). Before each approval:
 1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
    the host has it (the card reaches the phone), and give a clickable link to the file.
 2. Stamp it: `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" stamp <file> --root <project> --revision rN`
@@ -117,7 +117,7 @@ the RoadS progress-report draft. Before each approval:
    --approve --answer "<literal answer>" --expect <the stamp in the question>` (with `--stage N`);
    a refusal means the file changed since the question, so nothing is recorded: ask the approval
    again with the new stamp. Right before the write the approval covers (the GitHub write, the
-   tick, the writes of the closeout list and of the cleanup list, the summary push), run
+   tick, the writes of the closeout list, the summary push), run
    `frontlights.py stamp <file> --root <project> --check`: exit 1 means the file changed since the
    approval, so nothing is written and the approval is asked again, showing the new stamp and what
    changed.
@@ -216,14 +216,20 @@ not trusted or the registered project lost its block). Options: "Sim, escolher a
 about it in this session. Ask nothing else and go on exactly as before.
 
 **Closeout question, right after the progress question.** When `.frontlights/config.json`
-exists with a `repository`, run the read-only `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py"
+exists with a `repository`, this runs in order. When the `.frontlights/authorization*.json` records list issue ids, first run
+`git -C <main worktree> fetch --prune origin`, before `closeout.py candidates` and `cleanup.py plan`, so
+`origin/<base>` is current before anything is judged (if it fails, say so in one line and go on), then always run
+the cleanup of `references/closeout.md`, step 5, without a question: `cleanup.py plan` with `--issues` the
+`issue_ids` of the authorization records, then the `commands` it offers, in order, and its verify (the plan alone
+judges what is merged: an issue already closed by the `Closes #n` of a release counts only in `alreadyDone` of
+`candidates`, and its worktrees still go). Then run the read-only `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py"
 candidates --config <config> --root <project>` (a GitHub read through `gh` that takes a while when many issues are in scope, so give it a generous timeout; if it
-cannot run, say so in one line and go on). Only when it reports `ask` true, ask with `AskUserQuestion`: "Fechar as
-issues que já têm todos os critérios marcados e mover os cartões para Done?" Put in the question text
-how many there are and which, and what `board.status` allows. Options: "Sim, mostrar a lista" and
+cannot run, say so in one line and go on). Only when `candidates` reports `ask` true, ask with `AskUserQuestion`: "Fechar as
+issues que já têm todos os critérios marcados?" Put in the question text
+how many there are and which. Options: "Sim, mostrar a lista" and
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come
 back to the request. On no, write nothing. When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or
-`done_option_missing`, or `closedUnchecked` is above zero: then say in one line what could not be checked and the remedy
+`done_option_missing`: then say in one line that the cards could not be checked and the remedy
 (`gh auth refresh -s project`, or fix `project.done`); and when an issue is excluded as `awaiting_release` (every box
 ticked, branch not yet in `origin/<base>`), say in one line that it closes with the release that carries it.
 
@@ -442,6 +448,9 @@ findings left unfixed with the destination of each, risks and next action.
 
 Read `references/closeout.md`. It runs when the stage 1 closeout question is answered yes, when the
 wait of stage 6 finds the release's pull request merged into the approved base (and the local main
-brought up to it with `git pull --ff-only`), or when the user asks to close or move finished
-issues. Closing (with the tick in a parent, in the same approval) and the cleanup each wait for their own
-approval of the list by link and stamp ("Show before approval"): no implementation authorization, merged PR or green test covers them.
+brought up to it with `git pull --ff-only`), or when the user asks to close finished
+issues. At the merge and at stage 1, the cleanup of the merged work (closeout.md, step 5) runs first, without a
+question: the worktrees and local branches of the issues, slices and release already in the approved base, each
+worktree's records copied to the main worktree first, never a remote branch (GitHub deletes it). Closing (with the
+tick in a parent, in the same approval) waits for its own
+approval of the list by link and stamp ("Show before approval"): no implementation authorization, merged PR or green test covers it.

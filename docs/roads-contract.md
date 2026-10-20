@@ -144,12 +144,14 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
 - **A sprint segue o Status do Project.** Em 06/10/2026 o RoadS passou a seguir o Project nos dois sentidos: "está na
   sprint atual" é "Status Development" (as semanas futuras existem só no RoadS), o RoadS só age quando os
   dois lados discordam (vale quem mexeu por último; empate vale o RoadS) e a escrita dele no Project nasce desligada.
-  O Frontlights só escreve no Project em passos próprios que o usuário aprova, como o `gaps` e o fechamento.
+  O Frontlights só escreve no Project em passos próprios que o usuário aprova, como o `gaps`; o fechamento só fecha
+  a issue, e o cartão vai para Done pelo fluxo "Item closed" do próprio quadro.
 - **Quando aparece.** Ao apertar Sincronizar no RoadS, na hora. Uma sincronização feita até 30 s depois de outra (botão
   ou rotina diária) não consulta o GitHub e devolve o snapshot anterior. Sem sincronizar, recarregar a página só relê o
   que está guardado.
-- **Consequência para o Frontlights.** Fechar uma issue sem mover o cartão para Done não muda nada no RoadS; depois de
-  mover cartões, o RoadS os mostra na próxima sincronização dele.
+- **Consequência para o Frontlights.** Fechar uma issue só muda o RoadS quando o fluxo "Item closed" do quadro leva o
+  cartão a Done; um cartão que a conferência do fechamento acusa fora de Done não aparece como concluído lá. Depois do
+  fechamento, o RoadS o mostra na próxima sincronização dele.
 
 ## Fatos do resumo: a família inteira de cada entrega
 
