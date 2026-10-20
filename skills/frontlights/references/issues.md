@@ -71,17 +71,16 @@ its title, "Depende de", what it delivers and, for each slice, the section of th
 shows what it delivers: the artifact of the grilling (`references/grilling.md`, "The artifact"),
 updated on the same URL as the grilling with one section per slice, numbered after the
 grilling's sections and titled by the slice (its S-number and title), where the drawing of each
-slice is the screen, the flow or the layers as they stand once that slice lands, with fictitious
-data only. Without the artifact tool, the list says "artefato indisponível" once and goes on in
-text; when the grilling's log reads "não se aplica" (no round touched a screen, a flow or the
-layers), the list carries no section and says so once. Then ask with `AskUserQuestion` whether the
+slice is the screen, the flow or the layers as they stand once that slice lands, under the same
+rule for code and data as the grilling. Without the artifact tool, the list says
+"artefato indisponível" once and goes on in text. Then ask with `AskUserQuestion` whether the
 granularity is right (too coarse, too fine), whether the dependencies are real (each slice
 depends only on what truly gates it) and whether any slice should merge or split; the quiz
 itself stays the same, the drawing only makes each answer visible. Iterate
 until the user approves the breakdown. A slice with no answer to "what can be demoed when
 this is done?" is horizontal, and a slice whose drawing shows nothing demonstrable is horizontal
-too: fix it before the quiz, with no extra question. Only then show
-the complete body under the show-before-approval rule.
+too: fix it before the quiz, with no extra question. Only then ask approval of
+the body by link and stamp (`SKILL.md`, "Show before approval").
 
 **One write per issue.** The approval of the plan names the writes, one write per issue: a
 creation or, for an issue that already exists, one append of the spec sections and the boxes
@@ -157,8 +156,8 @@ record the trace in the layers section (`templates/issue.md`). Then:
   with evidence. It is never only a note, and a declared gap is not a state in which a
   plan can be approved. When it cannot be proven by reading, ask with `AskUserQuestion`
   how to prove it.
-- The issue body (stage 4) and the plan (stage 5) show the complete trace table before the
-  approval. The slice counts as defined only when no row lacks evidence; a plan with
+- The issue body (stage 4) and the plan (stage 5) carry the complete trace table in the file
+  that is approved. The slice counts as defined only when no row lacks evidence; a plan with
   such a row goes back for correction before it is shown for approval.
 
 A parent/child link is membership, not a dependency. A child that needs its
@@ -182,12 +181,11 @@ shared ownership for resources that cannot safely run together. Split oversized
 issues into independently acceptable outcomes: more than five slices is the measurable sign
 (the cap above). See `evals/vertical-slices.md`.
 
-Before asking for approval, show the complete plan in the user's language: the
-table of issues with their dependencies and ownership, and the full body of every
-issue, in the conversation, as a file sent with the host's file-sending tool
-when one exists, and in the `preview` of the approve option (as much as fits).
-Then ask approval through `AskUserQuestion`, with options, for the exact issue
-creation/update scope before any write. A local project without a remote writes
+Before asking for approval, write the complete plan in the user's language to a file:
+the table of issues with their dependencies and ownership, and the body of every
+issue, whole. Ask its approval by link and stamp (`SKILL.md`, "Show before approval")
+through `AskUserQuestion`, with options, for the exact issue creation/update scope
+before any write, and run its stamp check before each write. A local project without a remote writes
 the approved bodies under `.frontlights/issues/<n>/` with `source: "local"`
 snapshots; the same approval rule applies. Use installed GitHub
 tools or `gh issue create/edit --repo <approved-repo> --body-file <file>` with
@@ -224,9 +222,9 @@ user merge or close it first); a child whose work is only on a branch keeps that
 its slice, renamed to the slice's name. When the family
 has more than five open children, one body is too big: cut them into two or more top-level issues of
 up to five slices each, published blockers first and linked by `--blocked-by`; the parent becomes the
-first of them, or closes as "dividida em #a, #b" when nothing of it is left. Show the before and the
-after in full, under the show-before-approval rule: the current body of the parent and the list of its
-children, then the new body (or bodies) and the commands. Ask one approval per family, with
+first of them, or closes as "dividida em #a, #b" when nothing of it is left. Write the before and the
+after whole to the file of the approval (`SKILL.md`, "Show before approval"): the current body of the parent
+and the list of its children, then the new body (or bodies) and the commands. Ask one approval per family, with
 `AskUserQuestion`; a family the user declines stays as it is.
 
 **The writes, after the approval.** The body of the parent is replaced: this is the only exception to
@@ -350,12 +348,12 @@ a top-level issue, and a family that already exists is never grown. Every findin
 not fixed in the PR leaves with a destination GitHub tracks (destination 2 or 3); text in
 the PR body is never a destination (the gate, below).
 
-No finding becomes a top-level issue by default. Show the whole batch (each finding,
-its proposed destination with the reason, and the full text of every new criterion
-and top-level issue body) under the show-before-approval rule, then decide it in a
-single `AskUserQuestion`: one option approves the proposed destinations and their named
+No finding becomes a top-level issue by default. Write the whole batch (each finding,
+its proposed destination with the reason, and the whole text of every new criterion
+and top-level issue body) to the file of the approval (`SKILL.md`, "Show before
+approval"), then decide it in a single `AskUserQuestion`: one option approves the proposed destinations and their named
 writes, others adjust them. Approving the batch approves exactly those writes, with the
-criterion text exactly as shown; it is not an implementation authorization for the new
+criterion text exactly as in the stamped file; it is not an implementation authorization for the new
 work: a new criterion joins the slices of its issue, in order, and a new top-level issue
 is implemented only under an authorization that names it.
 
@@ -385,9 +383,9 @@ contradicts a closed issue): use a top-level issue that cites it and say why.
   has no `S<n>` id, so give it a label for `checkpoint --slice` (`P1`, `P2`, in order) and keep
   that mapping in the handoff.
 - **Approval.** It changes the issue's scope, so, like any update of a published issue, it
-  keeps what is there and is shown before it is written (the update rule at the end of
+  keeps what is there and is approved before it is written (the update rule at the end of
   the Project board section): the exact text, the issue and its place in the section go
-  in the batch above and are approved in that single question. Nothing is written before
+  in the stamped file of the batch above and are approved in that single question. Nothing is written before
   the answer.
 - **Capture.** Save the body exactly as GitHub holds it, with this command and never with
   a shell redirect (Windows PowerShell re-encodes redirected output, and `--jq .body`
@@ -429,7 +427,7 @@ contradicts a closed issue): use a top-level issue that cites it and say why.
 
 A leftover already kept in a section of its own (a body written before this rule) is
 moved into the criteria only when the user asks for it, as a write of this recipe with
-its own approval: the open items are added to the criteria (text shown first) and the
+its own approval: the open items are added to the criteria (text approved first by link and stamp) and the
 same items are removed from the old section, so the only differences are those added
 lines and those removed ones. Until then the closeout only warns about it
 (`pending_outside_criteria`).

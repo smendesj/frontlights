@@ -65,8 +65,8 @@ class IssueStageTests(unittest.TestCase):
                        'Problema', 'Solução', 'Decisões de implementação', 'Decisões de teste', 'Fora de escopo',
                        'Mark a section that does not apply with the reason', 'Do not write user stories',
                        'without file paths or code snippets in the prose', 'trace table',
-                       'Show the complete revision before asking', '`.frontlights/issue.md`',
-                       'does not authorize code', 'is a new approval of the exact text shown in full'):
+                       'Ask approval of the revision by link and stamp', '`.frontlights/issue.md`',
+                       'does not authorize code', 'is a new approval of the exact file with its stamp'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, reference)
         self.assertEqual(positions(text, ('## The only question: the seams', '## The body', '## Approval')),
@@ -111,7 +111,7 @@ class IssueStageTests(unittest.TestCase):
     def test_the_later_stages_read_the_approved_issue_body(self):
         issues = flat(read('skills', 'frontlights', 'references', 'issues.md'))
         self.assertIn('Read the approved issue body (stage 4)', issues)
-        self.assertIn('The issue body (stage 4) and the plan (stage 5) show the complete trace table', issues)
+        self.assertIn('The issue body (stage 4) and the plan (stage 5) carry the complete trace table', issues)
         development = read('skills', 'frontlights', 'references', 'development.md')
         self.assertIn("Follow the conventions recorded in the issue's `## Decisões de implementação`", development)
         self.assertIn('`## Decisões de teste` in `templates/issue.md`', development)

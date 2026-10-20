@@ -62,8 +62,8 @@ class LadderTests(unittest.TestCase):
 
     def test_the_batch_shows_and_approves_the_exact_criterion_text(self):
         batch = ' '.join(self.followups.split())
-        for phrase in ('the full text of every new criterion and top-level issue body', 'single `AskUserQuestion`',
-                       'with the criterion text exactly as shown'):
+        for phrase in ('the whole text of every new criterion and top-level issue body', 'single `AskUserQuestion`',
+                       'with the criterion text exactly as in the stamped file'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, batch)
 
@@ -97,7 +97,7 @@ class RecipeTests(unittest.TestCase):
                 self.assertIn(phrase, self.recipe)
 
     def test_it_changes_scope_so_it_is_approved_before_any_write(self):
-        for phrase in ('like any update of a published issue, it keeps what is there and is shown before it is written',
+        for phrase in ('like any update of a published issue, it keeps what is there and is approved before it is written',
                        'the exact text', 'approved in that single question', 'Nothing is written before the answer'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
