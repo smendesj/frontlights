@@ -81,6 +81,18 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual((result.testsRun, result.errors, result.failures), (1, [], []))
         self.assertFalse(seen['template'].exists())
 
+    def test_a_copy_into_an_existing_folder_keeps_what_is_there(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        dest = Path(tmp.name) / 'root'
+        (dest / '.frontlights').mkdir(parents=True)
+        (dest / '.frontlights' / 'config.json').write_text('{}\n', encoding='utf-8')
+        gitfixture.copy(self.template, dest, exist_ok=True)
+        self.assertEqual((dest / '.frontlights' / 'config.json').read_text(encoding='utf-8'), '{}\n')
+        self.assertEqual(self.head(dest / 'main'), self.head(self.template / 'main'))
+        url = gitfixture.git(dest / 'main', 'remote', 'get-url', 'origin').stdout.strip()
+        self.assertEqual(Path(url).resolve(), (dest / 'origin.git').resolve())
+
     def test_a_template_with_a_worktree_is_refused(self):
         def with_worktree(root):
             build(root)

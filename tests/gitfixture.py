@@ -89,8 +89,9 @@ def rewrite_remotes(config, source, dest):
         config.write_text(''.join(lines), encoding='utf-8')
 
 
-def copy(template_folder, dest):
-    """A whole copy of the template at `dest` (which must not exist yet), with its inner remotes rewritten."""
+def copy(template_folder, dest, exist_ok=False):
+    """A whole copy of the template at `dest`, with its inner remotes rewritten. `dest` must not exist yet, unless
+    `exist_ok`: then what is already there stays, and a file of the template with the same name replaces it."""
     source = Path(template_folder)
     found = list(git_dirs(source))
     for gitdir in found:                                    # a worktree made outside the folder still leaves this
@@ -98,7 +99,7 @@ def copy(template_folder, dest):
         if linked.is_dir() and any(linked.iterdir()):
             raise ValueError(f'the template holds a worktree ({gitdir}): make worktrees in the test, after the copy')
     dest = Path(dest)
-    shutil.copytree(source, dest)
+    shutil.copytree(source, dest, dirs_exist_ok=exist_ok)
     for gitdir in found:
         rewrite_remotes(dest / gitdir.relative_to(source) / 'config', source, dest)
     return dest
