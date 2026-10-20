@@ -71,18 +71,30 @@ def key(path):
     return os.path.normcase(str(Path(path).resolve()))
 
 
+def unquote(value):
+    """A value of a Git config line as Git reads it: quotes dropped, `\\\\` and `\\"` unescaped."""
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        value = value[1:-1]
+    return re.sub(r'\\(.)', r'\1', value)
+
+
+def quote(value):
+    """A value Git reads back as is, whatever it holds (`#`, `;`, spaces, backslashes, quotes)."""
+    return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
 def rewrite_remotes(config, source, dest):
     """Point each remote URL of `config` that lies inside `source` at the same place inside `dest`."""
     inside, lines, changed = key(source), [], False
     for line in config.read_text(encoding='utf-8').splitlines(keepends=True):
         match = URL_LINE.match(line)
         if match:
-            value = match.group(2).strip('"').replace('\\\\', '\\')
+            value = unquote(match.group(2))
             if '://' not in value and os.path.isabs(value):
                 target = key(value)
                 if target == inside or target.startswith(inside + os.sep):
                     moved = Path(dest) / os.path.relpath(target, inside)
-                    line = f'{match.group(1)}{moved.as_posix()}\n'
+                    line = f'{match.group(1)}{quote(moved.as_posix())}\n'   # quoted: `#` and `;` open a comment
                     changed = True
         lines.append(line)
     if changed:

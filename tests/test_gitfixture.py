@@ -93,6 +93,15 @@ class TemplateTests(unittest.TestCase):
         url = gitfixture.git(dest / 'main', 'remote', 'get-url', 'origin').stdout.strip()
         self.assertEqual(Path(url).resolve(), (dest / 'origin.git').resolve())
 
+    def test_a_copy_under_a_folder_with_comment_characters_keeps_its_remote(self):
+        for name in ('a#b', 'a;b', 'a b'):
+            with self.subTest(folder=name):
+                tmp = tempfile.TemporaryDirectory()
+                self.addCleanup(tmp.cleanup)
+                copied = gitfixture.copy(self.template, Path(tmp.name) / name / 'copy')
+                url = gitfixture.git(copied / 'main', 'remote', 'get-url', 'origin').stdout.strip()
+                self.assertEqual(Path(url).resolve(), (copied / 'origin.git').resolve())
+
     def test_a_template_with_a_worktree_is_refused(self):
         def with_worktree(root):
             build(root)

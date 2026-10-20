@@ -134,7 +134,7 @@ class CleanupCase(unittest.TestCase):
     def worktree(self, name, issue=12, commit=True, start=None, record=True):
         """A worktree on a new branch `claude/<name>` with one commit of its own; returns (path, branch, tip)."""
         path, branch = self.base / name, f'claude/{name}'
-        if start is None and self.on_template_main():          # the same commit, made ahead by the template
+        if start is None and (name in self.premade or not commit) and self.on_template_main():  # made ahead
             tip = self.premade[name] if commit else self.main_tip
             self.git('worktree', 'add', '-q', '-b', branch, str(path), tip)
         else:
