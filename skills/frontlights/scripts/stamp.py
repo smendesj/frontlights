@@ -2,7 +2,7 @@
 """Approval stamp (issue 61): binds a user's approval of a document to the exact content of the file.
 
 Usage: frontlights.py stamp <file> [--root <project>] [--revision rN] [--approve --answer "<literal answer>"
-       [--stage N]] [--check] [--expect <sha12>]
+       [--stage N]] [--check] [--expect <sha12>]   (--approve requires --expect)
 
 Prints one JSON object: `ok`, `exitCode`, `operation` ("stamp"), `message` (Portuguese, for the user), `path`
 (relative to --root when the file is inside it, else as given; forward slashes), `revision` (from --revision, else
@@ -10,7 +10,9 @@ null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and
 
   --approve  appends one entry to <root>/.frontlights/approvals.json (a JSON list, created when absent, existing
              entries kept, extra keys included): path, revision, sha256, bytes, answer (verbatim), stage (when
-             given) and at (ISO-8601 in America/Sao_Paulo, with its offset, never UTC). Requires --answer.
+             given) and at (ISO-8601 in America/Sao_Paulo, with its offset, never UTC). Requires --answer and
+             --expect with the stamp shown in the question; when the file's stamp differs from it, nothing is
+             written and it exits 1 (the file changed since the question: ask the approval again).
   --check    compares the file with the last approval recorded for the same path: 0 when the stamp matches, 1 when
              it differs (with `approved`: the revision and sha256 of that approval) or when there is none.
   --expect   0 when the stamp equals the given one, 1 otherwise.
@@ -86,6 +88,8 @@ def read_approvals(path):
 def run(args):
     if args.approve and args.answer is None:
         raise Refusal('--approve precisa de --answer com a resposta literal do usuário')
+    if args.approve and args.expect is None:
+        raise Refusal('--approve precisa de --expect com o carimbo mostrado na pergunta; nada foi gravado')
     root = Path(args.root)
     path = shown_path(args.file, root)
     try:
@@ -116,7 +120,10 @@ def run(args):
                               approved={'revision': last.get('revision'), 'sha256': last.get('sha256')})
                 messages.append(f'o arquivo mudou desde a aprovação {last.get("revision")}; '
                                 'é preciso uma nova aprovação')
-    if args.approve:
+    if args.approve and result['exitCode'] != 0:
+        messages.append('o arquivo mudou desde a pergunta; nada foi gravado, é preciso pedir a aprovação de novo '
+                        f'com o novo carimbo {result["sha256"]}')
+    elif args.approve:
         target = root / APPROVALS
         entries = read_approvals(target)
         entry = {'path': path, 'revision': args.revision, 'sha256': result['sha256'], 'bytes': len(data),

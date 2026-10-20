@@ -103,7 +103,7 @@ and its revisions, the plan and the bodies of stage 5, the conversion of a famil
 batch and its leftover criteria, the closeout list and the cleanup list, the issue-gaps table and
 the RoadS progress-report draft. Before each approval:
 1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
-   one exists (the card reaches the phone), and give a clickable link to the file.
+   the host has it (the card reaches the phone), and give a clickable link to the file.
 2. Stamp it: `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" stamp <file> --root <project> --revision rN`
    prints the revision, a 12-character sha256 and the bytes, and the approval question names them
    ("Aprova r2 · 6c29ce70c2c7?").
@@ -114,17 +114,19 @@ the RoadS progress-report draft. Before each approval:
    previous revision and the new one), never a summary written by the session. Keep each previous
    revision as a file, so the diff can be computed.
 4. Record the user's approval with `frontlights.py stamp <file> --root <project> --revision rN
-   --approve --answer "<literal answer>"` (with `--stage N`). Right before the write the approval
-   covers (the GitHub write, the tick, the writes of the closeout list and of the cleanup list, the
-   summary push), run `frontlights.py stamp <file> --root <project> --check`: exit 1 means the file
-   changed since the approval, so nothing is written and the approval is asked again, showing the
-   new stamp and what changed.
+   --approve --answer "<literal answer>" --expect <the stamp in the question>` (with `--stage N`);
+   a refusal means the file changed since the question, so nothing is recorded: ask the approval
+   again with the new stamp. Right before the write the approval covers (the GitHub write, the
+   tick, the writes of the closeout list and of the cleanup list, the summary push), run
+   `frontlights.py stamp <file> --root <project> --check`: exit 1 means the file changed since the
+   approval, so nothing is written and the approval is asked again, showing the new stamp and what
+   changed.
 
 A summary or a path alone is not approval: the approval is of the file with that stamp, a decision
 that is not in the stamped file is not approved, and every revision is a new approval. Commands are
 not documents: the test-data SQL of `references/browser-testing.md` and the denied operations (stage
-6) stay in full inside the question that asks for them. If the host cannot send files or the stamp
-cannot run, record the approval as pending and stop.
+6) stay in full inside the question that asks for them. If the stamp cannot run, or there is neither
+a file card nor a clickable link, record the approval as pending and stop.
 
 **Fan out.** Every stage runs its independent pieces at once, one subagent per piece and as
 many as there are pieces, launched in one message (several `Agent` calls, in Claude Code) and

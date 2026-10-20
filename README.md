@@ -732,7 +732,7 @@ camadas necessárias, em vez de separar tickets apenas por banco de dados, API o
 As slices da issue são os critérios de aceitação: uma caixa por slice, em ordem de dependência,
 com Entrega, Seams, Camadas e Depende de em sub-itens; a etapa 5 mostra primeiro a lista numerada
 e pergunta se a granularidade está certa, se as dependências são reais e o que unir ou dividir, e
-só depois o corpo completo; prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
+só depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); prefactoring vem primeiro, refatoração larga vai em expandir, migrar e
 contrair, e todo critério falha no commit de partida. Uma issue curta tem no máximo cinco CAs,
 cada uma uma fatia vertical completa e curta; a sexta vira issues de topo ligadas por blocked-by, e a
 caixa de pendência não conta no teto.

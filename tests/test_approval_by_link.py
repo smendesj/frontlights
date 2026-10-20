@@ -20,7 +20,7 @@ POINTER = 'Show before approval'
 OLD = ('shown in full', 'show the plan in full', 'Show the complete revision', 'full text in the conversation',
        'complete text in the conversation', 'in full and in the user', 'as much as fits', 'the full body',
        'Print the whole draft text in the conversation', 'na íntegra', 'texto integral', 'texto completo',
-       'mostrados por inteiro', 'o texto se repete no `preview`')
+       'mostrados por inteiro', 'o texto se repete no `preview`', 'corpo completo', 'corpos mostrados')
 
 POINTER_FILES = (
     ('skills', 'frontlights', 'references', 'issue.md'),
@@ -99,10 +99,24 @@ class TheRuleTests(unittest.TestCase):
         text = rule()
         for phrase in ('A summary or a path alone is not approval', 'the approval is of the file with that stamp',
                        'a decision that is not in the stamped file is not approved', 'every revision is a new approval',
-                       'If the host cannot send files or the stamp cannot run, record the approval as pending and stop'):
+                       'If the stamp cannot run, or there is neither a file card nor a clickable link, record the '
+                       'approval as pending and stop'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertNotIn('shown in full in this session', text)
+        self.assertNotIn('the host cannot send files', text)
+
+    def test_the_file_card_is_sent_when_the_host_has_the_tool(self):
+        step1 = rule().split('1. ', 1)[1].split('2. ', 1)[0]
+        self.assertIn("send the file with the host's file-sending tool when the host has it", step1)
+
+    def test_the_approve_passes_the_stamp_shown_in_the_question(self):
+        text = rule()
+        for phrase in ('--approve --answer "<literal answer>" --expect <the stamp in the question>',
+                       'a refusal means the file changed since the question',
+                       'ask the approval again with the new stamp'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
 
     def test_the_rule_lives_once_in_skill_md(self):
         files = sorted(SKILL_DIR.rglob('*.md')) + [ROOT / 'README.md', ROOT / 'CLAUDE.md'] + sorted(
