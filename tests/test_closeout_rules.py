@@ -39,7 +39,7 @@ class SkillTests(unittest.TestCase):
         stage7 = ' '.join(self.text.split('## 7.')[1].split())
         for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md',
                        'Closing (with the tick in a parent, in the same approval) and the cleanup each wait for '
-                       'their own approval of the list shown in full', 'no implementation authorization, merged PR or green test covers them'):
+                       'their own approval of the list by link and stamp', 'no implementation authorization, merged PR or green test covers them'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
@@ -82,7 +82,7 @@ class ReferenceTests(unittest.TestCase):
                 self.assertIn(phrase, self.flat)
 
     def test_the_approval_is_a_question_with_options_of_at_most_five_words(self):
-        for phrase in ('Fechar estas <N> issues e mover os cartões para Done?', 'show-before-approval',
+        for phrase in ('Fechar estas <N> issues e mover os cartões para Done?', '"Show before approval"',
                        'Record the answer verbatim', 'never answer for the user'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)

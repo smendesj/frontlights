@@ -97,13 +97,34 @@ it by name and location only. Every number published in an issue, a report or a 
 percentage, a total) goes with the predicate or command that produced it, in the same
 text, and is reread before it is posted.
 
-**Show before approval.** Ask approval only of a document or plan shown in full in
-this session. Before each approval: write the
-complete text in the conversation, send the file with the host's file-sending
-tool when one exists (it reaches the phone), and repeat the text, or as much as
-fits, in the `preview` of the approve option. A summary or a file path alone is
-not showing it. If none of these is possible, record the approval as pending
-and stop.
+**Show before approval.** The approval of a document, a list or a table is asked by link and
+stamp, never by pasting the full text into the conversation. This covers the issue body of stage 4
+and its revisions, the plan and the bodies of stage 5, the conversion of a family, the findings
+batch and its leftover criteria, the closeout list and the cleanup list, the issue-gaps table and
+the RoadS progress-report draft. Before each approval:
+1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
+   one exists (the card reaches the phone), and give a clickable link to the file.
+2. Stamp it: `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" stamp <file> --root <project> --revision rN`
+   prints the revision, a 12-character sha256 and the bytes, and the approval question names them
+   ("Aprova r2 · 6c29ce70c2c7?").
+3. Next to the link, in the conversation and in the `preview` of the approve option, put at most
+   five lines: for r1, the sections of the document and the decisions it fixes, each with its
+   section of the artifact; from r2 on, the real diff between the stored revisions (the lines added
+   and removed, from `git diff --no-index --stat` and the changed lines between the kept file of the
+   previous revision and the new one), never a summary written by the session. Keep each previous
+   revision as a file, so the diff can be computed.
+4. Record the user's approval with `frontlights.py stamp <file> --root <project> --revision rN
+   --approve --answer "<literal answer>"` (with `--stage N`). Right before the write the approval
+   covers (the GitHub write, the tick, the writes of the closeout list and of the cleanup list, the
+   summary push), run `frontlights.py stamp <file> --root <project> --check`: exit 1 means the file
+   changed since the approval, so nothing is written and the approval is asked again, showing the
+   new stamp and what changed.
+
+A summary or a path alone is not approval: the approval is of the file with that stamp, a decision
+that is not in the stamped file is not approved, and every revision is a new approval. Commands are
+not documents: the test-data SQL of `references/browser-testing.md` and the denied operations (stage
+6) stay in full inside the question that asks for them. If the host cannot send files or the stamp
+cannot run, record the approval as pending and stop.
 
 **Fan out.** Every stage runs its independent pieces at once, one subagent per piece and as
 many as there are pieces, launched in one message (several `Agent` calls, in Claude Code) and
@@ -225,7 +246,7 @@ why in one sentence:
   (`references/development.md`, "Work without an issue").
 - **Short.** A bounded piece of work whose shape is clear but whose details are
   not, including work that starts from an existing issue. Grill (stage 3, with
-  its mandatory solution round), show the plan in full and get it approved, implement
+  its mandatory solution round), get the plan approved by link and stamp ("Show before approval"), implement
   under stage 6. Publish issues only if the user wants them.
 - **Full.** A feature or body of work with real uncertainty, several issues or
   more than one person involved. Run stages 3 to 6 as written.
@@ -329,8 +350,8 @@ Read `references/issue.md`. Write the body of the issue from the discovery log, 
 interview: the decisions were made in stage 3, and a decision that is missing from the log
 goes back there instead of being invented or asked here. The only question of this stage is the
 seams: propose the seams under test, preferring the ones that already exist, at the highest
-point possible, ideally one, and confirm them with `AskUserQuestion`. Then show the full body
-under the show-before-approval rule and obtain explicit approval of its exact revision. When
+point possible, ideally one, and confirm them with `AskUserQuestion`. Then obtain explicit approval
+of its exact revision, by link and stamp ("Show before approval"). When
 the work touches a screen, the body shows the field-by-field trace to the back and the
 database (`references/issues.md`) before it is approved. This approval covers the text;
 the GitHub write is the approval of stage 5.
@@ -355,9 +376,8 @@ proven (`references/issues.md`). Show first the numbered list of the slices (tit
 on, what it delivers and the section of the artifact with what it delivers, on the same URL as
 the grilling and numbered after the grilling's sections; `references/issues.md`) and ask the quiz with `AskUserQuestion`: is the granularity right, are
 the dependencies real, should any slice merge or split; a slice with no answer to "what can
-be demoed" is horizontal and goes back to the cut without an extra question. Then show the
-complete body of every issue under the show-before-approval rule and ask approval for the
-plan and the named GitHub writes: one write per issue; when the work starts from an issue that
+be demoed" is horizontal and goes back to the cut without an extra question. Then ask approval for the
+plan, the body of every issue and the named GitHub writes, by link and stamp ("Show before approval"): one write per issue; when the work starts from an issue that
 already exists, the spec and the slices are appended to its body by the write rule of the
 leftover (body captured, append only, difference checked, reread) and the text that was there
 is not edited. Stages 4 and 5 run in the same window. Publish only after approval and
@@ -422,4 +442,4 @@ Read `references/closeout.md`. It runs when the stage 1 closeout question is ans
 wait of stage 6 finds the release's pull request merged into the approved base (and the local main
 brought up to it with `git pull --ff-only`), or when the user asks to close or move finished
 issues. Closing (with the tick in a parent, in the same approval) and the cleanup each wait for their own
-approval of the list shown in full: no implementation authorization, merged PR or green test covers them.
+approval of the list by link and stamp ("Show before approval"): no implementation authorization, merged PR or green test covers them.

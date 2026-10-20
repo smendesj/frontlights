@@ -83,13 +83,11 @@ write, shown first). Without `project.done` the pair is `Status` / `Done`.
 
 ## 2. Show the list and ask
 
-Show in the conversation, in full and in the user's language, one table with a row per candidate (number,
-title, top-level or sub-issue, criteria n/n, children, PRs, card status → Done, action, cautions, and "fecha com N
-pendências fora dos critérios" when `pendingOutside` is above zero) in the
-`order` of the result, and the exact `commands` that will run. Send the same text as a file with the host's
-file-sending tool when one exists, and put it in the `preview` of the approve option (show-before-approval,
-`SKILL.md`). A sub-issue with `parentTicks` gets, in its row, "marcar no corpo de #P as linhas L" with each of
-those lines shown in full, and the lines in `shared` are listed as "não marcadas: citam outras issues". When the
+Write to a file, in the user's language, one table with a row per candidate (number, title, top-level or
+sub-issue, criteria n/n, children, PRs, card status → Done, action, cautions, and "fecha com N pendências fora dos
+critérios" when `pendingOutside` is above zero) in the `order` of the result, and the exact `commands` that will
+run, and ask its approval by link and stamp (`SKILL.md`, "Show before approval"). A sub-issue with `parentTicks`
+gets, in its row, "marcar no corpo de #P as linhas L" with each of those lines quoted whole, and the lines in `shared` are listed as "não marcadas: citam outras issues". When the
 list holds ticks, the question reads "Fechar estas <N> issues, mover os cartões para Done e marcar os itens dos
 pais?", and "Só fechar, sem mover" writes only the closes (no move and no tick). Then ask with `AskUserQuestion`: "Fechar estas <N> issues e mover os cartões para Done?" with
 "Sim, fechar e mover tudo" first and recommended (recommend "Escolher quais" instead when some candidate has
@@ -100,7 +98,8 @@ session while the list stands, and the user can answer the stage 1 question "Nã
 
 ## 3. Write what was approved
 
-In the `order` of the result, for each approved issue run the `commands` exactly as given, each value as one
+Run the stamp check of the approved list first (`SKILL.md`, "Show before approval"): when it exits 1, nothing is
+written and the list is asked again. In the `order` of the result, for each approved issue run the `commands` exactly as given, each value as one
 double-quoted argument: first `gh issue close <n> --repo <repo> --reason completed`, then, when the card
 moves, `gh project item-edit <number> --owner <owner> --url <issue-url> --field <field> --value <value>`.
 Never close a parent before every one of its children is closed. A failed write is recorded and only the
@@ -185,10 +184,9 @@ when its remote branch points at the same commit); in both cases nothing is unco
 it, and it is not protected; the remote branch goes only when `origin` is this repository and the branch still points
 at that commit.
 
-Show in the conversation, in full and in the user's language, one table with a row per candidate (issue, worktree,
-branch, pull requests, remote branch, cautions) and the exact `commands`, then the `excluded` with their reasons;
-send it as a file when the host has the tool and put it in the `preview` of the approve option (show-before-approval,
-`SKILL.md`). Say in the question that a worktree with `frontlights_records` takes those records with it and that the
+Write to a file, in the user's language, one table with a row per candidate (issue, worktree, branch, pull
+requests, remote branch, cautions) and the exact `commands`, then the `excluded` with their reasons, and ask its
+approval by link and stamp (`SKILL.md`, "Show before approval"), with the stamp check before the removal. Say in the question that a worktree with `frontlights_records` takes those records with it and that the
 files in `ignored` go too (name them), and copy what the user wants to keep before removing. Then ask with
 `AskUserQuestion`: "Remover estas <N> worktrees e branches?" with "Sim, remover tudo" first and recommended
 (recommend "Escolher quais" instead when some candidate has `frontlights_records` or an `ignored` list with anything

@@ -19,7 +19,8 @@ Expected, in this order:
    notification alone is never taken as proof.
 3. The user merges the release's pull request into the approved base. `merge-status` lists it as `ready`, the session
    runs `git pull --ff-only` on the local main and then the closeout for the issues of the release. A sub-issue with all
-   criteria ticked appears with "marcar no corpo de #P a linha L", the line shown in full; the item that cites two issues
+   criteria ticked appears with "marcar no corpo de #P a linha L", the line quoted whole in the list file approved by link and stamp
+   (`SKILL.md`, "Show before approval"); the item that cites two issues
    is listed as not ticked. The question reads "Fechar estas <N> issues, mover os cartões para Done e marcar os itens dos
    pais?". An issue with an unticked criterion is not offered, and the session says which criteria are left.
 4. After the answer, the sub-issue is closed first and then the parent's body is rewritten: the difference against the

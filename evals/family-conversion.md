@@ -27,7 +27,8 @@ a family.
 
 Reject: a new sub-issue, `gh issue create --parent` or `sub_issues --method POST` anywhere; a ticked box nested
 under a box (the closeout counts every box); a parent body
-replaced without the before and the after shown in full or without the approval of that family; the old
+replaced without the before and the after whole in the stamped file (`SKILL.md`, "Show before approval")
+or without the approval of that family; the old
 body not captured; a child closed, or its card moved, without its own "Sim"; six or more boxes in one
 issue; a decision in the new body that the user never made; a closed sub-issue reopened or converted;
 converting a family the user declined.
