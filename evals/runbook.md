@@ -120,7 +120,9 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     `.env` (anything besides dependency or build folders) is asked about, naming the file; the issue branches that
     `origin/main` now contains go (`contained_in_base_without_pull_request`), and the local-only integration worktree
     of the family goes only when it holds no commit of its own outside what reached the base; without a wake mechanism
-    the next `/frontlights` start runs the cleanup of the merged work it finds and then asks the closeout question.
+    the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the
+    authorization records (an issue already closed by `Closes #n` included), runs what it offers and then asks the
+    closeout question.
 
 18. Progress question in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start

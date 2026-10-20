@@ -16,10 +16,12 @@ Operations (each prints one JSON object on stdout):
           --worktree PATH named by hand, plus every local release branch (`<branch_prefix>release-<YYYY-MM-DD>[-N]`,
           the prefixes of the authorization records) whose work reached the approved base, split into what can be
           removed now, with the commands in the order to run them, and what stays and why. `commands` is the whole
-          list to run: `git fetch --prune origin` first (when there is an `origin`), then, per candidate that does not
-          ask, its own `commands`. A worktree holding Frontlights records (`frontlights_records`) gets `copy_records`
+          list to run: `git fetch --prune origin` first (when there is an `origin`, `item` null), then, per candidate
+          that does not ask, its own `commands`, each with `item` (the candidate's branch): a failed command skips the
+          rest of its item. A worktree holding Frontlights records (`frontlights_records`) gets `copy_records`
           before `git worktree remove`: `cleanup.py archive` copies its `.frontlights` to the main worktree's
-          `.frontlights/issues/<n>/worktrees/<folder>/` (`.frontlights/worktrees/<folder>/` without an issue). A
+          `.frontlights/issues/<n>/worktrees/<folder>-<short tip>/` (`.frontlights/worktrees/<folder>-<short tip>/`
+          without an issue), a folder of its own per archive. A
           candidate whose ignored files include anything besides dependency or build folders (DISPOSABLE) carries
           `ask: true`, `askReason` and `askIgnored`, and its commands stay out of `commands` until the user said yes.
           A worktree and its branch can be removed only when it is not the main one,
@@ -40,8 +42,10 @@ Operations (each prints one JSON object on stdout):
           A slice's worktree (an authorization entry with `slice`, issue 31) is delivered to the branch of its own
           issue, never by a pull request: it can go when that branch (the entry of the same issue without `slice`)
           contains its tip, it was never pushed and no pull request was opened from it.
-  archive copy --from <worktree>/.frontlights into --to (a folder under a `.frontlights` folder of the main
-          worktree), keeping what is already there: the one operation that writes, and only into --to.
+  archive copy --from <worktree>/.frontlights into --to, a folder under the `.frontlights` folder of the main
+          worktree of that repository (read from Git), that does not exist yet or is empty: one that holds anything is
+          refused, nothing copied, so no earlier archive is ever overwritten. The one operation that writes, and only
+          into --to.
   verify  reread --worktree, --branch and --records values and say whether each worktree is gone (unregistered and
           its folder absent), each local branch is gone, and each records folder holds the copied files.
 
@@ -77,6 +81,7 @@ MAX_ITEMS = 50           # worktrees one run looks at
 BATCH = 8                # branches read from GitHub in one query
 MAX_CHAIN = 8            # stacked parents followed from a pull request up to the approved base
 MAX_IGNORED = 20         # ignored names listed in a caution
+SHORT_TIP = 7            # characters of the tip in the folder an archive goes to
 REMOTE = 'origin'
 OID = re.compile(r'[0-9a-f]{40,64}')
 RELEASE = re.compile(r'release-\d{4}-\d{2}-\d{2}(?:-\d+)?')   # after the branch prefix (homolog.py, release_name)
@@ -234,9 +239,12 @@ def disposable(name):
                             or parts[-1].endswith(DISPOSABLE_SUFFIXES))
 
 
-def records_destination(main, item, folder):
-    """Where the Frontlights records of a worktree are copied in the main worktree before it is removed."""
+def records_destination(main, item, folder, tip):
+    """Where the Frontlights records of a worktree are copied in the main worktree before it is removed: a folder of
+    its own per worktree and tip (`<folder>-<short tip>`), so a later archive never lands on an earlier one."""
     name = FOLDER.sub('-', Path(folder).name).strip('.-') or 'worktree'
+    if isinstance(tip, str) and OID.fullmatch(tip):
+        name = f'{name}-{tip[:SHORT_TIP]}'
     base = Path(main) / '.frontlights'
     target = base / 'issues' / str(item['issue']) / 'worktrees' / name if item.get('issue') is not None else base / 'worktrees' / name
     return target.as_posix()
@@ -477,13 +485,15 @@ def assess(ctx, item, registered, github):
     destination = None
     if 'frontlights_records' in cautions:
         # the records go to the main worktree before the worktree that holds them is removed
-        destination = records_destination(main, item, registered['path'])
+        destination = records_destination(main, item, registered['path'], tip)
         commands.append({'kind': 'copy_records',
                          'argv': [ctx['python'], ctx['script'], 'archive', '--from', f"{registered['path']}/.frontlights",
                                   '--to', destination]})
     if registered is not None:
         commands.append({'kind': 'remove_worktree', 'argv': ['git', '-C', main, 'worktree', 'remove', registered['path']]})
     commands.append({'kind': 'delete_branch', 'argv': ['git', '-C', main, 'branch', '-D', branch]})
+    for command in commands:
+        command['item'] = branch   # a failed command skips the rest of its item
     record = {'issue': item.get('issue'), 'slice': item.get('slice'), 'release': False,
               'path': path if registered is not None else None, 'branch': branch, 'tip': tip,
               'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
@@ -517,7 +527,8 @@ def assess_release(ctx, branch, github):
     return [], {'issue': None, 'slice': None, 'release': True, 'path': None, 'branch': branch, 'tip': tip,
                 'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
                 'removeWorktree': False, 'recordsTo': None, 'cautions': ['merged_release_branch'], 'ask': False,
-                'commands': [{'kind': 'delete_branch', 'argv': ['git', '-C', ctx['main_path'], 'branch', '-D', branch]}]}
+                'commands': [{'kind': 'delete_branch', 'item': branch,
+                              'argv': ['git', '-C', ctx['main_path'], 'branch', '-D', branch]}]}
 
 
 def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None):
@@ -603,7 +614,7 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     result['candidates'].sort(key=lambda c: (c['release'], c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
     if has_origin(main):
         # GitHub deletes the merged head branches; the fetch drops the remote-tracking refs they left here
-        result['commands'].append({'kind': 'fetch_prune', 'argv': ['git', '-C', main, 'fetch', '--prune', REMOTE]})
+        result['commands'].append({'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', main, 'fetch', '--prune', REMOTE]})
     for candidate in result['candidates']:
         if not candidate['ask']:
             result['commands'] += candidate['commands']
@@ -624,16 +635,25 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
 
 
 def op_archive(source, destination):
-    """Copy the Frontlights records of a worktree (`<worktree>/.frontlights`) into `destination`, a folder under a
-    `.frontlights` folder, keeping what is already there. The one write of this helper, and only into `destination`."""
+    """Copy the Frontlights records of a worktree (`<worktree>/.frontlights`) into `destination`, a folder under the
+    `.frontlights` folder of the main worktree of the same repository (Git says which), that does not exist yet or is
+    empty: an earlier archive is never overwritten. The one write of this helper, and only into `destination`."""
     require(source and destination, 'archive needs --from <worktree>/.frontlights and --to <folder>')
     origin, target = Path(source).resolve(), Path(destination).resolve()
     require(origin.name == '.frontlights' and origin.is_dir(), '--from must be the .frontlights folder of a worktree')
-    require('.frontlights' in target.parts[:-1], '--to must be a folder under the .frontlights folder of the main worktree')
+    records = Path(list_worktrees(origin.parent)[0]['path']).resolve() / '.frontlights'
 
     def holds(outer, inner):
         return outer == inner or outer in inner.parents
+    require(norm(records) != norm(target) and any(norm(records) == norm(p) for p in target.parents),
+            '--to must be a folder under the .frontlights folder of the main worktree')
     require(not holds(origin, target) and not holds(target, origin), '--from and --to must not hold one another')
+    try:
+        occupied = target.exists() and (not target.is_dir() or any(target.iterdir()))
+    except OSError:
+        occupied = True
+    require(not occupied, '--to already holds files: nothing was copied, so no earlier archive is overwritten; '
+                          'the worktree keeps its records')
     try:
         shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True)
     except (OSError, shutil.Error):

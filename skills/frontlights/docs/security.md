@@ -296,10 +296,11 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca `git push origin --delete`. O
   `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
   oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
-- o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta dentro do
-  `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>/`), sem apagar o que já está lá, e recusa
-  origem que não seja uma pasta `.frontlights` e destino fora de uma; ele vem antes do `git worktree remove`, e uma
-  cópia que falha deixa a worktree e os registros onde estão;
+- o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do
+  `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/`), sem apagar o que já está
+  lá: recusa um destino que já tem arquivo (nada é copiado), origem que não seja uma pasta `.frontlights` e destino
+  fora do `.frontlights` da worktree principal daquele repositório (lida do Git); ele vem antes do `git worktree
+  remove`, e uma cópia que falha deixa a worktree e os registros onde estão;
 - a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
   negadas): só o candidato com arquivo ignorado fora de pastas de dependência ou build (`ask: true`) espera o "Sim";
   um comando que falha é registrado e nunca repetido com força, e o resto daquele item não roda.

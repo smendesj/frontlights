@@ -30,9 +30,19 @@ class SkillTests(unittest.TestCase):
         self.assertIn('**Closeout question, right after the progress question.**', stage1)
         self.assertIn('closeout.py" candidates', stage1)
         self.assertIn('Only when `candidates` reports `ask` true', stage1)
-        self.assertIn('When it finds merged work (a candidate, or an issue left out for any reason but '
-                      '`awaiting_release`), first run the cleanup of `references/closeout.md`, step 5, without a question', stage1)
-        self.assertIn('`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records', stage1)
+        # review r1 of issue 63 (R1-1): an issue closed by `Closes #n` only counts in `alreadyDone`, so the cleanup
+        # cannot wait for a candidate; and `origin/<base>` is fetched before anything is judged
+        self.assertNotIn('When it finds merged work', stage1)
+        for phrase in ('When the `.frontlights/authorization*.json` records list issue ids, first run '
+                       '`git -C <main worktree> fetch --prune origin`',
+                       'before `closeout.py candidates` and `cleanup.py plan`',
+                       'then always run the cleanup of `references/closeout.md`, step 5, without a question',
+                       '`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records',
+                       'the plan alone judges what is merged'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, stage1)
+        self.assertLess(stage1.index('fetch --prune origin'), stage1.index('`cleanup.py plan` with'))
+        self.assertLess(stage1.index('`cleanup.py plan` with'), stage1.index('closeout.py" candidates'))
         self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', stage1)
         self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when `board.status` is `unavailable` or `done_option_missing`: then say in one line that the cards could not be checked', stage1)
         question = stage1.split('**Closeout question, right after the progress question.**')[1]

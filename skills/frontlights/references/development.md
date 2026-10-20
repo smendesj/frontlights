@@ -708,8 +708,9 @@ offers the release again with everything accumulated.
   door otherwise, and the blast radius); it cites the issues by number, and the body of the pull request is never
   the destination of a finding (the gate on the findings, above). **`Closes #n` only from `closes`.** The body
   carries one `Closes #n` line per issue of the `closes` of the last `release-plan`, copied from that list, never
-  counted by hand; every other issue (a sub-issue, an open box, an open sub-issue, a leftover outside the criteria,
-  or every issue when `closes` is empty) is cited by number without a closing keyword (`Closes`, `Fixes`,
+  counted by hand (right before `## Resumo`, plain lines outside any code fence, the place `templates/pr.md`
+  fixes); every other issue (a sub-issue, an open box, an open sub-issue, a leftover outside the criteria, or every
+  issue when `closes` is empty) is cited by number without a closing keyword (`Closes`, `Fixes`,
   `Resolves` or a variant of them), in the body and in the commits, and follows the closing question of stage 7.
   The merge itself stays a denied operation: the `Closes #n` lines close their issues only through the merge the
   user approved, and only issues whose criteria are all ticked.

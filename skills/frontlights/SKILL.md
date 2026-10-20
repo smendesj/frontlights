@@ -216,12 +216,15 @@ not trusted or the registered project lost its block). Options: "Sim, escolher a
 about it in this session. Ask nothing else and go on exactly as before.
 
 **Closeout question, right after the progress question.** When `.frontlights/config.json`
-exists with a `repository`, run the read-only `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py"
+exists with a `repository`, this runs in order. When the `.frontlights/authorization*.json` records list issue ids, first run
+`git -C <main worktree> fetch --prune origin`, before `closeout.py candidates` and `cleanup.py plan`, so
+`origin/<base>` is current before anything is judged (if it fails, say so in one line and go on), then always run
+the cleanup of `references/closeout.md`, step 5, without a question: `cleanup.py plan` with `--issues` the
+`issue_ids` of the authorization records, then the `commands` it offers, in order, and its verify (the plan alone
+judges what is merged: an issue already closed by the `Closes #n` of a release counts only in `alreadyDone` of
+`candidates`, and its worktrees still go). Then run the read-only `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py"
 candidates --config <config> --root <project>` (a GitHub read through `gh` that takes a while when many issues are in scope, so give it a generous timeout; if it
-cannot run, say so in one line and go on). When it finds merged work (a candidate, or an issue left out for any
-reason but `awaiting_release`), first run the cleanup of `references/closeout.md`, step 5, without a question:
-`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records, then the `commands` it offers, in
-order, and its verify. Only when `candidates` reports `ask` true, ask with `AskUserQuestion`: "Fechar as
+cannot run, say so in one line and go on). Only when `candidates` reports `ask` true, ask with `AskUserQuestion`: "Fechar as
 issues que já têm todos os critérios marcados?" Put in the question text
 how many there are and which. Options: "Sim, mostrar a lista" and
 "Não, seguir com o pedido". On yes, read `references/closeout.md` and follow it (stage 7), then come

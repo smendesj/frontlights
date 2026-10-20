@@ -27,11 +27,13 @@ repository and is used only when the user asks for it. With no repository or no 
 the check could not run and go on.
 
 When the release's merge woke the session, the issues of the `closes` of its `release-plan` were closed by the
-`Closes #n` lines of the merged pull request (`development.md`, "The release"): they skip this step and the
-question, and only step 4 confirms them (`verify --issues <closes>`). Pass `--issues` with the other issues
-`release-plan` listed for that release (the sub-issues of a family included): an explicit list is taken as it is;
-an issue of `closes` that GitHub still shows open right after the merge stays out of this list too, and the verify
-reads it again. Only the release merged into the approved
+`Closes #n` lines of the merged pull request (`development.md`, "The release"): they skip the question, and the
+verify confirms them. Before this step, first run `closeout.py verify --issues <closes>` (the command of step 4):
+an issue it reports still open is read once more (the same verify, a few seconds later), and one still open then
+joins the closing question of step 2, in the `--issues` of this step, with the reason said in one line (the
+`Closes #n` of the merged pull request did not close it). Pass `--issues` with the other issues `release-plan`
+listed for that release (the sub-issues of a family included), plus those: an explicit list is taken as it is.
+Only the release merged into the approved
 base counts; the merge of an issue into the local main, or of a child into its parent's branch, closes nothing by
 itself (the issue closes with the release that carries it, as `development.md` says): `candidates` keeps such an
 issue out as `awaiting_release` until `origin/<base>` holds its branch (`--base` and `--remote`, defaulting to the
@@ -133,7 +135,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" verify --config <config> --root
 ```
 
 At the merge of a release, `--issues` takes the `closes` of its `release-plan` together with the issues closed in
-step 3. Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
+step 3 (an issue of `closes` still open there was already read twice and asked in step 2, step 1 says how). Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
 did not reach Done is in `cardsOutsideDone` and in one line of the message: say that line (the board's "Item
 closed" workflow did not move it; suggest turning it on in the board's Workflows screen). It never makes an issue
 fail, and the session does not move the card. GitHub is the source
@@ -145,7 +147,8 @@ output in the handoff, with the `tick-check` result of each parent.
 
 This step runs first, before the closing question of step 1: at the merge of the release, right after `git pull
 --ff-only origin <base>` (`development.md`, "At the merge"), with `--issues` the issues `release-plan` listed for
-that release, and at stage 1 of a new session when the closeout read finds merged work (`SKILL.md`, the closeout
+that release, and at stage 1 of every session whose authorization records list issue ids, after `git fetch
+--prune origin` and whatever `candidates` finds (the plan alone judges what is merged; `SKILL.md`, the closeout
 question), with `--issues` the `issue_ids` of the authorization records. It is the written exception to "deleting
 anything" of the denied operations (`development.md`): the worktrees and branches the work created (the
 `worktrees` of the authorization for these issues, plus an integration worktree the handoff names, plus the local
@@ -175,9 +178,11 @@ worktree), `release` (true for a release branch), worktree path, branch, tip, pu
 `contained_in_base_without_pull_request`, `merged_release_branch`, `branch_differs_from_authorization`) and its own
 `commands`. A worktree with `frontlights_records` (a non-empty `.frontlights` folder inside it) gets `copy_records`
 before `git worktree remove`: `cleanup.py archive --from <worktree>/.frontlights --to <recordsTo>` copies its
-records to the main worktree's `.frontlights/issues/<n>/worktrees/<worktree folder>/` (one folder per worktree;
-`.frontlights/worktrees/<worktree folder>/` for a worktree named without an issue), keeping what is already there.
-A failed copy stops that item, so the worktree keeps its records.
+records to the main worktree's `.frontlights/issues/<n>/worktrees/<worktree folder>-<short tip>/` (a folder of its
+own per archive; `.frontlights/worktrees/<worktree folder>-<short tip>/` for a worktree named without an issue). The
+destination must lie under the main worktree's `.frontlights` (the main worktree read from Git for the worktree of
+`--from`), and a destination that already holds files is refused (exit 1, nothing copied), so no earlier archive is
+ever overwritten. A failed copy stops that item, so the worktree keeps its records.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
 pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch`,
 once that branch contains a commit of its own, it was never pushed and no pull request was
@@ -209,7 +214,10 @@ it, and it is not protected.
 Run `commands` in order, without a question (each carries `git -C <main worktree>`), each value as one
 double-quoted argument: `git fetch --prune origin`, then per item the `copy_records`, `git worktree remove` and
 `git branch -D` (right here, because a squash merge leaves the branch "unmerged" for Git and the plan offers it only
-when its tip is the head of a merged pull request or already contained in the approved base). Never add `--force`
+when its tip is the head of a merged pull request or already contained in the approved base). Each command carries
+`item` (the branch of its candidate; null for the fetch), and the session runs them item by item: when any command
+of an item fails, it runs nothing more of that item (no `git worktree remove` after a failed `copy_records`, no
+`git branch -D` after a failed removal). Never add `--force`
 or `-f`. A command that fails (a path too long for Windows, a folder in use) is recorded
 and reported, and never retried with force; the rest of that item's commands are not run (a branch whose worktree
 could not be removed keeps both), and the next item goes on. For each candidate with `ask: true`, ask with

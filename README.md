@@ -645,10 +645,13 @@ a sessão acaba, a pergunta de fechamento do início da próxima sessão encontr
 
 Com o merge confirmado, nesta ordem:
 
-1. **Limpeza**, logo depois do `git pull --ff-only` e sem pergunta (também no início de uma sessão nova que acha
-   trabalho mesclado): `cleanup.py plan` traz os comandos em ordem e a sessão os roda. Primeiro `git fetch --prune`;
+1. **Limpeza**, logo depois do `git pull --ff-only` e sem pergunta (também no início de toda sessão nova cujos
+   registros de autorização listam issues, depois de um `git fetch --prune origin`: o plano sozinho julga o que foi
+   mesclado, inclusive a issue já fechada pelo `Closes #n`): `cleanup.py plan` traz os comandos em ordem e a sessão
+   os roda, item por item; um comando que falha deixa o resto daquele item sem rodar. Primeiro `git fetch --prune`;
    depois, para cada worktree com registros do `.frontlights` dentro, a cópia deles para
-   `.frontlights/issues/<n>/worktrees/<pasta>/` da worktree principal (`cleanup.py archive`), e só então a remoção
+   `.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da worktree principal (`cleanup.py archive`), numa
+   pasta própria que ele recusa se já tiver arquivo, e só então a remoção
    da worktree e da branch local; por último a branch local da release mesclada. Só entram as worktrees e branches
    das issues e das slices que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
    empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao
@@ -662,7 +665,8 @@ Com o merge confirmado, nesta ordem:
    integração local da família (nunca enviada, sem PR) entra quando não guarda commit próprio (nem merge com
    conteúdo, como um conflito resolvido à mão) fora das PRs já entregues.
 2. **Issue do `closes`**: já fechada pelo `Closes #n` do merge, só é conferida (`closeout.py verify --issues
-   <closes>`), sem pergunta.
+   <closes>`), sem pergunta; se o `verify` ainda a vê aberta depois de relê-la uma vez, ela entra na pergunta de
+   fechamento, com a razão numa linha.
    **Issue** com todos os critérios marcados, fora do `closes`: pergunta se pode fechá-la; o cartão vai para Done
    pelo fluxo "Item closed" do quadro.
    **Sub-issue** com todos os critérios marcados: pergunta se pode fechá-la e marcar, no corpo da issue pai, o item que a

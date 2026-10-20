@@ -271,7 +271,7 @@ class RemovableTests(CleanupCase):
         self.assertEqual(argvs[0][3:5], ['worktree', 'remove'])
         self.assertEqual(cleanup.norm(argvs[0][5]), cleanup.norm(path))
         self.assertEqual(argvs[1][3:], ['branch', '-D', branch])
-        prune = {'kind': 'fetch_prune', 'argv': ['git', '-C', argvs[0][2], 'fetch', '--prune', 'origin']}
+        prune = {'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', argvs[0][2], 'fetch', '--prune', 'origin']}
         self.assertEqual(result['commands'], [prune] + entry['commands'])
 
     def test_nothing_is_ever_removed_by_the_plan_and_no_command_forces_anything(self):
@@ -316,7 +316,7 @@ class RemovableTests(CleanupCase):
         self.assertEqual((entry['cautions'], entry['ask']), (['frontlights_records'], False))
         self.assertEqual([c['kind'] for c in entry['commands']], ['copy_records', 'remove_worktree', 'delete_branch'])
         self.assertEqual(cleanup.norm(entry['recordsTo']),
-                         cleanup.norm(self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12'))
+                         cleanup.norm(self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f'wt12-{tip[:7]}'))
 
     def test_a_squash_merged_branch_is_removable_because_its_tip_is_the_head_of_the_merged_pull_request(self):
         path, branch, tip = self.worktree('wt12')
@@ -1033,15 +1033,71 @@ class MergedWorkTests(CleanupCase):
                 self.assertEqual(cleanup.norm(command['argv'][2]), main)
             subprocess.run(command['argv'], check=True, capture_output=True)
         archive = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
-        self.assertEqual(json.loads((archive / 'issue-12' / 'issues' / '12' / 'review.json').read_text(encoding='utf-8')),
+        tips = {c['branch']: c['tip'] for c in result['candidates']}
+        issue_records = archive / f"issue-12-{tips[issue_branch][:7]}"
+        s1_records = archive / f"issue-12-s1-{tips[s1_branch][:7]}"
+        self.assertEqual(json.loads((issue_records / 'issues' / '12' / 'review.json').read_text(encoding='utf-8')),
                          {'evidence': True})
-        self.assertTrue((archive / 'issue-12-s1' / 'issues' / '12' / 'progress.json').is_file())
+        self.assertTrue((s1_records / 'issues' / '12' / 'progress.json').is_file())
         self.assertEqual(self.git('branch', '--list', '-r', f'origin/{self.RELEASE}'), '')   # pruned by the fetch
         after = cleanup.run('verify', self.config, self.root, None, None, [str(issue_path), str(s1_path)],
                             [issue_branch, s1_branch, self.RELEASE], FakeGh(),
-                            records=[str(archive / 'issue-12'), str(archive / 'issue-12-s1')])
+                            records=[str(issue_records), str(s1_records)])
         self.assertTrue(after['ok'], after)
         self.assertEqual([e['kind'] for e in after['entries']], ['worktree'] * 2 + ['branch'] * 3 + ['records'] * 2)
+
+    def test_each_command_names_the_item_it_belongs_to(self):
+        """Review r1 of issue 63 (R1-3): every command of `commands` carries the branch of its candidate in `item`
+        (null only for the fetch, which belongs to no item), so a failure skips the rest of that item."""
+        _, _, info = self.released()
+        result, _ = self.plan(info)
+        self.assertEqual(result['commands'][0]['kind'], 'fetch_prune')
+        self.assertIsNone(result['commands'][0]['item'])
+        expected = [c['branch'] for c in result['candidates'] for _ in c['commands']]
+        self.assertEqual([c['item'] for c in result['commands'][1:]], expected)
+        for candidate in result['candidates']:
+            with self.subTest(branch=candidate['branch']):
+                self.assertEqual({c['item'] for c in candidate['commands']}, {candidate['branch']})
+
+    def test_the_records_of_each_worktree_go_to_a_folder_of_their_own_tip(self):
+        """Review r1 of issue 63 (R1-2): `recordsTo` carries the short tip of the worktree, so a later worktree of the
+        same folder name never lands on records archived before."""
+        (issue_path, issue_branch), _, info = self.released()
+        result, _ = self.plan(info)
+        entry = next(c for c in result['candidates'] if c['branch'] == issue_branch)
+        expected = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / f"issue-12-{entry['tip'][:7]}"
+        self.assertEqual(cleanup.norm(entry['recordsTo']), cleanup.norm(expected))
+        copy = next(c for c in entry['commands'] if c['kind'] == 'copy_records')
+        self.assertEqual(copy['argv'][-1], entry['recordsTo'])
+
+    def test_archive_refuses_a_destination_that_already_holds_records(self):
+        """Review r1 of issue 63 (R1-2): a destination that exists and is not empty is refused, nothing copied."""
+        path, _, _ = self.worktree('wt12')
+        (path / '.frontlights').mkdir()
+        (path / '.frontlights' / 'note.txt').write_text('new')
+        target = self.root / '.frontlights' / 'issues' / '12' / 'worktrees' / 'wt12-abc1234'
+        target.mkdir(parents=True)
+        (target / 'note.txt').write_text('old')
+        result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(target))
+        self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+        self.assertEqual(((target / 'note.txt').read_text(), sorted(p.name for p in target.iterdir())), ('old', ['note.txt']))
+        empty = target.parent / 'wt12-def5678'
+        empty.mkdir()
+        result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(empty))
+        self.assertEqual((result['ok'], (empty / 'note.txt').read_text()), (True, 'new'))
+
+    def test_archive_refuses_a_frontlights_folder_outside_the_main_worktree(self):
+        """Review r1 of issue 63 (R1-6): the destination lies under the main worktree's `.frontlights`, the main
+        worktree read from Git for the worktree of --from; a `.frontlights` elsewhere is refused."""
+        path, _, _ = self.worktree('wt12')
+        (path / '.frontlights').mkdir()
+        (path / '.frontlights' / 'note.txt').write_text('evidence')
+        for target in (self.base / 'other' / '.frontlights' / 'issues' / '12', path / 'sub' / '.frontlights' / 'x',
+                       self.root / 'sub' / '.frontlights' / 'x'):
+            with self.subTest(target=str(target)):
+                result = cleanup.run('archive', None, source=str(path / '.frontlights'), destination=str(target))
+                self.assertEqual((result['ok'], result['exitCode']), (False, 1))
+                self.assertFalse(target.exists())
 
     def test_archive_copies_only_a_frontlights_folder_into_a_frontlights_folder(self):
         path, _, _ = self.worktree('wt12')

@@ -81,7 +81,7 @@ sub-issue, a mesma aprovação do fechamento inclui marcar no corpo do pai o ite
 `closeout.py tick-check` confere antes e depois). A limpeza das worktrees e branches (`scripts/cleanup.py
 plan|verify`, nunca com `--force`) roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta
 (`references/closeout.md`, passo 5): `git fetch --prune`, os registros de cada worktree copiados para
-`.frontlights/issues/<n>/worktrees/<pasta>/` da principal, e a remoção das worktrees e das branches locais das
+`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da principal, e a remoção das worktrees e das branches locais das
 issues, das slices e da release mesclada; nunca `git push origin --delete`, porque o GitHub apaga a branch de
 cabeça da PR mesclada. Só pergunta o candidato com arquivo ignorado fora de dependência ou build (`ask`).
 
@@ -152,7 +152,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
                    bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/
-    worktrees/<pasta>/  cópia do `.frontlights` de cada worktree da issue, feita pela limpeza antes de removê-la
+    worktrees/<pasta>-<tip curto>/  cópia do `.frontlights` de cada worktree da issue, feita pela limpeza antes de removê-la
     issue.json
     handoff.md
     artifact.html          fonte do artefato do grilling quando a issue já está publicada

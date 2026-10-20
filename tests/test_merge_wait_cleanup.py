@@ -109,7 +109,7 @@ class CloseoutReferenceTests(unittest.TestCase):
     def test_a_merge_is_one_of_the_ways_into_the_closeout(self):
         for phrase in ('when the release of stage 6', 'finds its pull request merged into the approved base',
                        'Pass `--issues` with the other issues `release-plan` listed for that release',
-                       'they skip this step and the question, and only step 4 confirms them (`verify --issues <closes>`)',
+                       'they skip the question, and the verify confirms them',
                        'the merge of an issue into the local main, or of a child into its parent\'s branch, closes nothing',
                        'comes back in `excluded` as `unchecked_criteria`: say which criteria are left'):
             with self.subTest(phrase=phrase):
@@ -148,7 +148,8 @@ class CloseoutReferenceTests(unittest.TestCase):
         step5 = ' '.join(section(self.text, '5. Clean up the merged work (first, without a question)').split())
         for phrase in ('This step runs first, before the closing question of step 1',
                        'right after `git pull --ff-only origin <base>`',
-                       'at stage 1 of a new session when the closeout read finds merged work',
+                       'at stage 1 of every session whose authorization records list issue ids, after '
+                       '`git fetch --prune origin` and whatever `candidates` finds (the plan alone judges what is merged',
                        'It is the written exception to "deleting anything" of the denied operations',
                        'the session removes them **without a question**',
                        'The remote branch is GitHub\'s job', '"Automatically delete head branches"',
@@ -156,7 +157,13 @@ class CloseoutReferenceTests(unittest.TestCase):
                        '`git fetch --prune origin` first (`fetch_prune`',
                        'gets `copy_records` before `git worktree remove`',
                        'cleanup.py archive --from <worktree>/.frontlights --to <recordsTo>',
-                       "`.frontlights/issues/<n>/worktrees/<worktree folder>/` (one folder per worktree",
+                       "`.frontlights/issues/<n>/worktrees/<worktree folder>-<short tip>/` (a folder of its own per archive",
+                       'a destination that already holds files is refused (exit 1, nothing copied)',
+                       'so no earlier archive is ever overwritten',
+                       "under the main worktree's `.frontlights` (the main worktree read from Git for the worktree of `--from`)",
+                       'Each command carries `item` (the branch of its candidate; null for the fetch)',
+                       'the session runs them item by item', 'when any command of an item fails, it runs nothing more of that item',
+                       '(no `git worktree remove` after a failed `copy_records`',
                        'A failed copy stops that item, so the worktree keeps its records',
                        'A local release branch (`<branch_prefix>release-<date>[-N]`',
                        '`merged_release_branch` and only `git branch -D`', 'one not merged yet is left alone and not listed',
@@ -180,6 +187,20 @@ class CloseoutReferenceTests(unittest.TestCase):
                        'list every `gone: false`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, step5)
+
+    def test_an_issue_of_closes_still_open_after_the_merge_joins_the_closing_question(self):
+        """Review r1 of issue 63 (R1-5): an issue of `closes` that the verify still shows open after the merge is
+        read once more and, still open, joins the closing question of step 2 with the reason in one line."""
+        step1 = ' '.join(section(self.text, '1. Find the candidates (read only)').split())
+        for phrase in ('first run `closeout.py verify --issues <closes>`',
+                       'an issue it reports still open is read once more (the same verify, a few seconds later)',
+                       'one still open then joins the closing question of step 2',
+                       'with the reason said in one line (the `Closes #n` of the merged pull request did not close it)'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, step1)
+        self.assertNotIn('stays out of this list too', step1)
+        step4 = ' '.join(section(self.text, '4. Verify').split())
+        self.assertIn('an issue of `closes` still open there was already read twice and asked in step 2', step4)
 
     def test_the_question_of_a_candidate_that_asks_fits_the_five_word_limit(self):
         step5 = ' '.join(section(self.text, '5. Clean up the merged work (first, without a question)').split())
@@ -259,7 +280,9 @@ class DocsAndEvalsTests(unittest.TestCase):
                              '`closeout.py tick-check` antes e depois', 'Sem item citando a filha, ela só fecha',
                              '`cleanup.py plan`', 'Nunca usa `--force`', 'A limpeza não depende da resposta ao fechamento',
                              'logo depois do `git pull --ff-only` e sem pergunta', 'Primeiro `git fetch --prune`',
-                             '`.frontlights/issues/<n>/worktrees/<pasta>/` da worktree principal (`cleanup.py archive`)',
+                             '`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da worktree principal (`cleanup.py archive`)',
+                             'também no início de toda sessão nova cujos registros de autorização listam issues, depois de um `git fetch --prune origin`',
+                             'se o `verify` ainda a vê aberta depois de relê-la uma vez, ela entra na pergunta de fechamento, com a razão numa linha',
                              'A branch remota nunca é apagada pela limpeza', 'a branch local da release mesclada',
                              'A espera é regra da skill, não barreira do Frontlights',
                              '`python scripts/closeout.py candidates|verify|merge-status|tick-check ...`',
@@ -274,7 +297,7 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       '`scripts/cleanup.py plan|verify`', 'nunca com `--force`',
                                       'roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta',
                                       'nunca `git push origin --delete`, porque o GitHub apaga a branch de cabeça da PR mesclada',
-                                      'worktrees/<pasta>/ cópia do `.frontlights` de cada worktree da issue'),
+                                      'worktrees/<pasta>-<tip curto>/ cópia do `.frontlights` de cada worktree da issue'),
             ('skills', 'frontlights', 'templates', 'handoff.md'): ('Aguardando o merge',),
             ('skills', 'frontlights', 'references', 'closeout.md'): ('`contained_in_base_without_pull_request`',
                                                                     'parentTicks', 'line numbers'),
@@ -285,6 +308,8 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       'ou, sem PR nenhuma, cujo tip já está contido em `origin/<base>`',
                                       'a branch remota nunca entra: o GitHub apaga a branch de cabeça da PR mesclada',
                                       'o `archive` é a única escrita do script',
+                                      'recusa um destino que já tem arquivo (nada é copiado)',
+                                      'e destino fora do `.frontlights` da worktree principal daquele repositório (lida do Git)',
                                       'a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações negadas)',
                                       'usa `git --no-optional-locks` sem shell', 'o aviso `ignored_files` lista os nomes',
                                       'a worktree de integração local (`--integration`) só entra sem PR'),
@@ -304,13 +329,18 @@ class DocsAndEvalsTests(unittest.TestCase):
                        'before any closing question and without asking, the cleanup of the merged work', 'with no `--force`',
                        'No command is `git push origin --delete`', 'before `git worktree remove`',
                        '"Não agora" to the closing leaves the cleanup done already',
-                       'the next `/frontlights` start runs the cleanup of the merged work it finds, without a question, and then asks the closeout question',
+                       'the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the '
+                       'authorization records, without a question, and then asks the closeout question',
+                       '`.frontlights/issues/<n>/worktrees/<folder>-<short tip>/`',
                        'Reject:', 'it is a rule of the skill', 'Cleanup details (same case)', 'Reject (cleanup):',
                        'removing a worktree without naming the ignored files that go with it'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         runbook = flat('evals', 'runbook.md')
         self.assertIn('17. Merge wait, closing, parent tick and cleanup (`evals/merge-wait-and-cleanup.md`)', runbook)
+        self.assertNotIn('runs the cleanup of the merged work it finds', runbook)
+        self.assertIn('the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the '
+                      'issue ids of the authorization records (an issue already closed by `Closes #n` included)', runbook)
         self.assertIn('| 17. Espera do merge, marcação no pai e limpeza | Pendente |', flat('docs', 'acceptance.md'))
 
     def test_the_new_files_carry_no_machine_path_and_no_real_name(self):

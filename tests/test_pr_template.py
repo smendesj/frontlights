@@ -105,6 +105,24 @@ class PullRequestTemplateTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
+    def test_the_closes_lines_sit_right_before_the_summary_outside_any_fence(self):
+        """Review r1 of issue 63 (R1-4): the `Closes #<n>` line is in the body itself, right before `## Resumo`, a plain
+        line outside any code fence, and the guidance says it stays when the guidance is deleted."""
+        lines = self.text.splitlines()
+        summary = lines.index('## Resumo')
+        before = [line for line in lines[:summary] if line.strip()]
+        self.assertEqual(before[-1], 'Closes #<n>')
+        place = max(i for i, line in enumerate(lines[:summary]) if line == 'Closes #<n>')
+        self.assertEqual(sum(1 for line in lines[:place] if line.startswith('```')) % 2, 0, 'inside a code fence')
+        self.assertNotIn('```text\nCloses', self.text)
+        for phrase in ('logo antes de `## Resumo`', 'uma linha simples por issue, fora de bloco de código',
+                       'ficam quando estas orientações são apagadas', 'com `closes` vazio, apague a linha-modelo'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.flat)
+        release = flat(read('skills', 'frontlights', 'references', 'development.md').split('## The release')[1])
+        self.assertIn('right before `## Resumo`, plain lines outside any code fence, the place `templates/pr.md` fixes',
+                      release)
+
     def test_a_finding_never_has_the_body_as_destination(self):
         self.assertIn('o corpo da PR nunca é destino de um achado', self.flat)
 
