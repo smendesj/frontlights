@@ -80,9 +80,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     only when open issues of this project have every acceptance criterion ticked (and their children closed or
     listed). Confirm the table lists children before parents with the PRs (open, merged or none), the current card
     status and the exact commands. Answer "Não agora" once and confirm nothing was written. Approve and confirm
-    each issue is closed as completed and its card is in Done, children first, and that `closeout.py verify`
-    reports every issue ok. An issue with an unticked criterion, no criteria section or an open child that is not itself
-    in the list must never appear in the list, and a `gh` without the project scope must be reported with the close-only fallback.
+    each issue is closed as completed, children first, that no command of the list moves a card, and that
+    `closeout.py verify` reports every issue ok; with the board's "Item closed" workflow on, each card is in Done, and
+    with it off, verify says in one line which card is not in Done and suggests turning it on in the board's Workflows
+    screen, without failing. A closed issue whose card is outside Done is never in the list. An issue with an unticked
+    criterion, no criteria section or an open child that is not itself in the list must never appear in the list, and a
+    `gh` without the project scope must be reported in one line, the closing going on.
 
 15. Issue gaps. With an enabled `roadmapSync` block and an issue on the RoadS board missing its assignee or a board
     field, run `/frontlights`: the first question is "Completar no GitHub as issues que o RoadS mostra?". Answer yes and
@@ -103,17 +106,23 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     has an unticked item citing a sub-issue, two sub-issues with their own branches and worktrees, one stacked on the
     parent) that has just entered the local main through the parent's branch, let the session offer the release and open
     its single PR. Confirm it says in one line that it waits, records "Aguardando o merge" in the `Release` line and
-    puts no closing keyword in the PR or a commit. Merge a branch of your own into `origin/main`: `merge-status` reports
+    puts no closing keyword in the PR or a commit (the sub-issues and a parent with an unticked item are never in the
+    `closes` of `release-plan`). Merge a branch of your own into `origin/main`: `merge-status` reports
     the release PR still open and nothing is offered. Merge the release PR into the approved base: the local main moves
     with `git pull --ff-only` and the closeout question lists the sub-issue with
     "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
-    that line (`tick-check` ok before and after). After the closing is verified, a second question offers to remove the
-    worktrees and branches; the main worktree, the folder the session stands in, a worktree with uncommitted changes and a
-    branch with an open pull request stay, with their reasons; no command uses `--force`; `cleanup.py verify` reports
-    everything gone. "Não agora" to the closing asks no cleanup question; without a wake mechanism the next `/frontlights`
-    start finds the merged work. The cleanup question names the files a worktree ignores, offers the issue branches that
-    `origin/main` now contains (`contained_in_base_without_pull_request`), and the local-only integration
-    worktree of the family goes only when it holds no commit of its own outside what reached the base.
+    that line (`tick-check` ok before and after). Before that question, and without asking, the cleanup of the merged
+    work ran: `git fetch --prune`, the records of each worktree copied to `.frontlights/issues/<n>/worktrees/` of the
+    main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed, and no
+    `git push origin --delete` (GitHub deletes the merged head branch); the main worktree, the folder the session stands
+    in, a worktree with uncommitted changes and a branch with an open pull request stay, said in one line; no command
+    uses `--force`; `cleanup.py verify` reports everything gone and the records copied. Only a worktree that ignores a
+    `.env` (anything besides dependency or build folders) is asked about, naming the file; the issue branches that
+    `origin/main` now contains go (`contained_in_base_without_pull_request`), and the local-only integration worktree
+    of the family goes only when it holds no commit of its own outside what reached the base; without a wake mechanism
+    the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the
+    authorization records (an issue already closed by `Closes #n` included), runs what it offers and then asks the
+    closeout question.
 
 18. Progress question in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start
@@ -216,9 +225,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     without the key the session says in one line that no backup is configured and asks nothing. Then, with two issues
     in the local main and none of them in `origin/main`, confirm `homolog release-plan` lists both and names
     `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" cuts and pushes only the release branch and
-    opens one pull request with a block per issue and no closing keyword, the merge is asked with "Mesclar a PR #<n> em
+    opens one pull request with a block per issue and one `Closes #n` line per issue of the `closes` of `release-plan`
+    (none for the others, none when `closes` is empty with its `closesReason`), the merge is asked with "Mesclar a PR #<n> em
     <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the
-    closeout offers the issues of the release; and that `cleanup plan` offers an issue branch without a pull request
+    closeout only verifies the issues of `closes` and offers the others; and that `cleanup plan` offers an issue branch without a pull request
     once `origin/main` contains its tip, and keeps it as `no_merged_pr` before. Finally, with an issue whose boxes are
     all ticked and whose branch is in the local main but not in `origin/main`, confirm the stage 1 closeout question is
     not asked and the session says in one line that the issue waits for the release (`awaiting_release`), and that after

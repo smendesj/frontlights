@@ -121,7 +121,7 @@ class IssueStageTests(unittest.TestCase):
         self.assertIn('| Issue |', protocol)
         self.assertIn('sem nova entrevista', protocol)
         self.assertRegex(protocol, r'(?m)^  issue\.md')
-        self.assertIn("(the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary)",
+        self.assertIn("(the issue's text, issue plan and publication, closeout, issue gaps and summary)",
                       flat(read('skills', 'frontlights', 'references', 'development.md')))
 
 

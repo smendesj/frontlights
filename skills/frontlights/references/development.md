@@ -60,15 +60,19 @@ as its branch; its records live in `.frontlights/direct/<branch, slashes as dash
 operation that names that `direct` (never `issue` too), and `release-plan` lists it in `releaseDirect`.
 
 **Denied operations, asked one at a time** with `AskUserQuestion`, "Sim" first and "Não" second, naming the
-exact operation and the exact command: merging a pull request, closing an issue, changing the board (adding an
+exact operation and the exact command: merging a pull request, closing an issue (the one exception: a `Closes #n`
+line of the release's pull request, for an issue of the `closes` of `release-plan`, closes it only through that
+approved merge; "The release", below), changing the board (adding an
 item, moving a card, editing a field), deploying or publishing to production, editing a migration already
 registered (on the base branch or applied anywhere but the local development database), writing the remote main
 (`origin/main`, the base branch on GitHub) or a protected branch (the local main is written only by the covered
 merge, with its three gates green), turning on a setting, key or flag in production, and deleting anything but
-the test data the run created. Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
+the test data the run created and the cleanup of merged work (`references/closeout.md`, step 5: the worktrees and
+local branches of the issues, slices and release already merged into the approved base, removed without a question,
+never a remote branch). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
 silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
-own stage (the issue's text, issue plan and publication, closeout, cleanup, issue gaps and summary) keep them. The
+own stage (the issue's text, issue plan and publication, closeout, issue gaps and summary) keep them. The
 host's own permission prompts are not Frontlights' to remove and still apply.
 
 ## The start of stage 6: the pre-push hook and the sync of the local main
@@ -199,12 +203,13 @@ desta vez" (`homolog suite --root <issue-worktree> --config <config> --issue <n>
 is killed: without it and without `homolog.suites.full.timeoutSeconds` the run gets 3600 s, which the whole suite of
 this repository has already exceeded under load). `<config>` is always the main worktree's
 `.frontlights/config.json`, by its absolute path: it is usually untracked and absent from an issue's worktree. The whole suite
-runs at the release ("The release"), with or without CI in the project. In this repository it is
+runs at the release ("The release"), the only whole check: a project's CI, when there is one, is neither expected
+nor a gate. In this repository it is
 `python tests/suite.py --skip-covered {covered}`: the complement, through the parallel runner, of what the impact of
 the release's issues already ran whole on the same tree, every other module run, the heavy ones in the serial queue
 and without the variable; the runner does not make the whole suite faster than `discover`, and the time saved is what
-it skips. The CI of this repository stays the full check: it runs the whole suite through
-`python -m unittest discover -s tests -v`, and runs the same `discover` and never sets the variable either.
+it skips. This repository has no CI workflow: outside the release, the whole suite also runs by hand through
+`python -m unittest discover -s tests -v`, which never sets the variable either.
 
 **A parked slice.** When a slice is parked (it waits for something the session cannot do: a
 decision, a credential, another team's endpoint), write right below its open box, as the last
@@ -509,8 +514,9 @@ Follow-ups section. A line in the PR body, a comment or the chat is never a
 destination, so "cited in the PR" does not pass the gate. A finding
 left unfixed leaves by the ladder: most often as an acceptance criterion of the source
 issue, which keeps the issue open until the leftover is treated, completed and ticked
-with evidence; or as a top-level issue. The PR cites the issue without a
-closing keyword, in its body and in the commit messages, while such a criterion is open.
+with evidence; or as a top-level issue. While such a criterion is open the issue is not in the `closes` of
+`release-plan`, so the PR cites it without a closing keyword, in its body and in the commit messages ("The
+release", below).
 
 Refactoring happens here. The reviewer may recommend refactors of the green code;
 the author applies them without changing behavior or adding tests at new seams,
@@ -541,8 +547,8 @@ Update GitHub checkpoints/status only if authorized and supported by current
 evidence; tick an acceptance criterion in the issue body only with evidence for it
 (a test, a measured result, a reviewed diff), because the closeout of stage 7 trusts
 the ticks; a criterion born from a finding is ticked the same way, once the work it
-names is done and its evidence exists. Closing an issue and moving its card are never part of this: they have
-their own approval (`references/closeout.md`). The release's pull request is covered by the standing authorization and still goes through
+names is done and its evidence exists. Closing an issue is never part of this: it has
+its own approval (`references/closeout.md`), and its card goes to Done by the board's own "Item closed" workflow. The release's pull request is covered by the standing authorization and still goes through
 the host's native approval; the branches of issues and slices stay local. The run merges only by the covered
 merges, and anything on the denied list runs only after the user's "Sim" to its own question ("Standing
 authorization and the denied operations", above). Park
@@ -631,7 +637,14 @@ offers the release again with everything accumulated.
   `--prefix` names it alone; `prefix` and `prefixSource` say which), the date in São Paulo, and `-2`, `-3` when the name is taken (by a local or remote-tracking branch, or by a merged pull request, read from its `Merge pull request #<n> from <owner>/<name>` subject). Exit code 2 says there is nothing to release, that the local main is behind and
   must be synced first, or that `fullSuite` (the whole suite of the release at the tip of the local main) is not
   `current`: say so in one line. Exit code 1 without `origin/<base>` (or when Git cannot count the commits): run
-  `homolog sync` first. It only reads.
+  `homolog sync` first. It also reads GitHub (read only, with the `repository` of `--config`, default
+  `<main worktree>/.frontlights/config.json`) for `closes`: the top-level issues of `release` with every box of
+  their acceptance criteria ticked, no open sub-issue and no open leftover outside the criteria (`pendingOutside`
+  0); each issue of `release` in `issues` shows `state`, `level`, `parent`, `criteria` (ticked and total),
+  `openChildren`, `pendingOutside` and `closing` (true, or the reason). Without a GitHub read (no config, no
+  repository, gh failed) or with a base that is not the repository's default branch (GitHub closes by keyword only
+  on a merge into it), `closes` is empty and `closesReason` says why: when in doubt, no `Closes`. `closes` never
+  changes `ready` or the exit code. It writes nothing.
 - **Run the whole suite on the local main.** First, adopt a green run of the same tree. In the usual flow an issue
   has only its impact record, which adoption refuses, so there is usually nothing to adopt: a whole-suite record of an
   issue exists only when the `unconfigured` answer "Rodar a suíte inteira desta vez" ran it, or when someone ran
@@ -643,7 +656,8 @@ offers the release again with everything accumulated.
   `adoptedFrom` naming the origin (`docs/protocol.md`), then `release-plan` again, as after a run. The session gives
   the path of the record (the `suite.json` of an issue, in that issue's worktree, or the per-tip record
   `release/suite-<sha>.json` of another release) and never searches for one; it adopts before the cleanup of the
-  worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing. A refusal of the record (an
+  worktrees (stage 7), which removes the issue's worktree (its records are copied to the main worktree's
+  `.frontlights/issues/<n>/worktrees/` first). A refusal writes nothing. A refusal of the record (an
   impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head the repository does
   not know, or another commit tree; the bytes on disk are not compared, since line endings can differ between clean
   worktrees of one tree) means the session runs the suite as below. A record outside a Git worktree, or whose worktree has a tracked file hidden from `git status` (skip-worktree,
@@ -665,7 +679,8 @@ offers the release again with everything accumulated.
   worktree already gone) adds nothing, and its reason is kept. The release record names what was skipped, where it
   came from and what did not count (`covered`, `docs/protocol.md`); `suite-gate --release` and `release-plan` judge it
   as the whole suite of the tip and say how many modules it skipped. So this run, like the adoption, comes before the
-  cleanup of the worktrees. The CI of the release's pull request stays the full check and runs everything. Without the
+  cleanup of the worktrees. This run is the release's only whole check; a CI on the release's pull request, when the project has one, is
+  neither expected nor a gate. Without the
   marker the suite runs whole, as before. `missing`, `stale`, `red` or `elsewhere` keeps `ready`
   false, and the release is not offered. Red blocks the release: the failure becomes a finding with a destination
   by the ladder of the Follow-ups section in `issues.md`, decided in the findings batch, and the release is offered
@@ -691,9 +706,14 @@ offers the release again with everything accumulated.
   attached or committed image, a login or a person's data) and the **Risco do merge**
   once, consolidated for the whole release (a one-way door when a migration or deleted data is in it, a two-way
   door otherwise, and the blast radius); it cites the issues by number, and the body of the pull request is never
-  the destination of a finding (the gate on the findings, above). **No closing keyword.** A pull request opened by Frontlights never
-  carries `Closes`, `Fixes`, `Resolves` or a variant of them, in its body or in its commits: closing an issue has
-  its own approval, and a merge that closed it would skip that approval and ignore the criteria still unticked.
+  the destination of a finding (the gate on the findings, above). **`Closes #n` only from `closes`.** The body
+  carries one `Closes #n` line per issue of the `closes` of the last `release-plan`, copied from that list, never
+  counted by hand (right before `## Resumo`, plain lines outside any code fence, the place `templates/pr.md`
+  fixes); every other issue (a sub-issue, an open box, an open sub-issue, a leftover outside the criteria, or every
+  issue when `closes` is empty) is cited by number without a closing keyword (`Closes`, `Fixes`,
+  `Resolves` or a variant of them), in the body and in the commits, and follows the closing question of stage 7.
+  The merge itself stays a denied operation: the `Closes #n` lines close their issues only through the merge the
+  user approved, and only issues whose criteria are all ticked.
 - **Wait for the merge.** Opening the pull request does not end the work, and the session does not expect to be
   told that it was merged. By default, as soon as the release's pull request is open, the session waits for the
   user's merge. The user can say "não aguardar" at any time: the wait ends and the closeout question of the next
@@ -709,8 +729,9 @@ offers the release again with everything accumulated.
   pull request unready.
   Then ask, under the denied-operations rule, "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não,
   aguardar o merge" second; one question per PR. The question names the commands: `gh pr ready <n>` and `gh pr
-  merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`, since the cleanup has its
-  own approval). On "Sim", run them, then `merge-status` as below. On "Não", the wait goes on unchanged.
+  merge <n> --merge` (a merge commit; never `--admin`, `--auto` or `--delete-branch`: the remote branch goes by
+  GitHub's automatic deletion of merged head branches, and the local one by the cleanup of `closeout.md`, step 5). On "Sim", run them, then `merge-status` as below. On "Não", the wait goes on
+  unchanged.
 - **What wakes the session.** Whatever the host offers: a subscription to the pull request's activity, or a
   background monitor that runs `python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" merge-status --config <config>
   --prs <n> --base <approved base>` every few minutes. Either is only a trigger. On every wake run `merge-status`
@@ -727,10 +748,13 @@ offers the release again with everything accumulated.
 - **At the merge.** With the release's pull request `ready`: in the main worktree, on the local main, `git pull
   --ff-only origin <base>` (the local main was already inside the release, so it moves forward without a merge
   commit; if it does not fast-forward, stop and ask instead of merging or resetting). Then read
-  `references/closeout.md` and run it for the issues of the release: the closing (with the tick in a parent, for
-  a sub-issue) and the cleanup of worktrees and branches are two separate approvals, in that order. An issue whose
+  `references/closeout.md` and run it for the issues of the release: first the cleanup of the merged work (step 5),
+  without approval and before any closing question: `git fetch --prune`, the records of each worktree copied to the
+  main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed;
+  then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the merge), and the
+  closing of the rest (with the tick in a parent, for a sub-issue) has its own approval. An issue whose
   criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports. The
-  cleanup now offers the issue branches that `origin/<base>` contains, pull request or not
+  cleanup offers the issue branches that `origin/<base>` contains, pull request or not
   (`contained_in_base_without_pull_request`).
 - **Other work goes on.** The wait never blocks independent issues. It ends when the release's pull request is
   merged or closed, or when the user ends it.

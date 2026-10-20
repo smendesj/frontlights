@@ -1,18 +1,30 @@
 #!/usr/bin/env python3
 """Clean-up helper: which worktrees and branches the work left behind are no longer needed, once the pull
-requests that carried the work were merged into the approved base.
+requests that carried the work were merged into the approved base, and the commands that remove them.
 
-Read only. It reads Git (worktree list, status, ancestry; always with `--no-optional-locks`, so not even the index
-is refreshed) and GitHub (`gh api graphql`, the reader of roads.py) and prints what the session may propose.
-Removing is done by the session, with its own `git`, after the user said yes: this helper never changes a
-repository, a file or GitHub, and the commands it prints are values to type, not something it runs. Every command
-is built from validated values (an existing registered worktree path without characters a command line cannot
-carry, a plain branch name) and never uses `--force`.
+`plan` and `verify` only read. They read Git (worktree list, status, ancestry; always with `--no-optional-locks`, so
+not even the index is refreshed) and GitHub (`gh api graphql`, the reader of roads.py) and print what the session
+runs. The cleanup of merged work needs no approval (closeout.md, step 5): the session runs the printed commands
+itself, with its own `git`, in order; only a candidate with `ask: true` waits for the user's yes. The commands are
+values to type, not something `plan` runs. Every command is built from validated values (an existing registered
+worktree path without characters a command line cannot carry, a plain branch name) and never uses `--force`. No
+command touches a remote branch: GitHub deletes the head branch of a merged pull request on its own ("Automatically
+delete head branches"), and `git fetch --prune` drops the remote-tracking ref it left.
 
 Operations (each prints one JSON object on stdout):
   plan    the worktrees and branches of --issues (the `worktrees` of .frontlights/authorization*.json), plus any
-          --worktree PATH named by hand, split into what can be removed now, with the commands in the order to run
-          them, and what stays and why. A worktree and its branch can be removed only when it is not the main one,
+          --worktree PATH named by hand, plus every local release branch (`<branch_prefix>release-<YYYY-MM-DD>[-N]`,
+          the prefixes of the authorization records) whose work reached the approved base, split into what can be
+          removed now, with the commands in the order to run them, and what stays and why. `commands` is the whole
+          list to run: `git fetch --prune origin` first (when there is an `origin`, `item` null), then, per candidate
+          that does not ask, its own `commands`, each with `item` (the candidate's branch): a failed command skips the
+          rest of its item. A worktree holding Frontlights records (`frontlights_records`) gets `copy_records`
+          before `git worktree remove`: `cleanup.py archive` copies its `.frontlights` to the main worktree's
+          `.frontlights/issues/<n>/worktrees/<folder>-<short tip>/` (`.frontlights/worktrees/<folder>-<short tip>/`
+          without an issue), a folder of its own per archive. A
+          candidate whose ignored files include anything besides dependency or build folders (DISPOSABLE) carries
+          `ask: true`, `askReason` and `askIgnored`, and its commands stay out of `commands` until the user said yes.
+          A worktree and its branch can be removed only when it is not the main one,
           nor the folder this process runs in, nor locked or checked out elsewhere, it has nothing uncommitted, the
           branch is not protected, no open pull request is based on the branch or comes from it, and the work was
           delivered: either its tip is the head of a pull request that was merged and that pull request reached
@@ -20,33 +32,39 @@ Operations (each prints one JSON object on stdout):
           the approved base (`origin/<base>` when the remote-tracking ref exists, else the local branch) already
           contains its tip (issue 32: delivered by a merge into the local main; the
           `contained_in_base_without_pull_request` caution says so). A pull request closed without a merge is not
-          the absence of one: that branch stays. The remote branch is deleted only when `origin` is the configured
-          repository and the branch still points at that same commit. Ignored files go away with the worktree:
-          they are named in the `ignored_files` caution.
+          the absence of one: that branch stays. Ignored files go away with the worktree: they are named in the
+          `ignored_files` caution. A release branch is offered by the same rule, with the caution
+          `merged_release_branch`, when no worktree has it checked out; one not merged yet is left alone, unsaid.
           --integration PATH names the local-only integration worktree of a family (never pushed, never a pull
           request): it can go when its branch has no pull request and was never pushed, and every commit of its own
           is already part of a pull request that reached the base; a merge is one of its own when it carries content
           (a conflict resolved by hand, a file added to it).
           A slice's worktree (an authorization entry with `slice`, issue 31) is delivered to the branch of its own
           issue, never by a pull request: it can go when that branch (the entry of the same issue without `slice`)
-          contains its tip, it was never pushed and no pull request was opened from it; its remote branch is never
-          touched.
-  verify  reread --worktree and --branch values and say whether each is gone (worktree unregistered and its
-          folder absent, local branch absent, remote branch absent).
+          contains its tip, it was never pushed and no pull request was opened from it.
+  archive copy --from <worktree>/.frontlights into --to, a folder under the `.frontlights` folder of the main
+          worktree of that repository (read from Git), that does not exist yet or is empty. One whose files are all
+          the same as the records (same paths, same bytes: an earlier copy, whole or stopped half-way, whose removal
+          failed) gets the missing files and is ok; one with any differing or extra file is refused, nothing copied,
+          so no earlier archive is ever overwritten. The one operation that writes, and only into --to.
+  verify  reread --worktree, --branch and --records values and say whether each worktree is gone (unregistered and
+          its folder absent), each local branch is gone, and each records folder holds the copied files.
 
 Run it from the folder the session stands in, with --root pointing at the project's main worktree: it never
 offers the folder it runs in.
 
-Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read) or, for verify, something that is not
-gone yet. A refusal is JSON, never a traceback.
+Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read or copy) or, for verify, something that is
+not gone or not copied yet. A refusal is JSON, never a traceback.
 """
 
 import argparse
+import filecmp
 import fnmatch
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -65,9 +83,19 @@ MAX_ITEMS = 50           # worktrees one run looks at
 BATCH = 8                # branches read from GitHub in one query
 MAX_CHAIN = 8            # stacked parents followed from a pull request up to the approved base
 MAX_IGNORED = 20         # ignored names listed in a caution
+SHORT_TIP = 7            # characters of the tip in the folder an archive goes to
 REMOTE = 'origin'
 OID = re.compile(r'[0-9a-f]{40,64}')
-REMOTE_URL = re.compile(r'[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$')
+RELEASE = re.compile(r'release-\d{4}-\d{2}-\d{2}(?:-\d+)?')   # after the branch prefix (homolog.py, release_name)
+PREFIX = re.compile(r'[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*/')
+DEFAULT_PREFIX = 'claude/'
+FOLDER = re.compile(r'[^A-Za-z0-9._-]+')
+# Folders of dependencies, builds and caches: ignored files that are rebuilt, so removing them asks nothing.
+DISPOSABLE = frozenset({'node_modules', 'bower_components', 'jspm_packages', '.venv', 'venv', '__pycache__', '.eggs',
+                        'dist', 'build', 'out', 'target', 'coverage', 'htmlcov', '.cache', '.parcel-cache', '.turbo',
+                        '.next', '.nuxt', '.svelte-kit', '.angular', '.gradle', '.pytest_cache', '.mypy_cache',
+                        '.ruff_cache', '.tox', '.nox'})
+DISPOSABLE_SUFFIXES = ('.pyc', '.pyo', '.egg-info')
 PULLS = 'nodes { number state merged mergedAt baseRefName headRefOid }'
 
 
@@ -126,12 +154,10 @@ def is_ancestor(root, commit, of):
     return True if code == 0 else False if code == 1 else None
 
 
-def origin_is(root, repository):
-    """Does `origin` push to the configured repository? (`git push` follows the push URL, which may differ from the
-    fetch one.) Removing a branch on the wrong remote is not undone."""
-    code, out = git(root, 'remote', 'get-url', '--push', REMOTE)
-    found = REMOTE_URL.search(out.strip()) if code == 0 else None
-    return bool(found) and found.group(1).casefold() == repository.casefold()
+def has_origin(root):
+    """Is there an `origin` remote to prune the remote-tracking refs of?"""
+    code, _ = git(root, 'remote', 'get-url', REMOTE)
+    return code == 0
 
 
 def base_ref(root, base):
@@ -168,18 +194,21 @@ def unique_commits(ctx, tip):
 # ---------------------------------------------------------------- scope
 
 def authorized_worktrees(root, issues):
-    """The worktrees the authorizations of the project name for `issues`: [{issue, path, branch}], and the
-    protected branch names those authorizations declare."""
+    """The worktrees the authorizations of the project name for `issues`: [{issue, path, branch}], the protected
+    branch names those authorizations declare, and the branch prefixes they use (`claude/` when none says)."""
     found = []
     try:
         files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
     except OSError:
         files = []
-    protected = []
+    protected, prefixes = [], set()
     for file in files:
         data = closeout.read_record(file)
         if not isinstance(data, dict):
             continue
+        prefix = data.get('branch_prefix', DEFAULT_PREFIX)
+        if isinstance(prefix, str) and PREFIX.fullmatch(prefix) and '..' not in prefix:
+            prefixes.add(prefix)
         listed = data.get('protected_branches')
         protected += [p for p in listed if isinstance(p, str) and p.strip('/')] if isinstance(listed, list) else []
         entries = data.get('worktrees')
@@ -190,7 +219,37 @@ def authorized_worktrees(root, issues):
                 box = entry.get('slice')   # a slice's worktree (issue 31): judged against the branch of its issue
                 found.append({'issue': entry['issue'], 'path': entry['path'], 'branch': branch if isinstance(branch, str) else None,
                               'slice': box if isinstance(box, str) and box.strip() else None})
-    return found, protected
+    return found, protected, sorted(prefixes) or [DEFAULT_PREFIX]
+
+
+def release_branches(root, prefixes):
+    """The local branches named like a release (`<prefix>release-<YYYY-MM-DD>[-N]`) under one of `prefixes`."""
+    code, out = git(root, 'for-each-ref', '--format=%(refname:short)', *(f'refs/heads/{p}' for p in prefixes))
+    if code != 0:
+        return []
+    names = []
+    for name in out.split():
+        if any(name.startswith(p) and RELEASE.fullmatch(name[len(p):]) for p in prefixes) and closeout.valid_branch(name):
+            names.append(name)
+    return sorted(set(names))
+
+
+def disposable(name):
+    """An ignored name inside a folder of dependencies, builds or caches (rebuilt, so removing it asks nothing)."""
+    parts = [part for part in name.strip('/"').split('/') if part]
+    return bool(parts) and (any(part in DISPOSABLE or part.endswith('.egg-info') for part in parts)
+                            or parts[-1].endswith(DISPOSABLE_SUFFIXES))
+
+
+def records_destination(main, item, folder, tip):
+    """Where the Frontlights records of a worktree are copied in the main worktree before it is removed: a folder of
+    its own per worktree and tip (`<folder>-<short tip>`), so a later archive never lands on an earlier one."""
+    name = FOLDER.sub('-', Path(folder).name).strip('.-') or 'worktree'
+    if isinstance(tip, str) and OID.fullmatch(tip):
+        name = f'{name}-{tip[:SHORT_TIP]}'
+    base = Path(main) / '.frontlights'
+    target = base / 'issues' / str(item['issue']) / 'worktrees' / name if item.get('issue') is not None else base / 'worktrees' / name
+    return target.as_posix()
 
 
 def is_protected(branch, protected):
@@ -417,41 +476,61 @@ def assess(ctx, item, registered, github):
                     else pull_reasons(ctx, github, tip))
     if reasons:
         return reasons, None
-    remote = github['remote']
-    remove_remote = not integration and not sliced and ctx['origin_ok'] and remote is not None and remote == tip
     if integration:
         cautions.append('local_only_integration')
     elif sliced:
         cautions.append('slice_merged_into_issue_branch')
-    else:
-        if not github['heads']:
-            cautions.append('contained_in_base_without_pull_request')   # issue 32: a merge into the local main, no pull request
-        # The remote cautions stand on their own, so a branch delivered without a pull request but pushed under
-        # the old flow still says what its remote branch is up to. Without a pull request, no remote branch means
-        # it was never pushed: nothing is gone.
-        if remote is None:
-            if github['heads']:
-                cautions.append('remote_branch_gone')
-        elif not ctx['origin_ok']:
-            cautions.append('origin_is_not_the_repository')
-        elif not remove_remote:
-            cautions.append('remote_branch_moved')
+    elif not github['heads']:
+        cautions.append('contained_in_base_without_pull_request')   # issue 32: a merge into the local main, no pull request
     main = ctx['main_path']
     commands = []
+    destination = None
+    if 'frontlights_records' in cautions:
+        # the records go to the main worktree before the worktree that holds them is removed
+        destination = records_destination(main, item, registered['path'], tip)
+        commands.append({'kind': 'copy_records',
+                         'argv': [ctx['python'], ctx['script'], 'archive', '--from', f"{registered['path']}/.frontlights",
+                                  '--to', destination]})
     if registered is not None:
         commands.append({'kind': 'remove_worktree', 'argv': ['git', '-C', main, 'worktree', 'remove', registered['path']]})
     commands.append({'kind': 'delete_branch', 'argv': ['git', '-C', main, 'branch', '-D', branch]})
-    if remove_remote:
-        commands.append({'kind': 'delete_remote_branch', 'argv': ['git', '-C', main, 'push', REMOTE, '--delete', branch]})
-    record = {'issue': item.get('issue'), 'slice': item.get('slice'), 'path': path if registered is not None else None,
-              'branch': branch, 'tip': tip,
+    for command in commands:
+        command['item'] = branch   # a failed command skips the rest of its item
+    record = {'issue': item.get('issue'), 'slice': item.get('slice'), 'release': False,
+              'path': path if registered is not None else None, 'branch': branch, 'tip': tip,
               'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
-              'removeWorktree': registered is not None, 'deleteRemoteBranch': remove_remote,
-              'cautions': cautions, 'commands': commands}
+              'removeWorktree': registered is not None, 'recordsTo': destination, 'cautions': cautions,
+              'ask': False, 'commands': commands}
     if ignored:
         record['ignoredCount'] = len(ignored)
         record['ignored'] = [rs.clean(name, 200) for name in ignored[:MAX_IGNORED]]
+        kept = [name for name in ignored if not disposable(name)]
+        if kept:
+            record.update(ask=True, askReason='ignored_files_besides_dependencies',
+                          askIgnored=[rs.clean(name, 200) for name in kept[:MAX_IGNORED]])
     return [], record
+
+
+def assess_release(ctx, branch, github):
+    """(reasons it stays, record when it can go) for a local release branch: the rule of an issue branch (its tip is
+    the head of a merged pull request that reached the base, or the base contains it), and no worktree has it."""
+    tip = local_tip(ctx['root'], branch)
+    if tip is None:
+        return ['nothing_left'], None
+    if is_protected(branch, ctx['protected']):
+        return ['protected_branch'], None
+    if github is None or github['cut']:
+        return ['pull_requests_unreadable'], None
+    reasons = pull_reasons(ctx, github, tip)
+    if not reasons and any(e['branch'] == branch for e in ctx['listing']):
+        reasons = ['checked_out_elsewhere']
+    if reasons:
+        return reasons, None
+    return [], {'issue': None, 'slice': None, 'release': True, 'path': None, 'branch': branch, 'tip': tip,
+                'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
+                'removeWorktree': False, 'recordsTo': None, 'cautions': ['merged_release_branch'], 'ask': False,
+                'commands': [{'kind': 'delete_branch', 'item': branch,
+                              'argv': ['git', '-C', ctx['main_path'], 'branch', '-D', branch]}]}
 
 
 def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None):
@@ -464,7 +543,7 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     listing = list_worktrees(root)
     main_entry = listing[0]
     records_root = root if (Path(root) / '.frontlights').is_dir() else main_entry['path']
-    authorized, protected = authorized_worktrees(records_root, set(numbers))
+    authorized, protected, prefixes = authorized_worktrees(records_root, set(numbers))
     issue_branches = {e['issue']: e['branch'] for e in authorized if not e.get('slice') and e['branch']}
     for entry in authorized:
         if entry.get('slice'):
@@ -488,9 +567,12 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     require(isinstance(expected, str), 'the approved base is unknown: pass --base <branch> (the repository default could not be read)')
     by_path = {norm(e['path']): e for e in listing}
     protected = list(protected) + ['main', 'master', expected] + ([default] if default else [])
+    main = main_entry['path']
+    releases = [b for b in release_branches(main, prefixes) if not is_protected(b, protected)][:MAX_ITEMS]
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
-              'baseSource': 'argument' if base else 'default_branch', 'candidates': [], 'excluded': [], 'alreadyClean': 0, 'ask': False}
-    if not items:
+              'baseSource': 'argument' if base else 'default_branch', 'commands': [], 'candidates': [], 'excluded': [],
+              'alreadyClean': 0, 'ask': False}
+    if not items and not releases:
         result['message'] = ('No worktree is recorded for these issues in an authorization and none was named: nothing to clean. '
                              'Name one with --worktree PATH.')
         return result
@@ -499,11 +581,11 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
         registered = by_path.get(norm(item['path']))
         branch = registered['branch'] if registered is not None else item['branch']
         resolved.append((item, registered, branch))
-    names = sorted({b for _, _, b in resolved if b and closeout.valid_branch(b) and not is_protected(b, protected)})
+    names = sorted({b for _, _, b in resolved if b and closeout.valid_branch(b) and not is_protected(b, protected)} | set(releases))
     github = read_branches(gh, repository, names) if names else {}
-    ctx = {'root': main_entry['path'], 'main': norm(main_entry['path']), 'main_path': main_entry['path'], 'base': expected,
+    ctx = {'root': main, 'main': norm(main), 'main_path': main, 'base': expected,
            'protected': protected, 'gh': gh, 'repository': repository, 'more': {}, 'delivered': set(), 'listing': listing,
-           'origin_ok': origin_is(main_entry['path'], repository)}
+           'python': Path(sys.executable).as_posix(), 'script': Path(__file__).resolve().as_posix()}
     # the integration worktrees go last: what they hold is judged against the pull requests the others delivered
     for item, registered, branch in sorted(resolved, key=lambda r: bool(r[0].get('integration'))):
         reasons, record = assess(ctx, item, registered, github.get(branch))
@@ -517,26 +599,189 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             result['excluded'].append({'issue': item.get('issue'), 'path': rs.clean(item['path'], 300),
                                        'branch': rs.clean(branch, 200) if branch else None,
                                        'reasons': ['not_found'] if reasons == ['nothing_left'] else reasons})
-    # the slices of an issue come before the issue's own worktree: its branch is what they are judged against
-    result['candidates'].sort(key=lambda c: (c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
-    result['ask'] = bool(result['candidates'])
+    taken = {c['branch'] for c in result['candidates']} | {e['branch'] for e in result['excluded']}
+    for branch in releases:
+        if branch in taken:
+            continue   # a release branch an authorization names as a worktree was judged above
+        reasons, record = assess_release(ctx, branch, github.get(branch))
+        if record is not None and any(frontlights.UNSAFE_CHARS.search(a) for c in record['commands'] for a in c['argv']):
+            reasons, record = ['unsafe_path'], None
+        if record is not None:
+            result['candidates'].append(record)
+        elif reasons in (['checked_out_elsewhere'], ['unsafe_path']):
+            # merged, but it cannot go: said; a release still in flight is no business of the cleanup
+            result['excluded'].append({'issue': None, 'path': None, 'branch': branch, 'reasons': reasons})
+    # the slices of an issue come before the issue's own worktree: its branch is what they are judged against; the
+    # release branches go last
+    result['candidates'].sort(key=lambda c: (c['release'], c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
+    if has_origin(main):
+        # GitHub deletes the merged head branches; the fetch drops the remote-tracking refs they left here
+        result['commands'].append({'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', main, 'fetch', '--prune', REMOTE]})
+    for candidate in result['candidates']:
+        if not candidate['ask']:
+            result['commands'] += candidate['commands']
+    asking = [c for c in result['candidates'] if c['ask']]
+    result['ask'] = bool(asking)
     parts = [f'{len(result["candidates"])} worktree(s) or branch(es) can be removed.' if result['candidates']
              else 'Nothing can be removed now.']
     if result['excluded']:
         parts.append(f'{len(result["excluded"])} stay (see excluded for the reason of each).')
     if result['alreadyClean']:
         parts.append(f'{result["alreadyClean"]} already gone.')
-    if result['candidates']:
-        parts.append('Nothing was removed. Ask the user, then run the commands in order; verify afterwards.')
+    parts.append('Nothing was removed. Run `commands` in order, with no question; verify afterwards.')
+    if asking:
+        parts.append(f'{len(asking)} candidate(s) hold ignored files besides dependency or build folders (`ask`): '
+                     'their commands are not in `commands` and run only after the user said yes.')
     result['message'] = ' '.join(parts)
     return result
 
 
-def op_verify(config, root='.', worktrees=(), branches=(), gh=None):
-    """Read only: whether each named worktree and branch is gone."""
-    gh = gh or rs.gh_default
+ARCHIVE_TEMP = re.compile(r'^\..+\.frontlights-archive-tmp$')
+
+
+def archive_temp_name(name):
+    """The temporary name a file of `archive` is copied under, in its own folder, before it is renamed into place."""
+    return f'.{name}.frontlights-archive-tmp'
+
+
+def is_link(path):
+    """A symlink, or a Windows junction (which `is_symlink` does not see)."""
+    return os.path.islink(path) or is_junction(path)
+
+
+def is_junction(path):
+    """A Windows junction (`os.path.isjunction`, Python 3.12 and later; none before it is read)."""
+    return bool(getattr(os.path, 'isjunction', lambda _: False)(path)) and not os.path.islink(path)
+
+
+def within(path, folder):
+    """Whether the real path of `path` is `folder` or lies under it."""
+    real, home = norm(path), norm(folder)
+    return real == home or real.startswith(home.rstrip(os.sep) + os.sep)
+
+
+def same_entry(origin, copy):
+    """Whether `copy` is what `shutil.copytree(..., symlinks=True)` makes of `origin`: the same link, or a regular file
+    with the same bytes."""
+    if origin.is_symlink() or copy.is_symlink():
+        return origin.is_symlink() and copy.is_symlink() and os.readlink(origin) == os.readlink(copy)
+    return origin.is_file() and copy.is_file() and filecmp.cmp(origin, copy, shallow=False)
+
+
+def archived_part(origin, target):
+    """`(present, leftovers)`: the relative paths of the files already in `target` when every one of them is the same
+    as in `origin` (an earlier copy of these records, whole or stopped half-way), and the temporary files an
+    interrupted copy left there (review r3 of issue 63, R3-2); None when `target` holds anything else, a junction, or
+    an entry other than a symlink whose real path leaves `target` (R3-1: the copy would write through it)."""
+    present, leftovers = set(), []
+    for folder, dirs, files in os.walk(target):
+        here = Path(folder)
+        for name in dirs + files:
+            copy, relative = here / name, (here / name).relative_to(target)
+            if is_junction(copy) or (not copy.is_symlink() and not within(copy, target)):
+                return None
+            if name in dirs and not copy.is_symlink():
+                if not (origin / relative).is_dir() or is_link(origin / relative):
+                    return None
+                continue
+            if (not copy.is_symlink() and copy.is_file() and ARCHIVE_TEMP.match(name)
+                    and not os.path.lexists(origin / relative)):
+                leftovers.append(copy)
+                continue
+            if not same_entry(origin / relative, copy):
+                return None
+            present.add(relative.as_posix())
+    return present, leftovers
+
+
+def copy_whole(src, dst):
+    """The `copy_function` of `archive`: copy under a temporary name in the same folder, then rename into place, so a
+    final file is never an incomplete copy (review r3 of issue 63, R3-2)."""
+    temporary = os.path.join(os.path.dirname(dst), archive_temp_name(os.path.basename(dst)))
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+    out = os.open(temporary, flags, 0o600)   # exclusive: an entry already there, a link included, is never written
+    try:                                      # through (review r4 of issue 63, R4-1)
+        with open(src, 'rb') as reading, os.fdopen(out, 'wb') as writing:
+            shutil.copyfileobj(reading, writing)
+        shutil.copystat(src, temporary)
+        os.replace(temporary, dst)
+    except BaseException:
+        if os.path.lexists(temporary) and not os.path.islink(temporary):
+            os.unlink(temporary)
+        raise
+    return dst
+
+
+def op_archive(source, destination):
+    """Copy the Frontlights records of a worktree (`<worktree>/.frontlights`) into `destination`, a folder under the
+    `.frontlights` folder of the main worktree of the same repository (Git says which). A destination that does not
+    exist or is empty gets the copy; one whose files are all the same as the records (same paths, same bytes) is an
+    earlier copy of them (review r2 of issue 63, R2-1: the removal after it failed), so the files it lacks are copied
+    and it is ok; one with any differing or extra file is refused, nothing copied: an earlier archive is never
+    overwritten. A symlink or junction between the main `.frontlights` and the destination (the destination included),
+    a junction inside the destination or in the records, or an entry of the destination whose real path leaves it, is
+    refused too (review r3 of issue 63, R3-1). Each file is copied under a temporary name, created exclusively, and
+    renamed into place; a temporary file an interrupted run left in the destination is removed (R3-2); an entry of the
+    records named like that temporary file is refused, nothing copied (R4-1). The one write of this helper, and only
+    into `destination`."""
+    require(source and destination, 'archive needs --from <worktree>/.frontlights and --to <folder>')
+    raw = Path(os.path.abspath(destination))
+    origin, target = Path(source).resolve(), Path(destination).resolve()
+    require(origin.name == '.frontlights' and origin.is_dir(), '--from must be the .frontlights folder of a worktree')
+    records = Path(list_worktrees(origin.parent)[0]['path']).resolve() / '.frontlights'
+
+    def holds(outer, inner):
+        return outer == inner or outer in inner.parents
+    require(norm(records) != norm(target) and any(norm(records) == norm(p) for p in target.parents),
+            '--to must be a folder under the .frontlights folder of the main worktree')
+    require(not holds(origin, target) and not holds(target, origin), '--from and --to must not hold one another')
+    linked = ('a symlink or junction on the way to --to leads the copy elsewhere: nothing was copied; the worktree '
+              'keeps its records')
+    try:
+        for step in (raw, *raw.parents):   # from the destination up to the main `.frontlights`, both included
+            if os.path.normcase(str(step)) == os.path.normcase(str(records)):
+                break
+            require(not (os.path.lexists(step) and is_link(step)), linked)
+            if norm(step) == norm(records):
+                break
+        for folder, dirs, files in os.walk(origin):
+            require(not any(is_junction(Path(folder) / n) for n in dirs + files),
+                    'the records hold a junction, which is not copied through: nothing was copied; the worktree keeps them')
+            require(not any(ARCHIVE_TEMP.match(n) for n in dirs + files),
+                    'the records hold an entry named like the temporary file of the copy (.<name>.frontlights-archive-tmp), '
+                    'which the copy would take for its own: nothing was copied; the worktree keeps them')
+        found = ((set(), []) if not target.exists() else
+                 archived_part(origin, target) if target.is_dir() and not is_link(target) else None)
+    except OSError:
+        raise Refusal(linked)
+    require(found is not None, '--to already holds files that differ from these records or that they do not have, or '
+                               'a link that leaves it: nothing was copied, so no earlier archive is overwritten; the '
+                               'worktree keeps its records')
+    present, leftovers = found
+
+    def skip(folder, names):   # what an earlier copy already holds, the same (checked above)
+        return [n for n in names if (Path(folder) / n).relative_to(origin).as_posix() in present]
+    try:
+        for leftover in leftovers:   # a temporary file of an interrupted run, inside the destination
+            leftover.unlink()
+        shutil.copytree(origin, target, symlinks=True, dirs_exist_ok=True, ignore=skip, copy_function=copy_whole)
+    except (OSError, shutil.Error):
+        raise Refusal('the records could not be copied; nothing was removed, so the worktree keeps them')
+    copied = sum(1 for p in target.rglob('*') if p.is_file())
+    where = target.as_posix()
+    message = (f'{copied} file(s) of records are in {where}.' if not present else
+               f'{where} already held {len(present)} of these file(s), the same; {copied - len(present)} missing '
+               f'file(s) copied, {copied} in all.' if copied > len(present) else
+               f'{where} already holds these {copied} file(s), the same: the records were already archived; nothing copied.')
+    return {'ok': True, 'exitCode': 0, 'to': rs.clean(where, 300), 'files': copied,
+            'alreadyArchived': len(present), 'message': message}
+
+
+def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):
+    """Read only: whether each named worktree and local branch is gone and each records folder holds the copy. The
+    remote branch is GitHub's to delete, so it is not read."""
     repository, _ = closeout.load_project(config)
-    require(worktrees or branches, 'verify needs what to check: pass --worktree PATH and/or --branch NAME')
+    require(worktrees or branches or records, 'verify needs what to check: pass --worktree PATH, --branch NAME and/or --records FOLDER')
     require(all(closeout.valid_branch(b) for b in branches), '--branch must be a plain branch name')
     listing = list_worktrees(root)
     registered = {norm(e['path']) for e in listing}
@@ -546,27 +791,35 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None):
         path = path if path.is_absolute() else Path(root) / path
         gone = norm(path) not in registered and not path.exists()
         entries.append({'kind': 'worktree', 'name': rs.clean(str(text), 300), 'gone': gone})
-    remote = read_branches(gh, repository, sorted(set(branches))) if branches else {}
     for branch in branches:
-        local = local_tip(listing[0]['path'], branch) is None
-        online = remote[branch]['remote'] is None
-        entries.append({'kind': 'branch', 'name': branch, 'localGone': local, 'remoteGone': online, 'gone': local and online})
-    waiting = [e['name'] for e in entries if not e['gone']]
+        entries.append({'kind': 'branch', 'name': branch, 'gone': local_tip(listing[0]['path'], branch) is None})
+    for text in records:
+        folder = Path(text)
+        folder = folder if folder.is_absolute() else Path(root) / folder
+        try:
+            copied = folder.is_dir() and any(p.is_file() for p in folder.rglob('*'))
+        except OSError:
+            copied = False
+        entries.append({'kind': 'records', 'name': rs.clean(str(text), 300), 'copied': copied})
+    waiting = [e['name'] for e in entries if not e.get('gone', e.get('copied'))]
     result = {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
               'entries': entries}
-    result['message'] = (f'All {len(entries)} item(s) are gone.' if not waiting else
-                         f'{len(waiting)} of {len(entries)} item(s) are not gone yet: ' + ', '.join(waiting) + '.')
+    result['message'] = (f'All {len(entries)} item(s) are done.' if not waiting else
+                         f'{len(waiting)} of {len(entries)} item(s) are not gone or not copied yet: ' + ', '.join(waiting) + '.')
     return result
 
 
 # ---------------------------------------------------------------- command line
 
-def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=()):
+def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
+        records=(), source=None, destination=None):
     try:
         if operation == 'plan':
             result = op_plan(config, root, issues, base, worktrees, integrations, gh)
         elif operation == 'verify':
-            result = op_verify(config, root, worktrees, branches, gh)
+            result = op_verify(config, root, worktrees, branches, gh, records)
+        elif operation == 'archive':
+            result = op_archive(source, destination)
         else:
             raise Refusal(f'Unknown operation: {rs.clean(operation, 40)}')
     except (Refusal, ValueError) as error:
@@ -601,14 +854,21 @@ def build_parser():
                                  help="the local-only integration worktree of a family, as many times as needed")
         else:
             command.add_argument('--branch', action='append', default=[], dest='branches', help='a branch name, as many times as needed')
+            command.add_argument('--records', action='append', default=[], dest='records',
+                                 help='a folder the records of a worktree were copied to (the `recordsTo` of plan)')
+    command = sub.add_parser('archive', allow_abbrev=False)
+    command.add_argument('--from', required=True, dest='source', help='the .frontlights folder of the worktree')
+    command.add_argument('--to', required=True, dest='destination', help='the folder of the main worktree it is copied to')
     return parser
 
 
 def main(argv=None):
     try:
         args = build_parser().parse_args(argv)
-        result = run(args.operation, args.config, args.root, getattr(args, 'issues', None), getattr(args, 'base', None),
-                     args.worktrees, getattr(args, 'branches', []), integrations=getattr(args, 'integrations', []))
+        result = run(args.operation, getattr(args, 'config', None), getattr(args, 'root', '.'), getattr(args, 'issues', None),
+                     getattr(args, 'base', None), getattr(args, 'worktrees', []), getattr(args, 'branches', []),
+                     integrations=getattr(args, 'integrations', []), records=getattr(args, 'records', []),
+                     source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     print(json.dumps(result, indent=2, ensure_ascii=True))

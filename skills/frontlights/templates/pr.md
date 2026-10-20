@@ -6,10 +6,18 @@ português para quem fala português, como este modelo), curto, sem preâmbulo e
 projeto. Preencha cada seção, apague estas orientações e os marcadores `<...>`. A guia do Resumo é adaptada,
 em palavras nossas, da skill show-me, sob a licença MIT (`references/LICENSE-pr.md`).
 
-A PR cita a issue pelo número, sem palavra de fechamento (`Closes`, `Fixes`, `Resolves` ou variante), no
-corpo e nos commits: fechar uma issue tem aprovação própria. E o corpo da PR nunca é destino de um achado:
+Cada issue do `closes` do `release-plan` (de topo, com todas as caixas marcadas, nenhuma filha aberta e
+nenhuma pendência fora dos critérios) ganha uma linha como a linha-modelo logo antes de `## Resumo`, com o número
+dela, copiada da lista, nunca contada à mão, uma linha simples por issue, fora de bloco de código: só o merge
+aprovado da PR a fecha. Essas linhas são do corpo e ficam quando estas orientações são apagadas; com `closes` vazio,
+apague a linha-modelo. As outras (sub-issue, caixa aberta, filha aberta, pendência
+fora dos critérios, ou todas quando `closes` vem vazio) a PR cita pelo número, sem palavra de fechamento
+(`Closes`, `Fixes`, `Resolves` ou variante), no corpo e nos commits, e elas seguem a pergunta de fechamento da
+etapa 7. E o corpo da PR nunca é destino de um achado:
 um achado sem correção sai antes, como critério de aceitação novo da issue de origem ou como issue de topo, e
 o corpo só cita esse destino.
+
+Closes #<n>
 
 ## Resumo
 

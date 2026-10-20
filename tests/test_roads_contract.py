@@ -100,7 +100,7 @@ class DocumentShapeTests(unittest.TestCase):
         for phrase in ('Só o Status do Project conta', 'não é lido** para itens de sprint', 'Item de sprint concluído fica',
                        'quando a **rotação** das sprints o retira', 'Grupos são diferentes',
                        'nunca do GitHub ao vivo', 'até 30 s depois de outra',
-                       'Fechar uma issue sem mover o cartão para Done não muda nada no RoadS'):
+                       'Fechar uma issue só muda o RoadS quando o fluxo "Item closed" do quadro leva o cartão a Done'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 

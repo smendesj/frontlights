@@ -161,10 +161,11 @@ class RecipeTests(unittest.TestCase):
         self.assertIn('never to get the issue closed', self.recipe)
 
     def test_the_pr_cites_the_issue_without_a_closing_keyword_while_a_leftover_is_open(self):
-        self.assertIn('the PR cites the issue without a closing keyword (`Closes`, `Fixes`, `Resolves`), in its body '
-                      'and in the commit messages', self.recipe)
+        self.assertIn('the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing keyword '
+                      '(`Closes`, `Fixes`, `Resolves`), in its body and in the commit messages', self.recipe)
         self.assertIn('the merge would close the issue with the criterion unticked', self.recipe)
-        self.assertIn('without a closing keyword, in its body and in the commit messages, while such a criterion is open',
+        self.assertIn('While such a criterion is open the issue is not in the `closes` of `release-plan`, so the PR '
+                      'cites it without a closing keyword, in its body and in the commit messages',
                       flat('skills', 'frontlights', 'references', 'development.md'))
 
     def test_a_legacy_section_is_moved_only_on_request_by_a_write_of_its_own_and_the_closeout_only_warns(self):
