@@ -698,8 +698,17 @@ def copy_whole(src, dst):
     """The `copy_function` of `archive`: copy under a temporary name in the same folder, then rename into place, so a
     final file is never an incomplete copy (review r3 of issue 63, R3-2)."""
     temporary = os.path.join(os.path.dirname(dst), archive_temp_name(os.path.basename(dst)))
-    shutil.copy2(src, temporary)
-    os.replace(temporary, dst)
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+    out = os.open(temporary, flags, 0o600)   # exclusive: an entry already there, a link included, is never written
+    try:                                      # through (review r4 of issue 63, R4-1)
+        with open(src, 'rb') as reading, os.fdopen(out, 'wb') as writing:
+            shutil.copyfileobj(reading, writing)
+        shutil.copystat(src, temporary)
+        os.replace(temporary, dst)
+    except BaseException:
+        if os.path.lexists(temporary) and not os.path.islink(temporary):
+            os.unlink(temporary)
+        raise
     return dst
 
 
@@ -711,8 +720,9 @@ def op_archive(source, destination):
     and it is ok; one with any differing or extra file is refused, nothing copied: an earlier archive is never
     overwritten. A symlink or junction between the main `.frontlights` and the destination (the destination included),
     a junction inside the destination or in the records, or an entry of the destination whose real path leaves it, is
-    refused too (review r3 of issue 63, R3-1). Each file is copied under a temporary name and renamed into place; a
-    temporary file an interrupted run left in the destination is removed (R3-2). The one write of this helper, and only
+    refused too (review r3 of issue 63, R3-1). Each file is copied under a temporary name, created exclusively, and
+    renamed into place; a temporary file an interrupted run left in the destination is removed (R3-2); an entry of the
+    records named like that temporary file is refused, nothing copied (R4-1). The one write of this helper, and only
     into `destination`."""
     require(source and destination, 'archive needs --from <worktree>/.frontlights and --to <folder>')
     raw = Path(os.path.abspath(destination))
@@ -737,6 +747,9 @@ def op_archive(source, destination):
         for folder, dirs, files in os.walk(origin):
             require(not any(is_junction(Path(folder) / n) for n in dirs + files),
                     'the records hold a junction, which is not copied through: nothing was copied; the worktree keeps them')
+            require(not any(ARCHIVE_TEMP.match(n) for n in dirs + files),
+                    'the records hold an entry named like the temporary file of the copy (.<name>.frontlights-archive-tmp), '
+                    'which the copy would take for its own: nothing was copied; the worktree keeps them')
         found = ((set(), []) if not target.exists() else
                  archived_part(origin, target) if target.is_dir() and not is_link(target) else None)
     except OSError:

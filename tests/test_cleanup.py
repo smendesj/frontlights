@@ -1019,6 +1019,40 @@ class CliTests(CleanupCase):
         self.assertIn((cleanup.archive_temp_name('a.txt'), 'a.txt'), copied)
         self.assertEqual(self.records(fresh), self.records(source))
 
+    def test_archive_refuses_a_source_entry_named_like_the_temporary_file_and_copies_nothing(self):
+        """Review r4 of issue 63 (R4-1, criterion P1): the source holds `a.txt` and `.a.txt.frontlights-archive-tmp`.
+        Copied as they come, the second would be taken for the temporary file of the first and one record lost (or,
+        were it a link leading outside, written through). It is refused (exit 1), nothing copied, the destination
+        untouched; and the temporary file is created exclusively, so one already there is never written through."""
+        path, _, _ = self.worktree('wt12')
+        source = path / '.frontlights'
+        source.mkdir()
+        (source / 'a.txt').write_text('slice')
+        (source / cleanup.archive_temp_name('a.txt')).write_text('another record')
+        worktrees = self.root / '.frontlights' / 'issues' / '12' / 'worktrees'
+        target = worktrees / 'wt12-abc1234'
+        code, result = self.archive(source, target)
+        self.assertEqual((code, result['ok'], result['exitCode']), (1, False, 1))
+        self.assertFalse(target.exists())
+        earlier = worktrees / 'wt12-earlier'
+        earlier.mkdir(parents=True)
+        (earlier / 'kept.txt').write_text('kept')
+        (source / 'kept.txt').write_text('kept')
+        code, result = self.archive(source, earlier)
+        self.assertEqual((code, result['ok']), (1, False))
+        self.assertEqual(self.records(earlier), {'kept.txt': b'kept'})
+        # the temporary file is created exclusively: one already there (here a planted file) is not overwritten
+        (source / cleanup.archive_temp_name('a.txt')).unlink()
+        (source / 'kept.txt').unlink()
+        destination = worktrees / 'wt12-busy'
+        destination.mkdir()
+        planted = destination / cleanup.archive_temp_name('a.txt')
+        with self.assertRaises(FileExistsError):
+            planted.write_text('planted')
+            cleanup.copy_whole(str(source / 'a.txt'), str(destination / 'a.txt'))
+        self.assertEqual(planted.read_text(), 'planted')
+        self.assertFalse((destination / 'a.txt').exists())
+
     def test_usage_mistakes_are_json_refusals_too(self):
         for argv in ([], ['plan'], ['frobnicate', '--config', 'x'], ['plan', '--config', 'x', '--bogus'], ['verify', '--config']):
             with self.subTest(argv=argv):

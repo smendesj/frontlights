@@ -188,6 +188,8 @@ archive is ever overwritten: report it and leave that item, naming the folder fo
 it. A symlink or junction on the way to the destination, a junction inside it or in the records, or an entry of it
 whose real path leaves it is refused the same way. Each file is copied under a temporary name and renamed into place,
 so no final file is ever half-written; a temporary file an interrupted copy left is removed by the next `archive`.
+The temporary file is created exclusively, never through a link, and a record named like it
+(`.<name>.frontlights-archive-tmp`) is refused the same way.
 A failed copy stops that item, so the worktree keeps its records.
 A slice's worktree (an authorization entry with `slice`) is delivered to the branch of its own issue, never by a
 pull request: it is offered, before the issue's own worktree, with the caution `slice_merged_into_issue_branch`,
