@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from unittest import mock
@@ -68,7 +69,28 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), Handler).serve_forever()
 """
 
 
+def unbound_on_windows(url):
+    """True on Windows when no socket holds the port of a 127.0.0.1 URL, neither there nor on 0.0.0.0.
+
+    There a refused connection only fails after about 2 s of SYN retries, so `reachable` answers such a port at
+    once: with nothing bound, the request could only fail. A port that is held, another host or another system
+    gives False and the real request decides, as before.
+    """
+    parts = urllib.parse.urlsplit(url)
+    if os.name != 'nt' or parts.hostname != '127.0.0.1' or not parts.port:
+        return False
+    for host in ('127.0.0.1', '0.0.0.0'):
+        try:
+            with socket.socket() as sock:
+                sock.bind((host, parts.port))
+        except OSError:
+            return False
+    return True
+
+
 def reachable(url):
+    if unbound_on_windows(url):
+        return False
     try:
         urllib.request.urlopen(url, timeout=2).close()
         return True
@@ -89,6 +111,14 @@ def http_server(port):
     return [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1']
 
 
+def reset_serve_state():
+    """Leave serve's module-level state as a new process would find it (secrets, cached probes, held locks)."""
+    serve._SECRETS.clear()
+    serve._ALIAS.clear()
+    serve._IPV6.clear()
+    serve._HELD.clear()
+
+
 class ServeTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -96,7 +126,21 @@ class ServeTestCase(unittest.TestCase):
         self.root = Path(self.tmp.name) / 'worktree'
         self.root.mkdir()
         self.config = Path(self.tmp.name) / 'config.json'
-        self.addCleanup(self.serve, 'stop')
+        reset_serve_state()
+        self.addCleanup(reset_serve_state)
+        self.addCleanup(self.stop_leftovers)
+
+    def stop_leftovers(self):
+        """A registry with a live pid may hold a process tree: a real stop. Otherwise stop has nothing to kill."""
+        try:
+            record = json.loads(self.registry().read_text(encoding='utf-8'))
+            live = any(serve.pid_alive(entry['pid']) for entry in record['processes'])
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            live = self.registry().exists()  # unreadable: a real stop, as before
+        if live:
+            self.serve('stop')
+        else:
+            self.call('stop')
 
     def write_config(self, processes, login=LOGIN, password=PASSWORD, path=None):
         block = {'processes': processes, 'baseUrl': 'http://127.0.0.1:1',
@@ -115,6 +159,18 @@ class ServeTestCase(unittest.TestCase):
         done = subprocess.run([sys.executable, str(SCRIPT), command, '--config', str(self.config),
                                '--root', str(self.root), '--issue', str(issue)],
                               capture_output=True, text=True, encoding='utf-8', timeout=120)
+        self.last = done
+        return done
+
+    def call(self, command, issue=9):
+        """serve.main in this process, for a command that leaves no live child (a status, a stop with nothing to
+        kill, a start refused before spawning); the module state starts clean, as in a new process."""
+        argv = [command, '--config', str(self.config), '--root', str(self.root), '--issue', str(issue)]
+        reset_serve_state()
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = serve.main(argv)
+        done = subprocess.CompletedProcess(argv, code, out.getvalue(), err.getvalue())
         self.last = done
         return done
 
@@ -183,14 +239,14 @@ class DuplicateStartTest(ServeTestCase):
         self.write_config([entry])
         first = self.payload(self.serve('start'))
         before = self.registry().read_text(encoding='utf-8')
-        done = self.serve('start')
+        done = self.call('start')
         self.assertEqual(done.returncode, 1, done.stdout)
         result = self.payload(done)
         self.assertFalse(result['ok'])
         self.assertIn('stop', result['error'])
         self.assertEqual(self.registry().read_text(encoding='utf-8'), before)
         self.assertTrue(reachable(entry['health']))
-        self.assertEqual(self.payload(self.serve('status'))['processes'][0]['pid'], first['processes'][0]['pid'])
+        self.assertEqual(self.payload(self.call('status'))['processes'][0]['pid'], first['processes'][0]['pid'])
         self.assertEqual(self.serve('stop').returncode, 0)
         self.assertTrue(wait_until(lambda: not reachable(entry['health'])))
 
@@ -198,7 +254,7 @@ class DuplicateStartTest(ServeTestCase):
         entry = self.web('web')
         self.write_config([entry])
         self.assertEqual(self.serve('start').returncode, 0)
-        old = self.payload(self.serve('status'))['processes'][0]['pid']
+        old = self.payload(self.call('status'))['processes'][0]['pid']
         serve.kill_tree(old)
         self.assertTrue(wait_until(lambda: not serve.pid_alive(old)))
         done = self.serve('start')
@@ -225,7 +281,7 @@ class IdentityTest(ServeTestCase):
         self.write_config([self.web('web')])
         self.other = self.foreign()
         self.record(identity='identidade-de-outro-processo')
-        done = self.serve('stop')
+        done = self.call('stop')
         self.assertTrue(serve.pid_alive(self.other.pid), 'stop matou um processo alheio: ' + done.stdout)
         self.assertEqual(done.returncode, 0, done.stdout)
         self.assertFalse(self.registry().exists())
@@ -234,7 +290,7 @@ class IdentityTest(ServeTestCase):
         self.write_config([self.web('web')])
         self.other = self.foreign()
         self.record()
-        done = self.serve('stop')
+        done = self.call('stop')
         self.assertTrue(serve.pid_alive(self.other.pid), 'stop matou sem conferir a identidade')
         self.assertEqual(done.returncode, 1)
         self.assertIn('dentidade desconhecida', self.payload(done)['error'])
@@ -251,7 +307,7 @@ class StatusTest(ServeTestCase):
     def test_status_reports_alive_then_dead_from_the_registry_on_disk(self):
         self.write_config([self.web('web')])
         pid = self.payload(self.serve('start'))['processes'][0]['pid']
-        done = self.serve('status')
+        done = self.call('status')
         self.assertEqual(done.returncode, 0, done.stdout)
         result = self.payload(done)
         self.assertTrue(result['running'])
@@ -259,11 +315,11 @@ class StatusTest(ServeTestCase):
         self.assertTrue(result['processes'][0]['alive'])
         subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'] if os.name == 'nt' else ['kill', '-9', str(pid)],
                        capture_output=True)
-        self.assertTrue(wait_until(lambda: not self.payload(self.serve('status'))['running']))
+        self.assertTrue(wait_until(lambda: not self.payload(self.call('status'))['running']))
 
     def test_status_without_a_registry_fails_with_a_clear_message(self):
         self.write_config([self.web('web')])
-        done = self.serve('status')
+        done = self.call('status')
         self.assertEqual(done.returncode, 1)
         self.assertFalse(self.payload(done)['ok'])
         self.assertIn('registro', self.payload(done)['error'])
@@ -295,7 +351,7 @@ class FailureTest(ServeTestCase):
     def test_a_missing_executable_is_reported_as_an_infrastructure_failure(self):
         self.write_config([{'name': 'web', 'argv': ['executavel-que-nao-existe-xyz'],
                             'health': f'http://127.0.0.1:{free_port()}/'}])
-        done = self.serve('start')
+        done = self.call('start')
         self.assertEqual(done.returncode, 1)
         result = self.payload(done)
         self.assertEqual((result['failedProcess'], result['category']), ('web', 'infraestrutura'))
@@ -347,7 +403,7 @@ class FailureTest(ServeTestCase):
             with self.subTest(argument=bad):
                 self.write_config([{'name': 'web', 'argv': [str(script), bad],
                                     'health': f'http://127.0.0.1:{free_port()}/', 'timeoutSeconds': 1}])
-                done = self.serve('start')
+                done = self.call('start')
                 self.assertEqual(done.returncode, 1, done.stdout)
                 result = self.payload(done)
                 self.assertEqual(result['failedProcess'], 'web')
@@ -358,7 +414,7 @@ class FailureTest(ServeTestCase):
     def test_argv_must_be_a_list_never_a_shell_string(self):
         self.write_config([{'name': 'web', 'argv': 'npm run watch',
                             'health': f'http://127.0.0.1:{free_port()}/'}])
-        done = self.serve('start')
+        done = self.call('start')
         self.assertEqual(done.returncode, 1)
         self.assertIn('argv', self.payload(done)['error'])
 
@@ -395,7 +451,7 @@ class SecretTest(ServeTestCase):
         self.write_config([self.web('web')])
         outputs = []
         for command in ('start', 'status', 'status'):
-            done = self.serve(command)
+            done = self.serve(command) if command == 'start' else self.call(command)
             outputs += [done.stdout, done.stderr]
         outputs += [self.tree_text()]
         self.serve('stop')
@@ -405,7 +461,7 @@ class SecretTest(ServeTestCase):
         # a refusal that would quote the secret (here through the process name) must be redacted
         self.write_config([{'name': 'web-' + PASSWORD, 'argv': ['executavel-que-nao-existe-xyz'],
                             'health': f'http://127.0.0.1:{free_port()}/'}])
-        done = self.serve('start')
+        done = self.call('start')
         outputs += [done.stdout, done.stderr, self.tree_text()]
         everything = NEWLINE.join(outputs)
         self.assertIn('"ok"', everything)
@@ -419,14 +475,14 @@ class SecretMaskingTest(ServeTestCase):
         for login, password in (('abc', PASSWORD), (LOGIN, 'xy'), ('a', 'e')):
             with self.subTest(login=login, password=password):
                 self.write_config([entry], login=login, password=password)
-                done = self.serve('start')
+                done = self.call('start')
                 self.assertEqual(done.returncode, 1, done.stdout)
                 result = self.payload(done)
                 self.assertEqual(result['category'], 'uso')
                 self.assertIn('mascar', result['error'])
                 self.assertFalse(self.registry().exists())
                 self.assertFalse(reachable(entry['health']), 'um processo subiu apesar da recusa')
-                self.serve('stop')
+                self.call('stop')
 
     def test_a_secret_that_is_a_prefix_of_the_mask_keeps_masking_idempotent_and_a_second_pass_does_not_grow_the_text(self):
         for secret in ('[redact', '[redacted', '[', '[r'):
@@ -445,7 +501,7 @@ class SecretMaskingTest(ServeTestCase):
             with self.subTest(login=login, password=password):
                 try:
                     self.write_config([entry], login=login, password=password)
-                    done = self.serve('start')
+                    done = self.call('start')
                     self.assertEqual(done.returncode, 1, done.stdout)
                     result = self.payload(done)
                     self.assertEqual(result['category'], 'uso')
@@ -453,7 +509,7 @@ class SecretMaskingTest(ServeTestCase):
                     self.assertFalse(self.registry().exists())
                     self.assertFalse(reachable(entry['health']), 'um processo subiu apesar da recusa')
                 finally:
-                    self.serve('stop')
+                    self.call('stop')
 
     def test_a_secret_that_is_a_substring_of_a_key_keeps_the_structure_and_the_registry_readable(self):
         for secret in ('name', 'port', 'dact', 'redacted'):
@@ -467,7 +523,7 @@ class SecretMaskingTest(ServeTestCase):
                                  {'name', 'pid', 'port', 'url', 'startedAt', 'identity'})
                 registry = json.loads(self.registry().read_text(encoding='utf-8'))
                 self.assertIn('name', registry['processes'][0])
-                status = self.serve('status')
+                status = self.call('status')
                 self.assertEqual(status.returncode, 0, status.stdout)
                 self.assertTrue(self.payload(status)['running'])
                 self.assertLess(len(status.stdout), 1500, 'a saída cresceu além do esperado')
@@ -493,7 +549,7 @@ class SecretMaskingTest(ServeTestCase):
         done = self.serve('start')
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         outputs = [done.stdout, done.stderr, self.registry().read_text(encoding='utf-8')]
-        done = self.serve('status')
+        done = self.call('status')
         outputs += [done.stdout, done.stderr]
         everything = NEWLINE.join(outputs)
         for form in ('ana%40exemplo.test', 'p%40ss+w%2Brd', 'p%40ss%20w%2Brd'):
@@ -536,7 +592,7 @@ class LockTest(ServeTestCase):
         self.lock().write_text('lixo', encoding='utf-8')
         entry = self.web('web')
         self.write_config([entry])
-        done = self.serve('start')
+        done = self.call('start')
         self.assertEqual(done.returncode, 1, done.stdout)
         self.assertIn('9.lock', self.payload(done)['error'])
         self.assertIn('apague', self.payload(done)['error'])
@@ -550,7 +606,7 @@ class LockTest(ServeTestCase):
         self.addCleanup(run.communicate)
         self.addCleanup(run.kill)
         self.assertTrue(wait_until(lambda: self.registry().is_file()), 'o registro não apareceu durante o start')
-        self.assertEqual(self.serve('status').returncode, 0)
+        self.assertEqual(self.call('status').returncode, 0)
         run.kill()
         run.communicate()
         self.assertEqual(self.serve('stop').returncode, 0, self.last.stdout)
@@ -560,7 +616,7 @@ class LockTest(ServeTestCase):
         self.registry().parent.mkdir(parents=True, exist_ok=True)
         self.registry().write_text('{quebrado', encoding='utf-8')
         for command in ('status', 'start'):
-            done = self.serve(command)
+            done = self.call(command)
             self.assertEqual(done.returncode, 1)
             self.assertIn('9.json', self.payload(done)['error'])
             self.assertIn('apague', self.payload(done)['error'])
