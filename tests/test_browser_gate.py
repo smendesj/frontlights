@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import browser_gate
 import frontlights
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
 
 SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
 EXAMPLE = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'config.json').read_text(encoding='utf-8'))
@@ -30,19 +32,38 @@ NOTES = 'docs/notes.md'
 
 
 class GateTestCase(unittest.TestCase):
+    # Branches the class template carries, committed but with no worktree: (name, start point, files).
+    SLICES = ()
+
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, cls.build)
+
+    @classmethod
+    def build(cls, folder):
+        """The class template: `main` with the base files, and the `SLICES` branches (worktrees come per test)."""
+        main = folder / 'main'
+        main.mkdir()
+        gitfixture.git(main, 'init', '-b', 'main')
+        gitfixture.git(main, 'config', 'user.email', 'fixture@example.invalid')
+        gitfixture.git(main, 'config', 'user.name', 'Fixture')
+        for name in (SCREEN, SCREEN_SPEC, TEMPLATE, SERVICE, API, API_TEST, NOTES):
+            cls.write(main, name, 'base\n')
+        gitfixture.git(main, 'add', '.')
+        gitfixture.git(main, 'commit', '-m', 'base')
+        for name, on, files in cls.SLICES:
+            gitfixture.git(main, 'checkout', '-q', '-b', name, on)
+            for path, text in files.items():
+                cls.write(main, path, text)
+            gitfixture.git(main, 'add', '.')
+            gitfixture.git(main, 'commit', '-m', name)
+        gitfixture.git(main, 'checkout', '-q', 'main')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         base = Path(self.tmp.name)
-        self.main = base / 'main'
-        self.main.mkdir()
-        self.git(self.main, 'init', '-b', 'main')
-        self.git(self.main, 'config', 'user.email', 'fixture@example.invalid')
-        self.git(self.main, 'config', 'user.name', 'Fixture')
-        for name in (SCREEN, SCREEN_SPEC, TEMPLATE, SERVICE, API, API_TEST, NOTES):
-            self.write(self.main, name, 'base\n')
-        self.git(self.main, 'add', '.')
-        self.git(self.main, 'commit', '-m', 'base')
+        self.main = gitfixture.copy(self.template, base / 'fixture') / 'main'
         self.record = base / 'result.json'
         self.config = copy.deepcopy(EXAMPLE)
         self.config.update(repository=None, project=None, roads=None)
@@ -51,7 +72,8 @@ class GateTestCase(unittest.TestCase):
     def git(self, root, *args):
         return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True, text=True)
 
-    def write(self, root, name, text):
+    @staticmethod
+    def write(root, name, text):                # also called on the class, while the template is built
         path = Path(root) / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding='utf-8')
@@ -65,6 +87,12 @@ class GateTestCase(unittest.TestCase):
         if files:
             self.git(root, 'add', '.')
             self.git(root, 'commit', '-m', name)
+        return root
+
+    def checkout(self, name):
+        """A worktree for a branch of the class template (`SLICES`), at the same place `slice` would put it."""
+        root = Path(self.tmp.name) / name
+        self.git(self.main, 'worktree', 'add', str(root), name)
         return root
 
     def edit(self, root, path, text='changed\n'):
@@ -200,11 +228,15 @@ class DetectionTests(GateTestCase):
 
 
 class BatchTests(GateTestCase):
+    SLICES = (('slice-parent', 'main', {SCREEN: 'parent\n', API: 'parent\n'}),
+              ('slice-child', 'main', {API_TEST: 'child\n', 'api/src/Other.cs': 'child\n'}),
+              ('slice-second', 'main', {TEMPLATE: 'second\n'}))
+
     def setUp(self):
         super().setUp()
-        self.parent = self.slice('slice-parent', **{SCREEN: 'parent\n', API: 'parent\n'})
-        self.child = self.slice('slice-child', **{API_TEST: 'child\n', 'api/src/Other.cs': 'child\n'})
-        self.second = self.slice('slice-second', **{TEMPLATE: 'second\n'})
+        self.parent = self.checkout('slice-parent')
+        self.child = self.checkout('slice-child')
+        self.second = self.checkout('slice-second')
 
     def test_one_decision_covers_every_visible_slice_of_the_batch(self):
         result = self.gate([self.parent, self.child, self.second])
@@ -230,9 +262,11 @@ class BatchTests(GateTestCase):
 
 
 class DecisionTests(GateTestCase):
+    SLICES = (('slice-a', 'main', {SCREEN: 'new\n', API: 'new\n'}),)
+
     def setUp(self):
         super().setUp()
-        self.a = self.slice('slice-a', **{SCREEN: 'new\n', API: 'new\n'})
+        self.a = self.checkout('slice-a')
 
     def test_a_decision_to_watch_run_or_go_on_answers(self):
         for situacao in ('aprovado', 'prosseguir', 'sem-assistir'):
@@ -575,11 +609,15 @@ class StackedSliceTests(GateTestCase):
             self.git(root, 'commit', '-m', name)
         return root
 
+    SLICES = (('slice-parent', 'main', {SCREEN: 'parent\n', API: 'parent\n'}),
+              ('slice-child1', 'slice-parent', {'api/src/Other1.cs': 'c1\n'}),
+              ('slice-child2', 'slice-parent', {API_TEST: 'c2\n', 'api/src/Other2.cs': 'c2\n'}))
+
     def setUp(self):
         super().setUp()
-        self.parent = self.slice('slice-parent', **{SCREEN: 'parent\n', API: 'parent\n'})
-        self.child1 = self.stacked_slice('slice-child1', 'slice-parent', **{'api/src/Other1.cs': 'c1\n'})
-        self.child2 = self.stacked_slice('slice-child2', 'slice-parent', **{API_TEST: 'c2\n', 'api/src/Other2.cs': 'c2\n'})
+        self.parent = self.checkout('slice-parent')
+        self.child1 = self.checkout('slice-child1')
+        self.child2 = self.checkout('slice-child2')
         self.roots = [self.parent, self.child1, self.child2]
         self.stack = {'slice-child1': 'slice-parent', 'slice-child2': 'slice-parent'}
 
@@ -691,17 +729,25 @@ class CommandTests(GateTestCase):
 
 
 class CarriedPendingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, cls.build)
+
+    @staticmethod
+    def build(folder):
+        root = folder / 'repo'
+        root.mkdir()
+        for args in (('init', '-b', 'claude/fixture'), ('config', 'user.email', 'fixture@example.invalid'),
+                     ('config', 'user.name', 'Fixture')):
+            subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True)
+        (root / 'a.txt').write_text('one', encoding='utf-8')
+        subprocess.run(['git', '-C', str(root), 'add', '.'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', str(root), 'commit', '-m', 'fixture'], check=True, capture_output=True)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / 'repo'
-        self.root.mkdir()
-        for args in (('init', '-b', 'claude/fixture'), ('config', 'user.email', 'fixture@example.invalid'),
-                     ('config', 'user.name', 'Fixture')):
-            subprocess.run(['git', '-C', str(self.root), *args], check=True, capture_output=True)
-        (self.root / 'a.txt').write_text('one', encoding='utf-8')
-        subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True, capture_output=True)
-        subprocess.run(['git', '-C', str(self.root), 'commit', '-m', 'fixture'], check=True, capture_output=True)
+        self.root = gitfixture.copy(self.template, Path(self.tmp.name) / 'fixture') / 'repo'
         self.handoff = Path(self.tmp.name) / 'handoff.md'
         self.handoff.write_text('state', encoding='utf-8')
         self.issue = {'number': 1, 'title': 't', 'body': 'b', 'state': 'open', 'source': 'local', 'labels': [],

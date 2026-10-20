@@ -21,6 +21,8 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import closeout
 import roads as rs
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
 
 SCRIPT = Path(closeout.__file__)
 REPO = 'OWNER/REPOSITORY'
@@ -1988,31 +1990,65 @@ class AwaitingReleaseTests(CloseoutCase):
 
     ENTRY = {'issue': 12, 'path': 'WORKTREE', 'branch': 'claude/issue-12'}
 
+    @staticmethod
+    def isolation(folder):
+        """Isolated Git: the empty global configuration of `folder`, no system configuration, no prompts."""
+        (folder / 'gitconfig').write_text('', encoding='utf-8')
+        return {'GIT_CONFIG_GLOBAL': str(folder / 'gitconfig'), 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_TERMINAL_PROMPT': '0'}
+
+    @staticmethod
+    def run_git(env, folder, *args):
+        return subprocess.run(['git', *(['-C', str(folder)] if folder else []), *args], capture_output=True, text=True,
+                              encoding='utf-8', errors='replace', env=dict(os.environ, **env),
+                              stdin=subprocess.DEVNULL, timeout=60)
+
+    @classmethod
+    def build(cls, folder):
+        """The class template: the bare `origin.git` and the repository `repo` with `app.txt` on `main`, already pushed.
+        Never `.frontlights` here: the copy lands on the test folder, which already holds the config. Without automatic
+        maintenance and gc, each commit, merge and push of the fixture is a single process."""
+        env, repo, origin = cls.isolation(folder), folder / 'repo', folder / 'origin.git'
+        repo.mkdir()
+
+        def git(*args, cwd=repo):
+            done = cls.run_git(env, cwd, *args)
+            if done.returncode:
+                raise RuntimeError(f'git {" ".join(args)}: {done.stderr}')
+
+        git('init', '-q', '--bare', '-b', 'main', str(origin), cwd=None)
+        git('config', 'receive.autogc', 'false', cwd=origin)
+        git('init', '-q', '-b', 'main')
+        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'), ('commit.gpgsign', 'false'),
+                           ('maintenance.auto', 'false')):
+            git('config', key, value)
+        (repo / 'app.txt').write_text('one\n', encoding='utf-8')
+        git('add', 'app.txt')
+        git('commit', '-q', '-m', 'first')
+        git('remote', 'add', 'origin', str(origin))
+        git('push', '-q', '-u', 'origin', 'main')
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.template = gitfixture.template(cls, cls.build)
+
     def setUp(self):
         super().setUp()
         self.aside = tempfile.TemporaryDirectory()
         self.addCleanup(self.aside.cleanup)
         aside = Path(self.aside.name)
-        (aside / 'gitconfig').write_text('', encoding='utf-8')
-        self.env = {'GIT_CONFIG_GLOBAL': str(aside / 'gitconfig'), 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_TERMINAL_PROMPT': '0'}
+        self.env = self.isolation(aside)
         self.origin = aside / 'origin.git'
         self.plain = aside / 'plain'
-        self.git('init', '-q', '--bare', '-b', 'main', str(self.origin), cwd=None)
-        self.git('init', '-q', '-b', 'main')
-        for key, value in (('user.email', 'fixture@example.invalid'), ('user.name', 'Fixture'), ('commit.gpgsign', 'false')):
-            self.git('config', key, value)
-        (self.root / 'app.txt').write_text('one\n', encoding='utf-8')
-        self.git('add', 'app.txt')
-        self.git('commit', '-q', '-m', 'first')
-        self.git('remote', 'add', 'origin', str(self.origin))
-        self.git('push', '-q', '-u', 'origin', 'main')
+        gitfixture.copy(self.template / 'origin.git', self.origin)
+        gitfixture.copy(self.template / 'repo', self.root, exist_ok=True)       # self.root already holds the config
+        # the origin was copied apart: point the copy's remote from the template origin to this test's
+        gitfixture.rewrite_remotes(self.root / '.git' / 'config', self.template, aside)
         self.record()
 
     def git(self, *args, cwd=DEFAULT):
         folder = self.root if cwd is DEFAULT else cwd
-        done = subprocess.run(['git', *(['-C', str(folder)] if folder else []), *args], capture_output=True, text=True,
-                              encoding='utf-8', errors='replace', env=dict(os.environ, **self.env),
-                              stdin=subprocess.DEVNULL, timeout=60)
+        done = self.run_git(self.env, folder, *args)
         self.assertEqual(done.returncode, 0, f'git {" ".join(args)}: {done.stderr}')
         return done.stdout.strip()
 

@@ -60,7 +60,8 @@ class FakeRoads:
 
         self.server = HTTPServer(('127.0.0.1', 0), Handler)
         self.port = self.server.server_address[1]
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        # shutdown waits for the loop's next poll: 0.05 s instead of the default 0.5 s at the end of every test
+        threading.Thread(target=self.server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True).start()
 
     def close(self):
         self.server.shutdown()
@@ -99,7 +100,16 @@ class ProgressTestCase(unittest.TestCase):
         key = patch.object(pr, 'user_key_path', return_value=base / 'home' / 'approval.key')
         key.start()
         self.addCleanup(key.stop)
+        # the temporary project is not a repository, where Git finds no main worktree: the double gives the same
+        # None without a `git rev-parse` process per lookup; `real_git` puts the real lookup back
+        self.no_main_worktree = patch.object(rs, 'main_worktree', return_value=None)
+        self.no_main_worktree.start()
+        self.addCleanup(self.no_main_worktree.stop)
         rs._SECRETS.clear()
+
+    def real_git(self):
+        """Use the real Git lookup of the main worktree in this test."""
+        self.no_main_worktree.stop()
 
     def collector(self, name='usage', script='collector.py', **extra):
         return {'name': name, 'command': [sys.executable, str(self.tools / script), str(self.log), name,
@@ -152,6 +162,7 @@ class ProgressTestCase(unittest.TestCase):
 
 class StatusTests(ProgressTestCase):
     def test_not_configured_when_there_is_no_config_or_no_block(self):
+        self.real_git()  # the lookup of the main worktree by the real Git, in a folder that is not a repository
         (self.project / '.frontlights' / 'config.json').unlink()
         result = self.run_op('status')
         self.assertTrue(result['ok'])
