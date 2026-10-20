@@ -9,8 +9,6 @@
 - Assumptions requiring verification:
 
 - Grilling depth (rápida / padrão / exaustiva):
-- Learning mode (ligado / desligado):
-- Learning mode changes (nenhuma, ou cada troca e a pergunta em que ocorreu):
 - Artifact URL and source path (one per grilling, the same URL every round; the source in `.frontlights/artifact.html`, or `.frontlights/issues/<n>/artifact.html` for a published issue; "artefato indisponível" when the host has no artifact tool):
 
 ## Project conventions
@@ -34,12 +32,6 @@
 | Implementation approach | | | unresolved |
 
 Every decision-tree branch ends answered or marked "não se aplica, porque…".
-
-## Concepts explained
-
-| Concept | Summary | Where it came up |
-| --- | --- | --- |
-| | | |
 
 ## Pre-mortem
 

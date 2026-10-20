@@ -44,26 +44,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
    external writes gated; do not label full AFK acceptance passed.
 10. Remove the junction, restart and verify the project data and its Git history remain intact
     (the skill does not depend on GuardianS or alter it; nothing of it is checked here).
-11. Learning mode. Answer "Ligado" to "Ativar o modo aprendizado?" in the same
-    call as the depth. Confirm `references/learning.md` was read before the first
-    explanation, and that each technical question is preceded by chat text with
-    the concept in plain words, why the project does it that way, a commented
-    excerpt with its path (about fifteen lines, no secrets) and what each option
-    changes. Confirm one "Ficou claro?" shares the call with at most three
-    decisions, and that no call ever holds more than four questions. Answer
-    "Entendi" once and confirm the decisions stand. Pick "Explicar de outro
-    jeito" twice: the decisions in that call are asked again, and "Seguir a
-    recomendação" (its description says the decision is marked "a revisar")
-    appears only after the second re-explanation and records the decision as
-    "tomada pela recomendação, a revisar" under Decisions and Open decisions,
-    and as the first branch offered at the closing. Repeat with "Desligado": the solution round shows exactly
-    three approaches plus "Explicar antes de decidir". Pick that option on one
-    of several questions in a call: the explanation comes, the same question
-    returns without the option together with the check, and the other answers
-    stand. Confirm no explanation or excerpt contains a secret, the discovery
-    log records the mode and one row per concept, and the explanations are
-    readable on the phone. The textual tests only prove these rules are written
-    down; this step proves they are followed.
+11. (Removed in issue #61: each decision's explanation now lives in its section of the artifact, item 28.)
 12. Issue family and stacked branches (a family that already exists). Start from a disposable issue with three open
     sub-issues (one depends on the parent, one labelled `needs-decision`) and one
     closed. Confirm the stage 2 line names the open ones, the grilling gives the
