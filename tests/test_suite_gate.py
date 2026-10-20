@@ -723,6 +723,31 @@ class AdoptionTestCase(SuiteTestCase):
 
 
 
+class AdoptionHiddenFileTests(AdoptionTestCase):
+    """Issue 57: sem a comparação de bytes, a adoção confere que nenhum arquivo versionado da worktree do registro
+    está escondido do `git status`, e recusa um registro que não está numa worktree do Git."""
+
+    def test_a_file_hidden_from_git_status_in_the_worktree_of_the_record_is_refused_and_nothing_is_written(self):
+        name = self.git(self.work, 'ls-files').stdout.split()[0]
+        self.git(self.work, 'update-index', '--skip-worktree', name)
+        (self.work / name).write_bytes(b'outro conteudo\n')
+        code, result = self.adopt()
+        self.assertEqual(code, 1, result)
+        self.assertIn(name, result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+
+    def test_a_record_outside_a_git_worktree_is_refused_and_nothing_is_written(self):
+        outside = self.base / 'copia-fora' / 'suite.json'
+        outside.parent.mkdir()
+        outside.write_bytes(Path(self.source).read_bytes())
+        code, result = self.adopt(source=outside)
+        self.assertEqual(code, 1, result)
+        self.assertIn('worktree do git', result['message'])
+        self.assertIn('nada foi gravado', result['message'])
+        self.assertFalse((self.release_folder / 'suite.json').exists())
+
+
 class SuiteAdoptionTests(AdoptionTestCase):
     def test_a_green_full_record_of_the_same_tree_is_adopted_without_running(self):
         """S1: os dois registros da release são gravados com a evidência da main local e `adoptedFrom`, nada roda
@@ -759,11 +784,14 @@ class SuiteAdoptionRefusalTests(AdoptionTestCase):
     """S2: `--from` recusa, sem gravar nada, o registro que não vale pela ponta da main local."""
 
     def forged(self, evidence=None, **changes):
-        """A copy of the issue's green record, outside the repository, with `changes` (and `evidence` keys)."""
+        """A copy of the issue's green record, in the `.frontlights/` of the worktree (a record lives in a worktree,
+        issue 57), with `changes` (and `evidence` keys)."""
         record = json.loads(self.source.read_text(encoding='utf-8'))
         record.update(changes)
         record['evidence'].update(evidence or {})
-        path = self.base / f'origem-{len(list(self.base.glob("origem-*.json")))}.json'
+        folder = self.work / '.frontlights' / 'origens'
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f'origem-{len(list(folder.glob("origem-*.json")))}.json'
         path.write_text(json.dumps(record), encoding='utf-8')
         return path
 
@@ -803,17 +831,23 @@ class SuiteAdoptionRefusalTests(AdoptionTestCase):
         first = self.git(self.work, 'rev-parse', 'main~1').stdout.strip()
         self.assert_refused_without_writing('outra árvore', source=self.forged({'head': first}, head=first))
 
-    def test_a_record_whose_file_hashes_differ_is_refused_and_the_release_records_stay_as_they_were(self):
-        """Mesma árvore de commit, mas o hash dos arquivos da evidência não é o da main local agora: recusado, e os
-        registros que uma adoção anterior gravou ficam byte a byte como estavam."""
+    def test_a_refused_record_leaves_the_release_records_as_they_were(self):
+        """Uma adoção recusada (outra árvore de commit) não toca os registros que uma adoção anterior gravou: ficam
+        byte a byte como estavam."""
         self.assertEqual(self.adopt()[0], 0)
         records = (self.release_folder / 'suite.json', self.release_folder / f'suite-{self.main_head}.json')
         before = [path.read_bytes() for path in records]
-        code, result = self.adopt(source=self.forged({'files_sha256': 'b' * 64}))
+        first = self.git(self.work, 'rev-parse', 'main~1').stdout.strip()
+        code, result = self.adopt(source=self.forged({'head': first}, head=first))
         self.assertEqual(code, 1, result)
-        self.assertIn('hash dos arquivos', result['message'])
         self.assertIn('nada foi gravado', result['message'])
         self.assertEqual([path.read_bytes() for path in records], before)
+
+    def test_the_same_commit_tree_with_other_bytes_on_disk_is_adopted(self):
+        """Issue 57: mesma árvore de commit e árvores limpas, mas bytes diferentes no disco (o fim de linha que o
+        core.autocrlf põe numa worktree e não na outra): o conteúdo é o mesmo, e a adoção vale."""
+        code, result = self.adopt(source=self.forged({'files_sha256': 'b' * 64}))
+        self.assertEqual((code, result.get('state')), (0, 'adopted'), result)
 
     def test_from_with_argv_or_timeout_seconds_is_refused(self):
         for flags in (('--argv', json.dumps(self.argv())), ('--timeout-seconds', '30')):
@@ -882,7 +916,7 @@ class CoveredTestCase(SuiteTestCase):
         untracked file in it during the run. The authorization record of the main worktree names it."""
         path, branch = self.base / f'wt-{number}', f'claude/issue-{number}'
         self.git(self.work, 'worktree', 'add', '-q', '-b', branch, str(path), 'main')
-        (path / f'issue-{number}.txt').write_text(f'{number}\n', encoding='utf-8')
+        (path / f'issue-{number}.txt').write_bytes(f'{number}\n'.encode())   # LF, whatever the platform
         self.git(path, 'add', '.')
         self.git(path, 'commit', '-q', '-m', f'issue {number}')
         if loose:
@@ -995,6 +1029,41 @@ class ReleaseCoveredTests(CoveredTestCase):
         self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
         code, plan = self.cli('release-plan', '--root', str(self.work))
         self.assertEqual((code, plan['release']), (0, [1]), plan)
+
+    def test_a_file_with_other_line_endings_on_disk_in_the_main_worktree_still_counts(self):
+        """Issue 57: com core.autocrlf, a worktree principal pode ter um arquivo com fim de linha CRLF e a da issue
+        com LF (ou o contrário); as duas estão limpas e têm a mesma árvore de commit, então o impacto conta."""
+        self.issue(1)
+        self.deliver(1)
+        self.git(self.work, 'config', 'core.autocrlf', 'true')
+        name = 'issue-1.txt'
+        (self.work / name).write_bytes((self.work / name).read_bytes().replace(b'\n', b'\r\n'))
+        self.git(self.work, 'add', '-u')   # the CRLF file normalizes to the same blob: nothing is staged
+        self.assertEqual(self.git(self.work, 'diff', '--name-only', 'HEAD').stdout.strip(), '')
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
+
+    def hidden_from_status(self, flag):
+        """Issue 57: a tracked file marked with `flag` and changed in the issue worktree leaves `git status`, and the
+        suite ran on other content; the record does not count and the reason names the file."""
+        worktree = self.issue(1)
+        self.git(worktree, 'update-index', flag, 'issue-1.txt')
+        (worktree / 'issue-1.txt').write_bytes(b'outro conteudo\n')
+        self.assertEqual(self.git(worktree, 'status', '--porcelain', '--', 'issue-1.txt').stdout.strip(), '')
+        self.deliver(1)
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': []})
+        refused = self.saved()['covered']['refused']
+        self.assertEqual([item['issue'] for item in refused], [1])
+        self.assertIn('issue-1.txt', refused[0]['reason'])
+
+    def test_a_skip_worktree_file_changed_in_the_issue_worktree_takes_its_record_out(self):
+        self.hidden_from_status('--skip-worktree')
+
+    def test_an_assume_unchanged_file_changed_in_the_issue_worktree_takes_its_record_out(self):
+        self.hidden_from_status('--assume-unchanged')
 
     def test_a_record_that_does_not_count_contributes_nothing_and_its_reason_is_recorded(self):
         """Cada issue entra na main local logo depois do próprio registro; só a última tem a árvore da ponta."""

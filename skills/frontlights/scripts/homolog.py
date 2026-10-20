@@ -63,8 +63,9 @@ Operations (each prints one JSON object on stdout):
          becomes the absolute path of a fresh `suite-covered-<YYYYmmdd-HHMMSS>.json` in the record folder,
          `{"complete": [ids]}`: with `--release`, the union of `complete` of the impact records of the issues of the
          release (the `release` of `release-plan`), each read from `.frontlights/issues/<n>/suite.json` in the
-         worktree its authorization entry names, that ran green on a clean tree whose commit tree and file hashes are
-         the tip's (the checks of the adoption after its first); a record that does not count adds nothing and its
+         worktree its authorization entry names, that ran green on a clean tree whose commit tree is the tip's, the
+         bytes on disk not compared (the checks of the adoption after its first), with no tracked file hidden from
+         `git status` (skip-worktree, assume-unchanged) in that worktree; a record that does not count adds nothing and its
          reason is kept. Outside the release the list is empty. The record takes `covered` {complete, from [{issue,
          path, head, tree}], refused [{issue, path, reason}], file}, and `warnings` when the list of the issues of
          the release cannot be had (no `<remote>/<base>`, or no authorization record names one of them), so the
@@ -88,7 +89,8 @@ Operations (each prints one JSON object on stdout):
          (an issue's `suite.json` or another release's `release/suite-<sha>.json`) that ran green, without timeout, on
          a clean tree: it answers `state: "adopted"` and writes both release records with `adoptedFrom` (the origin path, its
          head and tree). It refuses (exit 1, nothing written) an impact, red or timed-out record, one with a diff or a
-         file outside the commit, an unknown head, another tree or other evidence files than the tip's, a place that
+         file outside the commit, an unknown head or another tree (bytes on disk are not compared), one outside a Git
+         worktree or whose worktree has a tracked file hidden from `git status` (skip-worktree, assume-unchanged), a place that
          is not the clean tip of the local base, and `--from` with `--argv` or `--timeout-seconds`.
   suite-gate  compare suite.json with the tip now, the way `review-gate` does: `current` (same evidence, the
          suite exited 0; with `--require full` only a full record), `stale` (`changed` names the fields that
@@ -1033,7 +1035,7 @@ def write_release_records(root, record):
 def adoption_refusal(root, base, origin, evidence):
     """None when the record `origin` may be adopted by the release at the tip of the local `base`, whose evidence
     now is `evidence`; otherwise why not, in Portuguese: a green whole suite, run on a clean tree, whose commit
-    tree is the tip's and whose file hashes are the tip's now."""
+    tree is the tip's (the bytes on disk are not compared)."""
     if origin['mode'] != 'full':
         return 'é um registro da suíte por impacto, e a release pede a suíte inteira'
     return same_tree_refusal(root, base, origin, evidence, 'a suíte inteira')
@@ -1041,10 +1043,11 @@ def adoption_refusal(root, base, origin, evidence):
 
 def same_tree_refusal(root, base, origin, evidence, what):
     """None when the suite record `origin` (`what` names its suite in the reason) stands for the tip of the local
-    `base`, whose evidence now is `evidence`: it ran green (exit code 0, no timeout, no error) on a clean tree, its
-    head is known, the tree of that head is the tip's and its file hashes are the tip's now. Otherwise why not, in
-    Portuguese. The adoption (`adoption_refusal`) and the covered modules of the release (`impact_refusal`) share
-    it."""
+    `base`: it ran green (exit code 0, no timeout, no error) on a clean tree, its head is known and the tree of that
+    head is the tip's. Otherwise why not, in Portuguese. The bytes on disk are not compared (issue 57): with
+    `core.autocrlf` two clean worktrees of the same commit tree can hold other line endings, and a clean tree of the
+    same commit tree already holds the same content. The adoption (`adoption_refusal`) and the covered modules of
+    the release (`impact_refusal`) share it; `evidence` is kept in the signature for them."""
     if origin.get('exitCode') != 0 or origin.get('timedOut') is not False or origin.get('error'):
         return f'{what} desse registro não passou (código diferente de 0, prazo estourado ou não rodou)'
     head = origin.get('head')
@@ -1057,8 +1060,6 @@ def same_tree_refusal(root, base, origin, evidence, what):
     tree, tip_tree = tree_of(root, head), tree_of(root, f'refs/heads/{base}')
     if tree != tip_tree:
         return f'ele rodou em outra árvore ({tree[:7]}), e a ponta da {base} local tem a árvore {str(tip_tree)[:7]}'
-    if origin['evidence'].get('files_sha256') != evidence['files_sha256']:
-        return f'o hash dos arquivos da evidência dele não é o da {base} local agora'
     return None
 
 
@@ -1074,6 +1075,10 @@ def adopt_suite(root, base, from_record):
     require(origin is not None, f'não há registro de suíte em {path}; nada foi gravado')
     evidence = tree_evidence(root)
     reason = adoption_refusal(root, base, origin, evidence)
+    if reason is None:
+        code, top, _ = git(path.parent, 'rev-parse', '--show-toplevel')
+        reason = (hidden_refusal(top.strip()) if code == 0 and top.strip() else
+                  'a pasta do registro não está numa worktree do git, e não há como ver arquivos escondidos do git status')
     require(reason is None, f'{path} não vale pela ponta da {base} local: {reason}; nada foi gravado')
     tree = tree_of(root, origin['head'])
     record = dict(origin, base=base, head=evidence['head'], evidence=evidence,
@@ -1084,6 +1089,32 @@ def adopt_suite(root, base, from_record):
             'exitCode': 0,
             'message': f'A suíte inteira de {origin["head"][:7]} foi adotada para a ponta {evidence["head"][:7]} '
                        f'da {base} local (mesma árvore {str(tree)[:7]}); nada rodou.'}
+
+
+def hidden_files(worktree):
+    """The tracked files (outside `.frontlights/`) that `git status` does not watch in `worktree`: marked
+    skip-worktree (tag `S`) or assume-unchanged (a lower-case tag) in `git ls-files -v`. A file so marked may hold
+    other content than the commit and no evidence sees it (issue 57); None when Git cannot list the index."""
+    code, out, _ = git(worktree, 'ls-files', '-v', '-z')
+    if code != 0:
+        return None
+    hidden = []
+    for line in out.split('\0'):
+        if len(line) > 2 and (line[0] == 'S' or line[0].islower()) and not line[2:].startswith('.frontlights/'):
+            hidden.append(line[2:])
+    return sorted(hidden)
+
+
+def hidden_refusal(worktree):
+    """None when every tracked file of `worktree` is watched by `git status`; otherwise why not, in Portuguese."""
+    hidden = hidden_files(worktree)
+    if hidden is None:
+        return f'o git não listou o índice de {worktree}'
+    if hidden:
+        names = ', '.join(hidden[:10]) + (', ...' if len(hidden) > 10 else '')
+        return (f'arquivo(s) marcado(s) skip-worktree ou assume-unchanged ({names}): o git status não os vê, e a '
+                'suíte pode ter rodado sobre outro conteúdo')
+    return None
 
 
 def impact_refusal(root, base, origin, evidence):
@@ -1133,7 +1164,7 @@ def covered_by_release(root, base, remote, evidence):
             except Refusal as error:
                 reason = str(error)
             if origin is not None:
-                reason = impact_refusal(root, base, origin, evidence)
+                reason = impact_refusal(root, base, origin, evidence) or hidden_refusal(Path(root, place))
             elif reason is None:
                 reason = 'não há registro de suíte da issue'
         if reason:

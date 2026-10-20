@@ -645,7 +645,10 @@ offers the release again with everything accumulated.
   `release/suite-<sha>.json` of another release) and never searches for one; it adopts before the cleanup of the
   worktrees (stage 7), which takes the issue's record with it. A refusal writes nothing. A refusal of the record (an
   impact record, a red or timed-out run, a run with a diff or a file outside the commit, a head the repository does
-  not know, another commit tree or other evidence files than the tip's) means the session runs the suite as below. A
+  not know, or another commit tree; the bytes on disk are not compared, since line endings can differ between clean
+  worktrees of one tree) means the session runs the suite as below. A record outside a Git worktree, or whose worktree has a tracked file hidden from `git status` (skip-worktree,
+  assume-unchanged), is refused too: clear the mark (`git update-index --no-skip-worktree` or
+  `--no-assume-unchanged`) and run the suite, or give a record that is in a worktree. A
   refusal of the place (a tip that is not the local main's, or a dirty main) is fixed first, by going to the tip or by
   committing or discarding the change, and the adoption is tried again; `--from` with `--argv` or
   `--timeout-seconds` is a mistake of the call, redone without them. Without such a record, the session runs the
@@ -656,7 +659,8 @@ offers the release again with everything accumulated.
   `homolog.suites.full.argv` (this repository's, in "Which tests run when"), the release runs only what no impact
   record of the release's issues ran whole and green on the same tree: the run hands the suite a file with the
   `complete` of each impact record (read from the issue's worktree, the `path` of its authorization entry) that is
-  green, from a clean tree, of a known head whose commit tree and file hashes are the tip's, and the suite runs the
+  green, from a clean tree, of a known head whose commit tree is the tip's (the bytes on disk are not compared), with no
+  tracked file hidden from `git status` in that worktree (skip-worktree, assume-unchanged), and the suite runs the
   rest. Any other record (red, from another tree, with a change not committed, a full or a report-less one, a
   worktree already gone) adds nothing, and its reason is kept. The release record names what was skipped, where it
   came from and what did not count (`covered`, `docs/protocol.md`); `suite-gate --release` and `release-plan` judge it
