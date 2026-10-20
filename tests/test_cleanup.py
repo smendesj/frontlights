@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -21,10 +22,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontli
 import cleanup
 import roads as rs
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
+
 SCRIPT = Path(cleanup.__file__)
 REPO = 'OWNER/REPOSITORY'
 EARLY = '2026-10-06T12:00:00Z'
 LATE = '2026-10-06T13:00:00Z'
+PREMADE = ('wt12', 'issue-12', 'wt-a', 'wt-b', 'wt-c', 'parent')   # the names `worktree` is called with
 
 
 def pull(number, state='MERGED', base='main', oid=None, merged_at=EARLY):
@@ -68,24 +73,51 @@ class FakeGh:
 class CleanupCase(unittest.TestCase):
     root_name = 'proj'
 
+    @classmethod
+    def setUpClass(cls):
+        cls.template = gitfixture.template(cls, cls.build)
+
+    @classmethod
+    def build(cls, folder):
+        """The base repository, once per class (and per `root_name`): one commit, a GitHub origin, `.frontlights/`
+        ignored and its config. Each test copies it; the copy keeps the file mtimes, and worktrees come after."""
+        root = folder / cls.root_name
+        root.mkdir()
+        git = lambda *args: subprocess.run(['git', '-c', 'commit.gpgsign=false', '-C', str(root), *args], check=True,
+                                           capture_output=True, text=True, encoding='utf-8')
+        git('init', '-q', '-b', 'main')
+        git('config', 'user.email', 'fixture@example.invalid')
+        git('config', 'user.name', 'Fixture')
+        (root / 'app.txt').write_text('one\n')
+        git('add', '.')
+        git('commit', '-q', '-m', 'first')
+        git('remote', 'add', 'origin', f'https://github.com/{REPO}.git')
+        (root / '.frontlights').mkdir()
+        with open(root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
+            exclude.write('/.frontlights/\n')
+        (root / '.frontlights' / 'config.json').write_text(json.dumps({'repository': REPO}), encoding='utf-8')
+        # The commit `worktree(name)` makes, made ahead in one process: refs/fixture/<name> on top of main. Nothing
+        # of the product reads that namespace; the branch claude/<name> only appears when the test asks for it.
+        stamp, lines = int(time.time()), []
+        for i, name in enumerate(PREMADE, 1):
+            lines += [f'commit refs/fixture/{name}', f'mark :{i}',
+                      f'committer Fixture <fixture@example.invalid> {stamp} +0000', f'data {len(name) + 1}', name,
+                      'from refs/heads/main', f'M 100644 inline {name}.txt', f'data {len(name)}', name, '']
+        marks = folder / 'marks'
+        subprocess.run(['git', '-C', str(root), 'fast-import', '--quiet', f'--export-marks={marks}'], check=True,
+                       capture_output=True, input='\n'.join(lines).encode('utf-8'))
+        tips = dict(line.split() for line in marks.read_text(encoding='utf-8').splitlines() if line)
+        cls.premade = {name: tips[f':{i}'] for i, name in enumerate(PREMADE, 1)}
+        marks.unlink()
+        cls.main_tip = (root / '.git' / 'refs' / 'heads' / 'main').read_text(encoding='utf-8').strip()
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
+        gitfixture.copy(self.template, self.base, exist_ok=True)
         self.root = self.base / self.root_name
-        self.root.mkdir()
-        self.git('init', '-q', '-b', 'main')
-        self.git('config', 'user.email', 'fixture@example.invalid')
-        self.git('config', 'user.name', 'Fixture')
-        (self.root / 'app.txt').write_text('one\n')
-        self.git('add', '.')
-        self.git('commit', '-q', '-m', 'first')
-        self.git('remote', 'add', 'origin', f'https://github.com/{REPO}.git')
-        (self.root / '.frontlights').mkdir()
-        with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
-            exclude.write('/.frontlights/\n')
         self.config = self.root / '.frontlights' / 'config.json'
-        self.config.write_text(json.dumps({'repository': REPO}), encoding='utf-8')
         self.entries, self.protected = [], []
         self.tick = 0
 
@@ -102,15 +134,30 @@ class CleanupCase(unittest.TestCase):
     def worktree(self, name, issue=12, commit=True, start=None, record=True):
         """A worktree on a new branch `claude/<name>` with one commit of its own; returns (path, branch, tip)."""
         path, branch = self.base / name, f'claude/{name}'
-        self.git('worktree', 'add', '-q', '-b', branch, str(path), *([start] if start else []))
-        if commit:
-            (path / f'{name}.txt').write_text(name)
-            self.git('add', '.', cwd=path)
-            self.git('commit', '-q', '-m', name, cwd=path)
+        if start is None and self.on_template_main():          # the same commit, made ahead by the template
+            tip = self.premade[name] if commit else self.main_tip
+            self.git('worktree', 'add', '-q', '-b', branch, str(path), tip)
+        else:
+            self.git('worktree', 'add', '-q', '-b', branch, str(path), *([start] if start else []))
+            if commit:
+                (path / f'{name}.txt').write_text(name)
+                self.git('add', '.', cwd=path)
+                self.git('commit', '-q', '-m', name, cwd=path)
+            tip = self.git('rev-parse', 'HEAD', cwd=path)
         if record:
             self.entries.append({'issue': issue, 'path': str(path), 'branch': branch, 'ownership': ['src']})
             self.authorize()
-        return path, branch, self.git('rev-parse', 'HEAD', cwd=path)
+        return path, branch, tip
+
+    def on_template_main(self):
+        """The main checkout still on main, at the template's commit (read from the files, without a Git process)."""
+        dot = self.root / '.git'
+        try:
+            head = (dot / 'HEAD').read_text(encoding='utf-8').strip()
+            ref = (dot / 'refs' / 'heads' / 'main').read_text(encoding='utf-8').strip()
+        except OSError:
+            return False
+        return head == 'ref: refs/heads/main' and ref == self.main_tip
 
     def plan(self, branches=None, issues='12', base=None, worktrees=(), gh=None, default='main', integrations=()):
         gh = gh or FakeGh(branches, default)
