@@ -421,9 +421,10 @@ contradicts a closed issue): use a top-level issue that cites it and say why.
 - **Treat it.** The leftover is worked like any other criterion of the family. Tick it
   only with evidence, under the authorization for routine issue updates
   (`references/development.md`), and never to get the issue closed. While one is open,
-  the PR cites the issue without a closing keyword (`Closes`, `Fixes`, `Resolves`), in
-  its body and in the commit messages, because the merge would close the issue with the
-  criterion unticked.
+  the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing
+  keyword (`Closes`, `Fixes`, `Resolves`), in its body and in the commit messages, because
+  the merge would close the issue with the criterion unticked (`references/development.md`,
+  "The release").
 
 A leftover already kept in a section of its own (a body written before this rule) is
 moved into the criteria only when the user asks for it, as a write of this recipe with

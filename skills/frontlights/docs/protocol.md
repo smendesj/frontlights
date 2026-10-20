@@ -11,7 +11,7 @@
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos aprovados por carimbo; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
 | Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com os três portões verdes ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, testes, alterações, integração, revisão independente, os três portões e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
+| Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura do Git, dos registros e do GitHub), a suíte inteira na main local (adotada de um registro inteiro verde da mesma árvore com `--from`, ou rodada com
 `homolog suite --release --mode full`) e o `release-plan` de novo, a conferência da ponta antes da pergunta do merge
 (`homolog suite-gate --release --head <sha>`), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a saída do `suite-gate --release --head`; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar e marcar no corpo do pai o que a pessoa aprovou na lista mostrada; o cartão vai para Done pelo fluxo "Item closed" do próprio quadro | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
@@ -64,10 +64,18 @@ conferência relê o GitHub. Só a aprovação dessa lista cobre essa escrita.
 A release é oferecida ao fim de cada issue homologada e segue `references/development.md`, "The release": o
 `homolog release-plan` (só leitura) nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização
 mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o
-último nome de arquivo), a PR única leva o corpo do modelo
-`templates/pr.md`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
+último nome de arquivo) e devolve `closes`, lido do GitHub (só leitura, com o `repository` do `--config`, padrão
+`.frontlights/config.json` da raiz): as issues de topo da release com todas as caixas marcadas, nenhuma filha aberta e
+nenhuma pendência fora dos critérios; cada issue da release em `issues` traz `state`, `level`, `parent`, `criteria`,
+`openChildren`, `pendingOutside` e `closing` (`true` ou a razão: `sub_issue`, `no_criteria`, `unchecked_criteria`,
+`open_children`, `pending_outside`, `not_open`, `not_found`, `truncated`). Sem leitura do GitHub, ou com uma base que
+não é a branch padrão, `closes` sai vazio e `closesReason` diz por quê (`nothing_to_release`, `no_config`,
+`no_repository`, `github_unavailable`, `base_not_default`), com a frase em `closesMessage`; `ready` e o código de
+saída não mudam. E a PR única leva o corpo do modelo
+`templates/pr.md`, com uma linha `Closes #n` por issue de `closes`, e a sessão age só sobre a resposta do `closeout.py merge-status`, em que só `merged_into_base`
 vale (merge em outra branch, PR fechada sem merge ou não encontrada não fecha nada). Com o merge confirmado, `git
-pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release; "Agora não" deixa a issue
+pull --ff-only` traz a main local até ele e o fechamento roda só para as issues da release: o `verify --issues
+<closes>` só confere as de `closes`, e o `candidates` vê as outras; "Agora não" deixa a issue
 homologada na main local, e a próxima issue homologada oferece a release de novo, com tudo o que acumulou. Para uma
 sub-issue, a mesma aprovação do fechamento inclui marcar no corpo do pai o item que a cita (`parentTicks`; o
 `closeout.py tick-check` confere antes e depois). A limpeza das worktrees e branches (`scripts/cleanup.py

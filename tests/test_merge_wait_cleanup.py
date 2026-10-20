@@ -47,9 +47,13 @@ class WaitTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
-    def test_no_pr_of_the_plugin_carries_a_closing_keyword(self):
-        for phrase in ('never carries `Closes`, `Fixes`, `Resolves` or a variant of them, in its body or in its commits',
-                       'closing an issue has its own approval'):
+    def test_only_the_closes_of_the_release_plan_carry_a_closing_keyword(self):
+        """Issue 63, S3: `Closes #n` só para as issues do `closes` do `release-plan`; as outras sem palavra."""
+        for phrase in ('one `Closes #n` line per issue of the `closes` of the last `release-plan`, copied from that list, '
+                       'never counted by hand',
+                       'is cited by number without a closing keyword (`Closes`, `Fixes`, `Resolves` or a variant of them), '
+                       'in the body and in the commits, and follows the closing question of stage 7',
+                       'The merge itself stays a denied operation'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
@@ -75,7 +79,8 @@ class WaitTests(unittest.TestCase):
     def test_the_merge_leads_to_the_cleanup_first_then_the_closing_approval_and_independent_work_goes_on(self):
         for phrase in ('first the cleanup of the merged work (step 5), without approval and before any closing question',
                        '`git fetch --prune`, the records of each worktree copied to the main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed',
-                       'then the closing (with the tick in a parent, for a sub-issue), with its own approval',
+                       'then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the '
+                       'merge), and the closing of the rest (with the tick in a parent, for a sub-issue) has its own approval',
                        'An issue whose criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports',
                        'The wait never blocks independent issues'):
             with self.subTest(phrase=phrase):
@@ -88,7 +93,7 @@ class WaitTests(unittest.TestCase):
                       stage6)
         release = ' '.join(read('skills', 'frontlights', 'references', 'development.md')
                            .split('## The release: from the local main to GitHub')[1].split())
-        for phrase in ('"Lançar a release com as issues #a, #b agora?"', '**No closing keyword.**',
+        for phrase in ('"Lançar a release com as issues #a, #b agora?"', '**`Closes #n` only from `closes`.**',
                        '"Mesclar a PR #<n> em <base>?"', '`git pull --ff-only origin <base>`',
                        'A PR merged into another branch, closed without a merge, or not found is never ready',
                        'offers the release again with everything accumulated'):
@@ -103,7 +108,8 @@ class CloseoutReferenceTests(unittest.TestCase):
 
     def test_a_merge_is_one_of_the_ways_into_the_closeout(self):
         for phrase in ('when the release of stage 6', 'finds its pull request merged into the approved base',
-                       'pass `--issues` with the issues `release-plan` listed for that release',
+                       'Pass `--issues` with the other issues `release-plan` listed for that release',
+                       'they skip this step and the question, and only step 4 confirms them (`verify --issues <closes>`)',
                        'the merge of an issue into the local main, or of a child into its parent\'s branch, closes nothing',
                        'comes back in `excluded` as `unchecked_criteria`: say which criteria are left'):
             with self.subTest(phrase=phrase):
@@ -248,7 +254,8 @@ class DocsAndEvalsTests(unittest.TestCase):
         cases = {
             ('README.md',): ('#### Homologar na main local, lançar a release, fechar e limpar', 'aguarda o seu merge por padrão',
                              'pergunta se lança a release com elas agora', 'a branch `<prefixo>release-<data>`',
-                             'nunca leva palavra de fechamento', 'só vale o merge **na branch base aprovada**',
+                             'A PR leva `Closes #n` só para as issues do `closes` do `release-plan`',
+                             'só vale o merge **na branch base aprovada**',
                              '`closeout.py tick-check` antes e depois', 'Sem item citando a filha, ela só fecha',
                              '`cleanup.py plan`', 'Nunca usa `--force`', 'A limpeza não depende da resposta ao fechamento',
                              'logo depois do `git pull --ff-only` e sem pergunta', 'Primeiro `git fetch --prune`',

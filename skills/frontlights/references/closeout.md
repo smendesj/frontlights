@@ -26,8 +26,12 @@ their sub-issues, down the tree. `--issues` names an explicit list. `--all` swee
 repository and is used only when the user asks for it. With no repository or no `gh`, say in one line that
 the check could not run and go on.
 
-When the release's merge woke the session, pass `--issues` with the issues `release-plan` listed for that release
-(the sub-issues of a family included): an explicit list is taken as it is. Only the release merged into the approved
+When the release's merge woke the session, the issues of the `closes` of its `release-plan` were closed by the
+`Closes #n` lines of the merged pull request (`development.md`, "The release"): they skip this step and the
+question, and only step 4 confirms them (`verify --issues <closes>`). Pass `--issues` with the other issues
+`release-plan` listed for that release (the sub-issues of a family included): an explicit list is taken as it is;
+an issue of `closes` that GitHub still shows open right after the merge stays out of this list too, and the verify
+reads it again. Only the release merged into the approved
 base counts; the merge of an issue into the local main, or of a child into its parent's branch, closes nothing by
 itself (the issue closes with the release that carries it, as `development.md` says): `candidates` keeps such an
 issue out as `awaiting_release` until `origin/<base>` holds its branch (`--base` and `--remote`, defaulting to the
@@ -128,7 +132,8 @@ and children are now complete goes through the same question.
 python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" verify --config <config> --root <project> --issues 12,13
 ```
 
-Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
+At the merge of a release, `--issues` takes the `closes` of its `release-plan` together with the issues closed in
+step 3. Report per issue whether it is closed; list every `ok: false` (the command then exits with code 1). A card that
 did not reach Done is in `cardsOutsideDone` and in one line of the message: say that line (the board's "Item
 closed" workflow did not move it; suggest turning it on in the board's Workflows screen). It never makes an issue
 fail, and the session does not move the card. GitHub is the source

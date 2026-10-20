@@ -49,8 +49,16 @@ Operations (each prints one JSON object on stdout):
          at the tip of the local base the way `suite-gate --release` does: `current`, `missing`, `stale`, `red`, or
          `elsewhere` when the main worktree is not on that tip; with `recordPath`, `recordedHead` and what changed.
          It is checked last, after behind, nothing ahead and no issue branch. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
-         the same way, in `directs` and `releaseDirect`, and makes the release ready too. It only reads Git and the
-         records: it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
+         the same way, in `directs` and `releaseDirect`, and makes the release ready too. `closes` (issue 63) lists
+         the top-level issues of `release` the pull request closes with `Closes #n`: open, every box of the acceptance
+         criteria ticked, no open sub-issue, no open leftover outside the criteria; each issue of `release` in
+         `issues` takes `state`, `level`, `parent`, `criteria`, `openChildren`, `pendingOutside` and `closing` (true
+         or the reason), read from GitHub (read only, through closeout's reader) with the `repository` of `--config`
+         (default `<root>/.frontlights/config.json`). Without a read, or with a base that is not the default branch
+         (GitHub closes by keyword only on a merge into it), `closes` is empty and `closesReason` says why
+         (`nothing_to_release`, `no_config`, `no_repository`, `github_unavailable`, `base_not_default`), with
+         `closesMessage`; it never changes `ready` or the exit code. It only reads Git, the records and GitHub:
+         it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
          whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
@@ -751,7 +759,53 @@ def pending(item):
     return item['present'] and item['inLocalMain'] is True and item['inRemoteMain'] is False
 
 
-def op_release_plan(root, base, remote, prefix, records):
+CLOSES_NONE = ('a PR da release vai sem `Closes #n`, e as issues dela seguem a pergunta de fechamento da etapa 7')
+
+
+def release_closes(root, config_path, base, release, issues, gh=None):
+    """(closes, reason, message): the top-level issues of `release` whose pull request line is `Closes #n`, read from
+    GitHub (read only, through closeout) with the repository of the config (`config_path`, default
+    `<root>/.frontlights/config.json`). Each issue of the release in `issues` takes what was read of it (`state`,
+    `level`, `parent`, `criteria`, `openChildren`, `pendingOutside`) and `closing`, True or the reason. Without a read
+    (nothing to release, no config, no repository, GitHub unavailable, a base that is not the default branch)
+    `closes` is empty with the reason: when in doubt, no keyword. Never a refusal: the plan answers as it would."""
+    if not release:
+        return [], 'nothing_to_release', 'Nada a liberar, nada a fechar: `closes` vazio.'
+    import closeout   # noqa: PLC0415  (lazy: only the closing keyword of the release reads GitHub)
+    path = Path(config_path) if config_path else Path(root, '.frontlights', 'config.json')
+    try:
+        config = load_config(path)
+    except Refusal:
+        return [], 'no_config', f'Sem config legível (`--config`, padrão `.frontlights/config.json` da raiz), o ' \
+                                f'release-plan não leu o GitHub: {CLOSES_NONE}; sem `Closes #n`.'
+    repository = config.get('repository')
+    if not closeout.frontlights.repository(repository):
+        return [], 'no_repository', f'O config não nomeia um repositório `owner/name` do GitHub: {CLOSES_NONE}; ' \
+                                    'sem `Closes #n`.'
+    try:
+        default, found = closeout.release_keywords(gh or closeout.rs.gh_default, repository, release, base)
+    except Exception:   # noqa: BLE001  (a failed read only empties the list: when in doubt, no keyword)
+        default, found = None, None
+    if default is None:
+        return [], 'github_unavailable', f'O GitHub não respondeu à leitura (gh, conta ou acesso): {CLOSES_NONE}; ' \
+                                         'sem `Closes #n`.'
+    if default != base:
+        return [], 'base_not_default', (f'A base `{base}` não é a branch padrão do repositório (`{default}`), e o '
+                                        f'GitHub só fecha por palavra num merge na padrão: {CLOSES_NONE}; sem '
+                                        '`Closes #n`.')
+    for item in issues:
+        if item['issue'] in found:
+            item.update(found[item['issue']])
+    closes = [number for number in release if found.get(number, {}).get('closing') is True]
+    if not closes:
+        return [], None, f'Nenhuma issue da release está pronta para `Closes #n` (veja `closing` de cada uma): ' \
+                         f'{CLOSES_NONE}.'
+    lines = ', '.join(f'`Closes #{number}`' for number in closes)
+    return closes, None, (f'A PR da release leva uma linha por issue de `closes`: {lines}; o merge aprovado as fecha. '
+                          'As outras seguem a pergunta de fechamento da etapa 7.')
+
+
+def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=None):
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
@@ -769,6 +823,8 @@ def op_release_plan(root, base, remote, prefix, records):
               'behind': behind, 'issues': issues, 'release': release, 'directs': directs,
               'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,
               'prefixSource': source, 'skipped': skipped, 'fullSuite': release_suite(root, base), 'ready': False}
+    closes, reason, closes_message = release_closes(root, config_path, base, release, issues, gh)
+    result.update(closes=closes, closesReason=reason, closesMessage=closes_message)
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
                                           'antes do release-plan.')
@@ -1440,7 +1496,7 @@ def run(operation, root, base='main', remote='origin', install=False, config=Non
         elif operation == 'bundle':
             result = op_bundle(root, config, base, prefix, records)
         elif operation == 'release-plan':
-            result = op_release_plan(root, base, remote, prefix, records)
+            result = op_release_plan(root, base, remote, prefix, records, config)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -1506,6 +1562,8 @@ def build_parser():
             command.add_argument('--prefix', help='the prefix of the release branch name (default: the branch_prefix '
                                                   'of the newest authorization record, claude/ without one)')
             command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
+            command.add_argument('--config', help='.frontlights/config.json (default <root>/.frontlights/config.json): '
+                                                  'its repository is read on GitHub for `closes`')
     return parser
 
 
