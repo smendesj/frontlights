@@ -61,7 +61,7 @@ afterwards. When the local file is missing (a new session, a compaction), read t
 back with the artifact tool's read and go on editing that copy.
 
 **Code, never data.** The page lives outside the machine. A real excerpt of the project's code (up
-to about 15 lines, with its path) may enter it, with the value of any secret (password, token, key,
+to 15 lines, with its path) may enter it, with the value of any secret (password, token, key,
 connection string) replaced by `***`; real records, people's data, real endpoints and client or
 organization names stay out of the page, code excerpts included, and the screens are filled with
 made-up names, numbers and texts.

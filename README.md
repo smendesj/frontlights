@@ -722,7 +722,7 @@ pequena da fonte local (`.frontlights/artifact.html`, fora do versionamento) pub
 reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação), a sessão lê de volta a página
 publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
 artefato que mostra o que ela entrega, numerada depois das seções do grilling. Entra trecho de código real do
-projeto (até cerca de 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
+projeto (até 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
 (registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra. A URL e o caminho da fonte
 ficam no log de descoberta; "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a
 sessão avisa numa linha, segue em texto e registra "artefato indisponível".

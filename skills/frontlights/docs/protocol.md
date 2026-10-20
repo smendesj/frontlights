@@ -17,11 +17,9 @@
 | Fechamento | Somente fechar, mover para Done e marcar no corpo do pai o que a pessoa aprovou na lista mostrada | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
 | Limpeza | Somente remover as worktrees e branches da lista que a pessoa aprovou | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da remoção e nova leitura do Git e do GitHub |
 
-A aprovação de um documento, lista ou tabela é por link e carimbo, pela regra de `SKILL.md`,
-"Show before approval": o arquivo vai para `.frontlights/`, a pergunta nomeia a revisão e o
-carimbo, e a resposta literal fica em `.frontlights/approvals.json` (`frontlights.py stamp --approve`).
-Comandos seguem por inteiro dentro da pergunta. Toda pergunta tem opções, e todo texto ao usuário
-sai no idioma dele.
+A aprovação de um documento, lista ou tabela é do arquivo com aquele carimbo, nunca do texto colado na
+conversa; os passos estão em `SKILL.md`, "Show before approval". Comandos seguem por inteiro dentro da
+pergunta. Toda pergunta tem opções, e todo texto ao usuário sai no idioma dele.
 
 Mudanças posteriores de escopo invalidam as aprovações afetadas. A exibição de
 solicitações remotas não significa consentimento: ele vem só da resposta do usuário,
@@ -131,6 +129,11 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
   discovery.md
   artifact.html    fonte local do artefato do grilling, editada a cada seção e publicada na mesma URL
   issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
+  <documento>-r<N>.md   revisões anteriores guardadas ao lado do documento (`issue-r1.md` ao lado de `issue.md`),
+                   para o diff real do passo 3 de `SKILL.md`, "Show before approval"
+  approvals.json   lista de aprovações gravada por `frontlights.py stamp --approve`, uma entrada por aprovação:
+                   path, revision, sha256 de 12 caracteres, bytes, answer literal, stage (quando dado) e at
+                   (ISO-8601 em -03:00, nunca UTC)
   plan.json
   authorization.json
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,

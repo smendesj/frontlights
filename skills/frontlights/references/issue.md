@@ -43,11 +43,8 @@ product choices into technical assumptions. The acceptance criteria themselves a
 
 ## Approval
 
-Ask approval of the revision by link and stamp, under `SKILL.md`, "Show before approval": the
-body in `.frontlights/issue.md`, with each previous revision kept as a file, its
-stamp in the question, and next to the link the sections and decisions of r1 or, from r2 on, the
-real diff against the previous revision. A summary or a path is not approval. Ask explicit approval
-with `AskUserQuestion`, with options, and record the answer with `stamp --approve`. Keep the approved text in
+Ask approval of the revision by link and stamp, following the steps of `SKILL.md`, "Show before
+approval"; the file is `.frontlights/issue.md`. Keep the approved text in
 `.frontlights/issue.md` until stage 5 publishes it: this approval publishes nothing and does not
 authorize code, because the GitHub write is the approval of stage 5. Later material changes
 invalidate downstream approvals. Every revision of an approved body (r2, r2.1, and so on) is a

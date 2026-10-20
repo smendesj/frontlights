@@ -157,6 +157,25 @@ class StampTests(unittest.TestCase):
         self.assertIn('--expect', result['message'])
         self.assertFalse((self.root / '.frontlights' / 'approvals.json').exists())
 
+    def test_approve_with_check_is_an_invalid_usage(self):
+        code, result = self.run_stamp(str(self.doc), '--revision', 'r1', '--approve', '--answer', ANSWER,
+                                      '--expect', stamp_of(CONTENT), '--check')
+        self.assertEqual(code, 1)
+        self.assertFalse(result['ok'])
+        for phrase in ('--approve', '--check', 'não se combinam', '--expect'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, result['message'])
+        self.assertNotIn('nenhuma aprovação registrada', result['message'])
+        self.assertFalse((self.root / '.frontlights' / 'approvals.json').exists())
+
+    def test_help_of_approve_names_expect(self):
+        done = subprocess.run([sys.executable, str(SCRIPT), 'stamp', '--help'], capture_output=True,
+                              stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(done.returncode, 0)
+        text = ' '.join(done.stdout.decode('utf-8', errors='replace').split())  # a ajuda sai no código de página do console
+        self.assertIn('record the approval (requires --answer and --expect with the stamp shown in the question)',
+                      text)
+
     def test_edit_between_the_question_and_the_approve_writes_nothing(self):
         shown = stamp_of(CONTENT)
         self.doc.write_bytes(CONTENT + b'Editado depois da pergunta.\n')

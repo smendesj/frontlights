@@ -72,7 +72,8 @@ class TheRuleTests(unittest.TestCase):
         for phrase in ('at most five lines', 'in the `preview` of the approve option',
                        'for r1, the sections of the document and the decisions it fixes, each with its section of the artifact',
                        'from r2 on, the real diff between the stored revisions', 'git diff --no-index --stat',
-                       'never a summary written by the session', 'Keep each previous revision as a file'):
+                       'never a summary written by the session',
+                       'keep each previous revision as `<name>-r<N>.<ext>` beside the file'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
@@ -128,7 +129,37 @@ class TheRuleTests(unittest.TestCase):
                 self.assertEqual(homes, ['skills/frontlights/SKILL.md'])
 
 
+class TheRecordsTreeTests(unittest.TestCase):
+    def tree(self):
+        text = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        return text.split('## Registros', 1)[1].split('```', 2)[1]
+
+    def test_the_tree_lists_the_approvals_file(self):
+        tree = self.tree()
+        self.assertIn('approvals.json', tree)
+        for phrase in ('frontlights.py stamp --approve', 'path', 'revision', 'sha256 de 12 caracteres', 'bytes',
+                       'answer literal', 'stage', '-03:00'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, tree.split('approvals.json', 1)[1])
+
+    def test_the_tree_names_the_kept_revisions(self):
+        tree = self.tree()
+        for phrase in ('<documento>-r<N>.md', '`issue-r1.md` ao lado de `issue.md`', '"Show before approval"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, tree)
+
+
 class TheStagesPointToTheRuleTests(unittest.TestCase):
+    def test_issue_and_protocol_point_to_the_rule_without_restating_its_steps(self):
+        for parts in (('skills', 'frontlights', 'references', 'issue.md'),
+                      ('skills', 'frontlights', 'docs', 'protocol.md')):
+            # a árvore dos registros de protocol.md descreve o approvals.json e nomeia quem o grava
+            text = flat(*parts).split('## Registros', 1)[0]
+            with self.subTest(file=parts[-1]):
+                self.assertIn('`SKILL.md`, "Show before approval"', text)
+                self.assertNotIn('--approve', text)
+                self.assertNotIn('git diff --no-index', text)
+
     def test_the_stage_texts_of_skill_md_point_to_the_rule(self):
         text = skill()
         short = text.split('- **Short.**', 1)[1].split('- **Full.**', 1)[0]

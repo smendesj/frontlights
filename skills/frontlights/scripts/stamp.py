@@ -2,7 +2,7 @@
 """Approval stamp (issue 61): binds a user's approval of a document to the exact content of the file.
 
 Usage: frontlights.py stamp <file> [--root <project>] [--revision rN] [--approve --answer "<literal answer>"
-       [--stage N]] [--check] [--expect <sha12>]   (--approve requires --expect)
+       [--stage N]] [--check] [--expect <sha12>]   (--approve requires --expect and does not combine with --check)
 
 Prints one JSON object: `ok`, `exitCode`, `operation` ("stamp"), `message` (Portuguese, for the user), `path`
 (relative to --root when the file is inside it, else as given; forward slashes), `revision` (from --revision, else
@@ -12,7 +12,8 @@ null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and
              entries kept, extra keys included): path, revision, sha256, bytes, answer (verbatim), stage (when
              given) and at (ISO-8601 in America/Sao_Paulo, with its offset, never UTC). Requires --answer and
              --expect with the stamp shown in the question; when the file's stamp differs from it, nothing is
-             written and it exits 1 (the file changed since the question: ask the approval again).
+             written and it exits 1 (the file changed since the question: ask the approval again). Together with
+             --check it is a usage error (exit 1, nothing written): --check runs later, right before the write.
   --check    compares the file with the last approval recorded for the same path: 0 when the stamp matches, 1 when
              it differs (with `approved`: the revision and sha256 of that approval) or when there is none.
   --expect   0 when the stamp equals the given one, 1 otherwise.
@@ -49,7 +50,7 @@ def build_parser():
     parser.add_argument('file', help='the document to stamp')
     parser.add_argument('--root', default='.', help='the project whose .frontlights/approvals.json is used')
     parser.add_argument('--revision', help='the revision of the document, such as r2')
-    parser.add_argument('--approve', action='store_true', help='record the approval (requires --answer)')
+    parser.add_argument('--approve', action='store_true', help='record the approval (requires --answer and --expect with the stamp shown in the question)')
     parser.add_argument('--answer', help="the user's answer, verbatim")
     parser.add_argument('--stage', type=int, help='the stage of the approval')
     parser.add_argument('--check', action='store_true', help='compare with the last approval of the same path')
@@ -86,6 +87,9 @@ def read_approvals(path):
 
 
 def run(args):
+    if args.approve and args.check:
+        raise Refusal('--approve e --check não se combinam: a aprovação confere o carimbo com --expect, e o --check '
+                      'roda depois, logo antes da escrita que a aprovação cobre; nada foi gravado')
     if args.approve and args.answer is None:
         raise Refusal('--approve precisa de --answer com a resposta literal do usuário')
     if args.approve and args.expect is None:

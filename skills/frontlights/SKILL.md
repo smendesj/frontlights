@@ -111,8 +111,8 @@ the RoadS progress-report draft. Before each approval:
    five lines: for r1, the sections of the document and the decisions it fixes, each with its
    section of the artifact; from r2 on, the real diff between the stored revisions (the lines added
    and removed, from `git diff --no-index --stat` and the changed lines between the kept file of the
-   previous revision and the new one), never a summary written by the session. Keep each previous
-   revision as a file, so the diff can be computed.
+   previous revision and the new one), never a summary written by the session. To compute that diff,
+   keep each previous revision as `<name>-r<N>.<ext>` beside the file (`issue-r1.md` beside `issue.md`).
 4. Record the user's approval with `frontlights.py stamp <file> --root <project> --revision rN
    --approve --answer "<literal answer>" --expect <the stamp in the question>` (with `--stage N`);
    a refusal means the file changed since the question, so nothing is recorded: ask the approval

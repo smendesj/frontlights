@@ -19,7 +19,7 @@ Expected, in this order:
    section follows `templates/grilling-section.html` (what the question decides, the concepts, where the
    project already does this, what each option changes, before and after when there is a screen, the
    recommendation labelled as opinion, the choice after the answer), with the empty fields omitted. Where the
-   project already does this shows path:line and a real excerpt of up to about 15 lines, with any secret value
+   project already does this shows path:line and a real excerpt of up to 15 lines, with any secret value
    replaced by `***`. Each option's `preview` stays text (files, pattern fit, effort, seam) and every decision
    question names its section. Each section is a small edit of the local source published on the same URL;
    there is never one page per round: the URL never changes and the page is never rewritten whole.

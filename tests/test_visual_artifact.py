@@ -87,12 +87,24 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
 
     def test_code_enters_the_page_data_never(self):
         artifact = self.artifact()
-        for phrase in ("A real excerpt of the project's code (up to about 15 lines, with its path)",
+        for phrase in ("A real excerpt of the project's code (up to 15 lines, with its path)",
                        'replaced by `***`', '(password, token, key, connection string)',
                        "real records, people's data, real endpoints and client or organization names stay out"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
         self.assertNotIn('only fictitious data', artifact)
+
+    def test_the_code_excerpt_limit_is_up_to_15_lines_everywhere(self):
+        for parts, phrase in ((('skills', 'frontlights', 'references', 'grilling.md'), 'up to 15 lines'),
+                              (('skills', 'frontlights', 'docs', 'security.md'), 'até 15 linhas'),
+                              (('skills', 'frontlights', 'templates', 'grilling-section.html'), 'até 15 linhas'),
+                              (('README.md',), 'até 15 linhas'),
+                              (('evals', 'grilling-artifact.md'), 'up to 15 lines')):
+            text = flat(read(*parts))
+            with self.subTest(file=parts[-1]):
+                self.assertIn(phrase, text)
+                self.assertNotIn('about 15', text)
+                self.assertNotIn('cerca de 15', text)
 
     def test_the_section_template_has_its_fields(self):
         path = ROOT / 'skills' / 'frontlights' / 'templates' / 'grilling-section.html'
@@ -171,7 +183,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         raw_security = read('skills', 'frontlights', 'docs', 'security.md')
         self.assertIn('## Artefato do grilling', raw_security)
         artifact = flat(section_containing(raw_security, 'Artefato do grilling'))
-        for phrase in ('trecho real do código do projeto', 'até cerca de 15 linhas',
+        for phrase in ('trecho real do código do projeto', 'até 15 linhas',
                        'o valor de todo segredo (senha, token, chave, string de conexão) trocado por `***`',
                        'nenhum registro real, dado de pessoa, endpoint real, nome de cliente ou organização entra na página',
                        'fica fora da máquina', 'nunca do artefato', 'artefato indisponível'):

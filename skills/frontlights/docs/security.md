@@ -43,7 +43,7 @@ pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights 
 
 A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
 host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso separa código de dado.
-Código entra: um trecho real do código do projeto, de até cerca de 15 linhas e com o caminho, com o valor de
+Código entra: um trecho real do código do projeto, de até 15 linhas e com o caminho, com o valor de
 todo segredo (senha, token, chave, string de conexão) trocado por `***`. Dado nunca entra: o antes é montado do
 template real do componente (HTML e CSS lidos do repositório) e preenchido com dados inventados, e nenhum
 registro real, dado de pessoa, endpoint real, nome de cliente ou organização entra na página, nem dentro de um
