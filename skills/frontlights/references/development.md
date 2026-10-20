@@ -657,7 +657,8 @@ offers the release again with everything accumulated.
   `homolog.suites.full.argv` (this repository's, in "Which tests run when"), the release runs only what no impact
   record of the release's issues ran whole and green on the same tree: the run hands the suite a file with the
   `complete` of each impact record (read from the issue's worktree, the `path` of its authorization entry) that is
-  green, from a clean tree, of a known head whose commit tree and file hashes are the tip's, and the suite runs the
+  green, from a clean tree, of a known head whose commit tree is the tip's (the bytes on disk are not compared), with no
+  tracked file hidden from `git status` in that worktree (skip-worktree, assume-unchanged), and the suite runs the
   rest. Any other record (red, from another tree, with a change not committed, a full or a report-less one, a
   worktree already gone) adds nothing, and its reason is kept. The release record names what was skipped, where it
   came from and what did not count (`covered`, `docs/protocol.md`); `suite-gate --release` and `release-plan` judge it

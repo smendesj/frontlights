@@ -1016,6 +1016,27 @@ class ReleaseCoveredTests(CoveredTestCase):
         self.assertEqual((code, result.get('state')), (0, 'green'), result)
         self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': ['tests.test_a']})
 
+    def hidden_from_status(self, flag):
+        """Issue 57: a tracked file marked with `flag` and changed in the issue worktree leaves `git status`, and the
+        suite ran on other content; the record does not count and the reason names the file."""
+        worktree = self.issue(1)
+        self.git(worktree, 'update-index', flag, 'issue-1.txt')
+        (worktree / 'issue-1.txt').write_bytes(b'outro conteudo\n')
+        self.assertEqual(self.git(worktree, 'status', '--porcelain', '--', 'issue-1.txt').stdout.strip(), '')
+        self.deliver(1)
+        code, result = self.release()
+        self.assertEqual((code, result.get('state')), (0, 'green'), result)
+        self.assertEqual(json.loads(self.received.read_text(encoding='utf-8')), {'complete': []})
+        refused = self.saved()['covered']['refused']
+        self.assertEqual([item['issue'] for item in refused], [1])
+        self.assertIn('issue-1.txt', refused[0]['reason'])
+
+    def test_a_skip_worktree_file_changed_in_the_issue_worktree_takes_its_record_out(self):
+        self.hidden_from_status('--skip-worktree')
+
+    def test_an_assume_unchanged_file_changed_in_the_issue_worktree_takes_its_record_out(self):
+        self.hidden_from_status('--assume-unchanged')
+
     def test_a_record_that_does_not_count_contributes_nothing_and_its_reason_is_recorded(self):
         """Cada issue entra na main local logo depois do próprio registro; só a última tem a árvore da ponta."""
         self.issue(1)                                       # verde, mas a ponta andou depois dela
