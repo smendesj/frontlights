@@ -26,7 +26,7 @@ class TestDataRuleTests(unittest.TestCase):
 
     def test_the_section_says_what_is_created_how_where_and_how_it_is_removed(self):
         for phrase in ('never a reason to skip a case', 'non-owner', 'second account or tenant',
-                       "the product's own endpoints", 'disposable local database', 'Never production',
+                       "the product's own endpoints", 'the local development database', 'Never production',
                        "real person's or customer's", 'dados-de-teste.json', '`removido: true`',
                        'in reverse order of creation', 'only those ids', 'exact `DELETE` statement',
                        'git-ignored local file', 'Every brief handed to a subagent'):

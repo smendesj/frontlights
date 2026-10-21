@@ -104,21 +104,7 @@
           "health": "http://127.0.0.1:{port}/health",
           "timeoutSeconds": 60
         }
-      ],
-      "copyDatabase": {
-        "argv": [
-          "python",
-          "COPY_DB_SCRIPT"
-        ],
-        "timeoutSeconds": 600
-      },
-      "dropDatabase": {
-        "argv": [
-          "python",
-          "DROP_DB_SCRIPT"
-        ],
-        "timeoutSeconds": 120
-      }
+      ]
     }
   },
   "checks": {

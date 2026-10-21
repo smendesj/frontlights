@@ -478,8 +478,8 @@ exemplo em `examples/browser-app/` mostra o fluxo de ponta a ponta.
 permissões entre contas criam os usuários, contas ou tenants, empresas, perfis, concessões e demais dados
 que o `Fluxo:` precisa para rodar completo (o não-dono da mesma conta, um login de outra conta, um perfil
 restrito) e os removem no fim. Falta de login nunca é motivo para pular um caso, e nenhum texto delegado a
-um subagente proíbe a criação. Só no banco local e descartável, pelos endpoints do próprio produto, nunca em
-produção nem com dado de pessoa ou cliente real. Os ids criados ficam em `dados-de-teste.json` (nunca login
+um subagente proíbe a criação. Só no banco de desenvolvimento local (o de homologação), pelos endpoints do próprio
+produto, nunca em produção, staging ou banco remoto compartilhado, nem com dado de pessoa ou cliente real. Os ids criados ficam em `dados-de-teste.json` (nunca login
 ou senha), a remoção é conferida item a item, e o que o produto não apaga (excluir um usuário só o
 anonimiza) é listado com o `DELETE` exato, só dos ids criados, para você aprovar.
 
@@ -499,15 +499,16 @@ pasta é sincronizada e compartilhada com a empresa: só dados de teste aparecem
 fica em `.frontlights/issues/<n>/browser/` como antes (os do resumo na worktree principal).
 
 Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
-pronto para assistir. Com o sim, o teste roda em um Chrome de janela visível, nunca oculta e com
-perfil descartável, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
+pronto para assistir. Com o sim, o teste roda em um Chrome dirigido pelo Playwright, de janela visível e
+maximizada, nunca oculta e com perfil descartável (nunca o navegador embutido do Claude nem o Claude in Chrome, que só
+abre a aba da prévia), no banco de desenvolvimento local, que é o de homologação, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
 na página "ANTES: main") e depois a branch entregue ("DEPOIS: branch X"). Cada caso roda duas
 vezes, os avisos ficam na tela o tempo necessário para serem lidos e a janela de cada passagem
 permanece aberta cerca de 5 minutos no fim. Fechar a janela (ou os 5 minutos acabarem) avisa quem
 conduz o teste: ao fechar a janela da ANTES, a DEPOIS começa; ao fechar a da DEPOIS, o relatório
 chega, sem ninguém ficar esperando à toa. Prefere-se o back real e, quando o assunto é permissão, um perfil restrito
 real: o usuário de teste muda de perfil pelo endpoint do próprio produto, depois de você confirmar
-que o banco por trás é descartável, e volta no fim. O valor original fica salvo em disco antes da
+que o banco por trás é o de desenvolvimento local, nunca um remoto compartilhado, e volta no fim. O valor original fica salvo em disco antes da
 mudança (só o campo de perfil, nunca a linha inteira) e é conferido depois de desfazer. Resposta
 forçada por interceptação de rede só complementa e é declarada no relatório. O servidor de teste
 usa porta própria e o Frontlights encerra só o que ele mesmo subiu. Se a sua resposta for "rodar
@@ -550,7 +551,8 @@ Limites: só o Windows foi exercitado (POSIX não). O `inspect` confere nesses b
 `serve` e do `checks` que dependem só do config: formato dos blocos, shell embutido nos argv de
 `checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Confere também
 `browserTest.isolated` (portas que nunca são as da prévia nem do serve, `baseUrl` na porta de um processo
-isolado, `cwd` relativo desses processos, passos do banco sem shell) e o bloco `preview` (worktree dentro do
+isolado, `cwd` relativo desses processos, e recusa `copyDatabase` e `dropDatabase`, que saíram: o teste assistido
+roda no banco de desenvolvimento local, sem cópia) e o bloco `preview` (worktree dentro do
 `--root`, branch, `baseUrl` local e processos, com as regras do `serve preview`). Ele recusa o
 config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd` de
 `checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o de `preview.processes`
