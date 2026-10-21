@@ -519,6 +519,42 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → '
                       'oferta da release', flat('README.md'))
 
+    def test_a_fix_in_the_free_test_is_made_at_once_and_its_criteria_go_in_one_batch(self):
+        """Issue 69, S4: uma correção pedida no teste livre é feita na hora na branch da issue e mesclada de novo na
+        main local; cada correção vira um CA novo no rascunho local; ao fechar a janela, um lote aprovado por link e
+        carimbo é escrito só por acréscimo, e só então vem a release; sem correção, a release vem direto."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        fix = body.split('- **A fix asked in the free test.**')[1].split('- **Window closed, next step.**')[0]
+        for phrase in ('fixes it at once on the branch of the issue',
+                       'or in a new slice worktree of that issue ("Slices in order", above)',
+                       'TDD by default ("Which tests run when", above)',
+                       'merges the branch of the issue into the local main again by steps 1, 4 and 5 of "Into the '
+                       'local main"',
+                       'the `authorize` check included',
+                       'the free test itself is the evidence of the fix, and the watched run is not rerun',
+                       'the user reloads the page', 'the window stays open',
+                       '`.frontlights/issues/<n>/teste-livre-cas.md`', 'one box per fix',
+                       'ticked (`- [x]`) only when the user checked the fix in the free test',
+                       'open (`- [ ]`) otherwise',
+                       'leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion")'):
+            with self.subTest(part='fix', phrase=phrase):
+                self.assertIn(phrase, fix)
+        closed = body.split('- **Window closed, next step.**')[1]
+        for phrase in ('With fixes, the batch before the release',
+                       'by link and stamp (`SKILL.md`, "Show before approval")',
+                       'one approval for the whole file',
+                       'the write rule of the leftover (body captured, append only, difference checked, reread)',
+                       'Without fixes, the release comes directly',
+                       'the release question comes only after the window is closed'):
+            with self.subTest(part='closed', phrase=phrase):
+                self.assertIn(phrase, closed)
+        self.assertLess(closed.index('With fixes, the batch before the release'),
+                        closed.index('Only then it goes on to "The release"'))
+        self.assertEqual(' '.join(text.split()).count('teste-livre-cas.md'), 1)
+        self.assertNotIn('Lançar a release', body)
+
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
         segurança e no README."""

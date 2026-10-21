@@ -115,6 +115,16 @@ class FreeTestHandoffTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, lines[free[0]])
 
+    def test_the_free_test_line_records_the_fixes_and_their_batch(self):
+        """Issue 69, S4: a linha do teste livre registra as correções, os commits, o arquivo do lote, o carimbo e a
+        resposta literal."""
+        line = [line for line in read('skills', 'frontlights', 'templates', 'handoff.md').splitlines()
+                if line.startswith('- Teste livre na main local')][0]
+        for phrase in ('cada correção pedida', 'o commit dela', '`.frontlights/issues/<n>/teste-livre-cas.md`',
+                       'o carimbo', 'a resposta literal', 'a escrita só por acréscimo'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, line)
+
     def test_the_release_is_offered_once_the_free_test_window_is_closed(self):
         self.assertIn('once the window of its free test is closed', ' '.join(read(
             'skills', 'frontlights', 'references', 'development.md').split()))

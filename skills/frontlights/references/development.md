@@ -594,10 +594,27 @@ says that the window is theirs to test the local main as they like and that clos
   the release, the next issue's free test covers everything accumulated in the local main.
 - **Skipping it.** Closing the window right away is how the user skips it; nothing is asked and nothing is recorded
   as a failure.
+- **A fix asked in the free test.** When the user asks for a fix while the window is open, the session fixes it at
+  once on the branch of the issue, in the issue's worktree or in a new slice worktree of that issue ("Slices in
+  order", above), TDD by default ("Which tests run when", above), then merges the branch of the issue into the local
+  main again by steps 1, 4 and 5 of "Into the local main" (covered, the `authorize` check included, with the gate of
+  the watched run already answered): the free test itself is the evidence of the fix, and the watched run is not
+  rerun. When the product needs a restart to pick the change up, the session runs `serve stop` and `serve start` on
+  the main worktree ("The free test window"); then the user reloads the page, and the window stays open. Each fix
+  becomes a new acceptance criterion of the issue, first in a local draft, `.frontlights/issues/<n>/teste-livre-cas.md`,
+  one box per fix, in the user's language: `- [x] Correção (do teste livre): <what is now true>. Evidência: <commit
+  of the fix>, conferida pelo usuário no teste livre` (plus the fix's tests, when they ran), ticked (`- [x]`) only
+  when the user checked the fix in the free test, and open (`- [ ]`) otherwise, with `Evidência que fecha:` in place
+  of `Evidência:`. They are leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion"): a
+  label `P<n>` and no `S<n>` id, and they do not count toward the cap of five slices ("A short issue holds at most
+  five slices").
 - **Window closed, next step.** The holder's exit wakes the session, which stops what it started for the free test
-  (`serve stop` on the main worktree, "The free test window"), writes
-  the handoff's line "Teste livre na main local" and only then goes on to "The release", below: the release
-  question comes only after the window is closed, never while it is open.
+  (`serve stop` on the main worktree, "The free test window") and writes the handoff's line "Teste livre na main
+  local". With fixes, the batch before the release: the draft is the one file with every new criterion, approved
+  by link and stamp (`SKILL.md`, "Show before approval"), one approval for the whole file, and written into the
+  acceptance criteria of the issue body by the write rule of the leftover (body captured, append only, difference
+  checked, reread), in `references/issues.md`. Without fixes, the release comes directly. Only then it goes on to "The
+  release", below, with the batch written or with no fix: the release question comes only after the window is closed, never while it is open.
 
 ## The release: from the local main to GitHub
 

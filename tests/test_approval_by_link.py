@@ -88,7 +88,7 @@ class TheRuleTests(unittest.TestCase):
     def test_the_scope_names_every_document_and_keeps_commands_in_full(self):
         text = rule()
         for phrase in ('the issue body of stage 4 and its revisions', 'the plan and the bodies of stage 5',
-                       'the conversion of a family', 'the findings batch and its leftover criteria',
+                       'the conversion of a family', 'the findings batch and its leftover criteria', 'the batch of new criteria of the free test',
                        'the closeout list and the RoadS progress-report draft',
                        'the cleanup of merged work asks nothing',
                        'Commands are not documents', 'references/browser-testing.md', 'the denied operations',

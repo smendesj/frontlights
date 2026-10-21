@@ -223,5 +223,13 @@ class FreeTestWindowTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.free)
 
+    def test_a_fix_request_is_the_one_case_the_session_edits_code_in_the_free_test(self):
+        """Issue 69, S4: um pedido de correção é o único caso em que a sessão edita código com a janela aberta."""
+        for phrase in ('A fix the user asks for is the one case in which the session edits code while the window is '
+                       'open', '`development.md`, "The free test on the local main"',
+                       'even then it never writes to the database on its own'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.free)
+
 if __name__ == '__main__':
     unittest.main()
