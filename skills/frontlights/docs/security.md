@@ -7,7 +7,7 @@ aqui ficam os limites de aplicação dessas regras.
 ## Hooks e escritas em `.git/`
 
 O Frontlights não instala hook nenhum. A regra de que a main local do projeto, a homologação, nunca é enviada
-é regra da skill, não barreira. O hook de lembrete, `templates/frontlights-prompt-hook.py`, é um
+à main remota (o conteúdo dela só sai para o nome da branch da release, pelo push da release) é regra da skill, não barreira. O hook de lembrete, `templates/frontlights-prompt-hook.py`, é um
 modelo que o usuário copia para o `~/.claude/hooks/` e registra no próprio `settings.json`; ele só
 injeta um texto no turno, lê o prompt e o conteúdo do transcrito (só para procurar duas marcas de que o
 Frontlights já foi aberto) e sai sempre com 0, sem bloquear. As escritas da skill dentro de `.git/` são duas e
@@ -74,7 +74,7 @@ remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia 
 nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
 `browser_gate`, o único portão; um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão, e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
-remota só recebe a PR da release, operação negada. É conferência prévia, não barreira: o `authorize` não lê
+remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota). É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que o teste assistido foi respondido (quem prova é o `browser-gate`), e um modelo que não o chame não é impedido por ele.
 
 ## `homolog sync` e `homolog bundle`

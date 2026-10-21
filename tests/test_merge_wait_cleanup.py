@@ -168,6 +168,8 @@ class CloseoutReferenceTests(unittest.TestCase):
                        '(no `git worktree remove` after a failed `copy_records`',
                        'A failed copy stops that item, so the worktree keeps its records',
                        'A local release branch (`<branch_prefix>release-<date>[-N]`',
+                       'exists only when the release took the old path',
+                       'with the refspec push there is no local release branch to remove',
                        '`merged_release_branch` and only `git branch -D`', 'one not merged yet is left alone and not listed',
                        'carries `ask: true`, `askReason` `ignored_files_besides_dependencies` and `askIgnored`',
                        'it is the only candidate asked about',
@@ -325,7 +327,8 @@ class DocsAndEvalsTests(unittest.TestCase):
     def test_the_eval_the_runbook_and_the_record_cover_the_case(self):
         text = flat('evals', 'merge-wait-and-cleanup.md')
         for phrase in ('the session says in one line that it waits for the merge', 'the notification alone is never taken as proof',
-                       '"Lançar a release com as issues #a, #b agora?"', 'pushes only that branch', '`git pull --ff-only`',
+                       '"Lançar a release com as issues #a, #b agora?"', 'pushes only that branch',
+                       '`git push origin main:refs/heads/<release branch>`', '`git pull --ff-only`',
                        '`contained_in_base_without_pull_request`', 'marcar no corpo de #P a linha L', 'the item that cites two issues is listed as not ticked',
                        'exactly the listed line with `[ ]` turned into `[x]`', '`tick-check` answers `ok` before the write and on the reread',
                        'before any closing question and without asking, the cleanup of the merged work', 'with no `--force`',

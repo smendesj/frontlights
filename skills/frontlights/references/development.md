@@ -82,7 +82,8 @@ remote, before the first branch of the run is cut; a project without a remote (`
 `origin`) has nothing to sync, and the session says so in one line. The helper is `scripts/homolog.py`, reached as
 `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog <operation> ...`; it prints one JSON object with
 `ok`, `exitCode`, `operation` and `message`: exit code 0 done, 1 refused or failed, 2 a question for the user.
-The local main is never pushed: a rule of the skill.
+The local main is never pushed to the remote main: its content leaves only under the release branch name, by the
+refspec push of the release ("The release", below), and `origin/<base>` stays a denied write.
 
 **The sync.** `homolog sync --root <main worktree> --base <base> [--remote origin]` is the covered merge of
 `origin/<base>` into the local main: it requires the main worktree to have `<base>` checked out, no tracked
@@ -608,10 +609,18 @@ offers the release again with everything accumulated.
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.
-- **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
-  `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
+- **Branch and pull request (covered).** On "Sim", in the main worktree: `git push origin main:refs/heads/<release branch>`
+  (one push of the local main's tip to the release branch name on GitHub, `<base>` in place of `main` on the left
+  when the base has another name; never to the remote main, and no local release branch is created; the release
+  branch is the only branch of the flow that is pushed), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
   #a, #b" --body-file <file>` (the title names the slugs of the work without an issue too: "Release <date>: issues
-  #a; melhoria-x", or only the slugs when the release has no issue). The body follows `templates/pr.md` (the model of the pull request), in the user's
+  #a; melhoria-x", or only the slugs when the release has no issue).
+  **When the host refuses the refspec push.** The host's permission controls may refuse it (a user rule such as
+  "never push to main" may read `main:refs/heads/...` as a push to main): then ask with `AskUserQuestion`
+  "Lançar pelo caminho antigo, com a branch local <release branch>?", "Sim" first and "Não" second, and on "Sim" take
+  the old path: `git branch <release branch> <base>` and `git push -u origin <release branch>`, then the same
+  `gh pr create`; the cleanup removes that local branch once it is merged (`references/closeout.md`, step 5). On
+  "Não" nothing is pushed and the work stays in the local main. The body follows `templates/pr.md` (the model of the pull request), in the user's
   language, with the project's domain vocabulary: **Resumo** and **Evidência** once per issue (what it delivers with the smallest visual that makes its
   point clear; before and after, from the prints of each issue's watched run, its gate (the watched run), and the tests of
   its checkpoints and the independent review only when they ran, records that already exist, never invented; a print is cited by its file
