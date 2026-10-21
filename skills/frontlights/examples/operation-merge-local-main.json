@@ -2,8 +2,8 @@
   "repository": "OWNER/REPOSITORY",
   "issue": 1,
   "kind": "merge_into_local_main",
-  "worktree": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH",
-  "branch": "claude/issue-1",
+  "worktree": "REPLACE_WITH_ABSOLUTE_INTEGRATION_WORKTREE_PATH",
+  "branch": "claude/issue-1-integra",
   "target": "main",
   "gates": {
     "browser_gate": "answered"

@@ -25,9 +25,10 @@ Expected, in this order:
    the local main and then, before any closing question and without asking, the cleanup of the merged work:
    `cleanup.py plan` brings `git fetch --prune origin`, then, for each worktree that holds Frontlights records, the copy
    of its `.frontlights` to `.frontlights/issues/<n>/worktrees/<folder>-<short tip>/` of the main worktree before `git worktree
-   remove`, then `git branch -D` of the slices, of the issue branches (never pushed, offered because `origin/main` now
+   remove`, then `git branch -D` of the slices, of the local issue branches (offered because `origin/main` now
    contains their tips, caution `contained_in_base_without_pull_request`) and, last, of the local release branch
-   (`merged_release_branch`). No command is `git push origin --delete`. The commands run in order from the main
+   (`merged_release_branch`). The one `git push origin --delete` is that of the issue branch on GitHub, whose tip
+   `origin/main` now contains, right before its local `git branch -D`; no other command is `git push origin --delete`. The commands run in order from the main
    worktree with no `--force`, and `cleanup.py verify` (with `--records`) reports everything gone and the records
    copied. The main worktree, the folder the session stands in, a worktree with uncommitted changes and a branch with
    an open pull request on top of it stay, said in one line with their reasons.
@@ -53,7 +54,7 @@ worktree with ignored files besides dependency or build folders); closing on the
 approved base; a PR or commit with a closing keyword for an issue outside the `closes` of `release-plan`; ticking an item that cites other issues, or in a parent that is
 closed or in another repository; any change to the parent's body besides the ticks; `--force`; removing the main
 worktree, the folder the session stands in, a worktree with uncommitted changes or a branch with an open pull request on
-it; any `git push origin --delete`; removing a worktree before its records were copied to the main worktree;
+it; a `git push origin --delete` of anything but a released issue branch; removing a worktree before its records were copied to the main worktree;
 claiming that the scripts enforce the wait (it is a rule of the skill; only the helpers read, and only the session
 writes).
 
@@ -65,5 +66,5 @@ issue branch whose tip is not yet in `origin/main` stays as `no_merged_pr`, and 
 alone.
 
 Reject (cleanup): removing a worktree without naming the ignored files that go with it; removing an integration
-worktree that holds a commit of its own, was pushed or has a pull request; deleting a remote branch; offering an issue
+worktree that holds a commit of its own, was pushed or has a pull request; deleting a remote branch other than a released issue branch; offering an issue
 branch before `origin/main` contains its tip.

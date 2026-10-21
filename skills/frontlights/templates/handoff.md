@@ -4,7 +4,7 @@
 - Authorization reference, expiration, concurrency and permitted operations:
 - Monitoring arrangement, confirmation and phone-connection evidence:
 - Repository path, branch, base and HEAD:
-- Merge na main local (a branch da issue é cortada da main local e nunca enviada; a main local trazida para a branch da issue; o portão, o `browser-gate` respondido ou `not_needed`, com a evidência; os testes e a revisão só quando rodaram; a saída do `authorize` para `merge_into_local_main`; o commit do merge na main local):
+- Merge na main local (a branch da issue criada no GitHub por `gh issue develop` e enviada a cada fatia mesclada; a main local trazida para a branch local de integração `<prefixo>issue-<n>-integra`, nunca para a branch da issue; o portão, o `browser-gate` respondido ou `not_needed`, com a evidência; os testes e a revisão só quando rodaram; a saída do `authorize` para `merge_into_local_main`; o commit do merge na main local):
 - Teste livre na main local (numa issue com tela: a janela aberta sem pergunta depois do merge na main local e do bundle, o `serve start` na worktree principal, o horário em que a janela fechada acordou a sessão, o `serve stop`; "pulado" quando o usuário fechou a janela logo que ela abriu; sem tela, no terminal: os comandos dados e a resposta literal da pergunta de fim do teste, com o horário do "Sim, terminei"; cada correção pedida, o commit dela e o merge de novo na main local; o lote `.frontlights/issues/<n>/teste-livre-cas.md` com o carimbo, a resposta literal da aprovação e a escrita só por acréscimo no corpo da issue, ou "sem correções"; só depois dele vem a oferta da release):
 - Repository map and approved decisions:
 - Files changed / diff hash / files hash:

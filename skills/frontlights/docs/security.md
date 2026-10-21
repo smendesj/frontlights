@@ -70,11 +70,16 @@ permissões humanas e nativas vigentes.
 homologação: acumula as issues cujo teste assistido foi respondido (ou não era preciso), e a issue fecha só com a release que a leva
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
-remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
-nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
+remota), só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue,
+local e nunca enviada; a branch da issue nunca recebe a main local) ou do trabalho sem issue (a operação nomeia
+`issue` ou `direct`, nunca os dois; nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
 `browser_gate`, o único portão; um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão, e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
-remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota). É conferência prévia, não barreira: o `authorize` não lê
+remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota).
+A branch da issue é a única branch de trabalho enviada antes da release: criada no GitHub a partir da `origin/<base>`
+por `gh issue develop` e enviada a cada fatia mesclada, sob a autorização permanente, só com os commits da issue,
+nunca com um commit que só está na main local (`references/development.md`, "Slices in order"); as branches das
+fatias, a da prévia e a main local nunca são enviadas. É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que o teste assistido foi respondido (quem prova é o `browser-gate`), e um modelo que não o chame não é impedido por ele.
 
 ## `homolog sync` e `homolog bundle`
@@ -251,15 +256,18 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
   contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
   `contained_in_base_without_pull_request`), sem PR aberta a partir da branch nem em cima dela; a branch local da
-  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; a branch remota nunca
-  entra: o GitHub apaga a branch de cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch
-  --prune` tira a referência que sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
+  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; das branches remotas, só
+  a da issue (a entrada da issue sem `slice`, nunca a `-integra`, a da release ou uma protegida) entra, quando a ponta
+  dela no GitHub já está contida em `origin/<base>`; nenhuma outra branch remota entra: o GitHub apaga a branch de
+  cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch --prune` tira a referência que
+  sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
   `ignored_files` lista os nomes; a worktree de integração local (`--integration`) só entra sem PR, nunca enviada e
   sem commit próprio fora das PRs entregues (um merge conta como próprio quando carrega conteúdo, como um conflito
   resolvido à mão);
-- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git branch -D`) são montados
+- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git push origin --delete`
+  da branch da issue lançada, `git branch -D`) são montados
   só com um caminho de worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não
-  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca `git push origin --delete`. O
+  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca outro `git push origin --delete`. O
   `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
   oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
 - o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do

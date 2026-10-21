@@ -297,15 +297,16 @@ When the user will watch:
   every edge of the page are inside it; when something is cut off, resize and check
   again, and never go on with a cut-off window.
 - **Two passes, same scenario and same account.** ANTES runs the `Fluxo:` on the
-  approved base of the batch (`main`, or the default branch); an issue stacked on a
+  remote base of the batch (`origin/<base>`, the base the branch of the issue was created from),
+  never on the local main (`development.md`, "Slices in order"); an issue stacked on a
   parent that is not part of the batch uses that parent's branch.
   Serve it from a checkout of that
-  base, a detached-HEAD worktree made with `git worktree add` because the base
-  branch is already checked out elsewhere; for that stacked issue the
+  base, a detached-HEAD worktree made with `git worktree add` at `origin/<base>`; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
   --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
   delivered state (the branch of the issue, or the local integration of it with the slices that
-  closed their loop and are not merged yet), served from its worktree. Give both servers an `auto` port of their
+  closed their loop and are not merged yet), served from its worktree; both passes run on the local
+  development database. Give both servers an `auto` port of their
   own. A process with a fixed port runs one pass at a time, in this order: stop the
   issue's own server (the standard order started it earlier), start ANTES, run it,
   `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts, then
@@ -332,8 +333,8 @@ When the user will watch:
   Without the block, the passes run on the issue's own serve as above.
 - **A strip on every page.** The test injects a fixed strip into the page, pinned to the
   top edge across the full width, thin, above every other element and never
-  covered by a popup, toast or dialog (an init script or a DOM node, visible in the screenshots): "ANTES: <base>" ("ANTES: main"
-  on the main, the base's own name otherwise) in the first pass and
+  covered by a popup, toast or dialog (an init script or a DOM node, visible in the screenshots): "ANTES: <base>" ("ANTES: origin/main"
+  on the remote main, the base's own name otherwise) in the first pass and
   "DEPOIS: branch <name>" in the second, with the branch name as Git has it. No
   login, password or local path ever goes into the strip.
 - **Pace.** Each case runs twice in each pass. Hold every popup, toast and dialog
