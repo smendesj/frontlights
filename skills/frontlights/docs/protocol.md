@@ -310,9 +310,10 @@ um ponto de retomada local não concede essa permissão.
 
 O formato de `plan.json` segue `examples/plan.json`. O campo opcional `slices` de uma issue
 lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `id`, `title`,
-`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers` e `depends_on`; o
-`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, ou com dependência
-inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
+`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers`, `depends_on` e
+`walkthrough` (`persona`, `steps`, `before` e `after`: o roteiro da caixa, `references/issues.md`); o
+`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, sem `walkthrough` ou com `before` vazio, ou
+com dependência inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
 `vertical_check`, porque as slices trazem os dois. O campo opcional `parent` de uma
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
 plano com o próprio número), o que permite conferir o vínculo sem rede; ele só cabe numa
