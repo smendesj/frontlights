@@ -506,7 +506,7 @@ merges, and anything on the denied list runs only after the user's "Sim" to its 
 authorization and the denied operations", above). Park
 blocked issues with the precise pending question and continue independent ones.
 Report each issue's state, branch/PR, changes, the watched run, the tests and the review when they ran,
-the findings left unfixed with the destination of each, remaining risk and next
+the findings left unfixed with the destination of each, the count of its lines in `.frontlights/pitfalls.md` (criteria that entered after the approval: `references/issues.md`, "A pitfall line"), remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
 
 ## Into the local main: the watched run

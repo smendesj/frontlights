@@ -351,7 +351,9 @@ by the first of the three destinations that fits:
    (`- [ ] ...`) inside its acceptance-criteria section, for a leftover that belongs to
    that outcome (recipe: "A leftover as an acceptance criterion", below). The issue is
    done only when the leftover is treated, completed and ticked with evidence, like any
-   other criterion; it is one more box, worked in order like a slice.
+   other criterion; it is one more box, worked in order like a slice. It also leaves
+   one line in the project's pitfalls (`.frontlights/pitfalls.md`), in the same approval as the
+   batch and with no question of its own ("A pitfall line", below).
 3. A top-level issue only for new scope or for a problem that crosses several issues;
    it cites the issues it crosses in its body and, when one of them must land first,
    depends on it (`--blocked-by`).
@@ -449,6 +451,26 @@ its own approval: the open items are added to the criteria (text approved first 
 same items are removed from the old section, so the only differences are those added
 lines and those removed ones. Until then the closeout only warns about it
 (`pending_outside_criteria`).
+
+### A pitfall line
+
+Every criterion that enters a source issue after its approval (destination 2) is a fact the
+planning missed, so it leaves one line in `.frontlights/pitfalls.md` of the destination project,
+the file the next reconnaissance reads first (`references/grilling.md`, "Reconnaissance").
+
+- **Format.** One line per criterion, in Portuguese:
+  `- <AAAA-MM-DD> · #<n> · <fato> · sonda: <sonda>`: the date, the source issue, the fact that
+  was missed, written without real data (no login, name, endpoint or customer data: a generic
+  description of the case), and the probe that would have caught it, one of the minimum or of the
+  triggers of `references/grilling.md`, "Reconnaissance" (a screen state goes in the fact, so the
+  next artifact shows it).
+- **Approval.** The line goes in the stamped file of the batch, next to the text of its criterion,
+  and is approved by the same answer; it is written only after the answer, together with the
+  criterion. A finding fixed in the branch or sent to a top-level issue writes no line.
+- **File.** Outside version control, like the other records; created on first use, append-only:
+  never rewrite, reorder or remove a line.
+- **Measure.** The lines per issue are the success measure of the planning: the criteria that
+  entered after the approval, which the stage-6 report counts (`references/development.md`).
 
 ### The gate: no open finding without a destination
 
