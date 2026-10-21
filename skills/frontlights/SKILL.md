@@ -404,7 +404,7 @@ goes, in this order:
    Follow-ups section of `references/issues.md`). The independent review runs only when the user asks
    for it, judged by `references/review.md` (development.md, "When the review is done").
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
-   branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
+   local integration branch of the issue (never into the branch of the issue), the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
    the merge, then the bundle.
 7. **The free test** (development.md, "The free test on the local main"): in an issue with a screen, a
    Chrome window on the local main, opened without a question, for the user to test as they like; it ends

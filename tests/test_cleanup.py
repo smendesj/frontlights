@@ -250,6 +250,30 @@ class SliceWorktreeTests(CleanupCase):
                 result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: info})
                 self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], [reason])
 
+    def test_the_integration_branch_of_the_issue_never_stands_for_the_issue_branch_of_its_slices(self):
+        """Issue 70, S2: a branch local de integração (`<prefix>issue-<n>-integra`, entrada sem `slice`) vem depois
+        na autorização; as slices continuam julgadas contra a branch da issue, nunca contra ela."""
+        issue_path, issue_branch, _ = self.worktree('issue-12')
+        _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', issue_branch)
+        _, integra_branch, _ = self.worktree('issue-12-integra', start=issue_branch)   # cut before the slice merge
+        self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        result, _ = self.plan({issue_branch: {'heads': []}, s1_branch: {'heads': []}, integra_branch: {'heads': []}})
+        entry = {c['branch']: c for c in result['candidates']}[s1_branch]
+        self.assertEqual(entry['cautions'], ['slice_merged_into_issue_branch'])
+
+    def test_the_integration_worktree_of_the_issue_goes_once_the_base_holds_its_tip(self):
+        """Issue 70, S2: a worktree `-integra`, nunca enviada e sem PR, sai quando a base aprovada contém a ponta."""
+        _, issue_branch, _ = self.worktree('issue-12')
+        _, integra_branch, integra_tip = self.worktree('issue-12-integra', start=issue_branch)
+        result, _ = self.plan({issue_branch: {'heads': []}, integra_branch: {'heads': []}})
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[integra_branch], ['no_merged_pr'])
+        self.git('merge', '-q', '--no-ff', '-m', 'issue 12 into the local main', integra_branch)
+        result, _ = self.plan({issue_branch: {'heads': []}, integra_branch: {'heads': []}})
+        entries = {c['branch']: c for c in result['candidates']}
+        self.assertEqual(set(entries), {issue_branch, integra_branch}, result)
+        self.assertEqual(entries[integra_branch]['cautions'], ['contained_in_base_without_pull_request'])
+        self.assertEqual([c['kind'] for c in entries[integra_branch]['commands']], ['remove_worktree', 'delete_branch'])
+
     def test_a_slice_whose_issue_worktree_is_not_in_the_authorization_cannot_be_judged(self):
         self.git('branch', 'claude/issue-12')
         _, s1_branch, _ = self.slice_worktree('issue-12-s1', 'S1', 'claude/issue-12')

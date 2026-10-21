@@ -555,7 +555,16 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     main_entry = listing[0]
     records_root = root if (Path(root) / '.frontlights').is_dir() else main_entry['path']
     authorized, protected, prefixes = authorized_worktrees(records_root, set(numbers))
-    issue_branches = {e['issue']: e['branch'] for e in authorized if not e.get('slice') and e['branch']}
+    # the branch of the issue (`<prefix>issue-<n>`) wins over a later entry of the same issue without `slice`, such as
+    # its local integration branch (`<prefix>issue-<n>-integra`, issue 70): the slices are merged into the former
+    issue_branches = {}
+    for e in authorized:
+        if e.get('slice') or not e['branch']:
+            continue
+        own = e['branch'].rsplit('/', 1)[-1] == f"issue-{e['issue']}"
+        if own or not issue_branches.get(e['issue'], (None, False))[1]:
+            issue_branches[e['issue']] = (e['branch'], own)
+    issue_branches = {number: branch for number, (branch, _) in issue_branches.items()}
     for entry in authorized:
         if entry.get('slice'):
             entry['issue_branch'] = issue_branches.get(entry['issue'])

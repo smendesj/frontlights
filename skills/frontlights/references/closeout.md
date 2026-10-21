@@ -142,7 +142,8 @@ that release, and at stage 1 of every session whose authorization records list i
 --prune origin` and whatever `candidates` finds (the plan alone judges what is merged; `SKILL.md`, the closeout
 question), with `--issues` the `issue_ids` of the authorization records. It is the written exception to "deleting
 anything" of the denied operations (`development.md`): the worktrees and branches the work created (the
-`worktrees` of the authorization for these issues, plus an integration worktree the handoff names, plus the local
+`worktrees` of the authorization for these issues, the local integration worktree of each issue
+(`<branch_prefix>issue-<n>-integra`) among them, plus an integration worktree the handoff names, plus the local
 release branch once merged) are not needed once the release that carries them was merged into the approved base
 (for a branch with no pull request, once `origin/<base>` contains its tip), so the session removes them **without
 a question**, whatever the user answers to the closing afterwards. The remote branch is GitHub's job: the head
