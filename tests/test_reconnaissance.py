@@ -189,3 +189,20 @@ class ReconnaissanceInTheSkillTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class FindingsBatchTests(unittest.TestCase):
+    """Issue 65, findings batch r1 (items 1 to 3): what the spec left open, settled in the text."""
+
+    def test_a_technical_branch_the_evidence_cannot_settle_is_asked_with_its_facts(self):
+        text = ' '.join((SKILL / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
+        self.assertIn('A technical branch the evidence cannot settle is asked like a product one', text)
+
+    def test_a_family_runs_one_reconnaissance(self):
+        text = ' '.join((SKILL / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
+        recon = text.split('## Reconnaissance')[1].split('\n## ')[0]
+        self.assertIn('A family runs one reconnaissance', recon)
+
+    def test_the_direct_walkthrough_lives_in_the_records_of_the_direct_work(self):
+        text = ' '.join((SKILL / 'SKILL.md').read_text(encoding='utf-8').split())
+        self.assertIn('`.frontlights/direct/<branch, slashes as dashes>/walkthroughs/`', text)

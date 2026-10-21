@@ -125,6 +125,9 @@ message, and each returns a short fact table (up to about 20 lines, each fact wi
 path, command or query); the raw output stays in the subagent. An unverified fact never becomes an
 option.
 
+A family runs one reconnaissance, as it has one grilling: each sub-issue turns on its own triggers
+in the same table, and the probes of the whole family go out together.
+
 The discovery log records every trigger as "ligado" or "não se aplica, porque…"
 (`templates/discovery.md`, "Reconnaissance"), with the fact table of each probe that ran.
 
@@ -187,7 +190,8 @@ same question again; that is the only re-ask besides new evidence.
 
 The tree asks the user only product, scope and visual: a technical branch the evidence settles is
 not asked; it becomes an assumption shown in the plan with its evidence (the fact table of
-"Reconnaissance"). Every branch ends answered, an assumption with its evidence, or marked "não se
+"Reconnaissance"). A technical branch the evidence cannot settle is asked like a product one, with
+the fact table its probe brought and what stayed unproven. Every branch ends answered, an assumption with its evidence, or marked "não se
 aplica, porque…" in the discovery log.
 
 ## 5. Pre-mortem (by trigger)

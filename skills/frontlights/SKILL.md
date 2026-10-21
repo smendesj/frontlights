@@ -219,7 +219,8 @@ why in one sentence:
   can answer. If two or more reasonable implementations exist, or the issue has open
   sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5, except that
   Direct runs the full reconnaissance by trigger, even without an issue (`references/grilling.md`,
-  "Reconnaissance"), and writes its walkthrough with the before recorded before the code. Confirm the
+  "Reconnaissance"), and writes its walkthrough with the before recorded before the code, in
+  `.frontlights/direct/<branch, slashes as dashes>/walkthroughs/`, one `.md` per walkthrough as for a box. Confirm the
   intent, do the work, report what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
   A Direct change runs without an issue body or an issue; the watched-run question offers only to
