@@ -600,7 +600,9 @@ pelo Playwright com a main local, servida da worktree principal e ligada ao banc
 e sem tempo limite, com o Claude pronto para ajudar quando você pedir; uma correção que você pedir é feita na hora
 na branch da issue e mesclada de novo na main local, e você recarrega a página; cada correção vira um critério de
 aceitação novo, e, quando você fecha a janela, os novos vão à issue num lote só, aprovado por link e carimbo, antes
-da oferta da release; fechar a janela encerra o teste (o passo a
+da oferta da release; fechar a janela encerra o teste. Num projeto sem tela, o teste livre acontece no terminal: o
+Claude dá os comandos do projeto para você usar a main local, cada um no seu bloco, e pergunta se você terminou;
+só com o seu "Sim, terminei" vem a oferta da release, e uma correção pedida ali segue a mesma regra (o passo a
 passo está em
 [`references/development.md`](skills/frontlights/references/development.md#the-free-test-on-the-local-main)). Ao fim de cada issue homologada, depois do teste livre, o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a

@@ -231,5 +231,10 @@ class FreeTestWindowTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.free)
 
+    def test_without_a_screen_there_is_no_window(self):
+        """Issue 69, S5: sem tela, o teste livre não abre janela; a regra é a de `development.md`."""
+        self.assertIn('Without a screen there is no window: the free test happens in the terminal (`development.md`, '
+                      '"The free test on the local main")', flat(self.free))
+
 if __name__ == '__main__':
     unittest.main()

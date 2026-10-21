@@ -408,7 +408,8 @@ goes, in this order:
    the merge, then the bundle.
 7. **The free test** (development.md, "The free test on the local main"): in an issue with a screen, a
    Chrome window on the local main, opened without a question, for the user to test as they like; it ends
-   when the user closes the window.
+   when the user closes the window; without a screen, the commands to try the local main in the terminal and a
+   question before the release.
 8. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 

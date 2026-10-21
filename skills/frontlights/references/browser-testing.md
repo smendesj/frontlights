@@ -489,8 +489,9 @@ never a reason to skip a case, shorten a pass, park the run or ask the user to s
 ## The free test window
 
 The free test on the local main comes after the merge into the local main and the bundle of an issue whose watched
-run was answered; the order is in `development.md`, "The free test on the local main". This section is only its
-window, which follows the watched run's rules unless it says otherwise:
+run was answered; the order is in `development.md`, "The free test on the local main". Without a screen there is no window: the free
+test happens in the terminal (`development.md`, "The free test on the local main"). This section is only the window,
+which follows the watched run's rules unless it says otherwise:
 
 - **The product.** Start it with `python "${CLAUDE_SKILL_DIR}/scripts/serve.py" start --config <config> --root <main
   worktree> --issue <n>` (`<n>` the homologated issue; the issue's own serve is already stopped by the order of the

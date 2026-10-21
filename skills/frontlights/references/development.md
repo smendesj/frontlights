@@ -587,6 +587,18 @@ local development database (the homologation one), already logged in; the window
 holder are in `references/browser-testing.md`, "The free test window". One line to the user, in their language,
 says that the window is theirs to test the local main as they like and that closing it ends the free test.
 
+- **Without a screen, in the terminal.** In an issue whose `browser-gate` said `not_needed` (no screen; the
+  walkthrough of each box was the evidence, step 3 of "Into the local main"), no window opens and no product is
+  served: right after the merge into the local main and the bundle, the session says in one line, in the user's
+  language, that the local main is ready for the user to try, then gives the exact commands to use it, each in its
+  own code block, run in the main worktree: the project's own verification and run commands, from the charter's
+  `verification_commands` or what `inspect` reports (the test command, say), never a secret, a credential or a
+  token. Then it asks with `AskUserQuestion` "Terminou de testar a main local?", with two options, "Sim, terminei"
+  first and "Ainda testando". "Ainda testando" leaves the question pending: the session asks it again when the user
+  comes back, and never answers it for the user. Only after "Sim, terminei" it goes on to "Window closed, next
+  step.", below. A fix asked while the question is pending follows "A fix asked in the free test", below, with the
+  pending question in place of the open window and the user running the commands again in place of reloading the
+  page (no `serve` to restart); once it is merged again into the local main, the question is asked again.
 - **The user leads.** No script, no ANTES/DEPOIS, no print and no time limit. While the window is open the session
   helps on request and does nothing else in it (the limits of that help are in the same section of
   `browser-testing.md`).
@@ -608,13 +620,15 @@ says that the window is theirs to test the local main as they like and that clos
   of `Evidência:`. They are leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion"): a
   label `P<n>` and no `S<n>` id, and they do not count toward the cap of five slices ("A short issue holds at most
   five slices").
-- **Window closed, next step.** The holder's exit wakes the session, which stops what it started for the free test
+- **Window closed, next step.** The holder's exit wakes the session (without a screen, the user's "Sim, terminei" in
+  its place, with nothing served to stop), which stops what it started for the free test
   (`serve stop` on the main worktree, "The free test window") and writes the handoff's line "Teste livre na main
   local". With fixes, the batch before the release: the draft is the one file with every new criterion, approved
   by link and stamp (`SKILL.md`, "Show before approval"), one approval for the whole file, and written into the
   acceptance criteria of the issue body by the write rule of the leftover (body captured, append only, difference
   checked, reread), in `references/issues.md`. Without fixes, the release comes directly. Only then it goes on to "The
-  release", below, with the batch written or with no fix: the release question comes only after the window is closed, never while it is open.
+  release", below, with the batch written or with no fix: the release question comes only after the window is closed, never while it is open (without a screen, only after "Sim, terminei", never while the
+  question of the terminal is pending).
 
 ## The release: from the local main to GitHub
 

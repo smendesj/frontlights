@@ -555,6 +555,46 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertEqual(' '.join(text.split()).count('teste-livre-cas.md'), 1)
         self.assertNotIn('Lançar a release', body)
 
+    def test_without_a_screen_the_free_test_is_in_the_terminal(self):
+        """Issue 69, S5: num projeto sem tela (`browser-gate` `not_needed`), o teste livre acontece no terminal: os
+        comandos para usar a main local e a pergunta de fim do teste antes da release; só o "Sim, terminei" leva à
+        release, e uma correção pedida ali segue a regra da S4."""
+        question = 'Terminou de testar a main local?'
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        self.assertEqual(text.count(question), 1)
+        skill_dir = ROOT / 'skills' / 'frontlights'
+        for path in sorted((skill_dir / 'references').glob('*.md')) + [skill_dir / 'SKILL.md']:
+            if path.name == 'development.md':
+                continue
+            with self.subTest(file=path.name):
+                self.assertNotIn(question, ' '.join(path.read_text(encoding='utf-8').split()))
+        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        terminal = body.split('- **Without a screen, in the terminal.**')[1].split('- **')[0]
+        for phrase in ('In an issue whose `browser-gate` said `not_needed`', 'no window opens and no product is served',
+                       'right after the merge into the local main and the bundle',
+                       "in one line, in the user's language, that the local main is ready for the user to try",
+                       'each in its own code block', "the charter's `verification_commands` or what `inspect` reports",
+                       'never a secret', f'asks with `AskUserQuestion` "{question}"',
+                       '"Sim, terminei" first', '"Ainda testando" leaves the question pending',
+                       'asks it again when the user comes back', 'never answers it for the user',
+                       'Only after "Sim, terminei"', 'follows "A fix asked in the free test", below'):
+            with self.subTest(part='terminal', phrase=phrase):
+                self.assertIn(phrase, terminal)
+        self.assertLess(body.index('- **Without a screen, in the terminal.**'),
+                        body.index('- **A fix asked in the free test.**'))
+        closed = body.split('- **Window closed, next step.**')[1]
+        for phrase in ("without a screen, the user's \"Sim, terminei\" in its place",
+                       'without a screen, only after "Sim, terminei"'):
+            with self.subTest(part='closed', phrase=phrase):
+                self.assertIn(phrase, closed)
+        self.assertIn('without a screen, the commands to try the local main in the terminal and a question before '
+                      'the release', stage(6))
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        self.assertIn('sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta '
+                      'de fim do teste, e só o "Sim, terminei" leva à release', protocol)
+        self.assertIn('Num projeto sem tela, o teste livre acontece no terminal', flat('README.md'))
+
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
         segurança e no README."""
