@@ -1,4 +1,4 @@
-# Progress question in any project, and a start by plain words (manual; no model score claimed)
+# Summary on request in any project, and a start by plain words (manual; no model score claimed)
 
 Setup: the project that declares the `roadmapSync.progress` block (approved, secret present), a second project with
 an enabled `roadmapSync` block but no progress block, and a third with no `.frontlights/config.json` at all. Nothing is
@@ -6,27 +6,28 @@ registered yet. The skill is installed by the junction and its `description` nam
 
 Expected, in this order:
 
-1. `/frontlights` in the second project: the issue-gaps question is asked as before; the progress question is not, and
-   the session asks once "Registrar o projeto que guarda o bloco do Resumo para a diretoria?" with the options "Sim,
-   escolher a pasta" and "Agora não"; "Agora não" ends it for the session. In the third project the session says
-   nothing about it.
+1. `/frontlights` in the second project with no request about the summary: the opening asks nothing about RoadS or the
+   summary (only the closeout question, when there is something to close). Then "/frontlights pode criar/atualizar o
+   resumo" in the second and in the third project: `progress_report.py status` runs and the session asks once
+   "Registrar o projeto que guarda o bloco do Resumo para a diretoria?" with the options "Sim, escolher a pasta" and
+   "Agora não"; "Agora não" ends it for the session.
 2. The user answers yes to registering the project that declares the block. The session looks, read-only, for the
    folders next to the project whose config has an enabled progress block and offers each one in full as an option
    (the free-text choice takes another folder); it says that the registration only says where the block is and lives
    in the home directory, and the user's pick is the explicit yes that runs `progress_report.py home --set <project>`. `home` alone shows it registered and valid.
-3. `/frontlights` in the second and in the third project: the question "Atualizar também o Resumo para a diretoria no
-   RoadS?" appears, with the project where the block lives named in its text. "Sim, preparar o resumo agora" runs
-   `window`, `collect`, `shots` and `push` with `--root <operationsRoot>`; the collectors run from the project that
+3. A request for the summary in the second and in the third project: the session names the project where the block
+   lives and runs `window`, `collect`, `shots` and `push` with `--root <operationsRoot>`; the collectors run from the project that
    declares the block, and the approval record is written there, not in the project the session opened.
 4. A project with its own block, even a disabled one, never uses the registration. A registration file copied from
-   another machine, edited by hand or with a changed path reads `invalid`: no progress question, only the registration question.
-5. `home --clear` after an explicit yes removes it; the question goes away.
+   another machine, edited by hand or with a changed path reads `invalid`: a request for the summary gets only the
+   registration question.
+5. `home --clear` after an explicit yes removes it; the next request for the summary asks the registration again.
 6. Start a fresh session with a plain phrase ("frontlights, ataque a issue <n>") and no slash: the model opens the
-   command and the stage 1 questions come before any other work. Repeat with the opt-in hook installed
+   command and stage 1 (the cleanup and the closeout question) comes before any other work. Repeat with the opt-in hook installed
    (`skills/frontlights/templates/frontlights-prompt-hook.py`): the reminder is in the turn, stage 1 opens first, and a second mention in
    the same session adds no second reminder. A path such as `.frontlights/config.json` in a prompt adds none.
 
 Reject: the registration written without the user's yes; a block that runs without its own approval because it was
-found through the registration; a project's config file that points the session at another folder; the progress
-question asked with `ask` false; a hook that blocks a prompt; claiming that the hook was verified in a real session
+found through the registration; a project's config file that points the session at another folder; any question
+about RoadS or the summary at the opening; a hook that blocks a prompt; claiming that the hook was verified in a real session
 before it was.

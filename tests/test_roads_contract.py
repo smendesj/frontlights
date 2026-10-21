@@ -26,18 +26,19 @@ def table_row(label):
 
 
 class ClosedSetsTests(unittest.TestCase):
-    def test_item_statuses_match_the_code_and_an_unknown_one_is_refused(self):
-        cells = table_row('status de item')
-        self.assertEqual(set(re.findall(r'[a-z_]+', cells[1])), set(rs.ITEM_STATUSES))
-        self.assertIn('recusado', cells[2])
-
-    def test_the_version_is_one_and_the_table_covers_the_route_the_skill_reads(self):
-        self.assertEqual(rs.STATE_SCHEMA_VERSION, 1)
+    def test_the_contract_no_longer_reads_the_roadmap_state(self):
+        # issue 65: completing the issues RoadS shows left Frontlights, and with it the only reader of roadmap-state
+        flat = ' '.join(DOC.split())
         self.assertIn('versão deste contrato é **1**', DOC)
-        self.assertEqual(table_row('GET roadmap-state')[1], 'obrigatório')
-        for route in ('GET pending-changes', 'POST sync-board', 'POST ack'):
+        for route in ('GET roadmap-state', 'GET pending-changes', 'POST sync-board', 'POST ack', 'status de item'):
             with self.subTest(route=route), self.assertRaises(AssertionError):
                 table_row(route)
+        self.assertNotIn('### `GET roadmap-state`', DOC)
+        self.assertIn('Desde 21/10/2026 (issue 65) ele também não lê `GET roadmap-state`', flat)
+        self.assertNotIn('`gaps`', flat)
+        for name in ('ITEM_STATUSES', 'STATE_SCHEMA_VERSION', 'normalise_state'):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(rs, name))
 
     def test_only_proximo_does_not_need_a_print(self):
         facts = {'entries': [{'issue': 1, 'status': 'proximo'}, {'issue': 2, 'status': 'novo-valor'}]}
@@ -75,19 +76,11 @@ class DocumentShapeTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
-    def test_the_contract_describes_the_sprints_as_weeks_by_date(self):
-        flat = ' '.join(DOC.split())
-        for phrase in ('`laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA`', 'na ordem de `startDate`, nunca pelo texto do id',
-                       'aceita as duas formas', 'nunca as duas na mesma resposta', 'uma semana pode vir com `items: []`',
-                       'Decisão de 15/10/2026 (exceção à regra de quebra)', 'continua 1'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, flat)
-
     def test_the_contract_says_the_skill_stopped_calling_the_queue_routes(self):
         flat = ' '.join(DOC.split())
         for phrase in ('Rotas que o Frontlights deixou de chamar (19/10/2026)',
                        'não chama `POST sync-board`, `GET pending-changes` nem `POST ack`',
-                       'é decisão do dono do RoadS', 'são ignorados'):
+                       'é decisão do dono do RoadS'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
         for gone in ('### `POST sync-board`', '### `GET pending-changes', '### `POST ack`', '"Acima do limite de N:"',

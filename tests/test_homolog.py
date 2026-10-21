@@ -159,7 +159,7 @@ class LocalMainTextTests(unittest.TestCase):
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
         for phrase in ('one issue branch, cut from the local main and kept local',
-                       'the watched run answered or not needed, `authorize`, the merge, then the bundle',
+                       'the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`, the merge, then the bundle',
                        '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -331,10 +331,10 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('the merge, then the bundle', stage(6))
         text = read('skills', 'frontlights', 'references', 'development.md')
         body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
-        for phrase in ('4. **Back it up.**', 'homolog bundle --root <main worktree> --config',
+        for phrase in ('5. **Back it up.**', 'homolog bundle --root <main worktree> --config',
                        'the only write the run makes outside the project, and only into that folder',
                        '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
-                       '`configured: false`', 'name the key, ask nothing and go on', '5. **Record it.**',
+                       '`configured: false`', 'name the key, ask nothing and go on', '6. **Record it.**',
                        '"sem backup configurado"'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)

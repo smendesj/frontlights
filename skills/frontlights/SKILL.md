@@ -25,8 +25,7 @@ references are `references/grilling.md` (stage 3),
 `references/review.md` (the independent reviewer's standard, for a review the user asks for, named only in the
 reviewer's brief),
 `references/closeout.md` (stage 7 and the closeout question of stage 1),
-`references/issue-gaps.md` (the issue-gaps question of stage 1, when the user
-says yes), `references/progress-report.md` (the progress question that follows it, when the user says yes, and the registration of the block's home).
+`references/progress-report.md` (the board summary, when the user asks for it, and the registration of the block's home).
 `templates/pr.md` is the model of the release's pull request (stage 6), adapted under
 `references/LICENSE-pr.md`.
 
@@ -101,7 +100,7 @@ text, and is reread before it is posted.
 **Show before approval.** The approval of a document, a list or a table is asked by link and
 stamp, never by pasting the full text into the conversation. This covers the issue body of stage 4
 and its revisions, the plan and the bodies of stage 5, the conversion of a family, the findings
-batch and its leftover criteria, the closeout list, the issue-gaps table and
+batch and its leftover criteria, the closeout list and
 the RoadS progress-report draft (the cleanup of merged work asks nothing: `references/closeout.md`, step 5). Before each approval:
 1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
    the host has it (the card reaches the phone), and give a clickable link to the file.
@@ -131,8 +130,8 @@ a file card nor a clickable link, record the approval as pending and stop.
 
 **Fan out.** Every stage runs its independent pieces at once, one subagent per piece and as
 many as there are pieces, launched in one message (several `Agent` calls, in Claude Code) and
-refilled as each one lands: the read-only helpers of stages 0 to 2 (`update-check`, the
-`status` reads, `candidates`, `inspect`, the sub-issue reads) in one go, a read whose inputs
+refilled as each one lands: the read-only helpers of stages 0 to 2 (`update-check`,
+`candidates`, `inspect`, the sub-issue reads) in one go, a read whose inputs
 a later answer changed run again; code reading, conventions, the field-by-field trace and
 research, one subagent per area or layer; in stage 6 the highest safe number of independent
 issues, each in its own worktree with its own agent, and, inside an issue, its independent slices,
@@ -180,44 +179,7 @@ Run the update commands only when the user asks.
 
 ## 1. Take the request and right-size the path
 
-**Issue-gaps question, first, every session.** Before anything else in this stage,
-even when the user arrived with another request, run the read-only `python
-"${CLAUDE_SKILL_DIR}/scripts/roads.py" status --root <project>` (no network). Only when it
-reports `configured` true (an enabled `roadmapSync` block in this project) ask with
-`AskUserQuestion`: "Completar no GitHub as issues que o RoadS mostra?"
-Put what `status` reports in the question text: ready, the endpoint not yet approved, or
-the secret absent. Options: "Sim, conferir agora" and "Não, seguir com o pedido". On yes,
-read `references/issue-gaps.md` and follow it, then come back to the request. On no, make
-no call to RoadS and go on. When `configured` is false and `enabled` is true (the block is on but does not
-validate), say `message` in one line and go on; when both are false, say nothing and go on. Frontlights
-writes no roadmap or week file: RoadS keeps the roadmap from the open issues.
-
-**Progress question, right after the issue-gaps question.** Once the issue-gaps question and
-everything it triggered are done, and also when it was not asked or the user answered no
-to it, run the read-only `python
-"${CLAUDE_SKILL_DIR}/scripts/progress_report.py" status --root <project>` (no
-network), in whatever project the session opened. The block of the summary lives in one
-project (the one the user registered once as its home), and `status` finds it from any
-other, so the question is asked in any project once that home is registered (until then only a project
-with an enabled `roadmapSync` block is offered the registration). Only when it reports `ask` true (an
-enabled `roadmapSync.progress` block, the project's own or the registered home's) ask
-with `AskUserQuestion`: "Atualizar também o Resumo para a diretoria no RoadS?"
-Put what `status` reports in the question text: ready, the block not yet approved, the
-secret absent and, when `source` is `home`, the project where the block lives
-(`home.root`). Options: "Sim, preparar o resumo agora" and "Não, seguir com o pedido".
-On yes, read `references/progress-report.md` and follow it, running every operation with
-`--root <operationsRoot>`, the project `status` reported, then come back to the request.
-On no, make no call to RoadS and run nothing. When `ask` is false, a disabled block says
-nothing; an absent one says nothing either, except when an enabled `roadmapSync` block is in this
-project and `homeState` is `none` or `invalid`, or when `source` is `home` and `configured` is false (the
-registered project lost its block or moved): then the user has no way to learn that the summary
-exists, so ask once per session with `AskUserQuestion`: "Registrar o projeto que guarda o
-bloco do Resumo para a diretoria?" (say in the text whether nothing is registered, the record is
-not trusted or the registered project lost its block). Options: "Sim, escolher a pasta" and "Agora não". On yes, read
-`references/progress-report.md` ("Where the block lives") and follow it; on no, say nothing more
-about it in this session. Ask nothing else and go on exactly as before.
-
-**Closeout question, right after the progress question.** When `.frontlights/config.json`
+**Closeout question, the only question at the opening.** Before the request, when `.frontlights/config.json`
 exists with a `repository`, this runs in order. When the `.frontlights/authorization*.json` records list issue ids, first run
 `git -C <main worktree> fetch --prune origin`, before `closeout.py candidates` and `cleanup.py plan`, so
 `origin/<base>` is current before anything is judged (if it fails, say so in one line and go on), then always run
@@ -234,6 +196,14 @@ back to the request. On no, write nothing. When `ask` is false, say nothing and 
 an issue is excluded as `awaiting_release` (every box ticked, branch not yet in `origin/<base>`): say in one line
 that it closes with the release that carries it. The closeout never reads the board.
 
+**Board summary on request.** The "Resumo para a diretoria" in RoadS runs only when the user asks for it
+("/frontlights pode criar/atualizar o resumo", or any other request for the summary), from any project; the
+opening asks nothing about it or about RoadS. Then run the read-only `python
+"${CLAUDE_SKILL_DIR}/scripts/progress_report.py" status --root <project>` (no network) in the project the session
+opened, read `references/progress-report.md` and follow it, running every other operation with
+`--root <operationsRoot>`, the project `status` reported (the project's own block or the registered home's; the
+registration of the home is asked there, never at the opening), then come back to the request, if there is one.
+
 The user's own request is the starting point and the authority on scope. Accept
 any kind of work: a product feature, a bug, a refactor, research, a one-off
 script, a document, operating an external system. Begin from the request as
@@ -247,8 +217,11 @@ why in one sentence:
 - **Direct.** A small, well-understood, low-risk change with a single obvious
   implementation that follows the project's existing pattern, or a question you
   can answer. If two or more reasonable implementations exist, or the issue has open
-  sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5 entirely. Confirm the intent, do the work, report
-  what you measured. A Direct change the user can see on the screen still ends with
+  sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5, except that
+  Direct runs the full reconnaissance by trigger, even without an issue (`references/grilling.md`,
+  "Reconnaissance"), and writes its walkthrough with the before recorded before the code, in
+  `.frontlights/direct/<branch, slashes as dashes>/walkthroughs/`, one `.md` per walkthrough as for a box. Confirm the
+  intent, do the work, report what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
   A Direct change runs without an issue body or an issue; the watched-run question offers only to
   name an existing issue. In a project with a remote it is still homologated on the local main
@@ -332,11 +305,13 @@ unavailable integrations accurately.
 
 ## 3. Grill
 
-Read `references/grilling.md`. Ask the depth,
-confirm the problem (in one question when an issue already settles it), record
-the project's conventions, then propose at least three genuinely different
-implementation approaches with their pattern fit, walk the chosen approach's
-decision tree and let the user decide when to stop. An issue settles what is
+Read `references/grilling.md`. Confirm the problem (in one question when an
+issue already settles it), record the project's conventions, run the
+reconnaissance by trigger (the project's pitfalls first, each probe in a subagent
+that returns a short fact table; an unverified fact never becomes an option), then
+propose at least three genuinely different implementation approaches with their
+pattern fit, walk the chosen approach's decision tree asking only product, scope
+and visual, and let the user decide when to stop. An issue settles what is
 wanted, not how: starting from one still runs the solution round. Follow the
 existing code pattern unless it is concretely worse for the problem, and say so
 when it is. Sub-issues join the same interview instead of being left out: one
@@ -429,7 +404,8 @@ goes, in this order:
    Follow-ups section of `references/issues.md`). The independent review runs only when the user asks
    for it, judged by `references/review.md` (development.md, "When the review is done").
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
-   branch of the issue, the watched run answered or not needed, `authorize`, the merge, then the bundle.
+   branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
+   the merge, then the bundle.
 7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 
@@ -441,7 +417,7 @@ the questions of the work itself (the watched run, failures, the findings batch,
 decision) are still asked.
 
 Finish with the report of development.md ("Review, checkpoints and renewal"): per-issue state,
-branch and PR, changes, the watched run, the measured commands and results and the independent review
+branch and PR, changes, the watched run, the walkthroughs run without a screen, the measured commands and results and the independent review
 against the exact diff when they ran, the findings left unfixed with the destination of each, risks and next action.
 
 ## 7. Closeout of finished issues (its own approval)

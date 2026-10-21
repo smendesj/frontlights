@@ -63,7 +63,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                        'a diagram of the flow, of the layers or of the current rule',
                        '**one section per decision question**',
                        'the solution round and every branch of the decision tree, the pre-mortem included',
-                       'Confirmation questions, the depth question and the closing "Seguimos?" get no section',
+                       'Confirmation questions and the closing "Seguimos?" get no section',
                        'the before first, then the decision questions', 'titled by the question',
                        "in stage 5 the slices' sections follow them",
                        'Every section follows `templates/grilling-section.html`',
@@ -170,7 +170,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         self.assertIn('- Artifact URL and source path (one per grilling, the same URL every round', template)
         self.assertIn('`.frontlights/artifact.html`', template)
         self.assertIn('"artefato indisponível" when the host has no artifact tool', template)
-        self.assertLess(template.index('- Grilling depth'), template.index('- Artifact URL'))
+        self.assertLess(template.index('- Assumptions requiring verification'), template.index('- Artifact URL'))
         self.assertLess(template.index('- Artifact URL'), template.index('## Project conventions'))
 
     def test_the_docs_separate_code_from_data(self):

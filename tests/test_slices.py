@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -39,7 +40,15 @@ def section(text, heading):
 
 def slice_(number, depends_on=(), **extra):
     value = dict(id=f'S{number}', title=f'Slice {number}', delivers=f'Demo of behaviour {number} end to end',
-                 seams=['POST /observations'], layers=['Tela', 'API', 'Testes'], depends_on=list(depends_on))
+                 seams=['POST /observations'], layers=['Tela', 'API', 'Testes'], depends_on=list(depends_on),
+                 walkthrough=walkthrough())
+    value.update(extra)
+    return value
+
+
+def walkthrough(**extra):
+    value = dict(persona='conta 1', steps='abrir a observação, salvar e recarregar',
+                 before='a observação some ao recarregar', after='a observação aparece depois de recarregar')
     value.update(extra)
     return value
 
@@ -85,6 +94,47 @@ class SlicesInThePlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r'S1.*depende de S1'):
             frontlights.validate_plan(plan(issue(1, [slice_(1, ['S1'])])))
 
+    def test_a_slice_without_a_walkthrough_is_refused(self):
+        """Issue 65, S3: cada fatia nasce com roteiro (persona, passos, antes, depois); sem ele, o plano é inválido."""
+        bare = slice_(1)
+        del bare['walkthrough']
+        with self.assertRaisesRegex(ValueError, r'1: slice S1: falta walkthrough'):
+            frontlights.validate_plan(plan(issue(1, [bare])))
+        for value in ('conta 1 · salvar', ['conta 1'], None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, r'slice S1: falta walkthrough'):
+                frontlights.validate_plan(plan(issue(1, [slice_(1, walkthrough=value)])))
+
+    def test_a_walkthrough_with_an_empty_before_is_refused(self):
+        for before in ('', '   ', None):
+            with self.subTest(before=before), self.assertRaisesRegex(ValueError, r'slice S1: falta walkthrough\.before'):
+                frontlights.validate_plan(plan(issue(1, [slice_(1, walkthrough=walkthrough(before=before))])))
+        missing = walkthrough()
+        del missing['before']
+        with self.assertRaisesRegex(ValueError, r'slice S1: falta walkthrough\.before'):
+            frontlights.validate_plan(plan(issue(1, [slice_(1, walkthrough=missing)])))
+
+    def test_every_field_of_the_walkthrough_is_a_non_empty_string(self):
+        for field in ('persona', 'steps', 'after'):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, rf'slice S2: falta walkthrough\.{field}'):
+                frontlights.validate_plan(plan(issue(1, [slice_(1), slice_(2, walkthrough=walkthrough(**{field: ''}))])))
+
+    def test_a_complete_walkthrough_is_valid_and_the_persona_is_only_a_label(self):
+        for persona in ('conta 1', 'conta 2', 'sem tela', 'usuário de teste criado'):
+            with self.subTest(persona=persona):
+                frontlights.validate_plan(plan(issue(1, [slice_(1, walkthrough=walkthrough(persona=persona))])))
+
+    def test_the_cli_refuses_a_plan_whose_slice_has_no_walkthrough(self):
+        example = json.loads(read('skills', 'frontlights', 'examples', 'plan.json'))
+        del example['issues'][0]['slices'][0]['walkthrough']
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'plan.json'
+            path.write_text(json.dumps(example, ensure_ascii=False), encoding='utf-8')
+            result = subprocess.run([sys.executable, str(SCRIPT), 'validate-plan', '--plan', str(path)],
+                                    capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('slice S1: falta walkthrough', result.stdout + result.stderr)
+        self.assertIn('walkthrough.before', result.stdout + result.stderr)
+
     def test_slice_ids_are_unique_and_simple(self):
         with self.assertRaisesRegex(ValueError, r'repetid'):
             frontlights.validate_plan(plan(issue(1, [slice_(1), slice_(1)])))
@@ -115,6 +165,9 @@ class SlicesInThePlanTests(unittest.TestCase):
         sliced = [i for i in example['issues'] if i.get('slices')]
         self.assertGreaterEqual(len(sliced), 2)
         self.assertTrue(any(any(s['depends_on'] for s in i['slices']) for i in sliced))
+        for item in (s for i in sliced for s in i['slices']):
+            with self.subTest(slice=item['id']):
+                self.assertEqual(set(item['walkthrough']), {'persona', 'steps', 'before', 'after'})
         frontlights.validate_plan(copy.deepcopy(example))
         result = subprocess.run([sys.executable, str(SCRIPT), 'validate-plan', '--plan',
                                  str(SKILL / 'examples' / 'plan.json')], capture_output=True, text=True)
@@ -159,6 +212,35 @@ class SlicesTextTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat(criteria))
         self.assertNotIn('## Verificação da fatia vertical', template)
+
+    def test_the_reference_gives_each_box_its_walkthrough(self):
+        """Issue 65, S3: a caixa traz o roteiro em duas linhas; o antes vem do reconhecimento; no plano é
+        `walkthrough`, exigido pelo validate-plan; uma issue antiga ganha roteiro nas caixas abertas ao ser retomada."""
+        text = read('skills', 'frontlights', 'references', 'issues.md')
+        raw = section(text, 'Slices as acceptance criteria') or ''
+        self.assertRegex(raw, r'(?m)^  - Roteiro: <persona> · <steps>$')
+        self.assertRegex(raw, r'(?m)^    → antes: <[^>]+>; depois: <[^>]+>$')
+        body = flat(raw)
+        for phrase in ('`Roteiro: <persona> · <passos>`', '`→ antes: …; depois: …`', 'a label', 'never a login',
+                       '`conta 1`', '`conta 2`', '`sem tela`', '`references/grilling.md`, "Reconnaissance"',
+                       '`walkthrough`', '`persona`, `steps`, `before` and `after`',
+                       'without `walkthrough` or with an empty `before`',
+                       'An old issue', 'enters the grilling or stage 6', 'its open boxes', 'append only',
+                       'the approval of the plan', 'Ticked boxes stay as they are'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, body)
+
+    def test_the_issue_template_box_carries_the_walkthrough(self):
+        criteria = section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Critérios de aceitação') or ''
+        self.assertRegex(criteria, r'(?m)^  - Depende de: [^\n]*\n  - Roteiro: <[^>]+> · <[^>]+>\n'
+                                   r'    → antes: <[^>]+>; depois: <[^>]+>$')
+        self.assertIn('nunca login', flat(criteria))
+        self.assertIn('reconhecimento', flat(criteria))
+
+    def test_the_protocol_lists_the_walkthrough_of_a_slice(self):
+        protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
+        self.assertIn('`walkthrough` (`persona`, `steps`, `before` e `after`: o roteiro da caixa', protocol)
+        self.assertIn('sem `walkthrough` ou com `before` vazio', protocol)
 
     def test_the_cap_of_five_slices_is_written_where_the_cut_is_made(self):
         """Issue 31, S1: o teto de cinco CAs por issue, o corte do excedente em issues de topo com blocked-by e as

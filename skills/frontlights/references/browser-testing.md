@@ -22,7 +22,9 @@ running anything:
 
 - `Toca o frontend:` `sim` turns the browser test on; `não` skips it.
 - `Conta:` `conta 1` (the default) or `contas 1 e 2`.
-- `Fluxo:` the screens and actions to exercise, with the expected result, and the
+- `Fluxo:` the order in which the watched run walks the walkthroughs of the boxes (the `Roteiro:` lines of each
+  box, with its persona, steps, before and after: `references/issues.md`), the screens and actions to exercise,
+  with the expected result, and the
   effect in the back and the database after saving (what changes in the row or in the
   behavior), checked through the product's own read path or a read-only query the
   project already permits, never only what the screen shows.
@@ -388,7 +390,9 @@ Options, in this order: "Assistir de novo", "Aprovado",
 - "Aprovado": close the window. The user confirms that DEPOIS did what the `Fluxo:` expects. Record
   `aprovacao: "aprovado"`, `situacao: "aprovado"`, the `lote` of the gate output and the answer
   verbatim, then go on with the order
-  (`checks smoke`, `serve stop`, and the review when the user asked for one).
+  (`checks smoke`, `serve stop`, and the review when the user asked for one). The answer confirms each box whose
+  walkthrough the run walked: it is the evidence of the tick of that box, which is ticked now by the tick cycle of
+  `development.md`, "Slices in order".
 - "Precisa de alteração": the user wants something changed. Ask what with
   `AskUserQuestion` and record it in their own words, record `aprovacao: "alteracao"` (and `situacao: "alteracao"`) and
   run no further step of the order; close the window and stop what this test started, with the profile already
@@ -399,7 +403,8 @@ Options, in this order: "Assistir de novo", "Aprovado",
 - "Pode prosseguir": close the window. The user saw the run and lets the stage go on without approving it.
   Record
   `aprovacao: "prosseguir"` and `situacao: "prosseguir"`; the handoff and the report say the run was watched
-  but not approved by the user, never "aprovado".
+  but not approved by the user, never "aprovado". It confirms no box: a box the run walked is ticked only with
+  other evidence of its own (its tests, when they ran), and stays open otherwise.
 
 Never pick an answer for the user, never read the 5 minutes or a silence as an answer and
 never write `aprovacao: "aprovado"` on your own. When a case of DEPOIS failed, the

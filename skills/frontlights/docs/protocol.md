@@ -10,7 +10,7 @@
 | Issue | Redigir o corpo da issue a partir da descoberta, sem nova entrevista; a única pergunta é a dos seams | Arquivo da revisão com o carimbo (`frontlights.py stamp`) e aprovação humana dessa revisão exata; nada publicado |
 | Slices | Cortar o corpo aprovado em slices (uma caixa de critério por slice, bloqueadoras primeiro, até cinco por issue; o excedente vira issues de topo ligadas por blocked-by), mostrar a lista numerada com o quiz (cada slice com a seção do artefato que mostra o que ela entrega, na mesma URL do grilling) e depois pede a aprovação dos corpos por link e carimbo (`SKILL.md`, "Show before approval"); etapas 4 e 5 na mesma janela | Lista numerada e quiz respondidos, corpos aprovados por carimbo; aprovação das gravações específicas, uma escrita por issue (só acréscimo numa issue que já existe) |
 | Publicação | Somente criações e atualizações aprovadas | Nova leitura dos links, conteúdos e dependências reais |
-| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com o teste assistido respondido ou dispensável, o único portão ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, alterações, integração, o teste assistido (o portão), os testes e a revisão independente quando rodaram, e a saída do `authorize` do merge na main local |
+| Desenvolvimento | Sem pergunta de abertura, sob a autorização permanente (`references/development.md`, "Standing authorization and the denied operations"): só as issues da família ou do lote e as operações cobertas; a branch da issue, cortada da main local e nunca enviada, entra na main local por merge só com o teste assistido respondido ou dispensável, o único portão, e, sem tela, com o roteiro de cada caixa rodado ("Into the local main"); cada operação negada só com o "Sim" da pergunta própria; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta (`serve preview refresh`) e só para a pedido | Anúncio do que a execução fará, alterações, integração, o teste assistido (o portão), os testes e a revisão independente quando rodaram, e a saída do `authorize` do merge na main local |
 | Release | Ao fim de cada issue homologada (`references/development.md`, "The release"): `homolog sync`, `homolog release-plan` (só leitura do Git, dos registros e do GitHub; pronto quando há o que lançar e a main local não está atrás), sem suíte obrigatória (a suíte inteira só a pedido do usuário), a oferta da release e, com o "Sim", a branch `<prefixo>release-<data>`, o push dela e a PR única (cobertos); depois, ler o estado da PR (`closeout.py merge-status`) e oferecer o merge; só com o "Sim" o merge é feito; depois dele, `git pull --ff-only` na main local | Saída do `release-plan` e resposta literal da oferta; a resposta do `merge-status` a cada despertar; resposta literal da pergunta do merge |
 | Fechamento | Somente fechar e marcar no corpo do pai o que a pessoa aprovou na lista mostrada; o cartão vai para Done pelo fluxo "Item closed" do próprio quadro | Lista e comandos num arquivo carimbado, aprovação própria, `stamp --check` antes da escrita e nova leitura do GitHub |
 | Limpeza | Remover, sem pergunta, só o que o `cleanup.py plan` oferece: as worktrees e branches locais das issues, das slices e da release já mescladas na base aprovada, depois de copiar os registros de cada worktree para a principal; nunca a branch remota (o GitHub a apaga) | O plano e os comandos rodados (`git fetch --prune`, `copy_records`, `git worktree remove`, `git branch -D`), a resposta literal de cada candidato com `ask` e a saída do `cleanup.py verify` |
@@ -146,6 +146,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                    (ISO-8601 em -03:00, nunca UTC)
   plan.json
   authorization.json
+  pitfalls.md      armadilhas do projeto: uma linha por critério que entrou numa issue depois da aprovação, gravada
+                   no degrau "critério novo" dos Follow-ups e lida primeiro pelo reconhecimento; criado no primeiro
+                   uso, só acréscimo (formato: `references/issues.md`, "A pitfall line")
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
                    bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/
@@ -158,6 +161,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     evidence/<data-hora>.txt
     review.json            evidência a que a revisão independente, quando o usuário a pediu, ficou vinculada (`review-gate`)
     merge-local-main.json  operação do merge na main local, conferida pelo `authorize`
+    walkthroughs/S<k>.md   roteiro de uma caixa rodado sem tela (cabeçalho, Antes, Depois, saída mascarada), condição do merge na main local
     body-before|body-new|body-after-<carimbo>.md   cópias do corpo que o `closeout.py tick` guarda
   direct/<branch-com-hifens>/   trabalho sem issue (caminho Direto, ou Curto sem publicar issue): handoff,
                                 revisão, merge-local-main.json; no charter, a entrada de worktrees leva
@@ -266,18 +270,11 @@ O Frontlights não sincroniza roadmap nem sprint: o RoadS mantém o Roadmap a pa
 `status` de `scripts/roads.py` as lista em `obsoleteKeys`; a aprovação do par (URL, variável) continua em
 `.frontlights/roadmap-sync/approval.json`.
 
-A pergunta da etapa 1 sobre as issues do RoadS roda o passo `gaps` (`references/issue-gaps.md`). Ele só lê: `GET
-roadmap-state` (nada é consumido), e no GitHub só as issues do repositório do `config.json`,
-por `gh api graphql`, com a conta ativa do `gh`. Uma URL do RoadS fora desse repositório é ignorada
-e listada em `skipped`; issue fechada não é tocada. O resultado separa o que o config resolve
-sozinho (`fill`) do que exige escolha (`choose`), e informa os campos do quadro sem opção
-(`unfillable`). As escritas seguem a tabela aprovada pelo usuário, com o `gh` da sessão e as
-permissões vigentes, só em valor vazio, e terminam relendo com `gaps`. Sem `roadmap-state` válido
-(endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
-anos 2000 a 2100), o passo é recusado; `snapshotStale` indica cópia do quadro com mais de 24 h ou ausente.
+O Frontlights também não completa as issues que o RoadS mostra e não lê `roadmap-state`: o passo `gaps` saiu na
+issue 65, e a abertura da sessão não faz pergunta nenhuma sobre o RoadS.
 
-O passo do resumo para a diretoria (`scripts/progress_report.py`) vem logo depois da pergunta das
-issues do RoadS, em qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
+O passo do resumo para a diretoria (`scripts/progress_report.py`) roda só quando o usuário pede o resumo, em
+qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
 próprio projeto ou o do projeto que o usuário registrou como dono (`progress_report.py home --set`, com o sim
 dele; o `status` informa `source`, `operationsRoot` e `homeState`, e as demais operações rodam em
 `operationsRoot`). A ordem é: `status`,
@@ -310,9 +307,10 @@ um ponto de retomada local não concede essa permissão.
 
 O formato de `plan.json` segue `examples/plan.json`. O campo opcional `slices` de uma issue
 lista as slices em ordem de dependência, bloqueadoras primeiro, cada uma com `id`, `title`,
-`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers` e `depends_on`; o
-`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, ou com dependência
-inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
+`delivers` (o que dá para demonstrar quando ela termina), `seams`, `layers`, `depends_on` e
+`walkthrough` (`persona`, `steps`, `before` e `after`: o roteiro da caixa, `references/issues.md`); o
+`validate-plan` recusa slice sem `delivers`, sem seams ou camadas, sem `walkthrough` ou com `before` vazio, ou
+com dependência inexistente, posterior ou repetida, e com `slices` a issue dispensa `acceptance` e
 `vertical_check`, porque as slices trazem os dois. O campo opcional `parent` de uma
 issue é o id de outra issue do mesmo plano (a issue de origem já publicada entra no
 plano com o próprio número), o que permite conferir o vínculo sem rede; ele só cabe numa

@@ -2,7 +2,7 @@
 """Hook opcional `UserPromptSubmit` do Frontlights: lembra o modelo de abrir o /frontlights quando a
 pessoa cita a skill em linguagem comum ("frontlights, ataque a issue <n>", "ativar frontlights").
 
-Por que existe: sem a barra, abrir o estágio 1 (as perguntas das issues do RoadS, do resumo e do fechamento)
+Por que existe: sem a barra, abrir o estágio 1 (a pergunta do fechamento, e o resumo para a diretoria quando pedido)
 depende de o modelo decidir invocar a skill, e já houve a frase lida como pedido à sessão vizinha do próprio Frontlights. Este hook não decide nada pelo modelo: só injeta um lembrete no turno.
 
 O Frontlights não instala hooks. Para ligar este, copie o arquivo para `~/.claude/hooks/` e registre-o no
@@ -31,7 +31,7 @@ CHUNK = 1024 * 1024
 REMINDER = (
     'A pessoa citou o Frontlights. Se ela quer usar a skill (iniciar, ativar, atuar, atacar ou retomar uma '
     'issue), invoque a skill /frontlights com o pedido dela ANTES de qualquer outro trabalho, para que a '
-    'etapa 1 faça as perguntas das issues do RoadS, do resumo para a diretoria e do fechamento. Aqui "frontlights" é a '
+    'etapa 1 faça a pergunta do fechamento e o resumo para a diretoria rode quando pedido. Aqui "frontlights" é a '
     'skill, não uma sessão ou um projeto de mesmo nome (o repositório do próprio Frontlights), a não ser que a '
     'pessoa peça claramente para falar com essa sessão. Se o Frontlights já foi aberto nesta sessão, ignore '
     'este lembrete.'
