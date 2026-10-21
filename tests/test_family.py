@@ -326,7 +326,7 @@ class WatchedRunTextTests(unittest.TestCase):
 
     def test_real_back_comes_first_and_forced_responses_are_declared(self):
         for phrase in ('Real back first', 'real restricted profile', 'Undo in a `finally`',
-                       'never write to the database directly', 'the database behind the server is disposable',
+                       'never write to the database directly', 'the database behind the server is the local development database',
                        'perfil-original.json', "only that field and the user's id",
                        'mark the file `restaurado: true`', 'never demote the account that performs the undo',
                        '"Sem mudar perfil"', 'a detached-HEAD worktree made with `git worktree add`',

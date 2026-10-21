@@ -450,11 +450,9 @@ class BrowserTestOffThePreviewPortsTests(unittest.TestCase):
 
 
 def isolated(**overrides):
-    """Bloco browserTest.isolated válido: instância própria, porta automática, banco copiado e descartado."""
+    """Bloco browserTest.isolated válido: instância própria e porta automática, no banco de desenvolvimento local."""
     block = {'baseUrl': 'http://127.0.0.1:{port}/',
-             'processes': [process(name='web', argv=['python', 'APP_SCRIPT', '{port}'])],
-             'copyDatabase': {'argv': ['python', 'COPY_DB_SCRIPT'], 'timeoutSeconds': 600},
-             'dropDatabase': {'argv': ['python', 'DROP_DB_SCRIPT'], 'timeoutSeconds': 120}}
+             'processes': [process(name='web', argv=['python', 'APP_SCRIPT', '{port}'])]}
     block.update(overrides)
     return block
 
@@ -469,7 +467,7 @@ def with_isolated(block=None, *processes, preview=None, **overrides):
 
 
 class IsolatedBlockTests(unittest.TestCase):
-    """browserTest.isolated: o teste assistido em instância própria, com banco copiado a cada teste e descartado.
+    """browserTest.isolated: o teste assistido em instância própria, no banco de desenvolvimento local, sem cópia.
 
     Ausente ou null, nada muda; presente, o inspect recusa o bloco inválido antes de qualquer coisa rodar.
     """
@@ -569,13 +567,6 @@ class IsolatedBlockTests(unittest.TestCase):
             with self.subTest(cwd=cwd), tempfile.TemporaryDirectory() as root:
                 inspect_file(with_isolated(processes=[process(name='front', cwd=cwd)]), root)
 
-    def test_database_steps_refuse_a_working_folder(self):
-        """Issue 34, S4: cwd nos passos do banco é recusado, nunca ignorado em silêncio."""
-        for field in ('copyDatabase', 'dropDatabase'):
-            with self.subTest(field=field):
-                step = {'argv': ['python', 'STEP_SCRIPT'], 'cwd': 'tools'}
-                self.refuse(with_isolated(**{field: step}), rf'browserTest\.isolated\.{field}\.cwd')
-
     def test_processes_follow_the_serve_rules(self):
         cases = {'ausentes': None, 'vazios': [], 'texto': 'web',
                  'argv como texto (shell)': [process(argv='python APP_SCRIPT {port}')],
@@ -592,39 +583,20 @@ class IsolatedBlockTests(unittest.TestCase):
                                       r'browserTest\.isolated\.processes')
                 self.assertIn('local', message)
 
-    def test_copy_and_drop_database_are_required_objects(self):
-        for field in ('copyDatabase', 'dropDatabase'):
-            for value in (None, 'python COPY_DB_SCRIPT', ['python', 'COPY_DB_SCRIPT']):
-                with self.subTest(field=field, value=value):
-                    self.refuse(with_isolated(**{field: value}), rf'browserTest\.isolated\.{field}')
-            with self.subTest(field=field, value='ausente'):
-                block = isolated()
-                block.pop(field)
-                self.refuse(with_isolated(block), rf'browserTest\.isolated\.{field}')
-
-    def test_database_argv_must_be_a_non_empty_list_of_texts(self):
-        for field in ('copyDatabase', 'dropDatabase'):
-            for argv in (None, 'python DROP_DB_SCRIPT', [], ['python', ''], ['python', 7], ['python', 'a\0b']):
-                with self.subTest(field=field, argv=argv):
-                    self.refuse(with_isolated(**{field: {'argv': argv}}), rf'browserTest\.isolated\.{field}\.argv')
-
-    def test_database_argv_never_embeds_a_shell(self):
-        for field in ('copyDatabase', 'dropDatabase'):
-            for argv in (['sh', '-c', 'x'], ['cmd', '/c', 'x'], ['powershell', '-Command', 'x'], ['DROP_DB.bat'],
-                         ['python', '-c', 'x'], ['env', 'python', 'x'], ['python', 'DROP_DB_SCRIPT', '&&', 'x'],
-                         ['python', 'DROP_DB_SCRIPT', '|', 'x']):
-                with self.subTest(field=field, argv=argv):
-                    self.refuse(with_isolated(**{field: {'argv': argv}}),
-                                rf'browserTest\.isolated\.{field}\.argv não aceita shell embutido')
-
-    def test_database_timeout_is_an_optional_positive_integer(self):
-        for field in ('copyDatabase', 'dropDatabase'):
-            for timeout in (0, -5, 1.5, '60', True):
-                with self.subTest(field=field, timeout=timeout):
-                    self.refuse(with_isolated(**{field: {'argv': ['python', 'DB_SCRIPT'], 'timeoutSeconds': timeout}}),
-                                rf'browserTest\.isolated\.{field}\.timeoutSeconds')
-            with self.subTest(field=field, timeout='ausente'), tempfile.TemporaryDirectory() as root:
-                inspect_file(with_isolated(**{field: {'argv': ['python', 'DB_SCRIPT']}}), root)
+    def test_database_copy_and_drop_are_refused_with_a_message_to_delete_them(self):
+        """Issue 69, S2: o teste assistido roda no banco de desenvolvimento local; os campos de cópia saem."""
+        step = {'argv': ['python', 'DB_SCRIPT'], 'timeoutSeconds': 60}
+        for fields in (('copyDatabase',), ('dropDatabase',), ('copyDatabase', 'dropDatabase')):
+            for value in (step, None):
+                with self.subTest(fields=fields, value=value):
+                    message = self.refuse(with_isolated(**{field: value for field in fields}),
+                                          r'browserTest\.isolated')
+                    for field in fields:
+                        self.assertIn(field, message)
+                    self.assertIn('apague', message)
+                    self.assertIn('banco de desenvolvimento local', message)
+        with tempfile.TemporaryDirectory() as root:
+            inspect_file(with_isolated(), root)
 
     def test_a_fixed_port_of_the_preview_is_refused(self):
         """Nunca nas portas da prévia: a porta fixa vem de `port` ou, sem ele, da porta do health."""
@@ -676,11 +648,8 @@ class IsolatedBlockTests(unittest.TestCase):
         secret = ['--login', login, '--password', PASSWORD]
         named = {'name': f'{login}-{PASSWORD}', 'argv': ['python', 'APP_SCRIPT'] + secret,
                  'health': 'http://127.0.0.1:8080/health'}
-        cases = {'dropDatabase com shell': (with_isolated(dropDatabase={'argv': ['sh', '-c', ' '.join(secret)]}),
-                                            r'dropDatabase\.argv'),
-                 'copyDatabase com timeout inválido': (
-                     with_isolated(copyDatabase={'argv': ['python', 'COPY_DB_SCRIPT'] + secret, 'timeoutSeconds': 0}),
-                     r'copyDatabase\.timeoutSeconds'),
+        cases = {'copyDatabase recusado': (with_isolated(copyDatabase={'argv': ['python', 'COPY_DB_SCRIPT'] + secret}),
+                                           r'copyDatabase'),
                  'processo com health não local': (
                      with_isolated(processes=[dict(named, health='http://10.0.0.5:8080/health')]), 'não é local'),
                  'processo na porta da prévia': (
@@ -697,8 +666,8 @@ class IsolatedBlockTests(unittest.TestCase):
         self.assertEqual(block['baseUrl'], 'http://127.0.0.1:{port}/')
         self.assertTrue(all(item['port'] == 'auto' and item['health'].startswith('http://127.0.0.1:{port}/')
                             for item in block['processes']))
-        self.assertIn('COPY_DB_SCRIPT', block['copyDatabase']['argv'])
-        self.assertIn('DROP_DB_SCRIPT', block['dropDatabase']['argv'])
+        self.assertNotIn('copyDatabase', block)
+        self.assertNotIn('dropDatabase', block)
         with tempfile.TemporaryDirectory() as root:
             inspect_file(local(EXAMPLE), root)
 

@@ -874,16 +874,21 @@ def validate_test_blocks(config, path):
 
 
 def validate_isolated_block(config):
-    """Refuse an invalid `browserTest.isolated` (the assisted test in its own instance, with the development
-    database copied before each test and dropped at the end). Absent or null: nothing is checked. Works on the
-    config already read: the caller masks the refusal text."""
+    """Refuse an invalid `browserTest.isolated` (the assisted test in its own processes and ports, on the local
+    development database itself, never a copy: a block that still declares `copyDatabase` or `dropDatabase`, even
+    null, is refused). Absent or null: nothing is checked. Works on the config already read: the caller masks the
+    refusal text."""
     import checks
     block = config['browserTest'].get('isolated')
     if block is None:
         return
     if not isinstance(block, dict):
-        raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl, processes, copyDatabase e '
-                             'dropDatabase.')
+        raise checks.Refused('browserTest.isolated precisa ser um objeto com baseUrl e processes.')
+    stale = [field for field in ('copyDatabase', 'dropDatabase') if field in block]
+    if stale:
+        raise checks.Refused(f'browserTest.isolated não aceita mais {" nem ".join(stale)}: o teste assistido roda no '
+                             'banco de desenvolvimento local, sem cópia; apague os campos copyDatabase e dropDatabase '
+                             'do bloco.')
     if not isolated_local_url(block.get('baseUrl')):
         raise checks.Refused('browserTest.isolated.baseUrl precisa ser uma URL http(s) em host local (127.0.0.1, '
                              'localhost ou ::1), sem usuário e senha; {port} pode ocupar o lugar da porta.')
@@ -935,8 +940,6 @@ def validate_isolated_block(config):
         raise checks.Refused('browserTest.isolated.baseUrl usa {port}, mas nenhum processo de '
                              'browserTest.isolated.processes tem port "auto": a que porta ele se referiria? Use a '
                              'porta fixa do processo na baseUrl ou port "auto" no processo.')
-    for field in ('copyDatabase', 'dropDatabase'):
-        validate_isolated_command(block.get(field), f'browserTest.isolated.{field}')
 
 
 def fixed_url_port(url):
@@ -969,30 +972,6 @@ def fixed_ports(processes):
         if port is not None:
             ports.setdefault(port, item.get('name'))
     return ports
-
-
-def validate_isolated_command(command, where):
-    """`{argv, timeoutSeconds?}` of a database step of the isolated instance, with the shell filter of checks."""
-    import checks
-    if not isinstance(command, dict):
-        raise checks.Refused(f'{where} precisa ser um objeto com argv (lista de argumentos) e, opcionalmente, '
-                             'timeoutSeconds.')
-    argv = command.get('argv')
-    if not isinstance(argv, list) or not argv or not all(isinstance(part, str) and part for part in argv):
-        raise checks.Refused(f'{where}.argv precisa ser uma lista não vazia de textos não vazios, não uma string.')
-    if any('\0' in part for part in argv):
-        raise checks.Refused(f'{where}.argv não aceita byte NUL em nenhum argumento.')
-    reason = checks.embedded_shell(argv)
-    if reason:
-        raise checks.Refused(f'{where}.argv não aceita shell embutido ({reason}; cmd, sh, bash, powershell, .bat, '
-                             'wrappers, &&, |, ;, redirecionamentos, python -c); declare o executável e seus '
-                             'argumentos.')
-    timeout = command.get('timeoutSeconds')
-    if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, int) or timeout <= 0):
-        raise checks.Refused(f'{where}.timeoutSeconds precisa ser um inteiro positivo.')
-    if 'cwd' in command:
-        raise checks.Refused(f'{where}.cwd não é aceito: o passo do banco roda na worktree principal do projeto; '
-                             'declare o caminho do script no argv.')
 
 
 def isolated_local_url(value):

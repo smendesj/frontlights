@@ -100,7 +100,7 @@ text, and is reread before it is posted.
 **Show before approval.** The approval of a document, a list or a table is asked by link and
 stamp, never by pasting the full text into the conversation. This covers the issue body of stage 4
 and its revisions, the plan and the bodies of stage 5, the conversion of a family, the findings
-batch and its leftover criteria, the closeout list and
+batch and its leftover criteria, the batch of new criteria of the free test, the closeout list and
 the RoadS progress-report draft (the cleanup of merged work asks nothing: `references/closeout.md`, step 5). Before each approval:
 1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
    the host has it (the card reaches the phone), and give a clickable link to the file.
@@ -406,7 +406,11 @@ goes, in this order:
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
    branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
    the merge, then the bundle.
-7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
+7. **The free test** (development.md, "The free test on the local main"): in an issue with a screen, a
+   Chrome window on the local main, opened without a question, for the user to test as they like; it ends
+   when the user closes the window; without a screen, the commands to try the local main in the terminal and a
+   question before the release.
+8. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 
 **Denied operations are asked one at a time.** An operation on the denied list (development.md,
