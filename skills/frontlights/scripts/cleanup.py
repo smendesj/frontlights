@@ -234,6 +234,17 @@ def release_branches(root, prefixes):
     return sorted(set(names))
 
 
+def nothing_left(main, entry, key, known):
+    """An authorization entry whose worktree Git no longer lists, whose folder is gone and whose branch (a plain name)
+    has no local tip: nothing of it is left to remove (issue 65's follow-up: old charters filled the cap)."""
+    branch = entry.get('branch')
+    if key in known or Path(entry['path']).exists():
+        return False
+    if branch is None:
+        return True
+    return closeout.valid_branch(branch) and local_tip(main, branch) is None
+
+
 def disposable(name):
     """An ignored name inside a folder of dependencies, builds or caches (rebuilt, so removing it asks nothing)."""
     parts = [part for part in name.strip('/"').split('/') if part]
@@ -548,7 +559,8 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     for entry in authorized:
         if entry.get('slice'):
             entry['issue_branch'] = issue_branches.get(entry['issue'])
-    items, seen = [], {}
+    items, seen, gone = [], {}, 0
+    known = {norm(e['path']) for e in listing}
     named = [{'issue': None, 'path': str(p), 'branch': None} for p in worktrees]
     named += [{'issue': None, 'path': str(p), 'branch': None, 'integration': True} for p in integrations]
     for entry in authorized + named:
@@ -560,6 +572,9 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             continue
         entry['path'] = str(path if path.is_absolute() else Path(root) / path)
         seen[key] = entry
+        if entry.get('issue') is not None and nothing_left(main_entry['path'], entry, key, known):
+            gone += 1   # what `assess` would count as already clean: it never takes a place under the cap
+            continue
         items.append(entry)
     require(len(items) <= MAX_ITEMS, f'name at most {MAX_ITEMS} worktrees')
     default = read_default_branch(gh, repository)
@@ -571,10 +586,12 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     releases = [b for b in release_branches(main, prefixes) if not is_protected(b, protected)][:MAX_ITEMS]
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
               'baseSource': 'argument' if base else 'default_branch', 'commands': [], 'candidates': [], 'excluded': [],
-              'alreadyClean': 0, 'ask': False}
+              'alreadyClean': gone, 'ask': False}
     if not items and not releases:
-        result['message'] = ('No worktree is recorded for these issues in an authorization and none was named: nothing to clean. '
-                             'Name one with --worktree PATH.')
+        result['message'] = (f'{gone} recorded worktree(s) of these issues are already gone, with their branches: nothing to clean.'
+                              if gone else
+                              'No worktree is recorded for these issues in an authorization and none was named: nothing to clean. '
+                              'Name one with --worktree PATH.')
         return result
     resolved = []
     for item in items:

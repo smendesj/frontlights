@@ -336,6 +336,7 @@ class RemovableTests(CleanupCase):
         self.git('branch', '-D', branch)
         result, _ = self.plan({})
         self.assertEqual((result['alreadyClean'], result['candidates'], result['excluded'], result['ask']), (1, [], [], False))
+        self.assertIn('already gone', result['message'])
 
     def test_several_issues_are_ordered_by_number_and_a_hand_named_worktree_comes_last(self):
         a, branch_a, tip_a = self.worktree('wt-a', issue=13)
@@ -565,6 +566,34 @@ class IntegrationTests(CleanupCase):
         (integ / 'scratch.txt').write_text('x')
         result, _ = self.plan(info, issues='12,13', integrations=[str(integ)])
         self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}['claude/integ'], ['uncommitted_changes'])
+
+
+class StaleAuthorizationTests(CleanupCase):
+    """An authorization entry whose worktree, folder and local branch are all gone has nothing left: it is counted as
+    already clean and never takes a place under the cap of MAX_ITEMS (a long-lived project keeps old charters)."""
+
+    def gone(self, count, issue=12):
+        for n in range(count):
+            self.entries.append({'issue': issue, 'path': str(self.base / f'gone{n}'), 'branch': f'claude/gone{n}',
+                                 'ownership': ['src']})
+        self.authorize()
+
+    def test_entries_with_nothing_left_do_not_count_toward_the_cap(self):
+        path, branch, tip = self.worktree('wt12')
+        self.gone(cleanup.MAX_ITEMS + 10)
+        result, _ = self.plan({branch: merged(tip)})
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual((result['alreadyClean'], len(result['candidates']), result['excluded']),
+                         (cleanup.MAX_ITEMS + 10, 1, []))
+
+    def test_entries_with_a_local_branch_left_still_count_toward_the_cap(self):
+        self.gone(cleanup.MAX_ITEMS + 1)
+        for n in range(cleanup.MAX_ITEMS + 1):
+            self.git('branch', f'claude/gone{n}')
+        result, gh = self.plan({})
+        self.assertFalse(result['ok'])
+        self.assertIn(f'name at most {cleanup.MAX_ITEMS} worktrees', result['message'])
+        self.assertEqual(gh.calls, [])
 
 
 class MoreStayTests(CleanupCase):
