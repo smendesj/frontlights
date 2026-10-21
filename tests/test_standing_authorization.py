@@ -59,7 +59,7 @@ class StandingAuthorizationTests(unittest.TestCase):
         for phrase in ('running migrations on the local development database',
                        "creating and removing test data through the product's own endpoints",
                        'ticking acceptance criteria with evidence',
-                       'the branch of the issue into the local main once its watched run is answered or not needed'):
+                       'the local integration branch of the issue into the local main once its watched run is answered or not needed'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
         self.assertIn('The merges the run makes on its own are the covered merges of that section', skill)

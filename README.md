@@ -133,8 +133,9 @@ defina o repositório exato no formato `proprietario/repositorio` e mantenha
 `.frontlights/` ignorado pelo Git desse projeto. Um projeto sem remoto usa
 `"repository": null`: o GitHub aparece como `unconfigured`, o plano usa
 `url: null` e as issues ficam em `.frontlights/issues/<n>/`, com `source: "local"`.
-As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`, são cortadas da main local do
-projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
+As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`. A branch de cada issue é criada
+no GitHub a partir da `origin/main` por `gh issue develop`, ligada à issue, e só leva os commits da issue; as
+branches das fatias, a da prévia e a main local do projeto (a homologação) ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
 trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa.
@@ -593,7 +594,8 @@ worktree para o `.frontlights` da principal antes de a limpeza removê-la.
 Cada issue entra na **main local** do projeto, a homologação, por um merge com um único portão, o teste assistido
 respondido (ou dispensável, sem mudança na tela, e então com o roteiro de cada caixa rodado pelo Claude, sem pergunta
 nova, num `.md` por caixa em `.frontlights/issues/<n>/walkthroughs/` e na tabela do handoff): a main local é trazida
-para a branch da issue, o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
+para uma branch local de integração da issue (`<prefixo>issue-<n>-integra`, nunca enviada; a branch da issue no
+GitHub nunca recebe a main local), o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Numa issue com tela, logo depois, sem pergunta, abre o **teste livre**: uma janela do Chrome
 pelo Playwright com a main local, servida da worktree principal e ligada ao banco local, para você testar sem roteiro
@@ -645,9 +647,10 @@ Com o merge confirmado, nesta ordem:
    das issues e das slices que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
    empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao
    GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são
-   protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota nunca é apagada pela
-   limpeza: o GitHub apaga a branch da PR mesclada sozinho (a opção "Automatically delete head branches" do
-   repositório). Nunca usa `--force`, e `cleanup.py verify` confere depois que tudo sumiu e que os registros foram
+   protegidos, nem a worktree principal, nem a pasta em que a sessão está. Das branches remotas, a limpeza só apaga
+   a da issue (`git push origin --delete`), quando a ponta dela no GitHub já está em `origin/main`, antes da branch
+   local; nunca a de uma slice, da integração, da release ou uma protegida: o GitHub apaga a branch da PR mesclada
+   sozinho (a opção "Automatically delete head branches" do repositório). Nunca usa `--force`, e `cleanup.py verify` confere depois que tudo sumiu e que os registros foram
    copiados. Os arquivos que o Git ignora (um `.env`, `node_modules`) vão embora com a worktree: só pergunta antes
    a worktree que tem arquivo ignorado fora de pastas de dependência ou build (um `.env`, por exemplo), nomeando os
    arquivos. O que fica (alteração pendente, PR aberta, branch protegida) é dito numa linha. A worktree de
@@ -685,14 +688,15 @@ espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktr
 Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
 empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Antes, no início de cada
 etapa 6, traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
-Ele trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local, cada CA na própria
+Ele trabalha as slices de cada issue em ordem, numa branch por issue, criada no GitHub a partir da `origin/main`, cada CA na própria
 worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é, por padrão, um ciclo de
 TDD (nenhum teste quando você pede a implementação "só com teste assistido"), um ponto
 de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
 aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
 commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
 produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com o
-teste assistido respondido; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
+teste assistido respondido; a branch da issue sobe para o GitHub a cada fatia mesclada, a main local só sai na
+release, e a PR da release é a única do fluxo. Cada operação
 negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
 só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em

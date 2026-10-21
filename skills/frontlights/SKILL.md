@@ -391,8 +391,8 @@ goes, in this order:
    local main.
 2. **The preview** (same section), in a project whose config has a `preview` block: up before the
    first slice, refreshed after each slice is merged into the branch of its issue.
-3. **Slices in order** (development.md, "Slices in order"): one issue branch, cut from the local
-   main and kept local; one worktree per slice, merged into the branch of the issue when its loop
+3. **Slices in order** (development.md, "Slices in order"): one issue branch, created on GitHub from
+   `origin/<base>` by `gh issue develop` and pushed after each slice merge; one worktree per slice, merged into the branch of the issue when its loop
    closes (TDD by default, never a gate; no tests under "só com teste assistido", development.md, "Which
    tests run when"); independent slices at once, and the legwork around each open slice fanned out.
 4. **The watched run** (`references/browser-testing.md`): one per issue, when the last slice that
@@ -404,7 +404,7 @@ goes, in this order:
    Follow-ups section of `references/issues.md`). The independent review runs only when the user asks
    for it, judged by `references/review.md` (development.md, "When the review is done").
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
-   branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
+   local integration branch of the issue (never into the branch of the issue), the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
    the merge, then the bundle.
 7. **The free test** (development.md, "The free test on the local main"): in an issue with a screen, a
    Chrome window on the local main, opened without a question, for the user to test as they like; it ends
@@ -431,6 +431,7 @@ wait of stage 6 finds the release's pull request merged into the approved base (
 brought up to it with `git pull --ff-only`), or when the user asks to close finished
 issues. At the merge and at stage 1, the cleanup of the merged work (closeout.md, step 5) runs first, without a
 question: the worktrees and local branches of the issues, slices and release already in the approved base, each
-worktree's records copied to the main worktree first, never a remote branch (GitHub deletes it). Closing (with the
+worktree's records copied to the main worktree first, and of remote branches only the released issue's (GitHub
+deletes the others). Closing (with the
 tick in a parent, in the same approval) waits for its own
 approval of the list by link and stamp ("Show before approval"): no implementation authorization, merged PR or green test covers it.

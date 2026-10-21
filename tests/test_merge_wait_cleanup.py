@@ -37,7 +37,7 @@ class WaitTests(unittest.TestCase):
         for phrase in ("By default, as soon as the release's pull request is open, the session waits for the user's merge",
                        '"não aguardar"', 'the closeout question of the next session picks the work up',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       'the release branch is the only branch of the flow that is pushed'):
+                       'the release branch and the branch of each issue are the only branches of the flow that are pushed'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
@@ -188,8 +188,13 @@ class CloseoutReferenceTests(unittest.TestCase):
                        '`git fetch --prune origin` and whatever `candidates` finds (the plan alone judges what is merged',
                        'It is the written exception to "deleting anything" of the denied operations',
                        'the session removes them **without a question**',
-                       'The remote branch is GitHub\'s job', '"Automatically delete head branches"',
-                       'no command of the cleanup ever runs `git push origin --delete`',
+                       'A remote branch is GitHub\'s job, with one written exception', '"Automatically delete head branches"',
+                       'the plan brings `git push origin --delete <branch>` (`delete_remote_branch`) for the branch of an issue, and only for it',
+                       'once `origin/<base>` contains its tip on GitHub',
+                       'never for a slice, the integration branch (never pushed), the release, a protected branch',
+                       'no other command of the cleanup ever runs `git push origin --delete`',
+                       'no `git branch -D` after a failed removal or a failed remote delete',
+                       '`--remote-branch` names the branch of each `delete_remote_branch` that ran',
                        '`git fetch --prune origin` first (`fetch_prune`',
                        'gets `copy_records` before `git worktree remove`',
                        'cleanup.py archive --from <worktree>/.frontlights --to <recordsTo>',
@@ -257,7 +262,8 @@ class CloseoutReferenceTests(unittest.TestCase):
         for phrase in ('the one body edit is the approved tick of the item of a parent that cites a sub-issue closed in the same list',
                        'Close an issue on the strength of the merge alone',
                        'Remove a worktree or a branch that `cleanup.py plan` did not offer (or, with `ask: true`, that the user did not approve)',
-                       'delete a remote branch (`git push origin --delete`: GitHub deletes the merged head branch), use `--force`',
+                       'delete a remote branch the plan did not offer (`git push origin --delete` other than its '
+                       '`delete_remote_branch`: GitHub deletes the merged head branch), use `--force`',
                        'Merge a pull request, deploy or release: the closeout never does'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, never)
@@ -268,7 +274,7 @@ class CloseoutReferenceTests(unittest.TestCase):
                      'unsafe_branch', 'protected_branch', 'uncommitted_changes', 'unreadable_status', 'open_pr',
                      'no_merged_pr', 'newer_than_merged_pr', 'merged_into_other_branch', 'ancestry_unverifiable',
                      'open_dependents', 'pull_requests_unreadable', 'merged_release_branch', 'ignored_files_besides_dependencies',
-                     'fetch_prune', 'copy_records',
+                     'fetch_prune', 'copy_records', 'delete_remote_branch', 'remote_branch',
                      'frontlights_records', 'branch_differs_from_authorization', 'locked_worktree', 'checked_out_elsewhere',
                      'not_found', 'integration_has_pull_request', 'integration_pushed', 'integration_has_unique_commits',
                      'ignored_files', 'local_only_integration',
@@ -292,7 +298,7 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
         stage7 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 7.')[1].split())
         for phrase in ("when the wait of stage 6 finds the release's pull request merged into the approved base",
                        'the cleanup of the merged work (closeout.md, step 5) runs first, without a question',
-                       'never a remote branch (GitHub deletes it)',
+                       "and of remote branches only the released issue's (GitHub deletes the others)",
                        'Closing (with the tick in a parent, in the same approval) waits for its own'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
@@ -323,7 +329,9 @@ class DocsAndEvalsTests(unittest.TestCase):
                              '`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/` da worktree principal (`cleanup.py archive`)',
                              'também no início de toda sessão nova cujos registros de autorização listam issues, depois de um `git fetch --prune origin`',
                              'se o `verify` ainda a vê aberta depois de relê-la uma vez, ela entra na pergunta de fechamento, com a razão numa linha',
-                             'A branch remota nunca é apagada pela limpeza', 'a branch local da release mesclada',
+                             'Das branches remotas, a limpeza só apaga a da issue (`git push origin --delete`)',
+                             'nunca a de uma slice, da integração, da release ou uma protegida',
+                             'a branch local da release mesclada',
                              'A espera é regra da skill, não barreira do Frontlights',
                              '`python scripts/closeout.py candidates|verify|merge-status|tick-check ...`',
                              '`python scripts/cleanup.py plan|verify ...`',
@@ -336,7 +344,7 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       '(`parentTicks`', '`closeout.py tick-check` confere antes e depois',
                                       '`scripts/cleanup.py plan|verify`', 'nunca com `--force`',
                                       'roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta',
-                                      'nunca `git push origin --delete`, porque o GitHub apaga a branch de cabeça da PR mesclada',
+                                      'o único `git push origin --delete` é o da branch da issue, quando `origin/<base>` já contém a ponta dela no GitHub',
                                       'worktrees/<pasta>-<tip curto>/ cópia do `.frontlights` de cada worktree da issue'),
             ('skills', 'frontlights', 'templates', 'handoff.md'): ('Aguardando o merge',),
             ('skills', 'frontlights', 'references', 'closeout.md'): ('`contained_in_base_without_pull_request`',
@@ -346,7 +354,8 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       'um item que cita outras issues junto nunca é marcado', 'nunca com `--force`',
                                       'cujo tip é a cabeça de uma PR mesclada que chegou à base aprovada',
                                       'ou, sem PR nenhuma, cujo tip já está contido em `origin/<base>`',
-                                      'a branch remota nunca entra: o GitHub apaga a branch de cabeça da PR mesclada',
+                                      'das branches remotas, só a da issue (a entrada da issue sem `slice`, nunca a `-integra`, a da release ou uma protegida) entra',
+                                      'nenhuma outra branch remota entra: o GitHub apaga a branch de cabeça da PR mesclada',
                                       'o `archive` é a única escrita do script',
                                       'recusa um destino com arquivo diferente ou a mais (nada é copiado, nada é sobrescrito)',
                                       'e destino fora do `.frontlights` da worktree principal daquele repositório (lida do Git)',
@@ -368,7 +377,8 @@ class DocsAndEvalsTests(unittest.TestCase):
                        '`contained_in_base_without_pull_request`', 'marcar no corpo de #P a linha L', 'the item that cites two issues is listed as not ticked',
                        'exactly the listed line with `[ ]` turned into `[x]`', '`tick-check` answers `ok` before the write and on the reread',
                        'before any closing question and without asking, the cleanup of the merged work', 'with no `--force`',
-                       'No command is `git push origin --delete`', 'before `git worktree remove`',
+                       'no other command is `git push origin --delete`', 'right before its local `git branch -D`',
+                       'before `git worktree remove`',
                        '"Não agora" to the closing leaves the cleanup done already',
                        'the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the '
                        'authorization records, without a question, and then asks the closeout question',

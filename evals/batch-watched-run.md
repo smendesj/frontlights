@@ -21,7 +21,7 @@ Expected, in this order:
    teste_assistido` records it, `resume` in a new session lists it first and the session asks the question before any
    review. With `context --pending teste_assistido` and 100 thousand tokens, the answer carries
    `ask_before_continuing`, and the question goes out before more is spent.
-5. "Sim, pode rodar": one ANTES on the base and one DEPOIS on the branch of the issue when every screen slice is
+5. "Sim, pode rodar": one ANTES on the remote base (`origin/<base>`) and one DEPOIS on the branch of the issue when every screen slice is
    already merged into it, otherwise on a local integration worktree that merges the issue branch and the slice
    branches still open (never pushed), every `Fluxo:` in the same two passes, then the closing question. After
    "Aprovado" the record, `.frontlights/issues/<n>/browser/result.json`, carries `situacao`, `lote.roots` (the
