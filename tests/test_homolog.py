@@ -159,7 +159,7 @@ class LocalMainTextTests(unittest.TestCase):
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
         for phrase in ('one issue branch, cut from the local main and kept local',
-                       'the watched run answered or not needed, `authorize`, the merge, then the bundle',
+                       'the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`, the merge, then the bundle',
                        '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
