@@ -70,8 +70,9 @@ permissões humanas e nativas vigentes.
 homologação: acumula as issues cujo teste assistido foi respondido (ou não era preciso), e a issue fecha só com a release que a leva
 mesclada. O `authorize` distingue as duas: aceita `merge_into_local_main` só com `target` igual a `base.branch`
 do charter, sem barra (então `origin/main`, `upstream/main` e `refs/remotes/...` são recusados como main
-remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia `issue` ou `direct`, nunca os dois;
-nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
+remota), só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue,
+local e nunca enviada; a branch da issue nunca recebe a main local) ou do trabalho sem issue (a operação nomeia
+`issue` ou `direct`, nunca os dois; nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
 `browser_gate`, o único portão; um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão, e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
 remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota).

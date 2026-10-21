@@ -33,7 +33,7 @@ an issue still waiting for its release loses its mapping when its charter is ove
 
 **Covered**, for the issues of the family or batch at hand: editing, testing, committing, the covered merges
 below, the creation of the branch of the issue on GitHub when its work starts and the push of the branch of the
-issue after each slice merge ("Slices in order", below; a charter never lists `push_issue_branch` among what it
+issue after each slice merge and after a fix of the free test ("Slices in order", below; a charter never lists `push_issue_branch` among what it
 does not allow), running migrations on the local development database, creating and removing test data through the
 product's own endpoints, commenting on the issues and ticking acceptance criteria with evidence. Before the
 release, GitHub receives only the branch of each issue, with only the commits of the issue on top of
@@ -44,7 +44,9 @@ are still asked.
 
 **Covered merges.** The run makes these merges on its own, and only these:
 
-- a base into an issue's own branch;
+- a base into an issue's own branch or into its local integration branch (`<branch_prefix>issue-<n>-integra`,
+  step 1 of "Into the local main");
+- the branch of the issue into its local integration branch, after a fix of the free test;
 - a slice's branch into the branch of its own issue when its loop closes;
 - the branch of the issue (or of the slice it depends on) into a slice's branch, to bring it up to date;
 - a verified child's branch into its parent's branch;
@@ -53,7 +55,8 @@ are still asked.
   becomes a question);
 - the local main and the branches of the issues in progress into the preview branch by `serve preview
   refresh` (a conflict is undone and becomes a question);
-- the branch of the issue into the local main once its watched run is answered or not needed ("Into the local main").
+- the local integration branch of the issue into the local main once its watched run is answered or not needed
+  ("Into the local main"; work without an issue, its own branch).
 
 **Work without an issue.** The Direct path, or a Short one that publishes no issue, is homologated the same way
 in a project with a remote. Its charter lists a slug of its own (lower-case letters, digits and hyphens, up to 64
@@ -123,8 +126,8 @@ An issue is worked on one issue branch, created on GitHub when its work starts: 
 <branch_prefix>issue-<n>` and `git worktree add <path> <branch_prefix>issue-<n>` give the issue its worktree on a
 local branch that tracks the remote one (covered). After each slice is merged into it (below), the session pushes
 it, `git push origin <branch_prefix>issue-<n>` (covered), so the branch of the issue on GitHub carries only the
-commits of the issue on top of `origin/<base>`. The pushes happen only after slice merges and before step 1 of
-"Into the local main": the local main never enters a pushed branch. An issue whose branch was cut from the local
+commits of the issue on top of `origin/<base>`. The local main never enters a pushed branch: it meets the issue
+only in the local integration branch of step 1 of "Into the local main", which is never pushed. An issue whose branch was cut from the local
 main before this rule keeps that local branch until its release. The issue is delivered by one merge into the
 local main once its watched run is answered or not needed ("Into the local main", below); each of its slices (the boxes
 of its acceptance criteria, stage 5) gets its own worktree and branch, `<branch_prefix>issue-<n>-s<k>`,
@@ -541,11 +544,16 @@ below, and a target with a slash (`origin/main`, `upstream/main`) is refused as 
 The watched run is the only gate of stage 6: no impact suite and no review is required. When the last slice of the
 issue is merged into the branch of the issue, the steps run in this order:
 
-1. **Bring the local main in first.** In the issue's worktree, `git merge main` (one of the covered merges,
-   a base into the issue's own branch), so the tip of the branch already contains the local main and the
-   merge below cannot conflict. A conflict is resolved here, in the issue's worktree, committed there and
-   shown as part of the diff of the issue. From here on the branch of the issue holds the local main and is not
-   pushed again, since the local main never enters a pushed branch ("Slices in order", above).
+1. **Bring the local main in, on a local integration branch.** The branch of the issue never receives the local
+   main, since it is pushed and the local main never enters a pushed branch ("Slices in order", above). `git
+   worktree add -b <branch_prefix>issue-<n>-integra <path> <branch_prefix>issue-<n>` cuts a local integration
+   branch from the branch of the issue, named in the charter's `worktrees` as its own entry `{issue: n, path,
+   branch: <branch_prefix>issue-<n>-integra}` (no `slice`), local and never pushed. In that worktree, `git merge
+   main` (one of the covered merges, a base into the issue's local integration branch), so its tip already
+   contains the local main and the merge below cannot conflict. A conflict is resolved here, in the integration
+   worktree, committed there and shown as part of the diff of the issue. Steps 2 to 4 run on that worktree and
+   that branch. Work without an issue has no integration branch: its branch is cut from the local main and never
+   pushed, so `git merge main` runs in its own worktree, as before.
 2. **The gate, the watched run.** `frontlights.py browser-gate` answers `answered` (the user approved or said
    to go on) or `not_needed` (nothing on the screen changed), exit code 0; `pending`, `stale`,
    `contradiction` or `unconfigured` is the question of `browser-testing.md`, never the merge.
@@ -563,14 +571,14 @@ issue is merged into the branch of the issue, the steps run in this order:
    files and its gates stay as below.
 4. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
    authorize --charter .frontlights/authorization.json --operation .frontlights/issues/<n>/merge-local-main.json`,
-   with `kind` `merge_into_local_main`, the issue's worktree and branch, `target` the base branch of the
+   with `kind` `merge_into_local_main`, the integration worktree and branch of the issue, `target` the base branch of the
    charter and `gates` `{"browser_gate": "answered"}` (or `not_needed`), the only gate;
    `examples/operation-merge-local-main.json` shows the shape. With `scope_check: pass`, in the
-   main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>`. A refusal names the gate
+   main worktree and on the local main: `git merge --no-ff <branch_prefix>issue-<n>-integra`. A refusal names the gate
    or the target, and the session asks the user with `AskUserQuestion` instead of merging; it never edits the
    gates to make them pass. Work without an issue (the Direct path, or a Short one that publishes none) goes
    the same way: its charter lists the slug in `direct_ids` and its `worktrees` entry carries `direct` in place
-   of `issue`, the operation names that `direct` (never `issue` too) and is kept in
+   of `issue`, the operation names that `direct` (never `issue` too), its own worktree and branch, and is kept in
    `.frontlights/direct/<branch, slashes as dashes>/merge-local-main.json`, and the merge is `git merge --no-ff
    <its branch>`.
 5. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
@@ -587,7 +595,7 @@ issue is merged into the branch of the issue, the steps run in this order:
    said in one line and recorded in the handoff as a backup not taken.
 6. **Record it.** The handoff's line "Merge na main local" takes the watched run with its evidence, or the walkthroughs run without a screen with their table (and the
    tests or the review, only when they ran), the output of `authorize`, the commit of the merge and the bundle's path (or "sem backup configurado");
-   the branch of the issue is not pushed after step 1.
+   the branch of the issue on GitHub never received the local main.
 
 `authorize` is a preflight, not a barrier: it reads no Git and does not prove that the watched run was answered
 (`browser-gate` does), the host's own permission prompts still
@@ -625,9 +633,11 @@ says that the window is theirs to test the local main as they like and that clos
   as a failure.
 - **A fix asked in the free test.** When the user asks for a fix while the window is open, the session fixes it at
   once on the branch of the issue, in the issue's worktree or in a new slice worktree of that issue ("Slices in
-  order", above), TDD by default ("Which tests run when", above), then merges the branch of the issue into the local
-  main again by steps 1, 4 and 5 of "Into the local main" (covered, the `authorize` check included, with the gate of
-  the watched run already answered): the free test itself is the evidence of the fix, and the watched run is not
+  order", above), TDD by default ("Which tests run when", above), pushes the branch of the issue again (covered), then
+  brings the branch of the issue and the local main into its integration branch (`git merge <branch_prefix>issue-<n>`
+  and `git merge main` in the integration worktree, both covered) and merges that branch into the local main again by
+  steps 4 and 5 of "Into the local main" (covered, the `authorize` check included, with the gate of the watched run
+  already answered): the free test itself is the evidence of the fix, and the watched run is not
   rerun. When the product needs a restart to pick the change up, the session runs `serve stop` and `serve start` on
   the main worktree ("The free test window"); then the user reloads the page, and the window stays open. Each fix
   becomes a new acceptance criterion of the issue, first in a local draft, `.frontlights/issues/<n>/teste-livre-cas.md`,

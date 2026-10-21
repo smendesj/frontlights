@@ -226,7 +226,8 @@ class FamilyRulesTextTests(unittest.TestCase):
         body = flat(section(read('skills', 'frontlights', 'references', 'development.md'),
                             'Standing authorization and the denied operations') or '')
         for phrase in ('**Covered merges.** The run makes these merges on its own, and only these:',
-                       "a base into an issue's own branch;",
+                       "a base into an issue's own branch or into its local integration branch",
+                       'the branch of the issue into its local integration branch, after a fix of the free test;',
                        "a slice's branch into the branch of its own issue when its loop closes;",
                        "the branch of the issue (or of the slice it depends on) into a slice's branch, to bring it "
                        "up to date;",
@@ -236,7 +237,8 @@ class FamilyRulesTextTests(unittest.TestCase):
                        "undone and becomes a question);",
                        'the local main and the branches of the issues in progress into the preview branch by '
                        '`serve preview refresh` (a conflict is undone and becomes a question);',
-                       'the branch of the issue into the local main once its watched run is answered or not needed',
+                       'the local integration branch of the issue into the local main once its watched run is '
+                       'answered or not needed',
                        'the push of the branch of the issue after each slice merge',
                        'the branches of the slices, the preview branch and the local main stay local'):
             with self.subTest(phrase=phrase):

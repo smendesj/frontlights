@@ -14,6 +14,7 @@
   "worktrees": [
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-1", "ownership": ["src", "tests", "docs/evidence"]},
     {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_SLICE_WORKTREE_PATH", "branch": "claude/issue-1-s2", "slice": "S2", "ownership": ["src/edit", "tests/edit"]},
+    {"issue": 1, "path": "REPLACE_WITH_ABSOLUTE_INTEGRATION_WORKTREE_PATH", "branch": "claude/issue-1-integra", "ownership": ["src", "tests", "docs/evidence"]},
     {"issue": 2, "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/issue-2", "base": "claude/issue-1", "ownership": ["src/edit", "tests/edit"]},
     {"direct": "melhoria-x", "path": "REPLACE_WITH_ABSOLUTE_WORKTREE_PATH", "branch": "claude/melhoria-x", "ownership": ["docs"]}
   ],

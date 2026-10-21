@@ -81,6 +81,18 @@ class LocalMainMergeAuthorizeTests(unittest.TestCase):
         self.assertEqual(result['scope_check'], 'pass')
         self.assertFalse(result['permission_granted'])
 
+    def test_the_merge_comes_from_the_integration_branch_of_the_issue(self):
+        """Issue 70, S2: a main local entra pela branch local de integração `<prefix>issue-<n>-integra`, cortada da
+        branch da issue e listada como entrada própria do charter (sem `slice`); o `authorize` aceita o merge dela."""
+        integra = self.root / 'issue-1-integra'
+        (integra / 'src').mkdir(parents=True)
+        c = dict(self.c, worktrees=self.c['worktrees'] + [
+            {'issue': 1, 'path': str(integra), 'branch': 'claude/issue-1-integra', 'ownership': ['src']}])
+        op = dict(self.op, worktree=str(integra), branch='claude/issue-1-integra')
+        result = frontlights.authorize(c, op)
+        self.assertEqual(result['scope_check'], 'pass')
+        self.assertFalse(result['permission_granted'])
+
     def test_a_browser_gate_that_was_not_needed_is_green_too(self):
         op = dict(self.op, gates=dict(GREEN, browser_gate='not_needed'))
         self.assertEqual(frontlights.authorize(self.c, op)['scope_check'], 'pass')
@@ -189,6 +201,40 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', gone=gone):
                 self.assertNotIn(gone, development)
 
+    def test_the_local_main_enters_through_a_local_integration_branch(self):
+        """Issue 70, S2: a main local entra por uma branch local de integração, e a branch remota da issue nunca a
+        recebe; os merges cobertos, o teste livre, a skill, a segurança, o README, o handoff, o exemplo e a limpeza
+        dizem isso."""
+        development = flat('skills', 'frontlights', 'references', 'development.md')
+        for phrase in ("a base into an issue's own branch or into its local integration branch "
+                       "(`<branch_prefix>issue-<n>-integra`",
+                       'the branch of the issue into its local integration branch',
+                       'the local integration branch of the issue into the local main',
+                       'brings the branch of the issue and the local main into its integration branch',
+                       'Work without an issue has no integration branch'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, development)
+        for gone in ('by steps 1, 4 and 5 of "Into the local main"',
+                     'the branch of the issue into the local main once its watched run'):
+            with self.subTest(file='development.md', gone=gone):
+                self.assertNotIn(gone, development)
+        skill = stage(6)
+        self.assertIn('the local main brought into the local integration branch of the issue (never into the branch '
+                      'of the issue)', skill)
+        self.assertNotIn('the local main brought into the branch of the issue,', skill)
+        security = flat('skills', 'frontlights', 'docs', 'security.md')
+        self.assertIn('só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue', security)
+        readme = flat('README.md')
+        self.assertIn('a main local é trazida para uma branch local de integração da issue', readme)
+        self.assertNotIn('a main local é trazida para a branch da issue', readme)
+        handoff = read('skills', 'frontlights', 'templates', 'handoff.md')
+        self.assertIn('a main local trazida para a branch local de integração', handoff)
+        self.assertNotIn('a main local trazida para a branch da issue;', handoff)
+        op = json.loads(read('skills', 'frontlights', 'examples', 'operation-merge-local-main.json'))
+        self.assertEqual((op['branch'], op['worktree']), ('claude/issue-1-integra', 'REPLACE_WITH_ABSOLUTE_INTEGRATION_WORKTREE_PATH'))
+        closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
+        self.assertIn('the local integration worktree of each issue (`<branch_prefix>issue-<n>-integra`)', closeout)
+
     def test_the_direct_path_keeps_a_local_branch(self):
         """Issue 70, S1: o trabalho sem issue não tem issue a que ligar a branch, então a branch dele fica local."""
         development = flat('skills', 'frontlights', 'references', 'development.md')
@@ -212,17 +258,22 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(text.index('## Review, checkpoints and renewal'), text.index('## Into the local main'))
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
         body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
-        for phrase in ('homologation bench', 'refused as the remote main', '**Bring the local main in first.**',
+        for phrase in ('homologation bench', 'refused as the remote main',
+                       '**Bring the local main in, on a local integration branch.**',
+                       '`git worktree add -b <branch_prefix>issue-<n>-integra <path> <branch_prefix>issue-<n>`',
+                       '`{issue: n, path, branch: <branch_prefix>issue-<n>-integra}`', 'local and never pushed',
+                       'The branch of the issue never receives the local main',
                        '`git merge main`', 'The watched run is the only gate of stage 6: no impact suite and no '
                        'review is required.', '**The gate, the watched run.**', '**The check and the merge.**',
                        '`merge_into_local_main`',
-                       '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>`',
+                       '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>-integra`',
                        'it never edits the gates to make them pass', '**Record it.**', '"Merge na main local"',
                        'a preflight, not a barrier', 'it reads no Git'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         for gone in ('**Gate 1, the impact suite.**', '**Gate 2, the review.**', 'The whole suite waits for the release.',
-                     '`full_suite`'):
+                     '`full_suite`', '**Bring the local main in first.**', 'the branch of the issue holds the local main',
+                     'is not pushed after step 1', "In the issue's worktree, `git merge main`"):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, body)
         whole = ' '.join(text.split())
@@ -318,7 +369,8 @@ class LocalMainTextTests(unittest.TestCase):
             charter = dict(charter, approved_by='usuário', approval_reference='autorização permanente',
                            expires_at='2099-01-01T00:00:00+00:00',
                            monitoring=dict(charter['monitoring'], confirmed_by='usuário'),
-                           worktrees=[dict(charter['worktrees'][0], path=temp)])
+                           worktrees=[dict(next(w for w in charter['worktrees'] if w['branch'] == op['branch']),
+                                           path=temp)])
             self.assertEqual(frontlights.authorize(charter, dict(op, worktree=temp))['scope_check'], 'pass')
 
     def test_the_sync_opens_stage_six(self):
@@ -569,8 +621,8 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('fixes it at once on the branch of the issue',
                        'or in a new slice worktree of that issue ("Slices in order", above)',
                        'TDD by default ("Which tests run when", above)',
-                       'merges the branch of the issue into the local main again by steps 1, 4 and 5 of "Into the '
-                       'local main"',
+                       'pushes the branch of the issue again (covered)',
+                       'merges that branch into the local main again by steps 4 and 5 of "Into the local main"',
                        'the `authorize` check included',
                        'the free test itself is the evidence of the fix, and the watched run is not rerun',
                        'the user reloads the page', 'the window stays open',
