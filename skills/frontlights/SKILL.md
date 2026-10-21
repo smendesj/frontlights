@@ -406,7 +406,10 @@ goes, in this order:
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
    branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
    the merge, then the bundle.
-7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
+7. **The free test** (development.md, "The free test on the local main"): in an issue with a screen, a
+   Chrome window on the local main, opened without a question, for the user to test as they like; it ends
+   when the user closes the window.
+8. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 
 **Denied operations are asked one at a time.** An operation on the denied list (development.md,

@@ -89,7 +89,7 @@ class WaitTests(unittest.TestCase):
     def test_the_stacking_rule_points_to_the_wait_and_the_skill_states_it_in_stage_six(self):
         self.assertIn('the family enters the local main as one', flat('skills', 'frontlights', 'references', 'development.md'))
         stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        self.assertIn('7. **The release** (development.md, "The release"), offered at the end of each homologated issue',
+        self.assertIn('8. **The release** (development.md, "The release"), offered at the end of each homologated issue',
                       stage6)
         release = ' '.join(read('skills', 'frontlights', 'references', 'development.md')
                            .split('## The release: from the local main to GitHub')[1].split())
@@ -99,6 +99,25 @@ class WaitTests(unittest.TestCase):
                        'offers the release again with everything accumulated'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, release)
+
+
+class FreeTestHandoffTests(unittest.TestCase):
+    """Issue 69, S3: o handoff ganha a linha do teste livre logo depois da linha do merge na main local."""
+
+    def test_the_handoff_has_the_free_test_line_after_the_local_main_merge(self):
+        lines = read('skills', 'frontlights', 'templates', 'handoff.md').splitlines()
+        merge = [i for i, line in enumerate(lines) if line.startswith('- Merge na main local')]
+        free = [i for i, line in enumerate(lines) if line.startswith('- Teste livre na main local')]
+        self.assertEqual(len(merge), 1)
+        self.assertEqual(len(free), 1)
+        self.assertEqual(free[0], merge[0] + 1)
+        for phrase in ('janela fechada', '`serve stop`', 'pulado'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, lines[free[0]])
+
+    def test_the_release_is_offered_once_the_free_test_window_is_closed(self):
+        self.assertIn('once the window of its free test is closed', ' '.join(read(
+            'skills', 'frontlights', 'references', 'development.md').split()))
 
 
 class CloseoutReferenceTests(unittest.TestCase):

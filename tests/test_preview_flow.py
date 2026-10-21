@@ -167,5 +167,61 @@ class IsolatedWatchedRunTests(unittest.TestCase):
         self.assertIn("which only opens the user's preview tab", browser)
 
 
+
+class FreeTestWindowTests(unittest.TestCase):
+    """Issue 69, S3: a janela do teste livre na main local, regra de `references/browser-testing.md`."""
+
+    def setUp(self):
+        self.text = read('skills', 'frontlights', 'references', 'browser-testing.md')
+        self.free = between(self.text, '## The free test window', '## Cross-account permissions')
+
+    def test_the_strip_text_lives_once_in_the_free_test_rule(self):
+        references = ROOT / 'skills' / 'frontlights' / 'references'
+        counts = {path.name: path.read_text(encoding='utf-8').count('MAIN LOCAL: teste livre')
+                  for path in sorted(references.glob('*.md'))}
+        self.assertEqual({name: count for name, count in counts.items() if count}, {'browser-testing.md': 1})
+        self.assertIn('"MAIN LOCAL: teste livre"', self.free)
+
+    def test_the_window_is_chrome_by_playwright_on_the_whole_screen_logged_in_with_account_one(self):
+        for phrase in ('Chrome driven by Playwright', "never Claude's built-in browser nor Claude in Chrome",
+                       '`headless: false`', '`viewport: null`', "a disposable profile, never the user's personal one",
+                       'account 1 of `browserTest.users`', 'typed only into the login form',
+                       'a fixed strip pinned to the top edge across the full width, by an init script',
+                       'the order is in `development.md`, "The free test on the local main"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.free)
+
+    def test_the_product_runs_from_the_main_worktree_only_for_the_free_test(self):
+        for phrase in ('`python "${CLAUDE_SKILL_DIR}/scripts/serve.py" start --config <config> --root <main worktree> '
+                       '--issue <n>`',
+                       'on the local development database (the homologation one)',
+                       'This is the only exception to the rule that a watched run never serves from the main '
+                       'worktree, and it holds only for the free test'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.free)
+        passes = between(self.text, '- **Two passes, same scenario and same account.**', '- **The isolated instance.**')
+        self.assertIn('A watched run never serves from the main worktree (the free test is the only exception, '
+                      '"The free test window")', passes)
+        self.assertEqual(flat(self.text).count('the only exception to the rule that a watched run never serves from '
+                                               'the main worktree'), 1)
+
+    def test_the_holder_has_no_time_limit_and_its_exit_wakes_the_session(self):
+        for phrase in ('The holder has no time limit', 'the 5 minutes of the watched run do not apply',
+                       "it exits only on the browser's `disconnected` event",
+                       'its exit wakes the session, which runs `serve stop` for what it started',
+                       '`python "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <main worktree> '
+                       '--issue <n>`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.free)
+        pace = between(self.text, '- **Pace.**', '- **Window closed, next step.**')
+        self.assertIn('The holder of the free test has no time limit ("The free test window", below)', pace)
+
+    def test_the_user_leads_and_the_session_helps_on_request(self):
+        for phrase in ('The user leads: no script, no ANTES/DEPOIS and no print is required',
+                       'the session helps on request', 'reads the screen, the console and the network and explains',
+                       'clicks or types only when the user asks', 'never writes to the database on its own'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.free)
+
 if __name__ == '__main__':
     unittest.main()

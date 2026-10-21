@@ -309,7 +309,8 @@ When the user will watch:
   own. A process with a fixed port runs one pass at a time, in this order: stop the
   issue's own server (the standard order started it earlier), start ANTES, run it,
   `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts, then
-  start the issue's server again (`checks smoke` needs it up). After each `serve start`
+  start the issue's server again (`checks smoke` needs it up). A watched run never serves from the main worktree (the
+  free test is the only exception, "The free test window"). After each `serve start`
   confirm that the process answering on the port is the recorded one or a descendant
   of it (`serve status` and the owning pid of `Get-NetTCPConnection -LocalPort
   <port>`), or DEPOIS could be answered by the base. Stop the ANTES record in every
@@ -345,7 +346,8 @@ When the user will watch:
   exiting, and it prints which of the two ended it. Its exit is the
   notice: the harness wakes the one who started it, so nobody polls and nobody waits for
   a report that never comes. A bare timer or `sleep` is not a holder, because nothing
-  wakes the driver when the user closes the window early.
+  wakes the driver when the user closes the window early. The holder of the free test has no time limit ("The
+  free test window", below).
 - **Window closed, next step.** The notice is the same whether the user closed the window
   or the 5 minutes ended it: the session goes on without waiting for anyone. When the ANTES holder exits, stop the ANTES server and
   only then start DEPOIS; never start DEPOIS before that notice. When the DEPOIS holder
@@ -483,6 +485,35 @@ never a reason to skip a case, shorten a pass, park the run or ask the user to s
 - **Not a question.** This is not asked per run; the watched-run question only says that it happens.
   Ask only about what this section does not settle: a statement outside the product's endpoints, and the
   residue statements above.
+
+## The free test window
+
+The free test on the local main comes after the merge into the local main and the bundle of an issue whose watched
+run was answered; the order is in `development.md`, "The free test on the local main". This section is only its
+window, which follows the watched run's rules unless it says otherwise:
+
+- **The product.** Start it with `python "${CLAUDE_SKILL_DIR}/scripts/serve.py" start --config <config> --root <main
+  worktree> --issue <n>` (`<n>` the homologated issue; the issue's own serve is already stopped by the order of the
+  watched run), so the processes of `browserTest.processes` run from the main worktree, on the local main, on the
+  local development database (the homologation one), never on the ports of the preview. This is the only exception
+  to the rule that a watched run never serves from the main worktree, and it holds only for the free test. A project
+  that starts its own environment (no `browserTest.processes`) is asked to bring it up on the local main, as in
+  "Environment: `serve`".
+- **The window.** Chrome driven by Playwright, visible (`headless: false`), never Claude's built-in browser nor
+  Claude in Chrome, in a disposable profile, never the user's personal one, sized to the screen with `viewport:
+  null`, as in "The whole screen, always". It opens on `browserTest.baseUrl` already logged in with account 1 of
+  `browserTest.users`, typed only into the login form and never repeated in the conversation or a record.
+- **The strip.** On every page, a fixed strip pinned to the top edge across the full width, by an init script,
+  above every other element, with the text "MAIN LOCAL: teste livre" and nothing else (no login, password or local
+  path).
+- **The holder.** Started in the background by whoever opens the window, as in "Pace". The holder has no time limit:
+  the 5 minutes of the watched run do not apply, and it exits only on the browser's `disconnected` event, when the
+  user closes the window, and its exit wakes the session, which runs `serve stop` for what it started (`python
+  "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <main worktree> --issue <n>`) and goes on with the order of `development.md`.
+- **Help on request.** The user leads: no script, no ANTES/DEPOIS and no print is required, and the test creates no
+  test data of its own. While the window is open the session helps on request: it reads the screen, the console and
+  the network and explains what it sees; it clicks or types only when the user asks, and it never writes to the
+  database on its own.
 
 ## Cross-account permissions
 

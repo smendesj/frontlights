@@ -3,8 +3,8 @@
 Setup: a disposable repository with a remote, a parent issue (three acceptance criteria and, in its body, an unticked
 item that cites one sub-issue, plus another that cites two issues), two sub-issues (each with criteria, its own branch
 and worktree, one of them stacked on the parent's branch) and the local main as the homologation. The family has just
-entered the local main through the parent's branch, with its watched run answered (the only gate), and the bundle
-was written.
+entered the local main through the parent's branch, with its watched run answered (the only gate), the bundle
+was written and the user closed the window of the free test on the local main.
 
 Expected, in this order:
 
