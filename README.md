@@ -612,8 +612,9 @@ worktree para o `.frontlights` da principal antes de a limpeza removê-la.
 #### Homologar na main local, lançar a release, fechar e limpar
 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com um único portão, o teste assistido
-respondido (ou dispensável, sem mudança na tela): a main local é trazida para a branch da issue, o teste assistido
-responde, o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
+respondido (ou dispensável, sem mudança na tela, e então com o roteiro de cada caixa rodado pelo Claude, sem pergunta
+nova, num `.md` por caixa em `.frontlights/issues/<n>/walkthroughs/` e na tabela do handoff): a main local é trazida
+para a branch da issue, o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a

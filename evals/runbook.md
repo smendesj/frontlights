@@ -217,7 +217,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     asked for), writes the `merge_into_local_main` operation with `gates` `{"browser_gate": ...}` only and runs
     `authorize` before `git merge --no-ff` on the local main; an operation with the watched run not answered, a
     slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's
-    "Merge na main local" line carries the watched run, the `authorize` output and the merge commit. Then, at the
+    "Merge na main local" line carries the watched run, the `authorize` output and the merge commit. With
+    `not_needed`, confirm that each box has its `.frontlights/issues/<n>/walkthroughs/S<k>.md` (header, Antes,
+    Depois, masked output) and its row in the handoff table before the merge, with no new question, and that a box
+    without its file holds the merge. Then, at the
     start of a stage 6 in a clone with a remote, confirm that no hook is installed or asked about and that `homolog sync`
     advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
     the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that

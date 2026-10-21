@@ -819,14 +819,14 @@ class GateDocumentationTests(unittest.TestCase):
 
     def test_the_rule_is_in_the_browser_reference_the_skill_and_the_development_reference(self):
         browser = self.flat('skills', 'frontlights', 'references', 'browser-testing.md')
-        for phrase in ('browser-gate', 'one watched run per issue', 'before the independent review', 'lote.roots',
+        for phrase in ('browser-gate', 'one watched run per issue', 'before an independent review', 'lote.roots',
                        'situacao', 'ainda-nao', 'never one per slice, branch or worktree', 'teste_assistido',
                        "each `--root` is the worktree of an issue or of one of its slices",
                        '`--stacked <its branch>=<the branch of its issue>`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, browser)
         development = self.flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ('browser-gate', 'before the independent review', 'teste_assistido'):
+        for phrase in ('browser-gate', 'before an independent review', 'teste_assistido'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
         skill = self.flat('skills', 'frontlights', 'SKILL.md')
