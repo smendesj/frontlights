@@ -74,7 +74,11 @@ remota), só da worktree da issue ou do trabalho sem issue (a operação nomeia 
 nunca de uma slice) e com o `gates` de "Into the local main" (`references/development.md`), só o
 `browser_gate`, o único portão; um `browser_gate` fora de `answered` ou `not_needed` é recusado nomeando o portão, e `suite_gate` e `review_gate`, quando vêm, são aceitos sem exigência.
 A main local continua protegida como branch de trabalho (`edit` e `test` nela são recusados), e a main
-remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota). É conferência prévia, não barreira: o `authorize` não lê
+remota só recebe a PR da release, operação negada (o push da release, `git push origin main:refs/heads/<branch>`, vai ao nome da branch da release, nunca à main remota).
+A branch da issue é a única branch de trabalho enviada antes da release: criada no GitHub a partir da `origin/<base>`
+por `gh issue develop` e enviada a cada fatia mesclada, sob a autorização permanente, só com os commits da issue,
+nunca com um commit que só está na main local (`references/development.md`, "Slices in order"); as branches das
+fatias, a da prévia e a main local nunca são enviadas. É conferência prévia, não barreira: o `authorize` não lê
 o Git, não prova que o teste assistido foi respondido (quem prova é o `browser-gate`), e um modelo que não o chame não é impedido por ele.
 
 ## `homolog sync` e `homolog bundle`

@@ -37,7 +37,7 @@ class WaitTests(unittest.TestCase):
         for phrase in ("By default, as soon as the release's pull request is open, the session waits for the user's merge",
                        '"não aguardar"', 'the closeout question of the next session picks the work up',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       'the release branch is the only branch of the flow that is pushed'):
+                       'the release branch and the branch of each issue are the only branches of the flow that are pushed'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 

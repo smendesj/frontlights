@@ -133,8 +133,9 @@ defina o repositório exato no formato `proprietario/repositorio` e mantenha
 `.frontlights/` ignorado pelo Git desse projeto. Um projeto sem remoto usa
 `"repository": null`: o GitHub aparece como `unconfigured`, o plano usa
 `url: null` e as issues ficam em `.frontlights/issues/<n>/`, com `source: "local"`.
-As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`, são cortadas da main local do
-projeto (a homologação) e ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
+As branches de trabalho usam o `branch_prefix` da autorização, com padrão `claude/`. A branch de cada issue é criada
+no GitHub a partir da `origin/main` por `gh issue develop`, ligada à issue, e só leva os commits da issue; as
+branches das fatias, a da prévia e a main local do projeto (a homologação) ficam só locais até a release. Para o backup da homologação, a chave `homolog.backupDir`
 aponta uma pasta sua, por caminho absoluto (por exemplo `"C:\\PASTA\\DE\\BACKUP"`, de preferência sincronizada
 com a nuvem): a cada merge na main local o Frontlights grava ali um bundle Git da main local e das branches de
 trabalho de todo prefixo dos registros de autorização (`homolog bundle`); sem a chave, nada é gravado e a sessão só avisa.
@@ -685,14 +686,15 @@ espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktr
 Frontlights anuncia num bloco curto as issues, a branch e a ordem das slices de cada uma, a concorrência, o
 empilhamento (só numa família que já existe), a base das worktrees e os testes, e começa. Antes, no início de cada
 etapa 6, traz `origin/main` para a main local (`homolog sync`; um conflito é desfeito e vira pergunta).
-Ele trabalha as slices de cada issue em ordem, numa branch por issue, cortada da main local, cada CA na própria
+Ele trabalha as slices de cada issue em ordem, numa branch por issue, criada no GitHub a partir da `origin/main`, cada CA na própria
 worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada slice é, por padrão, um ciclo de
 TDD (nenhum teste quando você pede a implementação "só com teste assistido"), um ponto
 de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
 aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
 commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
 produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com o
-teste assistido respondido; nada da issue vai ao GitHub antes da release, cuja PR é a única do fluxo. Cada operação
+teste assistido respondido; a branch da issue sobe para o GitHub a cada fatia mesclada, a main local só sai na
+release, e a PR da release é a única do fluxo. Cada operação
 negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
 só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em

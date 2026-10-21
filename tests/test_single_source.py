@@ -28,6 +28,8 @@ SINGLE = {
     'is a condition of the merge into the local main, with no new question': 'o roteiro rodado sem tela (issue 65)',
     'the release question comes only after the window is closed': 'a ordem teste livre, janela fechada e release (issue 69)',
     '"Terminou de testar a main local?"': 'a pergunta de fim do teste livre no terminal (issue 69)',
+    '`gh issue develop <n> --repo <repo> --base <base> --name <branch_prefix>issue-<n>`':
+        'a criação da branch da issue no GitHub (issue 70)',
 }
 
 # cópias em português que deram lugar a um ponteiro
