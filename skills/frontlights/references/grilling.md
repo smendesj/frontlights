@@ -33,13 +33,27 @@ closing "Seguimos?" get no section. Sections are numbered in that order, the bef
 decision questions, and titled by the question (so "seção 3" is the second decision question); in
 stage 5 the slices' sections follow them (`references/issues.md`, the quiz).
 
-Every section follows `templates/grilling-section.html`; its fields are fixed, and a field with
-nothing to say is omitted: what the question decides; the concepts in plain words; where the
-project already does this (path:line and an excerpt of the project's real code); what each option
-changes; the before and after when there is a screen (the **after** for each approach of the
-solution round, with the screen states of "Reconnaissance", and, in the decision tree, for each option
-that changes what the user sees); the
-recommendation, labelled as opinion; and the choice, recorded after the answer.
+A section explains more than the question, never repeats it: the question and its option previews
+are in the session already, and the section answers "what does this imply". Every section follows
+`templates/grilling-section.html`, in its fixed order: why we are asking; the visual; one concrete
+scenario per option, with made-up data; the consequences (the cost of getting it wrong, whether it
+is reversible and what each option prevents); the concepts in plain words; where the project already
+does this (path:line and an excerpt of the project's real code); the recommendation, labelled as
+opinion; and the choice, recorded after the answer. Visual, Cenário por opção and Consequências are
+always present (one sentence each is enough for a simple question); among the others, a field
+with nothing to say is omitted. The model applies to the three kinds of section: the
+before of the problem round (its visual is the before, and its "why" says why it is a problem), each
+decision question, and each slice section of the stage 5 quiz.
+
+The visual follows the kind of question:
+
+| The question is about | The visual |
+| --- | --- |
+| A screen | before and after per option, the **after** for each approach of the solution round with the screen states of "Reconnaissance" |
+| A flow or an order of steps | a timeline per option, side by side |
+| A rule | a table of cases: made-up input and the result under each option |
+| Layers, files or where something lives | a layers diagram per option, showing what each touches |
+| A name or a text | a side-by-side comparison of where it appears |
 
 **One local source, small edits.** The page source lives in `.frontlights/artifact.html`
 (untracked; for a published issue, in its records folder, `.frontlights/issues/<n>/artifact.html`).
