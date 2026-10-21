@@ -89,7 +89,9 @@ shows what it delivers: the artifact of the grilling (`references/grilling.md`, 
 updated on the same URL as the grilling with one section per slice, numbered after the
 grilling's sections and titled by the slice (its S-number and title), where the drawing of each
 slice is the screen, the flow or the layers as they stand once that slice lands, under the same
-rule for code and data as the grilling. Without the artifact tool, the list says
+rule for code and data as the grilling. Each slice section follows the same model
+(`templates/grilling-section.html`) and opens with what can be demoed when the slice is done; the
+drawing of the slice is its Visual. Without the artifact tool, the list says
 "artefato indisponível" once and goes on in text. Then ask with `AskUserQuestion` whether the
 granularity is right (too coarse, too fine), whether the dependencies are real (each slice
 depends only on what truly gates it) and whether any slice should merge or split; the quiz

@@ -15,9 +15,9 @@ Expected, in this order:
 2. Stage 3, solution round and decision tree: the same page, on the same URL, gains one section per decision
    question, numbered after the before: the solution round (the **after** of the form for each of the three
    approaches) and every branch asked, the pre-mortem included; a naming branch gets its section too. Every
-   section follows `templates/grilling-section.html` (what the question decides, the concepts, where the
-   project already does this, what each option changes, before and after when there is a screen, the
-   recommendation labelled as opinion, the choice after the answer), with the empty fields omitted. Where the
+   section follows `templates/grilling-section.html` and the rule of `references/grilling.md` ("The
+   artifact"): it explains what the question implies without repeating it, always carries the Visual of its
+   kind of question, the Cenário por opção and the Consequências, and omits the other empty fields. Where the
    project already does this shows path:line and a real excerpt of up to 15 lines, with any secret value
    replaced by `***`. Each option's `preview` stays text (files, pattern fit, effort, seam) and every decision
    question names its section. Each section is a small edit of the local source published on the same URL;
@@ -42,7 +42,8 @@ publication, or the whole page rewritten to add a section; real data, a real rec
 a client on the page, or a code excerpt with a secret value left in clear; a decision question that cites no
 section; a decision branch without a section (a naming decision, say); a section for a
 confirmation or the closing "Seguimos?"; a section that departs from the model's fields or keeps an empty
-field; the quiz changed into something other than granularity, dependencies and merge or split; a slice drawn
+field; a section that repeats the question instead of saying what it implies; a section without Visual, Cenário
+por opção or Consequências; the quiz changed into something other than granularity, dependencies and merge or split; a slice drawn
 in the list but with no answer to "what can be demoed"; a script that builds the page; the session skipping
 the artifact in silence when the tool is missing; a new page started when the local source is missing instead
 of the published one read back.

@@ -719,9 +719,8 @@ página privada publicada pela ferramenta de artefatos do Claude, que também ab
 do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
 camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
 árvore, o pré-mortem incluído; confirmações e o "Seguimos?" do fim não ganham seção.
-Cada seção segue o modelo `templates/grilling-section.html` (o que a pergunta decide, os conceitos em palavras
-simples, onde o projeto já faz isso, o que cada opção muda, o antes e depois quando há tela, a recomendação
-marcada como opinião e a escolha), e um campo sem nada a dizer é omitido. Cada seção entra por uma edição
+Cada seção segue o modelo `templates/grilling-section.html`, com os campos e a regra de
+`references/grilling.md` ("The artifact"): explica o que a pergunta implica, sem repeti-la. Cada seção entra por uma edição
 pequena da fonte local (`.frontlights/artifact.html`, fora do versionamento) publicada na mesma URL, nunca
 reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação), a sessão lê de volta a página
 publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
@@ -773,8 +772,8 @@ reconhecimento acha algo. O
 padrão existente é o preferido; ele só é quebrado quando for comprovadamente pior
 para o caso.
 Cada pergunta de decisão do grilling tem a sua seção no artefato (veja "Artefato visual"), que
-explica a escolha: o que ela decide, os conceitos, onde o projeto já faz isso, o que cada opção
-muda e a recomendação como opinião. Quem quiser mais detalhe pede em texto livre ("não entendi",
+explica o que a escolha implica, sem repetir a pergunta (os campos e a regra ficam em
+`references/grilling.md`, "The artifact"), com a recomendação como opinião. Quem quiser mais detalhe pede em texto livre ("não entendi",
 "detalhe no artefato"): a sessão amplia a mesma seção, na mesma URL, e repete a pergunta.
 Toda pergunta ao usuário usa `AskUserQuestion`, sempre com opções. A conversa
 segue no idioma do usuário. Documento, lista ou tabela se aprova por link e carimbo (`frontlights.py stamp`), nunca colado
