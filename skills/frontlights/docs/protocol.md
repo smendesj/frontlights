@@ -146,6 +146,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                    (ISO-8601 em -03:00, nunca UTC)
   plan.json
   authorization.json
+  pitfalls.md      armadilhas do projeto: uma linha por critério que entrou numa issue depois da aprovação, gravada
+                   no degrau "critério novo" dos Follow-ups e lida primeiro pelo reconhecimento; criado no primeiro
+                   uso, só acréscimo (formato: `references/issues.md`, "A pitfall line")
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, guardados (nunca apagados): release-plan,
                    bundle, closeout e cleanup leem todo `authorization*.json`
   issues/<numero-no-github>/

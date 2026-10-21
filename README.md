@@ -287,7 +287,9 @@ aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, 
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
 houver uma aberta, a issue fica fora do `closes` do `release-plan` e o PR a cita sem palavra de fechamento
-(`Closes`, `Fixes`). Antes
+(`Closes`, `Fixes`). Todo critério que entra assim, depois da aprovação, deixa uma linha nas armadilhas do projeto
+(`.frontlights/pitfalls.md`), aprovada no mesmo lote, que o próximo reconhecimento lê primeiro; o relatório da
+etapa 6 conta as linhas por issue. Antes
 de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
