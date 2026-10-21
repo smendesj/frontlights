@@ -146,9 +146,14 @@ anything" of the denied operations (`development.md`): the worktrees and branche
 (`<branch_prefix>issue-<n>-integra`) among them, plus an integration worktree the handoff names, plus the local
 release branch once merged) are not needed once the release that carries them was merged into the approved base
 (for a branch with no pull request, once `origin/<base>` contains its tip), so the session removes them **without
-a question**, whatever the user answers to the closing afterwards. The remote branch is GitHub's job: the head
-branch of a merged pull request is deleted by GitHub itself ("Automatically delete head branches", a setting of the
-repository), so no command of the cleanup ever runs `git push origin --delete`.
+a question**, whatever the user answers to the closing afterwards. A remote branch is GitHub's job, with one
+written exception: the head branch of a merged pull request is deleted by GitHub itself ("Automatically delete head
+branches", a setting of the repository), the release's among them, but the branch of the issue
+(`<branch_prefix>issue-<n>`, pushed after each slice merge and never the head of a pull request) is not. So the plan
+brings `git push origin --delete <branch>` (`delete_remote_branch`) for the branch of an issue, and only for it, once
+`origin/<base>` contains its tip on GitHub (the release that carries it was merged): never for a slice, the
+integration branch (never pushed), the release, a protected branch or a remote branch whose tip is not in the base,
+and no other command of the cleanup ever runs `git push origin --delete`.
 
 ```powershell
 python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base>
@@ -164,7 +169,8 @@ conflict resolved by hand, a file added to it): such a branch stays, as `integra
 
 `commands` is the whole list, in the order to run it: `git fetch --prune origin` first (`fetch_prune`, which drops
 the remote-tracking refs of the branches GitHub deleted; absent without an `origin`), then the commands of every
-candidate that does not ask. `candidates` lists what can go, each with its issue, its slice (null outside a slice's
+candidate that does not ask; the candidate of a released issue branch carries `delete_remote_branch` right before
+its local `delete_branch`. `candidates` lists what can go, each with its issue, its slice (null outside a slice's
 worktree), `release` (true for a release branch), worktree path, branch, tip, pull requests, `recordsTo`, `ask`, its
 `cautions` (`frontlights_records`, `ignored_files`, `local_only_integration`, `slice_merged_into_issue_branch`,
 `contained_in_base_without_pull_request`, `merged_release_branch`, `branch_differs_from_authorization`) and its own
@@ -213,12 +219,12 @@ pushed itself; in both cases nothing is uncommitted, no pull request is open fro
 it, and it is not protected.
 
 Run `commands` in order, without a question (each carries `git -C <main worktree>`), each value as one
-double-quoted argument: `git fetch --prune origin`, then per item the `copy_records`, `git worktree remove` and
-`git branch -D` (right here, because a squash merge leaves the branch "unmerged" for Git and the plan offers it only
+double-quoted argument: `git fetch --prune origin`, then per item the `copy_records`, `git worktree remove`,
+`git push origin --delete` (the `delete_remote_branch` of a released issue branch) and `git branch -D` (right here, because a squash merge leaves the branch "unmerged" for Git and the plan offers it only
 when its tip is the head of a merged pull request or already contained in the approved base). Each command carries
 `item` (the branch of its candidate; null for the fetch), and the session runs them item by item: when any command
 of an item fails, it runs nothing more of that item (no `git worktree remove` after a failed `copy_records`, no
-`git branch -D` after a failed removal). Never add `--force`
+`git branch -D` after a failed removal or a failed remote delete). Never add `--force`
 or `-f`. A command that fails (a path too long for Windows, a folder in use) is recorded
 and reported, and never retried with force; the rest of that item's commands are not run (a branch whose worktree
 could not be removed keeps both), and the next item goes on. For each candidate with `ask: true`, ask with
@@ -229,10 +235,12 @@ never answer for the user. The `excluded` stay where they are: say them in one l
 Then verify:
 
 ```powershell
-python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" verify --config <config> --root <project> --worktree <path> --branch <name> --records <recordsTo>
+python "${CLAUDE_SKILL_DIR}/scripts/cleanup.py" verify --config <config> --root <project> --worktree <path> --branch <name> --remote-branch <name> --records <recordsTo>
 ```
 
-Report per item whether it is gone (the worktree unregistered and its folder absent, the local branch absent) and
+`--remote-branch` names the branch of each `delete_remote_branch` that ran; `verify` reads it on `origin` with
+`git ls-remote` (`kind` `remote_branch`; `unreadable` when the remote could not be read). Report per item whether it
+is gone (the worktree unregistered and its folder absent, the local branch absent, the remote branch absent) and
 whether each `--records` folder holds the copied files (`copied`), and list every `gone: false` or `copied: false`
 (the command then exits with code 1). Put the plan, the commands run, any answer to an `ask` and the verify output
 in the handoff.
@@ -255,6 +263,7 @@ sync (the board's own "Sincronizar" there); Frontlights does not sync RoadS and 
   approved.
 - Move or read a card (`gh project item-edit`, a board read): the board's "Item closed" workflow moves it to Done.
 - Remove a worktree or a branch that `cleanup.py plan` did not offer (or, with `ask: true`, that the user did not
-  approve), delete a remote branch (`git push origin --delete`: GitHub deletes the merged head branch), use
+  approve), delete a remote branch the plan did not offer (`git push origin --delete` other than its
+  `delete_remote_branch`: GitHub deletes the merged head branch), use
   `--force`, or remove the main worktree or the folder the session stands in.
 - Merge a pull request, deploy or release: the closeout never does.

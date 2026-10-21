@@ -256,15 +256,18 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   aprovada (um filho empilhado, pelo pai que foi mesclado depois e contém o commit) ou, sem PR nenhuma, cujo tip já está
   contido em `origin/<base>` (a branch de uma issue que chegou ao GitHub pela release; cautela
   `contained_in_base_without_pull_request`), sem PR aberta a partir da branch nem em cima dela; a branch local da
-  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; a branch remota nunca
-  entra: o GitHub apaga a branch de cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch
-  --prune` tira a referência que sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
+  release (`<prefixo>release-<data>`) entra pela mesma regra, quando nenhuma worktree a usa; das branches remotas, só
+  a da issue (a entrada da issue sem `slice`, nunca a `-integra`, a da release ou uma protegida) entra, quando a ponta
+  dela no GitHub já está contida em `origin/<base>`; nenhuma outra branch remota entra: o GitHub apaga a branch de
+  cabeça da PR mesclada ("Automatically delete head branches"), e o `git fetch --prune` tira a referência que
+  sobrou; os arquivos ignorados pelo Git vão embora com a worktree, e o aviso
   `ignored_files` lista os nomes; a worktree de integração local (`--integration`) só entra sem PR, nunca enviada e
   sem commit próprio fora das PRs entregues (um merge conta como próprio quando carrega conteúdo, como um conflito
   resolvido à mão);
-- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git branch -D`) são montados
+- os comandos (`git fetch --prune origin`, `cleanup.py archive`, `git worktree remove`, `git push origin --delete`
+  da branch da issue lançada, `git branch -D`) são montados
   só com um caminho de worktree registrado e um nome de branch simples, sem caractere que uma linha de comando não
-  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca `git push origin --delete`. O
+  carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca outro `git push origin --delete`. O
   `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
   oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
 - o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do

@@ -111,8 +111,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     "marcar no corpo de #P a linha L", the line quoted whole in the stamped list, and the approved write changes the parent body only on
     that line (`tick-check` ok before and after). Before that question, and without asking, the cleanup of the merged
     work ran: `git fetch --prune`, the records of each worktree copied to `.frontlights/issues/<n>/worktrees/` of the
-    main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed, and no
-    `git push origin --delete` (GitHub deletes the merged head branch); the main worktree, the folder the session stands
+    main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed, and
+    the one `git push origin --delete` is that of the released issue branch (GitHub deletes the merged head branch); the main worktree, the folder the session stands
     in, a worktree with uncommitted changes and a branch with an open pull request stay, said in one line; no command
     uses `--force`; `cleanup.py verify` reports everything gone and the records copied. Only a worktree that ignores a
     `.env` (anything besides dependency or build folders) is asked about, naming the file; the issue branches that

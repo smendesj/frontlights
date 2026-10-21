@@ -77,7 +77,7 @@ registered (on the base branch or applied anywhere but the local development dat
 merge, with its watched run answered or not needed), turning on a setting, key or flag in production, and deleting anything but
 the test data the run created and the cleanup of merged work (`references/closeout.md`, step 5: the worktrees and
 local branches of the issues, slices and release already merged into the approved base, removed without a question,
-never a remote branch). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
+and of remote branches only the branch of a released issue). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
 silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
 own stage (the issue's text, issue plan and publication, closeout and summary) keep them. The
@@ -749,8 +749,8 @@ offers the release again with everything accumulated.
   commit; if it does not fast-forward, stop and ask instead of merging or resetting). Then read
   `references/closeout.md` and run it for the issues of the release: first the cleanup of the merged work (step 5),
   without approval and before any closing question: `git fetch --prune`, the records of each worktree copied to the
-  main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed;
-  then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the merge), and the
+  main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed,
+  and the branch of each released issue on GitHub; then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the merge), and the
   closing of the rest (with the tick in a parent, for a sub-issue) has its own approval. An issue whose
   criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports. The
   cleanup offers the issue branches that `origin/<base>` contains, pull request or not
