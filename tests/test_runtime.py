@@ -80,12 +80,11 @@ class ReleaseManifestTests(unittest.TestCase):
                 with self.subTest(file=str(path.relative_to(ROOT)), phrase=phrase):
                     self.assertNotIn(phrase.lower(), flat.lower())
 
-    def test_grilling_asks_the_depth_alone_and_expands_a_section_on_request(self):
+    def test_grilling_opens_without_the_depth_and_expands_a_section_on_request(self):
         skill = ROOT / 'skills' / 'frontlights'
         flat = ' '.join((skill / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
-        depth = flat.split('## 0. Depth')[1].split('## The artifact')[0]
-        self.assertIn('"Qual profundidade de grilling?"', depth)
-        self.assertNotIn('Ativar', depth)
+        self.assertNotIn('## 0. Depth', flat)
+        self.assertNotIn('Ativar', flat.split('## 1. Problem round')[0])
         solution = flat.split('## 3. Solution round')[1].split('## 4. Decision tree')[0]
         for phrase in ('at least three genuinely different approaches',
                        'and up to four, in one `AskUserQuestion`, one per option'):
@@ -101,13 +100,13 @@ class ReleaseManifestTests(unittest.TestCase):
                 self.assertIn(phrase, tree)
         runbook = ' '.join((ROOT / 'evals' / 'runbook.md').read_text(encoding='utf-8').split())
         self.assertIn('11. (Removed in issue #61', runbook)
-        self.assertIn('Depth is asked once, in section 0, for the whole family.', flat)
+        self.assertNotIn('Depth is asked once', flat)
         closing = flat.split('## 6. Closing')[1].split('## Recording')[0]
         self.assertIn('do not re-ask settled decisions unless new evidence invalidates them', closing)
         recording = flat.split('## Recording')[1]
-        self.assertIn('Record everything in `templates/discovery.md`: depth, conventions', recording)
+        self.assertIn('Record everything in `templates/discovery.md`: conventions', recording)
         stage3 = ' '.join((skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0].split())
-        self.assertIn('Read `references/grilling.md`. Ask the depth, confirm the problem', stage3)
+        self.assertIn('Read `references/grilling.md`. Confirm the problem', stage3)
 
     def test_readme_says_each_decision_question_has_its_explaining_section(self):
         flat = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
@@ -116,12 +115,12 @@ class ReleaseManifestTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 
-    def test_discovery_template_keeps_the_depth_without_learning_mode(self):
+    def test_discovery_template_has_the_trigger_table_without_learning_mode(self):
         text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'discovery.md').read_text(encoding='utf-8')
         self.assertNotIn('Learning mode', text)
         self.assertNotIn('Concepts explained', text)
-        self.assertIn('- Grilling depth (rápida / padrão / exaustiva):', text)
-        self.assertLess(text.index('- Grilling depth'), text.index('## Project conventions'))
+        self.assertNotIn('Grilling depth', text)
+        self.assertLess(text.index('## Project conventions'), text.index('## Reconnaissance'))
         self.assertLess(text.index('## Decisions'), text.index('## Pre-mortem'))
 
     def test_example_config_carries_only_generic_placeholders(self):

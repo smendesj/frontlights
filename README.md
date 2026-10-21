@@ -740,7 +740,7 @@ recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igu
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
 do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
 camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
-árvore, o pré-mortem incluído; confirmações, a pergunta da profundidade e o "Seguimos?" do fim não ganham seção.
+árvore, o pré-mortem incluído; confirmações e o "Seguimos?" do fim não ganham seção.
 Cada seção segue o modelo `templates/grilling-section.html` (o que a pergunta decide, os conceitos em palavras
 simples, onde o projeto já faz isso, o que cada opção muda, o antes e depois quando há tela, a recomendação
 marcada como opinião e a escolha), e um campo sem nada a dizer é omitido. Cada seção entra por uma edição
@@ -779,10 +779,19 @@ entra na main local pela branch do pai, com as filhas dentro, pelo teste assisti
 e mostrados no diff). A concorrência usada é o número de filhas independentes
 cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na main local.
 Na entrevista, depois de confirmar o problema (numa só pergunta quando a issue já
-o define), a skill levanta as convenções do código afetado e propõe ao menos três
+o define), a skill levanta as convenções do código afetado e faz o reconhecimento por gatilho, sem
+perguntar profundidade: lê primeiro as armadilhas do projeto (`.frontlights/pitfalls.md`) e, com tela, o antes
+no app rodando, a origem dos textos, os estados, o ambiente e as personas; cada gatilho ligado (regra de mais de
+um ator, endpoint existente consumido, regra sobre dado existente ou migration, contrato compartilhado, fluxo de
+vários passos) roda a sua sonda num subagente, que devolve uma tabela curta de fatos com a evidência, e fato não
+verificado não vira opção. O log de descoberta registra cada gatilho, ligado ou desligado com o motivo.
+Só então a skill propõe ao menos três
 abordagens de implementação realmente diferentes. Cada uma informa se segue ou
 quebra o padrão do projeto e o custo disso. Em seguida, a skill percorre os ramos
-de decisão da abordagem escolhida, e é o usuário quem decide quando parar. O
+de decisão da abordagem escolhida, perguntando só produto, escopo e visual (um ramo técnico que a evidência
+resolve vira premissa mostrada no plano, com a evidência), e é o usuário quem decide quando parar. O pré-mortem
+roda quando liga o gatilho de ator, de dado existente ou de migration, e o desafio da issue sempre que o
+reconhecimento acha algo. O
 padrão existente é o preferido; ele só é quebrado quando for comprovadamente pior
 para o caso.
 Cada pergunta de decisão do grilling tem a sua seção no artefato (veja "Artefato visual"), que

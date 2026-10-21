@@ -11,8 +11,7 @@ Expected, in this order:
    page) with the **before** of the form built from the real template of the component (its HTML, its CSS and
    its three fields, read from the repository), filled with fictitious data only (made-up names, numbers and
    texts), and the confirmation question cites its section ("artefato, seção 1: antes"). The page source is
-   written to `.frontlights/artifact.html` (untracked), and the depth question and the confirmation get no
-   section of their own.
+   written to `.frontlights/artifact.html` (untracked), and the confirmation gets no section of its own.
 2. Stage 3, solution round and decision tree: the same page, on the same URL, gains one section per decision
    question, numbered after the before: the solution round (the **after** of the form for each of the three
    approaches) and every branch asked, the pre-mortem included; a naming branch gets its section too. Every
@@ -41,7 +40,7 @@ Reject: a real screenshot of the running product in the grilling, or an inline w
 free sketch where the template exists in the repository; a page per round, a new URL after the first
 publication, or the whole page rewritten to add a section; real data, a real record, a person, an endpoint or
 a client on the page, or a code excerpt with a secret value left in clear; a decision question that cites no
-section; a decision branch without a section (a naming decision, say); a section for the depth question, a
+section; a decision branch without a section (a naming decision, say); a section for a
 confirmation or the closing "Seguimos?"; a section that departs from the model's fields or keeps an empty
 field; the quiz changed into something other than granularity, dependencies and merge or split; a slice drawn
 in the list but with no answer to "what can be demoed"; a script that builds the page; the session skipping

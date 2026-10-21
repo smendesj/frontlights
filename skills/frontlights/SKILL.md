@@ -247,8 +247,10 @@ why in one sentence:
 - **Direct.** A small, well-understood, low-risk change with a single obvious
   implementation that follows the project's existing pattern, or a question you
   can answer. If two or more reasonable implementations exist, or the issue has open
-  sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5 entirely. Confirm the intent, do the work, report
-  what you measured. A Direct change the user can see on the screen still ends with
+  sub-issues (they need their approach confirmed), it is not Direct. Skip stages 3 to 5, except that
+  Direct runs the full reconnaissance by trigger, even without an issue (`references/grilling.md`,
+  "Reconnaissance"), and writes its walkthrough with the before recorded before the code. Confirm the
+  intent, do the work, report what you measured. A Direct change the user can see on the screen still ends with
   `frontlights.py browser-gate` and its watched-run question (stage 6) before it is reported.
   A Direct change runs without an issue body or an issue; the watched-run question offers only to
   name an existing issue. In a project with a remote it is still homologated on the local main
@@ -332,11 +334,13 @@ unavailable integrations accurately.
 
 ## 3. Grill
 
-Read `references/grilling.md`. Ask the depth,
-confirm the problem (in one question when an issue already settles it), record
-the project's conventions, then propose at least three genuinely different
-implementation approaches with their pattern fit, walk the chosen approach's
-decision tree and let the user decide when to stop. An issue settles what is
+Read `references/grilling.md`. Confirm the problem (in one question when an
+issue already settles it), record the project's conventions, run the
+reconnaissance by trigger (the project's pitfalls first, each probe in a subagent
+that returns a short fact table; an unverified fact never becomes an option), then
+propose at least three genuinely different implementation approaches with their
+pattern fit, walk the chosen approach's decision tree asking only product, scope
+and visual, and let the user decide when to stop. An issue settles what is
 wanted, not how: starting from one still runs the solution round. Follow the
 existing code pattern unless it is concretely worse for the problem, and say so
 when it is. Sub-issues join the same interview instead of being left out: one
