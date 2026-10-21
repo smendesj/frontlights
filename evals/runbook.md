@@ -258,9 +258,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     preview once in a tab of Claude in Chrome; that each slice merged into its issue branch is followed by a refresh that
     shows it on reload, a conflict comes back as a question and a broken build as one line with the log file and the
     error; that `serve stop` of an issue, the report and a new session leave the preview up and only `preview stop`, at
-    the user's request, takes it down; and that the watched run copies the development database with `copyDatabase`,
-    runs ANTES and DEPOIS in sequence in the isolated instance, never on the preview's ports nor in its tab, and drops
-    the copy with `dropDatabase` at the end.
+    the user's request, takes it down; and that the watched run runs ANTES and DEPOIS in sequence in the isolated
+    instance, on the local development database itself (never a copy), only in Chrome driven by Playwright, never on
+    the preview's ports nor in its tab, and that `inspect` refuses a block that still has `copyDatabase` or
+    `dropDatabase`.
 31. Review stop criterion. On a disposable issue whose review the user asked for, and whose first review reports one médio and two baixos of line
     width, confirm the baixos of style never reach the report, the médio is fixed, the second round reviews only
     the delta and the earlier finding, the review ends there with 0 sérios and 0 médios, the remaining baixos go to

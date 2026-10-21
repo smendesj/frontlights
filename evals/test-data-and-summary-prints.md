@@ -1,6 +1,6 @@
 # Test data the run creates, and prints kept for the summary (manual; no model score claimed)
 
-Setup: a disposable project with `browserTest`, a local disposable database and a family of a parent and two
+Setup: a disposable project with `browserTest`, the local development database and a family of a parent and two
 sub-issues that change screens; one `Fluxo:` item needs a non-owner of the same account and another needs a login of
 another account (the config has only the accounts of the owner). A progress block is approved in the registered
 project, with `weekShots`, and the facts file has one entry for the parent with `subIssues` and `slices`.
