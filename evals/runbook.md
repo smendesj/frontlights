@@ -56,12 +56,12 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     opens with no stacking or concurrency question: its announcement stacks the dependent
     child on the parent's branch and sets a concurrency equal to the independent children.
     Confirm the child worktree starts from the parent's branch (`git merge-base --is-ancestor`),
-    no branch of the family is pushed and no pull request is opened for the parent or the child; once the
+    only the branch of each issue of the family is pushed and no pull request is opened for the parent or the child; once the
     child is verified, confirm it is merged into the parent's branch and the family enters the local main
     through the parent's branch, with no rebase or force-push.
 13. Watched browser run. On an issue that touches the frontend, confirm the "pronto
     para assistir?" question comes before any window opens, the window is a visible
-    Chrome, the strip reads "ANTES: main" and then "DEPOIS: branch <name>", each case
+    Chrome, the strip reads "ANTES: origin/main" and then "DEPOIS: branch <name>", each case
     runs twice, popups stay long enough to read, and the window of each pass stays open about
     5 minutes at the end. Close the ANTES window early and confirm DEPOIS starts at once;
     close the DEPOIS window early and confirm the session is woken with the report (never
@@ -210,8 +210,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the offer before acting on a family, the batch request, one approval per family, the before and the after
     whole in the stamped file, the old body kept, the children closed and archived only after their own "Sim", and a family
     with more than five open children cut into top-level issues linked by `--blocked-by`.
-27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is cut
-    from the local main (never `origin/main`) and never pushed; when the last slice is merged into it, the session
+27. Local main as homologation (issue 32). On a disposable issue with two slices, confirm the issue branch is
+    created on GitHub from `origin/main` by `gh issue develop` (it shows in the Development field of the issue), is
+    pushed after each slice merge and never carries a commit that is only in the local main, while the slice
+    branches stay local; when the last slice is merged into it, the session
     brings the local main into the branch, gets `browser-gate` `answered` or `not_needed` (no suite and no review
     asked for), writes the `merge_into_local_main` operation with `gates` `{"browser_gate": ...}` only and runs
     `authorize` before `git merge --no-ff` on the local main; an operation with the watched run not answered, a

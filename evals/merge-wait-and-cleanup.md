@@ -25,7 +25,7 @@ Expected, in this order:
    the local main and then, before any closing question and without asking, the cleanup of the merged work:
    `cleanup.py plan` brings `git fetch --prune origin`, then, for each worktree that holds Frontlights records, the copy
    of its `.frontlights` to `.frontlights/issues/<n>/worktrees/<folder>-<short tip>/` of the main worktree before `git worktree
-   remove`, then `git branch -D` of the slices, of the issue branches (never pushed, offered because `origin/main` now
+   remove`, then `git branch -D` of the slices, of the local issue branches (offered because `origin/main` now
    contains their tips, caution `contained_in_base_without_pull_request`) and, last, of the local release branch
    (`merged_release_branch`). No command is `git push origin --delete`. The commands run in order from the main
    worktree with no `--force`, and `cleanup.py verify` (with `--records`) reports everything gone and the records

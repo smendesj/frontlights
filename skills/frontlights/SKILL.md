@@ -391,8 +391,8 @@ goes, in this order:
    local main.
 2. **The preview** (same section), in a project whose config has a `preview` block: up before the
    first slice, refreshed after each slice is merged into the branch of its issue.
-3. **Slices in order** (development.md, "Slices in order"): one issue branch, cut from the local
-   main and kept local; one worktree per slice, merged into the branch of the issue when its loop
+3. **Slices in order** (development.md, "Slices in order"): one issue branch, created on GitHub from
+   `origin/<base>` by `gh issue develop` and pushed after each slice merge; one worktree per slice, merged into the branch of the issue when its loop
    closes (TDD by default, never a gate; no tests under "só com teste assistido", development.md, "Which
    tests run when"); independent slices at once, and the legwork around each open slice fanned out.
 4. **The watched run** (`references/browser-testing.md`): one per issue, when the last slice that

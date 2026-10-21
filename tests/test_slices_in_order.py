@@ -1,4 +1,4 @@
-"""A etapa 6 trabalha as slices de uma issue em ordem, numa branch por issue, cortada da main local: cada slice é um ciclo de
+"""A etapa 6 trabalha as slices de uma issue em ordem, numa branch por issue, criada no GitHub a partir da `origin/<base>`: cada slice é um ciclo de
 TDD, um ponto de retomada e uma caixa marcada com evidência; uma sessão nova retoma pela primeira caixa aberta.
 
 Seams: `frontlights.checkpoint`/`resume` com `--slice`, e os manifestos de texto da skill, da referência da etapa
@@ -110,7 +110,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
     def test_stage_6_works_the_slices_in_order_on_one_branch_merged_into_the_local_main(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         body = flat(section(skill, '6. Bounded development') or '')
-        for phrase in ('one issue branch, cut from the local main', 'one worktree per slice',
+        for phrase in ('one issue branch, created on GitHub from `origin/<base>`', 'one worktree per slice',
                        '(development.md, "Slices in order")'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
@@ -198,7 +198,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         readme = flat(read('README.md'))
         for text, name in ((protocol, 'protocol'), (readme, 'README')):
-            for phrase in ('slices de cada issue em ordem', 'uma branch por issue, cortada da main local', 'família que já existe'):
+            for phrase in ('slices de cada issue em ordem', 'uma branch por issue, criada no GitHub a partir da', 'família que já existe'):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
         runbook = flat(read('evals', 'runbook.md'))

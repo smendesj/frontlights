@@ -158,23 +158,53 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
-        for phrase in ('one issue branch, cut from the local main and kept local',
+        for phrase in ('one issue branch, created on GitHub from `origin/<base>` by `gh issue develop` and pushed '
+                       'after each slice merge',
                        'the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`, the merge, then the bundle',
                        '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         development = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ('never `origin/main`', 'stays local and is never pushed',
-                       'Nothing of an issue goes to GitHub before the release',
+        for phrase in ('`gh issue develop <n> --repo <repo> --base <base> --name <branch_prefix>issue-<n>`',
+                       '`git fetch origin <branch_prefix>issue-<n>`',
+                       '`git worktree add <path> <branch_prefix>issue-<n>`',
+                       'links it to the Development field of the issue',
+                       '`git push origin <branch_prefix>issue-<n>`',
+                       'the branches of the slices, the preview branch and the local main stay local and are never pushed',
+                       'never a commit that is only in the local main',
+                       'the local main never enters a pushed branch',
                        'writing the remote main (`origin/main`, the base branch on GitHub)',
                        'the local main is written only by the covered merge',
                        '`gates` `{"browser_gate": "answered"}` (or `not_needed`), the only gate',
                        '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
-        for gone in ('pushing the work branches', 'one issue branch and one PR', 'write the base branch'):
+        for gone in ('pushing the work branches', 'one issue branch and one PR', 'write the base branch',
+                     'cut from the local main and kept local'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, text)
+        for gone in ('stays local and is never pushed', 'Nothing of an issue goes to GitHub before the release',
+                     '`git branch <branch_prefix>issue-<n> main`', 'the branches of the issue and of its slices stay local',
+                     'the branch of the issue stays local, never pushed'):
+            with self.subTest(file='development.md', gone=gone):
+                self.assertNotIn(gone, development)
+
+    def test_the_direct_path_keeps_a_local_branch(self):
+        """Issue 70, S1: o trabalho sem issue não tem issue a que ligar a branch, então a branch dele fica local."""
+        development = flat('skills', 'frontlights', 'references', 'development.md')
+        self.assertIn('Its branch has no issue to link: it is cut from the local main and stays local, never pushed',
+                      development)
+
+    def test_the_first_watched_run_compares_the_remote_base_with_the_branch_of_the_issue(self):
+        """Issue 70, S1: ANTES na base do GitHub (`origin/<base>`), DEPOIS na branch da issue, no banco local."""
+        browser = flat('skills', 'frontlights', 'references', 'browser-testing.md')
+        for phrase in ('ANTES runs the `Fluxo:` on the remote base of the batch (`origin/<base>`, the base the branch '
+                       'of the issue was created from)',
+                       'a detached-HEAD worktree made with `git worktree add` at `origin/<base>`',
+                       '"ANTES: origin/main"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, browser)
+        self.assertNotIn('"ANTES: main" on the main', browser)
 
     def test_the_development_reference_has_the_watched_run_section_after_the_review(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
@@ -197,7 +227,7 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertNotIn(gone, body)
         whole = ' '.join(text.split())
         for phrase in ('one merge into the local main per issue', 'delivered by one merge into the local main',
-                       'the branches of the issue and of its slices stay local',
+                       'the branches of the slices, the preview branch and the local main stay local',
                        'writing the remote main (`origin/main`, the base branch on GitHub)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, whole)
@@ -231,8 +261,9 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_the_protocol_and_the_security_notes_tell_the_local_main_from_the_remote(self):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('cortada da main local e nunca enviada, entra na main local por merge só com o teste assistido '
-                       'respondido ou dispensável, o único portão',
+        for phrase in ('criada no GitHub a partir da `origin/<base>` por `gh issue develop`, ligada à issue e enviada a '
+                       'cada fatia mesclada, entra na main local por merge só com o teste assistido respondido ou '
+                       'dispensável, o único portão',
                        '"Standing authorization and the denied operations"', 'em "Into the local main"',
                        'a saída do `authorize` do merge na main local'):
             with self.subTest(file='protocol', phrase=phrase):
@@ -255,15 +286,23 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertNotIn('enviar as branches de trabalho', text)
                 self.assertNotIn('escrever na branch base ou protegida', text)
+                self.assertNotIn('cortada da main local e nunca enviada', text)
+        self.assertIn('A branch da issue é a única branch de trabalho enviada antes da release', security)
 
     def test_the_readme_the_handoff_and_the_examples_follow(self):
         readme = flat('README.md')
-        for phrase in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
-                       'numa branch por issue, cortada da main local',
+        for phrase in ('A branch de cada issue é criada no GitHub a partir da `origin/main` por `gh issue develop`',
+                       'numa branch por issue, criada no GitHub a partir da `origin/main`',
                        'o da branch da issue na main local com o teste assistido respondido',
-                       'nada da issue vai ao GitHub antes da release'):
+                       'a branch da issue sobe para o GitHub a cada fatia mesclada'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
+        for gone in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
+                     'nada da issue vai ao GitHub antes da release', 'numa branch por issue, cortada da main local'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, readme)
+        self.assertNotIn('a branch da issue é cortada da main local e nunca enviada',
+                         read('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertNotIn('enviar as branches, abrir PRs rascunho', readme)
         handoff = read('skills', 'frontlights', 'templates', 'handoff.md')
         self.assertIn('- Merge na main local (', handoff)
