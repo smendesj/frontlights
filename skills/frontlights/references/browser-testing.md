@@ -513,7 +513,9 @@ window, which follows the watched run's rules unless it says otherwise:
 - **Help on request.** The user leads: no script, no ANTES/DEPOIS and no print is required, and the test creates no
   test data of its own. While the window is open the session helps on request: it reads the screen, the console and
   the network and explains what it sees; it clicks or types only when the user asks, and it never writes to the
-  database on its own.
+  database on its own. A fix the user asks for is the one case in which the session edits code while the window is
+  open, on the branch of the issue and merged again into the local main (`development.md`, "The free test on the
+  local main"); even then it never writes to the database on its own.
 
 ## Cross-account permissions
 

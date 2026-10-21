@@ -100,7 +100,7 @@ text, and is reread before it is posted.
 **Show before approval.** The approval of a document, a list or a table is asked by link and
 stamp, never by pasting the full text into the conversation. This covers the issue body of stage 4
 and its revisions, the plan and the bodies of stage 5, the conversion of a family, the findings
-batch and its leftover criteria, the closeout list and
+batch and its leftover criteria, the batch of new criteria of the free test, the closeout list and
 the RoadS progress-report draft (the cleanup of merged work asks nothing: `references/closeout.md`, step 5). Before each approval:
 1. Write it to a file under `.frontlights/`, send the file with the host's file-sending tool when
    the host has it (the card reaches the phone), and give a clickable link to the file.
