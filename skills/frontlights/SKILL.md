@@ -431,6 +431,7 @@ wait of stage 6 finds the release's pull request merged into the approved base (
 brought up to it with `git pull --ff-only`), or when the user asks to close finished
 issues. At the merge and at stage 1, the cleanup of the merged work (closeout.md, step 5) runs first, without a
 question: the worktrees and local branches of the issues, slices and release already in the approved base, each
-worktree's records copied to the main worktree first, never a remote branch (GitHub deletes it). Closing (with the
+worktree's records copied to the main worktree first, and of remote branches only the released issue's (GitHub
+deletes the others). Closing (with the
 tick in a parent, in the same approval) waits for its own
 approval of the list by link and stamp ("Show before approval"): no implementation authorization, merged PR or green test covers it.

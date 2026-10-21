@@ -7,9 +7,13 @@ not even the index is refreshed) and GitHub (`gh api graphql`, the reader of roa
 runs. The cleanup of merged work needs no approval (closeout.md, step 5): the session runs the printed commands
 itself, with its own `git`, in order; only a candidate with `ask: true` waits for the user's yes. The commands are
 values to type, not something `plan` runs. Every command is built from validated values (an existing registered
-worktree path without characters a command line cannot carry, a plain branch name) and never uses `--force`. No
-command touches a remote branch: GitHub deletes the head branch of a merged pull request on its own ("Automatically
-delete head branches"), and `git fetch --prune` drops the remote-tracking ref it left.
+worktree path without characters a command line cannot carry, a plain branch name) and never uses `--force`. One
+command touches a remote branch, `delete_remote_branch` (`git push origin --delete <branch>`, issue 70): only the
+branch of an issue (its authorization entry without `slice`, never the `-integra` one, a release or a protected
+branch) whose tip on GitHub `origin/<base>` already contains, that is, released. It comes after the fetch and before
+the local delete of the same item. Every other remote branch is left alone: GitHub deletes the head branch of a merged
+pull request on its own ("Automatically delete head branches"), the release's among them, and `git fetch --prune`
+drops the remote-tracking ref it left.
 
 Operations (each prints one JSON object on stdout):
   plan    the worktrees and branches of --issues (the `worktrees` of .frontlights/authorization*.json), plus any
@@ -47,8 +51,9 @@ Operations (each prints one JSON object on stdout):
           the same as the records (same paths, same bytes: an earlier copy, whole or stopped half-way, whose removal
           failed) gets the missing files and is ok; one with any differing or extra file is refused, nothing copied,
           so no earlier archive is ever overwritten. The one operation that writes, and only into --to.
-  verify  reread --worktree, --branch and --records values and say whether each worktree is gone (unregistered and
-          its folder absent), each local branch is gone, and each records folder holds the copied files.
+  verify  reread --worktree, --branch, --remote-branch and --records values and say whether each worktree is gone
+          (unregistered and its folder absent), each local branch is gone, each remote branch is gone from `origin`
+          (`git ls-remote`, the one read of the remote) and each records folder holds the copied files.
 
 Run it from the folder the session stands in, with --root pointing at the project's main worktree: it never
 offers the folder it runs in.
@@ -158,6 +163,14 @@ def has_origin(root):
     """Is there an `origin` remote to prune the remote-tracking refs of?"""
     code, _ = git(root, 'remote', 'get-url', REMOTE)
     return code == 0
+
+
+def released_base_ref(root, base):
+    """The remote-tracking ref of the approved base (`origin/<base>` as of the last fetch: what was released), or
+    None. The local base never stands for it: the local main is where the work is homologated, before the release."""
+    ref = f'refs/remotes/{REMOTE}/{base}'
+    code, _ = git(root, 'rev-parse', '--verify', '--quiet', f'{ref}^{{commit}}')
+    return ref if code == 0 else None
 
 
 def base_ref(root, base):
@@ -421,6 +434,23 @@ def slice_reasons(ctx, github, tip, issue_branch, branch):
     return reasons
 
 
+def released_remote(ctx, item, branch, github):
+    """Does the remote branch of this candidate go too (issue 70, S3)? Only the branch of an issue (the entry of the
+    issue without `slice`, never an integration or a release branch), when there is an `origin`, GitHub has the branch
+    and the remote-tracking base already contains its tip there. Anything Git cannot tell keeps it."""
+    if item.get('issue') is None or item.get('slice') or item.get('integration'):
+        return False
+    if ctx['issue_branches'].get(item['issue']) != branch or branch.endswith('-integra'):
+        return False
+    if RELEASE.fullmatch(branch.rsplit('/', 1)[-1]) or not ctx['origin']:
+        return False
+    remote = github.get('remote')
+    if not isinstance(remote, str) or not OID.fullmatch(remote):
+        return False
+    base = released_base_ref(ctx['root'], ctx['base'])
+    return base is not None and is_ancestor(ctx['root'], remote, base) is True
+
+
 def worktree_state(path):
     """(uncommitted, ignored): the lines of `git status` that are changes or new files, and the ignored names
     (`.frontlights` aside, which has its own caution), or None for the first when git could not tell."""
@@ -504,6 +534,10 @@ def assess(ctx, item, registered, github):
                                   '--to', destination]})
     if registered is not None:
         commands.append({'kind': 'remove_worktree', 'argv': ['git', '-C', main, 'worktree', 'remove', registered['path']]})
+    if released_remote(ctx, item, branch, github):
+        # the written exception (issue 70): the released issue branch on GitHub goes before the local one, so a
+        # failed push skips the local delete of the same item
+        commands.append({'kind': 'delete_remote_branch', 'argv': ['git', '-C', main, 'push', REMOTE, '--delete', branch]})
     commands.append({'kind': 'delete_branch', 'argv': ['git', '-C', main, 'branch', '-D', branch]})
     for command in commands:
         command['item'] = branch   # a failed command skips the rest of its item
@@ -609,7 +643,8 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
         resolved.append((item, registered, branch))
     names = sorted({b for _, _, b in resolved if b and closeout.valid_branch(b) and not is_protected(b, protected)} | set(releases))
     github = read_branches(gh, repository, names) if names else {}
-    ctx = {'root': main, 'main': norm(main), 'main_path': main, 'base': expected,
+    ctx = {'root': main, 'main': norm(main), 'main_path': main, 'base': expected, 'origin': has_origin(main),
+           'issue_branches': issue_branches,
            'protected': protected, 'gh': gh, 'repository': repository, 'more': {}, 'delivered': set(), 'listing': listing,
            'python': Path(sys.executable).as_posix(), 'script': Path(__file__).resolve().as_posix()}
     # the integration worktrees go last: what they hold is judged against the pull requests the others delivered
@@ -640,7 +675,7 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     # the slices of an issue come before the issue's own worktree: its branch is what they are judged against; the
     # release branches go last
     result['candidates'].sort(key=lambda c: (c['release'], c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
-    if has_origin(main):
+    if ctx['origin']:
         # GitHub deletes the merged head branches; the fetch drops the remote-tracking refs they left here
         result['commands'].append({'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', main, 'fetch', '--prune', REMOTE]})
     for candidate in result['candidates']:
@@ -803,12 +838,14 @@ def op_archive(source, destination):
             'alreadyArchived': len(present), 'message': message}
 
 
-def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):
-    """Read only: whether each named worktree and local branch is gone and each records folder holds the copy. The
-    remote branch is GitHub's to delete, so it is not read."""
+def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=(), remote_branches=()):
+    """Read only: whether each named worktree and local branch is gone, each named remote branch is gone from `origin`
+    (`git ls-remote`) and each records folder holds the copy."""
     repository = closeout.load_project(config)
-    require(worktrees or branches or records, 'verify needs what to check: pass --worktree PATH, --branch NAME and/or --records FOLDER')
+    require(worktrees or branches or records or remote_branches,
+            'verify needs what to check: pass --worktree PATH, --branch NAME, --remote-branch NAME and/or --records FOLDER')
     require(all(closeout.valid_branch(b) for b in branches), '--branch must be a plain branch name')
+    require(all(closeout.valid_branch(b) for b in remote_branches), '--remote-branch must be a plain branch name')
     listing = list_worktrees(root)
     registered = {norm(e['path']) for e in listing}
     entries = []
@@ -819,6 +856,13 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):
         entries.append({'kind': 'worktree', 'name': rs.clean(str(text), 300), 'gone': gone})
     for branch in branches:
         entries.append({'kind': 'branch', 'name': branch, 'gone': local_tip(listing[0]['path'], branch) is None})
+    for branch in remote_branches:
+        code, out = git(listing[0]['path'], 'ls-remote', '--heads', REMOTE, f'refs/heads/{branch}')
+        listed = {line.split('\t', 1)[-1].strip() for line in out.splitlines() if line.strip()}
+        entry = {'kind': 'remote_branch', 'name': branch, 'gone': code == 0 and f'refs/heads/{branch}' not in listed}
+        if code != 0:
+            entry['unreadable'] = True   # the remote could not be read: not known to be gone
+        entries.append(entry)
     for text in records:
         folder = Path(text)
         folder = folder if folder.is_absolute() else Path(root) / folder
@@ -838,12 +882,12 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=()):
 # ---------------------------------------------------------------- command line
 
 def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
-        records=(), source=None, destination=None):
+        records=(), source=None, destination=None, remote_branches=()):
     try:
         if operation == 'plan':
             result = op_plan(config, root, issues, base, worktrees, integrations, gh)
         elif operation == 'verify':
-            result = op_verify(config, root, worktrees, branches, gh, records)
+            result = op_verify(config, root, worktrees, branches, gh, records, remote_branches)
         elif operation == 'archive':
             result = op_archive(source, destination)
         else:
@@ -880,6 +924,8 @@ def build_parser():
                                  help="the local-only integration worktree of a family, as many times as needed")
         else:
             command.add_argument('--branch', action='append', default=[], dest='branches', help='a branch name, as many times as needed')
+            command.add_argument('--remote-branch', action='append', default=[], dest='remote_branches',
+                                 help='a branch name on origin (the `delete_remote_branch` of plan), as many times as needed')
             command.add_argument('--records', action='append', default=[], dest='records',
                                  help='a folder the records of a worktree were copied to (the `recordsTo` of plan)')
     command = sub.add_parser('archive', allow_abbrev=False)
@@ -894,6 +940,7 @@ def main(argv=None):
         result = run(args.operation, getattr(args, 'config', None), getattr(args, 'root', '.'), getattr(args, 'issues', None),
                      getattr(args, 'base', None), getattr(args, 'worktrees', []), getattr(args, 'branches', []),
                      integrations=getattr(args, 'integrations', []), records=getattr(args, 'records', []),
+                     remote_branches=getattr(args, 'remote_branches', []),
                      source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}

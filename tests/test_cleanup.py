@@ -322,7 +322,9 @@ class RemovableTests(CleanupCase):
         self.assertTrue(after['ok'], after)
         self.assertEqual([e['gone'] for e in after['entries']], [True, True])
 
-    def test_the_remote_branch_is_never_touched_whatever_github_says_of_it(self):
+    def test_the_remote_branch_is_never_touched_while_no_origin_base_holds_it(self):
+        """Issue 70, S3: só a branch remota de uma issue lançada (a ponta no GitHub dentro de `origin/<base>`) sai;
+        sem a ref remota da base, nada a toca, diga o GitHub o que disser."""
         path, branch, tip = self.worktree('wt12')
         for remote in (None, tip, 'a' * 40):
             with self.subTest(remote=remote):
@@ -1182,11 +1184,13 @@ class DeliveredWithoutPullRequestTests(CleanupCase):
 
 
 class MergedWorkTests(CleanupCase):
-    """Issue 63, S1: a limpeza do trabalho mesclado roda sozinha e sem branch remota. Depois do merge da release, o
-    plano traz `git fetch --prune`, a cópia dos registros de cada worktree para `.frontlights/issues/<n>/` antes de
-    removê-la, a remoção das worktrees e das branches locais da issue, das slices e da release mesclada, e nenhum
-    `git push origin --delete`; só pergunta quem tem arquivo ignorado fora de dependência ou build. O `origin` é um
-    repositório nu local que faz o papel do GitHub (merge e exclusão automática da branch da release)."""
+    """Issue 63, S1, e issue 70, S3: a limpeza do trabalho mesclado roda sozinha. Depois do merge da release, o plano
+    traz `git fetch --prune`, a cópia dos registros de cada worktree para `.frontlights/issues/<n>/` antes de
+    removê-la, a remoção das worktrees e das branches locais da issue, das slices e da release mesclada, e um só
+    `git push origin --delete`: o da branch da issue no GitHub, cuja ponta `origin/<base>` já contém; nunca o de uma
+    slice, da integração, da release ou de uma branch protegida. Só pergunta quem tem arquivo ignorado fora de
+    dependência ou build. O `origin` é um repositório nu local que faz o papel do GitHub (merge e exclusão automática
+    da branch da release)."""
 
     RELEASE = 'claude/release-2026-10-20'
 
@@ -1207,6 +1211,8 @@ class MergedWorkTests(CleanupCase):
         self.entries.append({'issue': 12, 'path': str(s1_path), 'branch': s1_branch, 'slice': 'S1', 'ownership': ['src']})
         self.authorize()
         self.git('merge', '-q', '--no-ff', '-m', 's1', s1_branch, cwd=issue_path)
+        self.git('push', '-q', 'origin', issue_branch)   # issue 70: the branch of the issue lives on GitHub
+        issue_remote = self.git('rev-parse', issue_branch)
         for path, name in ((issue_path, 'review.json'), (s1_path, 'progress.json')):
             (path / '.frontlights' / 'issues' / '12').mkdir(parents=True)
             (path / '.frontlights' / 'issues' / '12' / name).write_text('{"evidence": true}', encoding='utf-8')
@@ -1217,7 +1223,7 @@ class MergedWorkTests(CleanupCase):
         self.git('update-ref', 'refs/heads/main', release_tip, cwd=bare)          # the merge of the release on GitHub
         self.git('update-ref', '-d', f'refs/heads/{self.RELEASE}', cwd=bare)      # its automatic deletion
         self.git('pull', '-q', '--ff-only', 'origin', 'main')
-        info = {issue_branch: {'heads': []}, s1_branch: {'heads': []},
+        info = {issue_branch: {'heads': [], 'remote': issue_remote}, s1_branch: {'heads': []},
                 self.RELEASE: {'heads': [pull(70, oid=release_tip)]}}
         return (issue_path, issue_branch), (s1_path, s1_branch), info
 
@@ -1230,7 +1236,10 @@ class MergedWorkTests(CleanupCase):
         main = cleanup.norm(self.root)
         kinds = [c['kind'] for c in result['commands']]
         self.assertEqual(kinds, ['fetch_prune', 'copy_records', 'remove_worktree', 'delete_branch',
-                                 'copy_records', 'remove_worktree', 'delete_branch', 'delete_branch'])
+                                 'copy_records', 'remove_worktree', 'delete_remote_branch', 'delete_branch',
+                                 'delete_branch'])
+        remote = next(c for c in result['commands'] if c['kind'] == 'delete_remote_branch')
+        self.assertEqual((remote['item'], remote['argv'][3:]), (issue_branch, ['push', 'origin', '--delete', issue_branch]))
         self.assertEqual(result['commands'][0]['argv'][3:], ['fetch', '--prune', 'origin'])
         branches = [c['argv'][-1] for c in result['commands'] if c['kind'] == 'delete_branch']
         self.assertEqual(branches, [s1_branch, issue_branch, self.RELEASE])
@@ -1240,7 +1249,7 @@ class MergedWorkTests(CleanupCase):
         self.assertEqual((release['branch'], release['release'], release['removeWorktree'], release['cautions']),
                          (self.RELEASE, True, False, ['merged_release_branch']))
         flat_argv = [a for c in result['commands'] for a in c['argv']]
-        self.assertNotIn('push', flat_argv)
+        self.assertEqual([c for c in result['commands'] if 'push' in c['argv']], [remote])
         self.assertNotIn('--force', flat_argv)
         self.assertNotIn('-f', flat_argv)
         for command in result['commands']:
@@ -1255,11 +1264,82 @@ class MergedWorkTests(CleanupCase):
                          {'evidence': True})
         self.assertTrue((s1_records / 'issues' / '12' / 'progress.json').is_file())
         self.assertEqual(self.git('branch', '--list', '-r', f'origin/{self.RELEASE}'), '')   # pruned by the fetch
+        self.assertEqual(self.git('ls-remote', '--heads', 'origin'), self.git('ls-remote', '--heads', 'origin', 'main'))
         after = cleanup.run('verify', self.config, self.root, None, None, [str(issue_path), str(s1_path)],
                             [issue_branch, s1_branch, self.RELEASE], FakeGh(),
-                            records=[str(issue_records), str(s1_records)])
+                            records=[str(issue_records), str(s1_records)], remote_branches=[issue_branch])
         self.assertTrue(after['ok'], after)
-        self.assertEqual([e['kind'] for e in after['entries']], ['worktree'] * 2 + ['branch'] * 3 + ['records'] * 2)
+        self.assertEqual([e['kind'] for e in after['entries']],
+                         ['worktree'] * 2 + ['branch'] * 3 + ['remote_branch'] + ['records'] * 2)
+
+    def remote_deletes(self, result):
+        return [c['item'] for c in result['commands'] if c['kind'] == 'delete_remote_branch']
+
+    def test_the_remote_branch_of_the_issue_stays_unless_origin_base_holds_its_tip_on_github(self):
+        """Issue 70, S3: sem ponta remota, com uma ponta fora de `origin/<base>` (ou que este clone não tem), ou sem a
+        ref remota da base (a main local não conta: ela é a homologação), a branch remota fica."""
+        (_, issue_branch), _, info = self.released()
+        for name, remote in (('absent', None), ('outside', self.premade['wt12']), ('unknown', 'a' * 40)):
+            with self.subTest(remote=name):
+                changed = {**info, issue_branch: {'heads': [], 'remote': remote}}
+                result, _ = self.plan(changed)
+                self.assertIn(issue_branch, [c['branch'] for c in result['candidates']])
+                self.assertEqual(self.remote_deletes(result), [])
+        self.git('update-ref', '-d', 'refs/remotes/origin/main')
+        result, _ = self.plan(info)
+        self.assertIn(issue_branch, [c['branch'] for c in result['candidates']])
+        self.assertEqual(self.remote_deletes(result), [])
+
+    def test_a_failed_remote_delete_skips_the_local_delete_of_its_item(self):
+        """Issue 70, S3: o `push --delete` vem antes do `branch -D` da mesma branch e leva o mesmo `item`."""
+        (_, issue_branch), _, info = self.released()
+        result, _ = self.plan(info)
+        own = [c['kind'] for c in result['commands'] if c['item'] == issue_branch]
+        self.assertEqual(own[-2:], ['delete_remote_branch', 'delete_branch'])
+
+    def test_no_remote_delete_for_a_slice_the_integration_the_release_or_a_protected_branch(self):
+        """Issue 70, S3: a exceção é só a branch da issue; a da release o GitHub apaga, a de integração nunca vai ao
+        GitHub e uma protegida nunca sai."""
+        (_, issue_branch), (_, s1_branch), info = self.released()
+        _, integra_branch, integra_tip = self.worktree('issue-12-integra', commit=False, start=issue_branch)
+        release_tip = info[self.RELEASE]['heads'][0]['headRefOid']
+        changed = {**info, integra_branch: {'heads': []}, self.RELEASE: {**info[self.RELEASE], 'remote': release_tip}}
+        result, _ = self.plan(changed)
+        self.assertIn(integra_branch, [c['branch'] for c in result['candidates']])
+        self.assertIn(self.RELEASE, [c['branch'] for c in result['candidates']])
+        self.assertEqual(self.remote_deletes(result), [issue_branch])
+        sliced = {**info, s1_branch: {'heads': [], 'remote': info[issue_branch]['remote']}}
+        result, _ = self.plan(sliced)
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[s1_branch], ['slice_pushed'])
+        self.assertEqual(self.remote_deletes(result), [issue_branch])
+        self.protected = [issue_branch]
+        self.authorize()
+        result, _ = self.plan(info)
+        self.assertEqual({e['branch']: e['reasons'] for e in result['excluded']}[issue_branch], ['protected_branch'])
+        self.assertEqual(self.remote_deletes(result), [])
+
+    def test_the_integration_entry_never_gets_a_remote_delete_even_when_pushed_and_released(self):
+        """Issue 70, S3: a entrada `-integra` da autorização (sem `slice`) nunca é a branch da issue."""
+        (_, issue_branch), _, info = self.released()
+        _, integra_branch, integra_tip = self.worktree('issue-12-integra', commit=False, start=issue_branch)
+        result, _ = self.plan({**info, integra_branch: {'heads': [], 'remote': integra_tip}})
+        self.assertIn(integra_branch, [c['branch'] for c in result['candidates']])
+        self.assertEqual(self.remote_deletes(result), [issue_branch])
+
+    def test_verify_reads_the_remote_branch_on_the_origin(self):
+        """Issue 70, S3: `verify --remote-branch` lê o `origin` (`git ls-remote`) e diz se a branch remota saiu."""
+        (_, issue_branch), _, _ = self.released()
+        before = cleanup.run('verify', self.config, self.root, None, None, (), (), FakeGh(), remote_branches=[issue_branch])
+        self.assertEqual((before['exitCode'], [e['kind'] for e in before['entries']], before['entries'][0]['gone']),
+                         (1, ['remote_branch'], False))
+        self.git('push', '-q', 'origin', '--delete', issue_branch)
+        after = cleanup.run('verify', self.config, self.root, None, None, (), (), FakeGh(), remote_branches=[issue_branch])
+        self.assertTrue(after['ok'], after)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cleanup.main(['verify', '--config', str(self.config), '--root', str(self.root),
+                                 '--remote-branch', issue_branch])
+        self.assertEqual(code, 0, out.getvalue())
 
     def test_each_command_names_the_item_it_belongs_to(self):
         """Review r1 of issue 63 (R1-3): every command of `commands` carries the branch of its candidate in `item`

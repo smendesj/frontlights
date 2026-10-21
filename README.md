@@ -647,9 +647,10 @@ Com o merge confirmado, nesta ordem:
    das issues e das slices que têm o tip igual à cabeça de uma PR mesclada que chegou à base aprovada (o filho
    empilhado, pelo pai) ou, sem PR nenhuma, cujo tip já está em `origin/main` (a branch de uma issue que chegou ao
    GitHub pela release), sem alteração pendente, sem PR aberta a partir ou em cima da branch, que não são
-   protegidos, nem a worktree principal, nem a pasta em que a sessão está. A branch remota nunca é apagada pela
-   limpeza: o GitHub apaga a branch da PR mesclada sozinho (a opção "Automatically delete head branches" do
-   repositório). Nunca usa `--force`, e `cleanup.py verify` confere depois que tudo sumiu e que os registros foram
+   protegidos, nem a worktree principal, nem a pasta em que a sessão está. Das branches remotas, a limpeza só apaga
+   a da issue (`git push origin --delete`), quando a ponta dela no GitHub já está em `origin/main`, antes da branch
+   local; nunca a de uma slice, da integração, da release ou uma protegida: o GitHub apaga a branch da PR mesclada
+   sozinho (a opção "Automatically delete head branches" do repositório). Nunca usa `--force`, e `cleanup.py verify` confere depois que tudo sumiu e que os registros foram
    copiados. Os arquivos que o Git ignora (um `.env`, `node_modules`) vão embora com a worktree: só pergunta antes
    a worktree que tem arquivo ignorado fora de pastas de dependência ou build (um `.env`, por exemplo), nomeando os
    arquivos. O que fica (alteração pendente, PR aberta, branch protegida) é dito numa linha. A worktree de
