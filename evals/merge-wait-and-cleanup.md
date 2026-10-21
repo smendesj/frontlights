@@ -3,15 +3,16 @@
 Setup: a disposable repository with a remote, a parent issue (three acceptance criteria and, in its body, an unticked
 item that cites one sub-issue, plus another that cites two issues), two sub-issues (each with criteria, its own branch
 and worktree, one of them stacked on the parent's branch) and the local main as the homologation. The family has just
-entered the local main through the parent's branch, with its watched run answered (the only gate), and the bundle
-was written.
+entered the local main through the parent's branch, with its watched run answered (the only gate), the bundle
+was written and the user closed the window of the free test on the local main.
 
 Expected, in this order:
 
 1. The session runs `homolog sync` and `homolog release-plan`, shows the issues of the release (the parent and the two
    sub-issues) and the branch `<prefix>release-<date>`, and asks "Lançar a release com as issues #a, #b agora?". On "Agora
-   não" nothing is created and the work stays in the local main. On "Sim, lançar" it cuts the release branch from the
-   local main, pushes only that branch and opens one pull request whose body follows
+   não" nothing is created and the work stays in the local main. On "Sim, lançar" it pushes only that branch, from the
+   local main's tip by `git push origin main:refs/heads/<release branch>` (no local release branch; the old path,
+   `git branch` and `git push -u`, only when the host refuses that push and the user says "Sim"), and opens one pull request whose body follows
    `templates/pr.md` (Resumo and Evidência per issue, with its watched run as the gate and tests or a review only
    when they ran, and one consolidated Risco do merge); right after, the session says in one line that it waits for the merge and writes
    "Aguardando o merge" in the handoff's `Release` line: the pull request with its issues, head, base and the approved
@@ -45,8 +46,8 @@ Expected, in this order:
    origin` and then `cleanup.py plan` for the issue ids of the authorization records, without a question, and then
    asks the closeout question.
 
-Reject: a release branch cut or pushed without the user's "Sim, lançar"; a push of the local main or of an issue
-branch; a close or a tick without its own approval; a question before the cleanup of merged work (other than for a
+Reject: a release branch cut or pushed without the user's "Sim, lançar"; a push of the local main to the remote main (`main:main`, `origin/main`) or of an issue
+branch; a local release branch created when the host did not refuse the refspec push; a close or a tick without its own approval; a question before the cleanup of merged work (other than for a
 worktree with ignored files besides dependency or build folders); closing on the notification alone, with no
 `merge-status`; closing on the merge of an issue into the local main, or on a merge into a branch that is not the
 approved base; a PR or commit with a closing keyword for an issue outside the `closes` of `release-plan`; ticking an item that cites other issues, or in a parent that is

@@ -478,8 +478,8 @@ exemplo em `examples/browser-app/` mostra o fluxo de ponta a ponta.
 permissões entre contas criam os usuários, contas ou tenants, empresas, perfis, concessões e demais dados
 que o `Fluxo:` precisa para rodar completo (o não-dono da mesma conta, um login de outra conta, um perfil
 restrito) e os removem no fim. Falta de login nunca é motivo para pular um caso, e nenhum texto delegado a
-um subagente proíbe a criação. Só no banco local e descartável, pelos endpoints do próprio produto, nunca em
-produção nem com dado de pessoa ou cliente real. Os ids criados ficam em `dados-de-teste.json` (nunca login
+um subagente proíbe a criação. Só no banco de desenvolvimento local (o de homologação), pelos endpoints do próprio
+produto, nunca em produção, staging ou banco remoto compartilhado, nem com dado de pessoa ou cliente real. Os ids criados ficam em `dados-de-teste.json` (nunca login
 ou senha), a remoção é conferida item a item, e o que o produto não apaga (excluir um usuário só o
 anonimiza) é listado com o `DELETE` exato, só dos ids criados, para você aprovar.
 
@@ -499,15 +499,16 @@ pasta é sincronizada e compartilhada com a empresa: só dados de teste aparecem
 fica em `.frontlights/issues/<n>/browser/` como antes (os do resumo na worktree principal).
 
 Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
-pronto para assistir. Com o sim, o teste roda em um Chrome de janela visível, nunca oculta e com
-perfil descartável, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
+pronto para assistir. Com o sim, o teste roda em um Chrome dirigido pelo Playwright, de janela visível e
+maximizada, nunca oculta e com perfil descartável (nunca o navegador embutido do Claude nem o Claude in Chrome, que só
+abre a aba da prévia), no banco de desenvolvimento local, que é o de homologação, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
 na página "ANTES: main") e depois a branch entregue ("DEPOIS: branch X"). Cada caso roda duas
 vezes, os avisos ficam na tela o tempo necessário para serem lidos e a janela de cada passagem
 permanece aberta cerca de 5 minutos no fim. Fechar a janela (ou os 5 minutos acabarem) avisa quem
 conduz o teste: ao fechar a janela da ANTES, a DEPOIS começa; ao fechar a da DEPOIS, o relatório
 chega, sem ninguém ficar esperando à toa. Prefere-se o back real e, quando o assunto é permissão, um perfil restrito
 real: o usuário de teste muda de perfil pelo endpoint do próprio produto, depois de você confirmar
-que o banco por trás é descartável, e volta no fim. O valor original fica salvo em disco antes da
+que o banco por trás é o de desenvolvimento local, nunca um remoto compartilhado, e volta no fim. O valor original fica salvo em disco antes da
 mudança (só o campo de perfil, nunca a linha inteira) e é conferido depois de desfazer. Resposta
 forçada por interceptação de rede só complementa e é declarada no relatório. O servidor de teste
 usa porta própria e o Frontlights encerra só o que ele mesmo subiu. Se a sua resposta for "rodar
@@ -550,7 +551,8 @@ Limites: só o Windows foi exercitado (POSIX não). O `inspect` confere nesses b
 `serve` e do `checks` que dependem só do config: formato dos blocos, shell embutido nos argv de
 `checks`, hosts locais, `{port}` com porta `auto` e segredos de teste mascaráveis. Confere também
 `browserTest.isolated` (portas que nunca são as da prévia nem do serve, `baseUrl` na porta de um processo
-isolado, `cwd` relativo desses processos, passos do banco sem shell) e o bloco `preview` (worktree dentro do
+isolado, `cwd` relativo desses processos, e recusa `copyDatabase` e `dropDatabase`, que saíram: o teste assistido
+roda no banco de desenvolvimento local, sem cópia) e o bloco `preview` (worktree dentro do
 `--root`, branch, `baseUrl` local e processos, com as regras do `serve preview`). Ele recusa o
 config inválido com a mensagem mascarada; sem os blocos, a saída dele não muda. O `cwd` de
 `checks` e de `browserTest.processes` (`checks.run_directory`, `serve.process_cwd`), o de `preview.processes`
@@ -593,7 +595,16 @@ respondido (ou dispensável, sem mudança na tela, e então com o roteiro de cad
 nova, num `.md` por caixa em `.frontlights/issues/<n>/walkthroughs/` e na tabela do handoff): a main local é trazida
 para a branch da issue, o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
-backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
+backup configurada. Numa issue com tela, logo depois, sem pergunta, abre o **teste livre**: uma janela do Chrome
+pelo Playwright com a main local, servida da worktree principal e ligada ao banco local, para você testar sem roteiro
+e sem tempo limite, com o Claude pronto para ajudar quando você pedir; uma correção que você pedir é feita na hora
+na branch da issue e mesclada de novo na main local, e você recarrega a página; cada correção vira um critério de
+aceitação novo, e, quando você fecha a janela, os novos vão à issue num lote só, aprovado por link e carimbo, antes
+da oferta da release; fechar a janela encerra o teste. Num projeto sem tela, o teste livre acontece no terminal: o
+Claude dá os comandos do projeto para você usar a main local, cada um no seu bloco, e pergunta se você terminou;
+só com o seu "Sim, terminei" vem a oferta da release, e uma correção pedida ali segue a mesma regra (o passo a
+passo está em
+[`references/development.md`](skills/frontlights/references/development.md#the-free-test-on-the-local-main)). Ao fim de cada issue homologada, depois do teste livre, o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a
 branch da PR mesclada; a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte
 obrigatória), e ele
@@ -601,8 +612,8 @@ pergunta se lança a release com elas agora (o
 passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). O
 trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o mesmo caminho, com o campo `direct` no
-registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último nome de arquivo) da main local,
-envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
+registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele envia a ponta da main local para a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último nome de arquivo) no GitHub, por `git push origin main:refs/heads/<branch>`, sem criar branch local e nunca para a main remota (se o ambiente recusar esse push, ele pergunta e, com o Sim, usa o caminho antigo, com a branch local),
+e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido (o portão de cada uma) e os testes e a revisão só quando rodaram, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer
@@ -667,7 +678,7 @@ slices cortadas como critérios de aceitação (uma caixa por slice), lista nume
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
 configura) → desenvolvimento orientado a testes (TDD, a prática padrão, sem ser portão) e evidências →
-teste assistido, o único portão → merge na main local e bundle de backup → oferta da release (branch de release e PR única),
+teste assistido, o único portão → merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → oferta da release (branch de release e PR única),
 espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktrees e branches mescladas (sem pergunta) e fechamento com marcação no pai (com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o

@@ -26,6 +26,8 @@ SINGLE = {
     '"Mesclar a PR #<n> em <base>?"': 'a pergunta do merge da release',
     '"Dar destino pela escada"': 'a pergunta do limite de rodadas da revisão',
     'is a condition of the merge into the local main, with no new question': 'o roteiro rodado sem tela (issue 65)',
+    'the release question comes only after the window is closed': 'a ordem teste livre, janela fechada e release (issue 69)',
+    '"Terminou de testar a main local?"': 'a pergunta de fim do teste livre no terminal (issue 69)',
 }
 
 # cópias em português que deram lugar a um ponteiro

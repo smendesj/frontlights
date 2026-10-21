@@ -82,7 +82,8 @@ remote, before the first branch of the run is cut; a project without a remote (`
 `origin`) has nothing to sync, and the session says so in one line. The helper is `scripts/homolog.py`, reached as
 `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog <operation> ...`; it prints one JSON object with
 `ok`, `exitCode`, `operation` and `message`: exit code 0 done, 1 refused or failed, 2 a question for the user.
-The local main is never pushed: a rule of the skill.
+The local main is never pushed to the remote main: its content leaves only under the release branch name, by the
+refspec push of the release ("The release", below), and `origin/<base>` stays a denied write.
 
 **The sync.** `homolog sync --root <main worktree> --base <base> [--remote origin]` is the covered merge of
 `origin/<base>` into the local main: it requires the main worktree to have `<base>` checked out, no tracked
@@ -576,10 +577,64 @@ issue is merged into the branch of the issue, the steps run in this order:
 apply, and a model that does not call it is not stopped by it. The issue is homologated once it is in the
 local main; it closes only with the release that carries it merged (stage 7).
 
+## The free test on the local main
+
+The watched run tests the branch of the issue with the session at the wheel; the free test lets the user test the
+local main already merged, before anything of it goes to GitHub. In an issue whose `browser-gate` was `answered`
+(it has a screen), right after the merge into the local main and the bundle, the session opens the free test
+without a question: a new Chrome window on the product served from the main worktree, on the local main, on the
+local development database (the homologation one), already logged in; the window, the login, the strip and the
+holder are in `references/browser-testing.md`, "The free test window". One line to the user, in their language,
+says that the window is theirs to test the local main as they like and that closing it ends the free test.
+
+- **Without a screen, in the terminal.** In an issue whose `browser-gate` said `not_needed` (no screen; the
+  walkthrough of each box was the evidence, step 3 of "Into the local main"), no window opens and no product is
+  served: right after the merge into the local main and the bundle, the session says in one line, in the user's
+  language, that the local main is ready for the user to try, then gives the exact commands to use it, each in its
+  own code block, run in the main worktree: the project's own verification and run commands, from the charter's
+  `verification_commands` or what `inspect` reports (the test command, say), never a secret, a credential or a
+  token. Then it asks with `AskUserQuestion` "Terminou de testar a main local?", with two options, "Sim, terminei"
+  first and "Ainda testando". "Ainda testando" leaves the question pending: the session asks it again when the user
+  comes back, and never answers it for the user. Only after "Sim, terminei" it goes on to "Window closed, next
+  step.", below. A fix asked while the question is pending follows "A fix asked in the free test", below, with the
+  pending question in place of the open window and the user running the commands again in place of reloading the
+  page (no `serve` to restart); once it is merged again into the local main, the question is asked again.
+- **The user leads.** No script, no ANTES/DEPOIS, no print and no time limit. While the window is open the session
+  helps on request and does nothing else in it (the limits of that help are in the same section of
+  `browser-testing.md`).
+- **One free test per homologated issue.** It covers the whole local main, so when the user answers "Agora não" to
+  the release, the next issue's free test covers everything accumulated in the local main.
+- **Skipping it.** Closing the window right away is how the user skips it; nothing is asked and nothing is recorded
+  as a failure.
+- **A fix asked in the free test.** When the user asks for a fix while the window is open, the session fixes it at
+  once on the branch of the issue, in the issue's worktree or in a new slice worktree of that issue ("Slices in
+  order", above), TDD by default ("Which tests run when", above), then merges the branch of the issue into the local
+  main again by steps 1, 4 and 5 of "Into the local main" (covered, the `authorize` check included, with the gate of
+  the watched run already answered): the free test itself is the evidence of the fix, and the watched run is not
+  rerun. When the product needs a restart to pick the change up, the session runs `serve stop` and `serve start` on
+  the main worktree ("The free test window"); then the user reloads the page, and the window stays open. Each fix
+  becomes a new acceptance criterion of the issue, first in a local draft, `.frontlights/issues/<n>/teste-livre-cas.md`,
+  one box per fix, in the user's language: `- [x] Correção (do teste livre): <what is now true>. Evidência: <commit
+  of the fix>, conferida pelo usuário no teste livre` (plus the fix's tests, when they ran), ticked (`- [x]`) only
+  when the user checked the fix in the free test, and open (`- [ ]`) otherwise, with `Evidência que fecha:` in place
+  of `Evidência:`. They are leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion"): a
+  label `P<n>` and no `S<n>` id, and they do not count toward the cap of five slices ("A short issue holds at most
+  five slices").
+- **Window closed, next step.** The holder's exit wakes the session (without a screen, the user's "Sim, terminei" in
+  its place, with nothing served to stop), which stops what it started for the free test
+  (`serve stop` on the main worktree, "The free test window") and writes the handoff's line "Teste livre na main
+  local". With fixes, the batch before the release: the draft is the one file with every new criterion, approved
+  by link and stamp (`SKILL.md`, "Show before approval"), one approval for the whole file, and written into the
+  acceptance criteria of the issue body by the write rule of the leftover (body captured, append only, difference
+  checked, reread), in `references/issues.md`. Without fixes, the release comes directly. Only then it goes on to "The
+  release", below, with the batch written or with no fix: the release question comes only after the window is closed, never while it is open (without a screen, only after "Sim, terminei", never while the
+  question of the terminal is pending).
+
 ## The release: from the local main to GitHub
 
 The local main accumulates homologated issues; nothing of them reaches GitHub until the release, offered by the
-session at the end of each homologated issue (right after the merge into the local main and the bundle). The user
+session at the end of each homologated issue, once the window of its free test is closed ("The free test on the
+local main", above). The user
 can decline ("Agora não") as often as they like: the work stays in the local main, and the next homologated issue
 offers the release again with everything accumulated.
 
@@ -608,10 +663,18 @@ offers the release again with everything accumulated.
 - **Offer it.** Show the issues of the release (number and title) and the work without an issue (its slug) and ask
   with `AskUserQuestion` "Lançar a release com as issues #a, #b agora?" (naming the slugs too, when there are any),
   with "Sim, lançar" first and "Agora não" second; one question per release.
-- **Branch and pull request (covered).** On "Sim", in the main worktree: `git branch <release branch> <base>`,
-  `git push -u origin <release branch>` (the release branch is the only branch of the flow that is pushed), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
+- **Branch and pull request (covered).** On "Sim", in the main worktree: `git push origin main:refs/heads/<release branch>`
+  (one push of the local main's tip to the release branch name on GitHub, `<base>` in place of `main` on the left
+  when the base has another name; never to the remote main, and no local release branch is created; the release
+  branch is the only branch of the flow that is pushed), then `gh pr create --base <base> --head <release branch> --title "Release <date>: issues
   #a, #b" --body-file <file>` (the title names the slugs of the work without an issue too: "Release <date>: issues
-  #a; melhoria-x", or only the slugs when the release has no issue). The body follows `templates/pr.md` (the model of the pull request), in the user's
+  #a; melhoria-x", or only the slugs when the release has no issue).
+  **When the host refuses the refspec push.** The host's permission controls may refuse it (a user rule such as
+  "never push to main" may read `main:refs/heads/...` as a push to main): then ask with `AskUserQuestion`
+  "Lançar pelo caminho antigo, com a branch local <release branch>?", "Sim" first and "Não" second, and on "Sim" take
+  the old path: `git branch <release branch> <base>` and `git push -u origin <release branch>`, then the same
+  `gh pr create`; the cleanup removes that local branch once it is merged (`references/closeout.md`, step 5). On
+  "Não" nothing is pushed and the work stays in the local main. The body follows `templates/pr.md` (the model of the pull request), in the user's
   language, with the project's domain vocabulary: **Resumo** and **Evidência** once per issue (what it delivers with the smallest visual that makes its
   point clear; before and after, from the prints of each issue's watched run, its gate (the watched run), and the tests of
   its checkpoints and the independent review only when they ran, records that already exist, never invented; a print is cited by its file

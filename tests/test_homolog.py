@@ -297,7 +297,9 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('`homolog sync --root <main worktree> --base <base>', 'never pushes',
                        '"Resolver o conflito agora na worktree principal"', '"Seguir sem sincronizar"',
                        '`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
-                       'The local main is never pushed: a rule of the skill.',
+                       'The local main is never pushed to the remote main: its content leaves only under the release '
+                       'branch name, by the refspec push of the release ("The release", below), and `origin/<base>` '
+                       'stays a denied write.',
                        '**The sync.**', 'no tracked change pending and no merge in progress',
                        '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
                        'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
@@ -308,8 +310,8 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertNotIn(gone, ' '.join(text.split()))
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('O Frontlights não instala hook nenhum.',
-                       'A regra de que a main local do projeto, a homologação, nunca é enviada é regra da skill, não '
-                       'barreira.', 'As escritas da skill dentro de `.git/` são duas',
+                       'A regra de que a main local do projeto, a homologação, nunca é enviada à main remota (o conteúdo dela só '
+                       'sai para o nome da branch da release, pelo push da release) é regra da skill, não barreira.', 'As escritas da skill dentro de `.git/` são duas',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
                        'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):
@@ -385,7 +387,7 @@ class LocalMainTextTests(unittest.TestCase):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
         skill = stage(6)
-        for phrase in ('7. **The release** (development.md, "The release"), offered at the end of each homologated issue',
+        for phrase in ('8. **The release** (development.md, "The release"), offered at the end of each homologated issue',
                        "the session then waits for the user's merge"):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
@@ -400,7 +402,11 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
                        '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
-                       '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
+                       '**Branch and pull request (covered).**', '`git push origin main:refs/heads/<release branch>`',
+                       'never to the remote main, and no local release branch is created',
+                       '**When the host refuses the refspec push.**',
+                       'the old path: `git branch <release branch> <base>` and `git push -u origin <release branch>`',
+                       'the cleanup removes that local branch once it is merged (`references/closeout.md`, step 5)',
                        '**`Closes #n` only from `closes`.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
@@ -416,6 +422,22 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
+        self.assertLess(body.index('`git push origin main:refs/heads/<release branch>`'),
+                        body.index('**When the host refuses the refspec push.**'))
+        self.assertLess(body.index('**When the host refuses the refspec push.**'),
+                        body.index('`git push -u origin <release branch>`'))
+        whole = ' '.join(text.split())
+        for never in ('main:main', 'main:refs/heads/main', 'git push origin main`', 'git push origin <base>',
+                      'git push origin HEAD', 'git push -u origin main', 'git push origin origin/'):
+            with self.subTest(never=never):
+                self.assertNotIn(never, whole)
+        start = whole.find('git push origin main')
+        self.assertNotEqual(start, -1)
+        while start != -1:
+            with self.subTest(at=start):
+                self.assertTrue(whole.startswith('git push origin main:refs/heads/<release branch>', start),
+                                whole[start:start + 60])
+            start = whole.find('git push origin main', start + 1)
         for gone in ('**Run the whole suite on the local main.**', '`fullSuite` must be `current`',
                      'the whole suite of the release is green at the tip the release branch was cut from'):
             with self.subTest(gone=gone):
@@ -451,6 +473,127 @@ class LocalMainTextTests(unittest.TestCase):
                       flat('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
+
+    def test_the_free_test_sits_between_the_local_main_and_the_release(self):
+        """Issue 69, S3: numa issue com tela, o teste livre abre sem pergunta depois do merge na main local e do
+        bundle, e a pergunta da release só vem quando o usuário fecha a janela."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        local, free, release = ('## Into the local main: the watched run', '## The free test on the local main',
+                                '## The release: from the local main to GitHub')
+        for heading in (local, free, release):
+            with self.subTest(heading=heading):
+                self.assertEqual(text.count(heading), 1)
+        self.assertLess(text.index(local), text.index(free))
+        self.assertLess(text.index(free), text.index(release))
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        for phrase in ('In an issue whose `browser-gate` was `answered`', 'without a question',
+                       'the window, the login, the strip and the holder are in `references/browser-testing.md`, '
+                       '"The free test window"',
+                       'served from the main worktree, on the local main, on the local development database',
+                       'The user leads', 'One free test per homologated issue',
+                       "the next issue's free test covers everything accumulated in the local main",
+                       'Closing the window right away is how the user skips it',
+                       'stops what it started for the free test (`serve stop` on the main worktree, "The free test window")',
+                       'the release question comes only after the window is closed'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, body)
+        offer = ' '.join(text.split(release)[1].split('- **Plan it.**')[0].split())
+        self.assertIn('offered by the session at the end of each homologated issue, once the window of its free test '
+                      'is closed ("The free test on the local main", above)', offer)
+        self.assertNotIn('right after the merge into the local main and the bundle', offer)
+        skill = stage(6)
+        six = '6. **Into the local main** (development.md, "Into the local main")'
+        seven = '7. **The free test** (development.md, "The free test on the local main")'
+        eight = '8. **The release** (development.md, "The release")'
+        for item in (six, seven, eight):
+            with self.subTest(file='SKILL.md', item=item):
+                self.assertIn(item, skill)
+        self.assertLess(skill.index(six), skill.index(seven))
+        self.assertLess(skill.index(seven), skill.index(eight))
+        self.assertNotIn('7. **The release**', skill)
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        for phrase in ('o teste livre na main local, em "The free test on the local main"',
+                       'Ao fim de cada issue homologada, depois de fechada a janela do teste livre'):
+            with self.subTest(file='protocol.md', phrase=phrase):
+                self.assertIn(phrase, protocol)
+        self.assertIn('merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → '
+                      'oferta da release', flat('README.md'))
+
+    def test_a_fix_in_the_free_test_is_made_at_once_and_its_criteria_go_in_one_batch(self):
+        """Issue 69, S4: uma correção pedida no teste livre é feita na hora na branch da issue e mesclada de novo na
+        main local; cada correção vira um CA novo no rascunho local; ao fechar a janela, um lote aprovado por link e
+        carimbo é escrito só por acréscimo, e só então vem a release; sem correção, a release vem direto."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        fix = body.split('- **A fix asked in the free test.**')[1].split('- **Window closed, next step.**')[0]
+        for phrase in ('fixes it at once on the branch of the issue',
+                       'or in a new slice worktree of that issue ("Slices in order", above)',
+                       'TDD by default ("Which tests run when", above)',
+                       'merges the branch of the issue into the local main again by steps 1, 4 and 5 of "Into the '
+                       'local main"',
+                       'the `authorize` check included',
+                       'the free test itself is the evidence of the fix, and the watched run is not rerun',
+                       'the user reloads the page', 'the window stays open',
+                       '`.frontlights/issues/<n>/teste-livre-cas.md`', 'one box per fix',
+                       'ticked (`- [x]`) only when the user checked the fix in the free test',
+                       'open (`- [ ]`) otherwise',
+                       'leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion")'):
+            with self.subTest(part='fix', phrase=phrase):
+                self.assertIn(phrase, fix)
+        closed = body.split('- **Window closed, next step.**')[1]
+        for phrase in ('With fixes, the batch before the release',
+                       'by link and stamp (`SKILL.md`, "Show before approval")',
+                       'one approval for the whole file',
+                       'the write rule of the leftover (body captured, append only, difference checked, reread)',
+                       'Without fixes, the release comes directly',
+                       'the release question comes only after the window is closed'):
+            with self.subTest(part='closed', phrase=phrase):
+                self.assertIn(phrase, closed)
+        self.assertLess(closed.index('With fixes, the batch before the release'),
+                        closed.index('Only then it goes on to "The release"'))
+        self.assertEqual(' '.join(text.split()).count('teste-livre-cas.md'), 1)
+        self.assertNotIn('Lançar a release', body)
+
+    def test_without_a_screen_the_free_test_is_in_the_terminal(self):
+        """Issue 69, S5: num projeto sem tela (`browser-gate` `not_needed`), o teste livre acontece no terminal: os
+        comandos para usar a main local e a pergunta de fim do teste antes da release; só o "Sim, terminei" leva à
+        release, e uma correção pedida ali segue a regra da S4."""
+        question = 'Terminou de testar a main local?'
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        self.assertEqual(text.count(question), 1)
+        skill_dir = ROOT / 'skills' / 'frontlights'
+        for path in sorted((skill_dir / 'references').glob('*.md')) + [skill_dir / 'SKILL.md']:
+            if path.name == 'development.md':
+                continue
+            with self.subTest(file=path.name):
+                self.assertNotIn(question, ' '.join(path.read_text(encoding='utf-8').split()))
+        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        terminal = body.split('- **Without a screen, in the terminal.**')[1].split('- **')[0]
+        for phrase in ('In an issue whose `browser-gate` said `not_needed`', 'no window opens and no product is served',
+                       'right after the merge into the local main and the bundle',
+                       "in one line, in the user's language, that the local main is ready for the user to try",
+                       'each in its own code block', "the charter's `verification_commands` or what `inspect` reports",
+                       'never a secret', f'asks with `AskUserQuestion` "{question}"',
+                       '"Sim, terminei" first', '"Ainda testando" leaves the question pending',
+                       'asks it again when the user comes back', 'never answers it for the user',
+                       'Only after "Sim, terminei"', 'follows "A fix asked in the free test", below'):
+            with self.subTest(part='terminal', phrase=phrase):
+                self.assertIn(phrase, terminal)
+        self.assertLess(body.index('- **Without a screen, in the terminal.**'),
+                        body.index('- **A fix asked in the free test.**'))
+        closed = body.split('- **Window closed, next step.**')[1]
+        for phrase in ("without a screen, the user's \"Sim, terminei\" in its place",
+                       'without a screen, only after "Sim, terminei"'):
+            with self.subTest(part='closed', phrase=phrase):
+                self.assertIn(phrase, closed)
+        self.assertIn('without a screen, the commands to try the local main in the terminal and a question before '
+                      'the release', stage(6))
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        self.assertIn('sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta '
+                      'de fim do teste, e só o "Sim, terminei" leva à release', protocol)
+        self.assertIn('Num projeto sem tela, o teste livre acontece no terminal', flat('README.md'))
 
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
