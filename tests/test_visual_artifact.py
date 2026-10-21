@@ -35,6 +35,9 @@ def section_containing(text, heading):
     return rest[:following.start()] if following else rest
 
 
+SECTION_FIELDS = ('Por que estamos perguntando isso', 'Visual', 'Cenário por opção', 'Consequências', 'Conceitos',
+                  'Onde o projeto já faz', 'Recomendação (opinião)', 'Escolha')
+GONE_FIELDS = ('O que esta pergunta decide', 'O que cada opção muda', 'Antes e depois')
 OLD_CONDITION = 'touches a screen, a flow or the layers'
 GONE_OUTCOME = 'não se aplica'
 ARTIFACT_FILES = (('skills', 'frontlights', 'references', 'grilling.md'), ('skills', 'frontlights', 'SKILL.md'),
@@ -107,20 +110,52 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                 self.assertNotIn('cerca de 15', text)
 
     def test_the_section_template_has_its_fields(self):
+        """Issue 68: os campos explicam o que a pergunta implica; Visual, Cenário e Consequências sempre."""
         path = ROOT / 'skills' / 'frontlights' / 'templates' / 'grilling-section.html'
         self.assertTrue(path.exists())
         section = path.read_text(encoding='utf-8')
-        labels = ('O que esta pergunta decide', 'Conceitos', 'Onde o projeto já faz', 'O que cada opção muda',
-                  'Antes e depois', 'Recomendação (opinião)', 'Escolha')
-        positions = []
-        for label in labels:
-            with self.subTest(label=label):
-                self.assertIn(label, section)
-                positions.append(section.index(label))
-        self.assertEqual(positions, sorted(positions))
+        headings = re.findall(r'<h3>([^<]*)</h3>', section)
+        self.assertEqual(headings, list(SECTION_FIELDS))
+        for gone in GONE_FIELDS:
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, headings)
+        for css in ('campo-por-que', 'campo-visual', 'campo-cenario', 'campo-consequencias', 'campo-conceitos',
+                    'campo-projeto', 'campo-recomendacao', 'campo-escolha'):
+            with self.subTest(css=css):
+                self.assertIn('class="campo ' + css + '"', section)
+        visual = section[section.index('campo-visual'):section.index('campo-cenario')]
+        self.assertIn('class="comparacao"', visual)
+        comment = flat(section.split('-->')[0])
+        for phrase in ('Visual, Cenário por opção e Consequências estão em toda seção', 'nunca repete a pergunta',
+                       'até 15 linhas', '***'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, comment)
         self.assertIn('<pergunta>', section)
         self.assertNotIn('style="', section)
         self.assertNotIn('<html', section.lower())
+
+    def test_a_section_explains_more_than_the_question(self):
+        """Issue 68: a seção nunca repete a pergunta; o visual vem do tipo de pergunta; os três tipos de seção."""
+        artifact = self.artifact()
+        for phrase in ('explains more than the question, never repeats it', 'what does this imply',
+                       'Visual, Cenário por opção and Consequências are always present',
+                       'the cost of getting it wrong, whether it is reversible and what each option prevents',
+                       'one concrete scenario per option, with made-up data',
+                       'the before of the problem round', 'each decision question',
+                       'each slice section of the stage 5 quiz', 'why it is a problem'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, artifact)
+        for kind, drawing in (('A screen', 'before and after per option'),
+                              ('A flow or an order of steps', 'a timeline per option, side by side'),
+                              ('A rule', 'a table of cases'),
+                              ('Layers, files or where something lives', 'a layers diagram per option'),
+                              ('A name or a text', 'a side-by-side comparison of where it appears')):
+            with self.subTest(kind=kind):
+                row = re.search(r'\| ' + re.escape(kind) + r' \|[^|]*' + re.escape(drawing), artifact)
+                self.assertIsNotNone(row)
+        for gone in ('what the question decides', 'what each option changes'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, artifact)
 
     def test_every_decision_question_cites_the_artifact(self):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
@@ -211,6 +246,10 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
                        'the same rule for code and data as the grilling', '"artefato indisponível" once'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, quiz)
+        for phrase in ('the same model (`templates/grilling-section.html`)',
+                       'opens with what can be demoed when the slice is done', 'the drawing of the slice is its Visual'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, quiz)
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage5 = flat(skill.split('## 5.')[1].split('## 6.')[0])
         self.assertIn('the section of the artifact with what it delivers', stage5)
@@ -232,6 +271,17 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
                        'a decision branch without a section (a naming decision, say)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat(case))
+        for phrase in ('a section that repeats the question', 'a section without Visual, Cenário por opção or Consequências'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat(case))
+        for gone in ('what the question decides', 'what each option changes'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, flat(case))
+                self.assertNotIn(gone, flat(read('skills', 'frontlights', 'references', 'grilling.md')))
+        readme = flat(read('README.md'))
+        for gone in ('o que a pergunta decide', 'o que cada opção muda'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, readme)
         self.assertNotIn('adds nothing to the page', flat(case))
         self.assertNotIn('a page published for a request', flat(case))
         runbook = read('evals', 'runbook.md')
