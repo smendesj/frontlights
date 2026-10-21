@@ -601,8 +601,8 @@ pergunta se lança a release com elas agora (o
 passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#the-release-from-the-local-main-to-github)). O
 trabalho sem issue (caminho Direto, ou Curto sem publicar issue) segue o mesmo caminho, com o campo `direct` no
-registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele corta a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último nome de arquivo) da main local,
-envia só ela e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
+registro de autorização no lugar de `issue` (`references/development.md`, "Work without an issue"). Com o "Sim", ele envia a ponta da main local para a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último nome de arquivo) no GitHub, por `git push origin main:refs/heads/<branch>`, sem criar branch local e nunca para a main remota (se o ambiente recusar esse push, ele pergunta e, com o Sim, usa o caminho antigo, com a branch local),
+e abre a PR única pelo modelo `templates/pr.md`: Resumo (o menor visual) e Evidência (antes e depois) por issue,
 com os prints do teste assistido (o portão de cada uma) e os testes e a revisão só quando rodaram, e o Risco do merge consolidado (porta
 de mão única ou de mão dupla e raio de impacto). Depois de abrir a PR da release, o
 Frontlights **aguarda o seu merge por padrão** (você pode dizer "não aguardar" a qualquer

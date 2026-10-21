@@ -297,7 +297,9 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('`homolog sync --root <main worktree> --base <base>', 'never pushes',
                        '"Resolver o conflito agora na worktree principal"', '"Seguir sem sincronizar"',
                        '`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
-                       'The local main is never pushed: a rule of the skill.',
+                       'The local main is never pushed to the remote main: its content leaves only under the release '
+                       'branch name, by the refspec push of the release ("The release", below), and `origin/<base>` '
+                       'stays a denied write.',
                        '**The sync.**', 'no tracked change pending and no merge in progress',
                        '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
                        'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
@@ -308,8 +310,8 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertNotIn(gone, ' '.join(text.split()))
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('O Frontlights não instala hook nenhum.',
-                       'A regra de que a main local do projeto, a homologação, nunca é enviada é regra da skill, não '
-                       'barreira.', 'As escritas da skill dentro de `.git/` são duas',
+                       'A regra de que a main local do projeto, a homologação, nunca é enviada à main remota (o conteúdo dela só '
+                       'sai para o nome da branch da release, pelo push da release) é regra da skill, não barreira.', 'As escritas da skill dentro de `.git/` são duas',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
                        'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):
@@ -400,7 +402,11 @@ class LocalMainTextTests(unittest.TestCase):
         for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
                        '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
-                       '**Branch and pull request (covered).**', '`git push -u origin <release branch>`',
+                       '**Branch and pull request (covered).**', '`git push origin main:refs/heads/<release branch>`',
+                       'never to the remote main, and no local release branch is created',
+                       '**When the host refuses the refspec push.**',
+                       'the old path: `git branch <release branch> <base>` and `git push -u origin <release branch>`',
+                       'the cleanup removes that local branch once it is merged (`references/closeout.md`, step 5)',
                        '**`Closes #n` only from `closes`.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
                        '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
                        '`git pull --ff-only origin <base>`', '**Other work goes on.**',
@@ -416,6 +422,22 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
+        self.assertLess(body.index('`git push origin main:refs/heads/<release branch>`'),
+                        body.index('**When the host refuses the refspec push.**'))
+        self.assertLess(body.index('**When the host refuses the refspec push.**'),
+                        body.index('`git push -u origin <release branch>`'))
+        whole = ' '.join(text.split())
+        for never in ('main:main', 'main:refs/heads/main', 'git push origin main`', 'git push origin <base>',
+                      'git push origin HEAD', 'git push -u origin main', 'git push origin origin/'):
+            with self.subTest(never=never):
+                self.assertNotIn(never, whole)
+        start = whole.find('git push origin main')
+        self.assertNotEqual(start, -1)
+        while start != -1:
+            with self.subTest(at=start):
+                self.assertTrue(whole.startswith('git push origin main:refs/heads/<release branch>', start),
+                                whole[start:start + 60])
+            start = whole.find('git push origin main', start + 1)
         for gone in ('**Run the whole suite on the local main.**', '`fullSuite` must be `current`',
                      'the whole suite of the release is green at the tip the release branch was cut from'):
             with self.subTest(gone=gone):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Homologation helper (issue 32): the local base branch (`main`) is the homologation bench of the project. It is
-never pushed; the release leaves by a branch of its own and one pull request. This module keeps the bench
+never pushed to the remote base; the release pushes its tip to a branch name of its own (`git push origin
+main:refs/heads/<release branch>`) and opens one pull request. This module keeps the bench
 current with the remote and plans the release. Every Git call is a list argv run without a shell, with a timeout and
 GIT_TERMINAL_PROMPT=0. `run` knows five operations, `sync`, `bundle`, `release-plan`, `suite` and `suite-gate`;
 an unknown one is a refusal.

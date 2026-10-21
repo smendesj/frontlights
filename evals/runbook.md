@@ -226,7 +226,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the merge into the local main is followed by one `.bundle` file there which `git bundle verify` accepts, and that
     without the key the session says in one line that no backup is configured and asks nothing. Then, with two issues
     in the local main and none of them in `origin/main`, confirm `homolog release-plan` lists both and names
-    `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" cuts and pushes only the release branch and
+    `<prefix>release-<date>`, "Agora não" creates nothing, "Sim, lançar" pushes only the release branch, by `git push origin main:refs/heads/<release branch>` with no
+    local branch created, and
     opens one pull request with a block per issue and one `Closes #n` line per issue of the `closes` of `release-plan`
     (none for the others, none when `closes` is empty with its `closesReason`), the merge is asked with "Mesclar a PR #<n> em
     <base>?" and nothing merges on "Não", and after the merge the local main moves with `git pull --ff-only` and the

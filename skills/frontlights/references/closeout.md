@@ -190,8 +190,9 @@ merged yet; the rule's `git merge --no-ff` keeps the issue's tip ahead of the sl
 the issue's own branch) or `slice_issue_branch_unknown` (the authorization names no worktree of the issue itself, or
 the branch of the issue is already gone and the approved base does not hold the slice's tip; when the base holds it,
 the slice is offered).
-A local release branch (`<branch_prefix>release-<date>[-N]`, the prefixes of the authorization records) is offered
-last, with `merged_release_branch` and only `git branch -D`, by the rule of an issue branch below and when no
+A local release branch (`<branch_prefix>release-<date>[-N]`, the prefixes of the authorization records) exists only when the
+release took the old path (the host refused the refspec push; `references/development.md`, "The release"): with
+the refspec push there is no local release branch to remove. One that exists is offered last, with `merged_release_branch` and only `git branch -D`, by the rule of an issue branch below and when no
 worktree has it checked out (`checked_out_elsewhere` otherwise); one not merged yet is left alone and not listed.
 `ignored_files` comes with `ignoredCount` and `ignored`, the first names of what Git ignores in that worktree: those
 files go away with it. A candidate whose `ignored` has anything besides dependency or build folders
