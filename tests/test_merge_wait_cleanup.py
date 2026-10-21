@@ -125,6 +125,13 @@ class FreeTestHandoffTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, line)
 
+    def test_the_free_test_line_records_the_terminal_variant(self):
+        """Issue 69, S5: sem tela, a linha do teste livre registra os comandos dados e a resposta literal."""
+        line = [line for line in read('skills', 'frontlights', 'templates', 'handoff.md').splitlines()
+                if line.startswith('- Teste livre na main local')][0]
+        self.assertIn('sem tela, no terminal: os comandos dados e a resposta literal da pergunta de fim do teste',
+                      line)
+
     def test_the_release_is_offered_once_the_free_test_window_is_closed(self):
         self.assertIn('once the window of its free test is closed', ' '.join(read(
             'skills', 'frontlights', 'references', 'development.md').split()))
