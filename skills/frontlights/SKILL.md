@@ -403,7 +403,8 @@ goes, in this order:
    Follow-ups section of `references/issues.md`). The independent review runs only when the user asks
    for it, judged by `references/review.md` (development.md, "When the review is done").
 6. **Into the local main** (development.md, "Into the local main"): the local main brought into the
-   branch of the issue, the watched run answered or not needed, `authorize`, the merge, then the bundle.
+   branch of the issue, the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`,
+   the merge, then the bundle.
 7. **The release** (development.md, "The release"), offered at the end of each homologated issue;
    the session then waits for the user's merge.
 
@@ -415,7 +416,7 @@ the questions of the work itself (the watched run, failures, the findings batch,
 decision) are still asked.
 
 Finish with the report of development.md ("Review, checkpoints and renewal"): per-issue state,
-branch and PR, changes, the watched run, the measured commands and results and the independent review
+branch and PR, changes, the watched run, the walkthroughs run without a screen, the measured commands and results and the independent review
 against the exact diff when they ran, the findings left unfixed with the destination of each, risks and next action.
 
 ## 7. Closeout of finished issues (its own approval)

@@ -72,7 +72,7 @@ local branches of the issues, slices and release already merged into the approve
 never a remote branch). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
 silence or any other answer leaves it undone, and the work goes on without it. The approvals that have their
-own stage (the issue's text, issue plan and publication, closeout, issue gaps and summary) keep them. The
+own stage (the issue's text, issue plan and publication, closeout and summary) keep them. The
 host's own permission prompts are not Frontlights' to remove and still apply.
 
 ## The start of stage 6: the sync of the local main

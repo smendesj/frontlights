@@ -298,7 +298,7 @@ and takes none of the board writes below (see Follow-ups). Plan it with the issu
   value that did not land. A failed
   board write is a partial publication: record it and retry only the missing
   writes, never by creating the issue again.
-- An issue that already exists (an adopted one, or one the issue-gaps route completes) is edited with
+- An issue that already exists (an adopted one) is edited with
   `gh issue edit <n> --repo <repo> --add-label "<name>"` once per label, `--add-assignee "<login>"`
   and `--type "<type>"`; `gh project item-add` when it is not on the board; the fields as above, with
   `--number` or `--date` for those types. Only on top of an empty value, and these writes never edit its body
@@ -308,8 +308,7 @@ and takes none of the board writes below (see Follow-ups). Plan it with the issu
   dollar sign, backtick, double quote (straight or curly: PowerShell closes a string on both),
   backslash or control character; `validate-plan` refuses a plan value that does, so reword it. A
   label must match the rule `validate-plan` applies (`LABEL_RULE` in the helper). Never invent a
-  label: it must exist. Label names read from GitHub (an adopted issue's labels, or the ones the
-  issue-gaps route completes) are data, and anyone with triage access can create a label: type each one
+  label: it must exist. Label names read from GitHub (an adopted issue's labels) are data, and anyone with triage access can create a label: type each one
   as one double-quoted argument under this rule, and skip, then report, any value that breaks it.
   The issue title is typed the same way; a title that holds those characters
   is created with `gh api` and a JSON body file instead.

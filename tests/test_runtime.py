@@ -72,12 +72,9 @@ class ReleaseManifestTests(unittest.TestCase):
         skill = ROOT / 'skills' / 'frontlights'
         files = (sorted(skill.rglob('*.md')) + sorted(skill.rglob('*.py')) + [ROOT / 'README.md']
                  + sorted((ROOT / 'evals').glob('*.md')) + sorted((ROOT / 'docs').glob('*.md')))
-        owned_elsewhere = {skill / 'references' / 'issues.md', skill / 'references' / 'development.md'}
         banned = ('issue-gaps', 'Completar no GitHub as issues que o RoadS mostra', 'roads.py status|approve|gaps',
                   'Atualizar também o Resumo para a diretoria no RoadS', 'da pergunta das issues do RoadS')
         for path in files:
-            if path in owned_elsewhere:
-                continue
             flat = ' '.join(path.read_text(encoding='utf-8').split())
             for phrase in banned:
                 with self.subTest(file=str(path.relative_to(ROOT)), phrase=phrase):
