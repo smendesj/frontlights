@@ -387,7 +387,7 @@ class LocalMainTextTests(unittest.TestCase):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
         skill = stage(6)
-        for phrase in ('7. **The release** (development.md, "The release"), offered at the end of each homologated issue',
+        for phrase in ('8. **The release** (development.md, "The release"), offered at the end of each homologated issue',
                        "the session then waits for the user's merge"):
             with self.subTest(file='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
@@ -473,6 +473,51 @@ class LocalMainTextTests(unittest.TestCase):
                       flat('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
+
+    def test_the_free_test_sits_between_the_local_main_and_the_release(self):
+        """Issue 69, S3: numa issue com tela, o teste livre abre sem pergunta depois do merge na main local e do
+        bundle, e a pergunta da release só vem quando o usuário fecha a janela."""
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        local, free, release = ('## Into the local main: the watched run', '## The free test on the local main',
+                                '## The release: from the local main to GitHub')
+        for heading in (local, free, release):
+            with self.subTest(heading=heading):
+                self.assertEqual(text.count(heading), 1)
+        self.assertLess(text.index(local), text.index(free))
+        self.assertLess(text.index(free), text.index(release))
+        body = ' '.join(text.split(free)[1].split(release)[0].split())
+        for phrase in ('In an issue whose `browser-gate` was `answered`', 'without a question',
+                       'the window, the login, the strip and the holder are in `references/browser-testing.md`, '
+                       '"The free test window"',
+                       'served from the main worktree, on the local main, on the local development database',
+                       'The user leads', 'One free test per homologated issue',
+                       "the next issue's free test covers everything accumulated in the local main",
+                       'Closing the window right away is how the user skips it',
+                       'stops what it started for the free test (`serve stop` on the main worktree, "The free test window")',
+                       'the release question comes only after the window is closed'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, body)
+        offer = ' '.join(text.split(release)[1].split('- **Plan it.**')[0].split())
+        self.assertIn('offered by the session at the end of each homologated issue, once the window of its free test '
+                      'is closed ("The free test on the local main", above)', offer)
+        self.assertNotIn('right after the merge into the local main and the bundle', offer)
+        skill = stage(6)
+        six = '6. **Into the local main** (development.md, "Into the local main")'
+        seven = '7. **The free test** (development.md, "The free test on the local main")'
+        eight = '8. **The release** (development.md, "The release")'
+        for item in (six, seven, eight):
+            with self.subTest(file='SKILL.md', item=item):
+                self.assertIn(item, skill)
+        self.assertLess(skill.index(six), skill.index(seven))
+        self.assertLess(skill.index(seven), skill.index(eight))
+        self.assertNotIn('7. **The release**', skill)
+        protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
+        for phrase in ('o teste livre na main local, em "The free test on the local main"',
+                       'Ao fim de cada issue homologada, depois de fechada a janela do teste livre'):
+            with self.subTest(file='protocol.md', phrase=phrase):
+                self.assertIn(phrase, protocol)
+        self.assertIn('merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → '
+                      'oferta da release', flat('README.md'))
 
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na

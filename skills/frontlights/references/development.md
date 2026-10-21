@@ -577,10 +577,33 @@ issue is merged into the branch of the issue, the steps run in this order:
 apply, and a model that does not call it is not stopped by it. The issue is homologated once it is in the
 local main; it closes only with the release that carries it merged (stage 7).
 
+## The free test on the local main
+
+The watched run tests the branch of the issue with the session at the wheel; the free test lets the user test the
+local main already merged, before anything of it goes to GitHub. In an issue whose `browser-gate` was `answered`
+(it has a screen), right after the merge into the local main and the bundle, the session opens the free test
+without a question: a new Chrome window on the product served from the main worktree, on the local main, on the
+local development database (the homologation one), already logged in; the window, the login, the strip and the
+holder are in `references/browser-testing.md`, "The free test window". One line to the user, in their language,
+says that the window is theirs to test the local main as they like and that closing it ends the free test.
+
+- **The user leads.** No script, no ANTES/DEPOIS, no print and no time limit. While the window is open the session
+  helps on request and does nothing else in it (the limits of that help are in the same section of
+  `browser-testing.md`).
+- **One free test per homologated issue.** It covers the whole local main, so when the user answers "Agora não" to
+  the release, the next issue's free test covers everything accumulated in the local main.
+- **Skipping it.** Closing the window right away is how the user skips it; nothing is asked and nothing is recorded
+  as a failure.
+- **Window closed, next step.** The holder's exit wakes the session, which stops what it started for the free test
+  (`serve stop` on the main worktree, "The free test window"), writes
+  the handoff's line "Teste livre na main local" and only then goes on to "The release", below: the release
+  question comes only after the window is closed, never while it is open.
+
 ## The release: from the local main to GitHub
 
 The local main accumulates homologated issues; nothing of them reaches GitHub until the release, offered by the
-session at the end of each homologated issue (right after the merge into the local main and the bundle). The user
+session at the end of each homologated issue, once the window of its free test is closed ("The free test on the
+local main", above). The user
 can decline ("Agora não") as often as they like: the work stays in the local main, and the next homologated issue
 offers the release again with everything accumulated.
 

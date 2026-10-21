@@ -595,7 +595,11 @@ respondido (ou dispensável, sem mudança na tela, e então com o roteiro de cad
 nova, num `.md` por caixa em `.frontlights/issues/<n>/walkthroughs/` e na tabela do handoff): a main local é trazida
 para a branch da issue, o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
-backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
+backup configurada. Numa issue com tela, logo depois, sem pergunta, abre o **teste livre**: uma janela do Chrome
+pelo Playwright com a main local, servida da worktree principal e ligada ao banco local, para você testar sem roteiro
+e sem tempo limite, com o Claude pronto para ajudar quando você pedir; fechar a janela encerra o teste (o passo a
+passo está em
+[`references/development.md`](skills/frontlights/references/development.md#the-free-test-on-the-local-main)). Ao fim de cada issue homologada, depois do teste livre, o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a
 branch da PR mesclada; a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte
 obrigatória), e ele
@@ -669,7 +673,7 @@ slices cortadas como critérios de aceitação (uma caixa por slice), lista nume
 antes do corpo, plano aprovado e publicado numa escrita por issue → autorização permanente de
 implementação, anunciada sem pergunta → prévia ao vivo numa aba do seu Chrome, refeita a cada CA (quando o projeto a
 configura) → desenvolvimento orientado a testes (TDD, a prática padrão, sem ser portão) e evidências →
-teste assistido, o único portão → merge na main local e bundle de backup → oferta da release (branch de release e PR única),
+teste assistido, o único portão → merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → oferta da release (branch de release e PR única),
 espera do merge dela e, com ele confirmado, `pull --ff-only`, limpeza das worktrees e branches mescladas (sem pergunta) e fechamento com marcação no pai (com aprovação própria).
 
 **Autorização permanente.** A etapa 6 não pergunta concorrência, empilhamento nem autorização: o
