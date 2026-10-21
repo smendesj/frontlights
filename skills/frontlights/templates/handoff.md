@@ -15,6 +15,12 @@
 
 - TDD exception, if any, and rationale ("só com teste assistido" when the user asked for it: no test written or run):
 - Independent review, only when the user asked for one: evidence tied to exact HEAD/diff, the `review-gate` result (current or stale) for it, and each round (its HEAD and its counts `sérios/médios/baixos`):
+- Roteiros rodados sem tela (o `browser-gate` em `not_needed`, ou a caixa com persona `sem tela`): uma linha por caixa, com o arquivo `.frontlights/issues/<n>/walkthroughs/S<k>.md`; caixa sem arquivo segura o merge na main local:
+
+| Caixa | Antes | Depois | Arquivo |
+| --- | --- | --- | --- |
+| | | | |
+
 - Teste assistido da issue (o `browser-gate`: status, `situacao`, as `roots` e o caminho do `result.json`). Fatias que mudam a tela e ainda estão no ciclo (ou ainda não começaram): liste aqui, e nada é perguntado. Só quando a pergunta está devida (a última fatia de tela fechou o ciclo e não há resposta, ou foi "Ainda não") ela vai em `checkpoint --pending teste_assistido`, e a próxima sessão começa por ela:
 - Achados sem correção e destino de cada um (critério de aceitação novo na issue de origem ou issue de topo, nunca sub-issue nova, com o número e o texto escrito; texto no PR nunca é destino; só ficam sem destino o ruído que não é defeito, com a evidência, e o que o usuário descartou, com a resposta literal e "descartado pelo usuário"):
 - Release (a saída do `release-plan`: issues acumuladas e branch de release; a suíte inteira na ponta da main local só quando o usuário a pediu, com o comando, a contagem e a saída; a resposta literal à oferta; Aguardando o merge da PR única, com as issues, a branch de cabeça, a base aprovada e desde quando, ou "não aguardar" com a resposta literal do usuário; o `merge-status` e o `git pull --ff-only` depois do merge):

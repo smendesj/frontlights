@@ -137,8 +137,11 @@ one per slice worktree, which `resume` echoes so the next window starts at that 
 worktree) and, when its loop closes with evidence (by default, its own tests and the affected test
 modules green, and the measured commands; in a run "só com teste assistido", its change done, with no
 test written or run), the slice branch is merged into the branch of the issue (`git merge --no-ff
-<branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below)
-and then comes the tick of its box: capture the body, tick that line only, run
+<branch_prefix>issue-<n>-s<k>` in the issue's worktree, one of the covered merges, "Stacking" below);
+a box without a screen (its persona `sem tela`, or every box when `browser-gate` says `not_needed`) then
+runs the walkthrough of its box and writes its `.md` ("Into the local main", below), and the `.md` is the evidence
+of the tick; a box whose walkthrough has a screen waits for the "Aprovado" of the watched run, which walks it
+(`browser-testing.md`); then comes the tick of its box: capture the body, tick that line only, run
 `closeout.py tick-check` before and after the write (`closeout.py tick --config <config> --root <project>
 --issue <n> --box S<k>` does this whole cycle in one command and keeps the previous body in
 `.frontlights/issues/<n>/`), and leave a short comment on the issue with
@@ -505,7 +508,8 @@ the host's native approval; the branches of issues and slices stay local. The ru
 merges, and anything on the denied list runs only after the user's "Sim" to its own question ("Standing
 authorization and the denied operations", above). Park
 blocked issues with the precise pending question and continue independent ones.
-Report each issue's state, branch/PR, changes, the watched run, the tests and the review when they ran,
+Report each issue's state, branch/PR, changes, the watched run, the walkthroughs run without a screen (the table of
+the handoff), the tests and the review when they ran,
 the findings left unfixed with the destination of each, the count of its lines in `.frontlights/pitfalls.md` (criteria that entered after the approval: `references/issues.md`, "A pitfall line"), remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
 
@@ -527,7 +531,19 @@ issue is merged into the branch of the issue, the steps run in this order:
 2. **The gate, the watched run.** `frontlights.py browser-gate` answers `answered` (the user approved or said
    to go on) or `not_needed` (nothing on the screen changed), exit code 0; `pending`, `stale`,
    `contradiction` or `unconfigured` is the question of `browser-testing.md`, never the merge.
-3. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
+3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each box whose persona
+   is `sem tela` in an issue with a watched run, running the walkthrough of each box (its `Roteiro:` lines,
+   `references/issues.md`) is a condition of the merge into the local main, with no new question. The walkthrough
+   runs when the loop of its slice closes ("Slices in order", above): its steps at the base of the issue and at the
+   commit of the slice, and one file per box, `.frontlights/issues/<n>/walkthroughs/S<k>.md`, with a header (the
+   issue, the box, the persona, the date in São Paulo time, the steps, the base and the commit it ran on), a section
+   `## Antes` and a section `## Depois`, each with one line on what the steps showed and their output, masked (no
+   login, password, token, real endpoint or local path), in a code block. A `## Depois` that differs from the
+   `depois:` of the box is a failure of that slice, which goes back to its loop. Here the session only checks the
+   files: a box without its file keeps the issue out of the local main until it is run and written. The summary
+   table of the handoff (box · before · after · file) carries one row per file. `authorize` does not read these
+   files and its gates stay as below.
+4. **The check and the merge.** Write the operation and run `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py"
    authorize --charter .frontlights/authorization.json --operation .frontlights/issues/<n>/merge-local-main.json`,
    with `kind` `merge_into_local_main`, the issue's worktree and branch, `target` the base branch of the
    charter and `gates` `{"browser_gate": "answered"}` (or `not_needed`), the only gate;
@@ -539,7 +555,7 @@ issue is merged into the branch of the issue, the steps run in this order:
    of `issue`, the operation names that `direct` (never `issue` too) and is kept in
    `.frontlights/direct/<branch, slashes as dashes>/merge-local-main.json`, and the merge is `git merge --no-ff
    <its branch>`.
-4. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
+5. **Back it up.** Weeks of homologated work may live only in this clone, so right after the merge run
    `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" homolog bundle --root <main worktree> --config
    <config>` (covered; the only write the run makes outside the project, and only into that folder): it writes `<project>-<date>-<time>.bundle`, the local main and the work
    branches of every `branch_prefix` in the authorization records (`.frontlights/authorization*.json`; `claude/`
@@ -551,7 +567,7 @@ issue is merged into the branch of the issue, the steps run in this order:
    deleted. Exit code 1 with `configured: false` means no folder is configured: say so in one line, name the
    key, ask nothing and go on; any other refusal (a missing folder, a junction in its path, a Git failure) is
    said in one line and recorded in the handoff as a backup not taken.
-5. **Record it.** The handoff's line "Merge na main local" takes the watched run with its evidence (and the
+6. **Record it.** The handoff's line "Merge na main local" takes the watched run with its evidence, or the walkthroughs run without a screen with their table (and the
    tests or the review, only when they ran), the output of `authorize`, the commit of the merge and the bundle's path (or "sem backup configurado");
    the branch of the issue stays local, never pushed.
 
