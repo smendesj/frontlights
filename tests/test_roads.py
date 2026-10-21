@@ -1,8 +1,8 @@
-"""`roads.py`: o bloco `roadmapSync`, a credencial, a aprovação, o transporte e a leitura do `roadmap-state`.
+"""`roads.py`: o bloco `roadmapSync`, a credencial, a aprovação e o transporte. O `gaps` e a leitura do
+`roadmap-state` saíram na issue 65.
 
-Seams: `roads.run('status' | 'approve', ...)`, `roads.read_state` e `roads.normalise_state` com o transporte HTTP
-simulado, e `roads.http_default` contra um servidor local. Os testes usam transporte simulado: não homologam a
-RoadS real.
+Seams: `roads.run('status' | 'approve', ...)`, a linha de comando, `roads.request` com o transporte HTTP simulado, e
+`roads.http_default` contra um servidor local. Os testes usam transporte simulado: não homologam a RoadS real.
 """
 import http.server
 import json
@@ -18,7 +18,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import roads as rs
 
-FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'roads'
+SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts' / 'roads.py'
 SECRET = 'fixture-secret-value'
 
 
@@ -37,10 +37,6 @@ class Transport:
             raise answer
         status, body_out = answer
         return status, body_out if isinstance(body_out, str) else json.dumps(body_out)
-
-
-def state_fixture():
-    return json.loads((FIXTURES / 'roadmap-state.json').read_text(encoding='utf-8'))
 
 
 class RoadsTestCase(unittest.TestCase):
@@ -69,13 +65,15 @@ class RoadsTestCase(unittest.TestCase):
         config = {'repository': 'OWNER/REPOSITORY', 'project': None, 'roads': None, 'roadmapSync': sync}
         (self.project / '.frontlights' / 'config.json').write_text(json.dumps(config), encoding='utf-8')
 
-    def run_op(self, operation, transport=None, **kwargs):
-        return rs.run(operation, str(self.project), transport=transport or Transport(), **kwargs)
+    def run_op(self, operation):
+        return rs.run(operation, str(self.project))
 
-    def read_state(self, *answers):
+    def get(self, *answers):
+        """GET <endpoint>/progress-report through `request`, the transport every RoadS call of the skill uses."""
         self.assertTrue(self.run_op('approve')['ok'])
         transport = Transport(*answers)
-        return rs.read_state(rs.Context(str(self.project)), transport), transport
+        ctx = rs.Context(str(self.project))
+        return rs.request(ctx, transport, 'GET', rs.endpoint_url(ctx.endpoint, 'progress-report')), transport
 
 
 class ConfigurationTests(RoadsTestCase):
@@ -87,13 +85,13 @@ class ConfigurationTests(RoadsTestCase):
         self.assertFalse(result['ready'])
 
     def test_status_reports_secret_and_approval_and_never_touches_the_network(self):
-        transport = Transport()
-        result = self.run_op('status', transport)
+        with patch.object(rs, 'http_default', side_effect=AssertionError('network')) as network:
+            result = self.run_op('status')
         self.assertTrue(result['configured'])
         self.assertEqual((result['secret'], result['approval']), ('present', 'unapproved'))
         self.assertFalse(result['ready'])
         self.assertEqual(result['obsoleteKeys'], [])
-        self.assertEqual(transport.calls, [])
+        self.assertFalse(network.called)
         self.run_op('approve')
         self.assertTrue(self.run_op('status')['ready'])
 
@@ -113,6 +111,20 @@ class ConfigurationTests(RoadsTestCase):
                 result = self.run_op(operation)
                 self.assertFalse(result['ok'])
                 self.assertIn('Unknown operation', result['message'])
+
+    def test_the_gaps_operation_left_frontlights_with_the_roadmap_state_reader(self):
+        # issue 65: completing the issues RoadS shows is no longer a Frontlights step
+        result = self.run_op('gaps')
+        self.assertFalse(result['ok'])
+        self.assertIn('Unknown operation', result['message'])
+        for name in ('op_gaps', 'issue_gaps', 'read_state', 'normalise_state', 'read_issues', 'board_layout'):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(rs, name))
+        done = subprocess.run([sys.executable, str(SCRIPT), 'gaps', '--root', str(self.project)],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 2)
+        self.assertIn("invalid choice: 'gaps'", done.stderr)
+        self.assertEqual(done.stdout, '')
 
     def test_an_enabled_block_that_does_not_validate_is_reported_not_hidden(self):
         self.write_config(endpoint='http://roads.example.test/api')
@@ -156,17 +168,17 @@ class ConfigurationTests(RoadsTestCase):
 
 class TransportTests(RoadsTestCase):
     def test_the_bearer_goes_only_to_the_approved_endpoint(self):
-        state, transport = self.read_state((200, state_fixture()))
+        text, transport = self.get((200, {'window': None}))
         self.assertEqual([(c['method'], c['url']) for c in transport.calls],
-                         [('GET', 'https://roads.example.test/api/frontlights/roadmap-state')])
+                         [('GET', 'https://roads.example.test/api/frontlights/progress-report')])
         self.assertEqual(transport.calls[0]['headers'], {'Authorization': f'Bearer {SECRET}'})
-        self.assertEqual(state['asOf'], '2026-09-28T12:00:00Z')
+        self.assertEqual(json.loads(text), {'window': None})
 
     def test_redirect_and_rejected_credential_are_refused_without_leaking_the_secret(self):
         for status, fragment in ((302, 'redirect'), (401, 'rejected the credential'), (500, 'HTTP 500')):
             with self.subTest(status=status):
                 with self.assertRaises(rs.Refusal) as caught:
-                    self.read_state((status, ''))
+                    self.get((status, ''))
                 self.assertIn(fragment, str(caught.exception))
                 self.assertNotIn(SECRET, rs.protect(str(caught.exception)))
 
@@ -201,84 +213,6 @@ class TransportTests(RoadsTestCase):
         head = subprocess.run(['git', '-C', str(Path(__file__).resolve().parents[1]), 'rev-parse', '--short=12', 'HEAD'],
                               capture_output=True, text=True).stdout.strip()
         self.assertEqual(rs.user_agent(), f'frontlights-roadmap-sync/{head}')
-
-
-class RoadmapStateTests(RoadsTestCase):
-    def test_valid_state_comes_out_per_week_in_date_order(self):
-        state = rs.normalise_state(state_fixture())
-        self.assertEqual(state['asOf'], '2026-09-28T12:00:00Z')
-        self.assertFalse(state['snapshotStale'])
-        self.assertEqual([s['sprintId'] for s in state['sprints']], ['sprint-2026-09-28', 'sprint-2026-10-05'])
-        self.assertEqual([i['position'] for i in state['sprints'][0]['items']], [1, 2, 3])
-
-    def test_fields_of_the_retired_roadmap_sync_are_not_read(self):
-        state = state_fixture()
-        state['sprints'][0]['items'][0].update(pendingChangeIds='x', overLimit='false')
-        state.update(removedPending={}, maxSprintItems='4')
-        result = rs.normalise_state(state)
-        self.assertNotIn('pendingChangeIds', result['sprints'][0]['items'][0])
-        self.assertNotIn('removedPending', result)
-
-    def test_unknown_schema_version_is_refused_and_not_echoed(self):
-        for version in (2, '1', True, None, 'v' * 5000 + '<!-- injetado -->'):
-            with self.subTest(version=str(version)[:10]):
-                state = state_fixture()
-                state['schemaVersion'] = version
-                with self.assertRaises(rs.Refusal) as caught:
-                    rs.normalise_state(state)
-                message = str(caught.exception)
-                self.assertIn('schemaVersion', message)
-                self.assertNotIn('<!--', message)
-                self.assertLess(len(message), 400)
-
-    def test_dates_outside_the_supported_years_or_invalid_are_refused(self):
-        for start, end in (('0001-01-01', '0001-01-05'), ('9999-12-27', '9999-12-31'), ('1999-12-27', '1999-12-31'),
-                           ('2026-13-01', '2026-13-05'), ('28/09/2026', '02/10/2026'), ('2026-09-28', '2026-09-27'),
-                           ('2026-09-28T00:00:00Z', '2026-10-02'), (None, '2026-10-02')):
-            with self.subTest(start=start, end=end):
-                state = state_fixture()
-                state['sprints'][1].update(startDate=start, endDate=end)
-                with self.assertRaisesRegex(rs.Refusal, 'roadmap-state'):
-                    rs.normalise_state(state)
-
-    def test_fields_of_the_wrong_type_are_refused(self):
-        mutations = {
-            'sprints not a list': lambda s: s.update(sprints={}),
-            'items not a list': lambda s: s['sprints'][0].update(items=None),
-            'position as text': lambda s: s['sprints'][0]['items'][0].update(position='1'),
-            'position zero': lambda s: s['sprints'][0]['items'][0].update(position=0),
-            'done as number': lambda s: s['sprints'][0]['items'][0].update(done=0),
-            'title as number': lambda s: s['sprints'][0]['items'][0].update(title=5),
-            'unknown status': lambda s: s['sprints'][0]['items'][0].update(status='archived'),
-            'issueNumber as text': lambda s: s['sprints'][0]['items'][0].update(issueNumber='12'),
-            'bad updatedAt': lambda s: s['sprints'][0]['items'][0].update(updatedAt='ontem'),
-            'bad asOf': lambda s: s.update(asOf='agora'),
-            'bad snapshotSyncedAt': lambda s: s.update(snapshotSyncedAt=12),
-            'duplicate sprint': lambda s: s['sprints'].append(dict(s['sprints'][0])),
-            'comment sequence': lambda s: s['sprints'][0].update(title='a <!-- b'),
-        }
-        for label, mutate in mutations.items():
-            with self.subTest(label):
-                state = state_fixture()
-                mutate(state)
-                with self.assertRaises(rs.Refusal):
-                    rs.normalise_state(state)
-
-    def test_a_missing_roadmap_state_is_refused(self):
-        for answer in ((404, '{"error":"not_found"}'), (500, ''), (200, 'not json')):
-            with self.subTest(answer=answer):
-                with self.assertRaisesRegex(rs.Refusal, 'roadmap-state'):
-                    self.read_state(answer)
-
-    def test_snapshot_older_than_a_day_or_missing_is_stale(self):
-        for synced, stale in ((None, True), ('2026-09-27T11:59:59Z', True), ('2026-09-27T12:00:00Z', False),
-                              ('2026-09-28T11:55:00Z', False)):
-            with self.subTest(synced=synced):
-                state = state_fixture()
-                state['snapshotSyncedAt'] = synced
-                result = rs.normalise_state(state)
-                self.assertIs(result['snapshotStale'], stale)
-                self.assertEqual(result['snapshotSyncedAt'], synced)
 
 
 class PathTests(RoadsTestCase):

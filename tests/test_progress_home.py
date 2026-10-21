@@ -293,23 +293,26 @@ class HomeDocumentationTests(unittest.TestCase):
                 self.assertIn(phrase, reference)
         skill = ' '.join((ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8').split())
         stage1 = skill.split('## 1.')[1].split('## 2.')[0]
-        for phrase in ('operationsRoot', 'in any project', 'homeState'):
+        for phrase in ('operationsRoot', 'from any project'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage1)
 
-    def test_the_stage_one_question_to_register_is_in_the_skill_and_the_eval(self):
+    def test_the_question_to_register_lives_only_in_the_summary_route(self):
+        # issue 65: the registration is asked inside the summary the user asked for, never at the opening
         flat = lambda *parts: ' '.join(ROOT.joinpath(*parts).read_text(encoding='utf-8').split())
         question = 'Registrar o projeto que guarda o bloco do Resumo para a diretoria?'
-        self.assertIn(question, flat('skills', 'frontlights', 'SKILL.md'))
+        reference = flat('skills', 'frontlights', 'references', 'progress-report.md')
+        self.assertIn(question, reference)
+        self.assertIn('Agora não', reference)
+        self.assertNotIn(question, flat('skills', 'frontlights', 'SKILL.md'))
         self.assertIn(question, flat('evals', 'progress-home.md'))
-        self.assertIn('Agora não', flat('skills', 'frontlights', 'SKILL.md'))
 
     def test_the_eval_the_runbook_and_the_record_cover_the_case(self):
         flat = lambda *parts: ' '.join(ROOT.joinpath(*parts).read_text(encoding='utf-8').split())
         self.assertIn('registered', flat('evals', 'progress-home.md'))
-        self.assertIn('18. Progress question in any project, and a start by plain words (`evals/progress-home.md`)',
+        self.assertIn('18. Summary on request in any project, and a start by plain words (`evals/progress-home.md`)',
                       flat('evals', 'runbook.md'))
-        self.assertIn('| 18. Pergunta do resumo em qualquer projeto e início por linguagem natural | Pendente |',
+        self.assertIn('| 18. Resumo sob pedido em qualquer projeto e início por linguagem natural | Pendente |',
                       flat('docs', 'acceptance.md'))
 
 

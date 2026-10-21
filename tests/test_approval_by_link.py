@@ -26,7 +26,6 @@ POINTER_FILES = (
     ('skills', 'frontlights', 'references', 'issue.md'),
     ('skills', 'frontlights', 'references', 'issues.md'),
     ('skills', 'frontlights', 'references', 'closeout.md'),
-    ('skills', 'frontlights', 'references', 'issue-gaps.md'),
     ('skills', 'frontlights', 'references', 'progress-report.md'),
     ('skills', 'frontlights', 'docs', 'protocol.md'),
     ('skills', 'frontlights', 'docs', 'security.md'),
@@ -90,7 +89,7 @@ class TheRuleTests(unittest.TestCase):
         text = rule()
         for phrase in ('the issue body of stage 4 and its revisions', 'the plan and the bodies of stage 5',
                        'the conversion of a family', 'the findings batch and its leftover criteria',
-                       'the closeout list, the issue-gaps table', 'the RoadS progress-report draft',
+                       'the closeout list and the RoadS progress-report draft',
                        'the cleanup of merged work asks nothing',
                        'Commands are not documents', 'references/browser-testing.md', 'the denied operations',
                        'stay in full inside the question'):
