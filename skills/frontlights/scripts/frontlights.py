@@ -353,9 +353,23 @@ LOCAL_MAIN_GATES = {'browser_gate': ('answered', 'not_needed')}
 DIRECT_RULE = re.compile(r'[a-z0-9][a-z0-9-]{0,63}')
 
 
+WALKTHROUGH_FIELDS = ('persona', 'steps', 'before', 'after')
+
+
+def walkthrough_of(label, sid, walkthrough):
+    """The walkthrough of a slice (issue 65, S3), shapes only: an object whose persona (a label such as `conta 1` or
+    `sem tela`, never a login), steps, before and after are non-empty strings. The before is the one recorded at the
+    base by the reconnaissance, so a slice without it has nothing to compare the after with."""
+    require(isinstance(walkthrough, dict),
+            f'{label}: slice {sid}: falta walkthrough (objeto com persona, steps, before e after; o '
+            f'walkthrough.before é o antes gravado na base pelo reconhecimento)')
+    for field in WALKTHROUGH_FIELDS:
+        require(nonempty(walkthrough.get(field)), f'{label}: slice {sid}: falta walkthrough.{field} (texto não vazio)')
+
+
 def slices_of(issue):
     """The slices of an issue, validated: one acceptance-criteria box each, in dependency order (blockers
-    first), every one with what it delivers, its seams and its layers. None when the issue has no `slices`,
+    first), every one with what it delivers, its seams, its layers and its walkthrough. None when the issue has no `slices`,
     in which case it keeps `acceptance` and `vertical_check`."""
     slices = issue.get('slices')
     if slices is None:
@@ -370,7 +384,7 @@ def slices_of(issue):
     seen = []
     for item in slices:
         require(isinstance(item, dict),
-                f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers e depends_on')
+                f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers, depends_on e walkthrough')
         sid = item.get('id')
         require(isinstance(sid, str) and SLICE_ID_RULE.fullmatch(sid),
                 f'{label}: slice com id inválido {sid!r}: use um rótulo curto sem espaço, como S1')
@@ -380,6 +394,7 @@ def slices_of(issue):
                 f'{label}: slice {sid}: falta delivers (o que dá para demonstrar quando ela termina)')
         for field in ('seams', 'layers'):
             require(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)')
+        walkthrough_of(label, sid, item.get('walkthrough'))
         deps = item.get('depends_on', [])   # absent means none ("Depende de: nenhuma")
         require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
                 f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')

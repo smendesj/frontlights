@@ -246,8 +246,7 @@ do projeto (nomes de label, de tipo e de linha) fica só no `config.json` do pro
   até o primeiro `:` ou `/`, como `area:` ou `area/`; famílias separadas por outro caractere, como
   `area-backend`, não são reconhecidas): no plano isso é recusado, nomeado ou não o label implícito
   e também quando dois campos diferentes implicam labels da mesma família (um único valor, como
-  `Both`, pode implicar `area:frontend` e `area:backend` de propósito), e no `gaps` vira `labelConflicts`
-  para você decidir.
+  `Both`, pode implicar `area:frontend` e `area:backend` de propósito).
 - O `project` recusa chave desconhecida, para que um erro de digitação (`label_rules` em vez de
   `labels`) não desligue a regra em silêncio. O `inspect` mostra as regras lidas.
 
@@ -287,7 +286,9 @@ aprovado no lote antes de ser escrito (corpo anterior guardado, só acréscimo, 
 diferença conferidas; só a migração de uma seção legada também remove linhas). A issue só fecha com a pendência tratada, concluída e marcada com
 evidência, como qualquer critério, e o fechamento (veja abaixo) já a enxerga; enquanto
 houver uma aberta, a issue fica fora do `closes` do `release-plan` e o PR a cita sem palavra de fechamento
-(`Closes`, `Fixes`). Antes
+(`Closes`, `Fixes`). Todo critério que entra assim, depois da aprovação, deixa uma linha nas armadilhas do projeto
+(`.frontlights/pitfalls.md`), aprovada no mesmo lote, que o próximo reconhecimento lê primeiro; o relatório da
+etapa 6 conta as linhas por issue. Antes
 de relatar uma issue como revisada ou concluída, antes do merge na main local e antes de abrir ou atualizar um PR,
 todo achado em aberto tem destino rastreável; "citado no corpo do PR" nunca é destino, e
 só ruído que não é defeito (um 404 de arquivo que só falta no disco local, dado de teste)
@@ -304,29 +305,18 @@ a partir de outro plugin. A consulta ao quadro e ao planejamento de entregas exi
 ferramentas configuradas separadamente; o utilitário consulta issues do GitHub e
 uma rota JSON de observações. Integrações ausentes são informadas explicitamente.
 
-### Completar as issues que o RoadS mostra
+### Bloco `roadmapSync` do RoadS
 
 O RoadS mantém o Roadmap a partir das issues abertas, e o Frontlights não escreve `ROADMAP.md` nem
 `SPRINT_*.md`. As pastas da semana sob o `scrumRoot` guardam só arquivos pontuais: os prints do resumo
-para a diretoria e os do teste assistido (`evidencias/`).
-
-Quando o projeto tem o bloco `roadmapSync` habilitado, toda sessão `/frontlights` começa perguntando se
-você quer completar no GitHub as issues que o RoadS mostra. O RoadS cria a issue com labels, Status,
-Prioridade, Repositório, Stack, Description e o esforço, mas não define responsável nem tipo nativo, e
-as issues que nasceram em outro lugar chegam ao quadro com o que tinham. Com a resposta "sim", o
-utilitário `gaps` (somente leitura) lista, nas issues das sprints e dos grupos, o que falta contra as
-regras do `project`: o que o config resolve sozinho (padrão de campo, label que um valor implica,
-responsável e tipo do quadro, entrar no quadro) e o que exige escolha. O Frontlights propõe os valores,
-mostra a tabela inteira, e você aprova antes de qualquer escrita. Só se preenche o que está vazio, nunca
-se sobrescreve valor existente, e o texto do corpo de uma issue nunca é editado. Ao final, `gaps` roda
-de novo para conferir. Campo sem opção no quadro é apenas informado. Se a cópia do quadro no RoadS tiver
-mais de 24 h, ou nunca tiver sido feita, você é avisado.
+para a diretoria e os do teste assistido (`evidencias/`). A sessão não pergunta nada sobre o RoadS ao
+abrir: completar no GitHub as issues que o RoadS mostra saiu do Frontlights na issue 65 (o `gaps` e a
+leitura de `roadmap-state` foram removidos), e o resumo para a diretoria roda só quando você o pede.
 
 Configure o bloco `roadmapSync` no `.frontlights/config.json` do projeto (veja
 `examples/config.json`):
 
-- `endpoint` é a base `/api/frontlights` do RoadS; o `gaps` lê `GET roadmap-state` e o resumo usa a
-  rota do bloco `progress`. A aprovação vale para essa base, com o mesmo segredo;
+- `endpoint` é a base `/api/frontlights` do RoadS; o resumo usa a rota do bloco `progress`. A aprovação vale para essa base, com o mesmo segredo;
 - `secretEnvVar` nomeia a variável do segredo, que precisa começar por `FRONTLIGHTS_`. Defina o
   valor no seu próprio terminal, com
   `setx FRONTLIGHTS_API_SECRET "<valor emitido pelo RoadS>"`, e reinicie o Claude;
@@ -336,37 +326,24 @@ Configure o bloco `roadmapSync` no `.frontlights/config.json` do projeto (veja
   (`evidencias/`), com o `roadmapSync` ligado ou não; sem eles, esses prints ficam no `.frontlights`.
 
 As chaves da antiga sincronização do roadmap (`roadmapFile`, `sprintFilePattern`, `maxSprintItems`,
-`markCompleted`, `issueTargets`) são ignoradas; o `status` as lista em `obsoleteKeys` e a skill oferece
+`markCompleted`, `issueTargets`) são ignoradas; o `status` as lista em `obsoleteKeys`, e você pode
 tirá-las do bloco. Na primeira vez, o envio do segredo para aquele endereço precisa da sua aprovação, que
 fica em `.frontlights/roadmap-sync/approval.json`, fora do Git (a aprovação dada antes continua valendo).
-O utilitário é `python scripts/roads.py status|approve|gaps --root <projeto>`. O `gaps` só lê, usa o
-`gh` da própria máquina (a conta ativa precisa enxergar o repositório e o quadro) e aceita
-`--only-sprints` para deixar os grupos do backlog de fora.
-
-Limites conhecidos do `gaps`: só enxerga o repositório e o quadro do `config.json`; lê até 100 labels,
-20 responsáveis, 20 cartões e 50
-valores de quadro por issue (uma issue maior é ignorada e listada em `skipped`, nunca lida como vazia);
-campos de seleção múltipla, de usuário e outros tipos além de seleção única, texto, número, data e
-iteração não são lidos, e um campo desses configurado em `fields` aparece em `unfillable` e sempre
-vazio; um
-campo de iteração é reconhecido mas não é escrito. Valores de campo ou de opção com `<`, `>` ou
-caracteres que um terminal interpretaria são mostrados limpos e listados em `unwritable`: o Frontlights
-não os digita. Um `project` com chave desconhecida passa a ser recusado: se o seu `config.json` tinha
-chaves extras ali, remova-as.
+O utilitário é `python scripts/roads.py status|approve --root <projeto>`.
 
 ### Resumo para a diretoria (opcional)
 
-O bloco `roadmapSync.progress` mora em um projeto só (por exemplo, o RoadS), e a pergunta aparece
-em qualquer projeto: logo depois da pergunta das issues do RoadS (inclusive quando ela não foi feita, ou
-quando você respondeu "não") o `/frontlights` pergunta: "Atualizar também o Resumo para a diretoria no
-RoadS?". O projeto que tem o próprio bloco usa o dele (mesmo desabilitado); os outros usam o projeto que
+O bloco `roadmapSync.progress` mora em um projeto só (por exemplo, o RoadS), e o resumo pode ser pedido
+em qualquer projeto: ele roda só quando você o pede ("/frontlights pode criar/atualizar o resumo", ou
+qualquer outro pedido do resumo); a abertura da sessão não pergunta nada sobre ele. O projeto que tem o
+próprio bloco usa o dele (mesmo desabilitado); os outros usam o projeto que
 você registrou uma vez como dono do bloco, com `python scripts/progress_report.py home --set <projeto>`,
 só depois do seu sim. O registro fica no diretório pessoal, assinado com a chave do usuário, nunca num
 repositório, e diz só onde o bloco está: o bloco lá continua precisando da própria aprovação. O
 `status` informa `source`, `operationsRoot` (o projeto em que as demais operações rodam), `home` e
-`homeState`; sem bloco e sem registro a pergunta não aparece e, se o projeto tem o bloco `roadmapSync`
-habilitado, o Frontlights pergunta uma vez por sessão se você quer registrar o projeto dono do bloco
-(e oferece como opção cada pasta vizinha que tenha um). Com a resposta "sim", o Frontlights:
+`homeState`; quando você pede o resumo sem bloco e sem registro válido, o Frontlights pergunta uma vez por
+sessão se você quer registrar o projeto dono do bloco (e oferece como opção cada pasta vizinha que tenha
+um). Com o pedido do resumo, o Frontlights:
 
 1. pergunta ao RoadS qual período coletar;
 2. roda os coletores que o próprio projeto configurou e mostra a tabela de conferência dos números;
@@ -585,7 +562,7 @@ execução, antes de qualquer processo subir. Um `browserTest` que declara só a
 
 ### Fechar o que terminou
 
-Depois da pergunta das issues do RoadS e da do resumo, o Frontlights lê o GitHub (só leitura) e, quando acha issues
+Na abertura da sessão, antes do pedido, o Frontlights lê o GitHub (só leitura) e, quando acha issues
 que ele trabalhou neste projeto e que já têm **todos os critérios de aceitação marcados**, pergunta se pode
 fechá-las. A lista vem completa, com as sub-issues antes dos pais, os PRs
 ligados (aberto, mesclado ou nenhum) e os comandos exatos; só depois da sua
@@ -612,8 +589,9 @@ worktree para o `.frontlights` da principal antes de a limpeza removê-la.
 #### Homologar na main local, lançar a release, fechar e limpar
 
 Cada issue entra na **main local** do projeto, a homologação, por um merge com um único portão, o teste assistido
-respondido (ou dispensável, sem mudança na tela): a main local é trazida para a branch da issue, o teste assistido
-responde, o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
+respondido (ou dispensável, sem mudança na tela, e então com o roteiro de cada caixa rodado pelo Claude, sem pergunta
+nova, num `.md` por caixa em `.frontlights/issues/<n>/walkthroughs/` e na tabela do handoff): a main local é trazida
+para a branch da issue, o teste assistido responde (e percorre os roteiros das caixas, na ordem do `Fluxo:`), o `authorize` confere e o merge é feito; nenhuma suíte e nenhuma revisão são exigidas (o passo a passo está em
 [`references/development.md`](skills/frontlights/references/development.md#into-the-local-main-the-watched-run)), e um bundle da main local e das branches vai para a pasta de
 backup configurada. Ao fim de cada issue homologada o Frontlights oferece a **release**: `homolog release-plan` lista
 as issues que estão na main local e ainda não em `origin/main` (o nome da branch da release pula só os de branches locais ou remotas que existem: o GitHub apaga a
@@ -709,7 +687,7 @@ só o "Sim" libera aquela operação. A lista completa do que é coberto, dos
 merges cobertos e das operações negadas fica num lugar só, em
 [`references/development.md`](skills/frontlights/references/development.md#standing-authorization-and-the-denied-operations).
 As perguntas do próprio trabalho (teste assistido, falhas, achados, decisão nova) continuam, assim como as
-aprovações do texto da issue, do plano de issues, do fechamento, das issues do RoadS e do resumo (a limpeza do
+aprovações do texto da issue, do plano de issues, do fechamento e do resumo (a limpeza do
 trabalho mesclado roda sem pergunta). Os pedidos de
 permissão do próprio Claude Code não são do Frontlights e continuam valendo.
 
@@ -740,7 +718,7 @@ recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igu
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
 do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
 camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
-árvore, o pré-mortem incluído; confirmações, a pergunta da profundidade e o "Seguimos?" do fim não ganham seção.
+árvore, o pré-mortem incluído; confirmações e o "Seguimos?" do fim não ganham seção.
 Cada seção segue o modelo `templates/grilling-section.html` (o que a pergunta decide, os conceitos em palavras
 simples, onde o projeto já faz isso, o que cada opção muda, o antes e depois quando há tela, a recomendação
 marcada como opinião e a escolha), e um campo sem nada a dizer é omitido. Cada seção entra por uma edição
@@ -779,10 +757,19 @@ entra na main local pela branch do pai, com as filhas dentro, pelo teste assisti
 e mostrados no diff). A concorrência usada é o número de filhas independentes
 cujos arquivos não se sobrepõem. Sem a empilhada, a filha espera o pai estar na main local.
 Na entrevista, depois de confirmar o problema (numa só pergunta quando a issue já
-o define), a skill levanta as convenções do código afetado e propõe ao menos três
+o define), a skill levanta as convenções do código afetado e faz o reconhecimento por gatilho, sem
+perguntar profundidade: lê primeiro as armadilhas do projeto (`.frontlights/pitfalls.md`) e, com tela, o antes
+no app rodando, a origem dos textos, os estados, o ambiente e as personas; cada gatilho ligado (regra de mais de
+um ator, endpoint existente consumido, regra sobre dado existente ou migration, contrato compartilhado, fluxo de
+vários passos) roda a sua sonda num subagente, que devolve uma tabela curta de fatos com a evidência, e fato não
+verificado não vira opção. O log de descoberta registra cada gatilho, ligado ou desligado com o motivo.
+Só então a skill propõe ao menos três
 abordagens de implementação realmente diferentes. Cada uma informa se segue ou
 quebra o padrão do projeto e o custo disso. Em seguida, a skill percorre os ramos
-de decisão da abordagem escolhida, e é o usuário quem decide quando parar. O
+de decisão da abordagem escolhida, perguntando só produto, escopo e visual (um ramo técnico que a evidência
+resolve vira premissa mostrada no plano, com a evidência), e é o usuário quem decide quando parar. O pré-mortem
+roda quando liga o gatilho de ator, de dado existente ou de migration, e o desafio da issue sempre que o
+reconhecimento acha algo. O
 padrão existente é o preferido; ele só é quebrado quando for comprovadamente pior
 para o caso.
 Cada pergunta de decisão do grilling tem a sua seção no artefato (veja "Artefato visual"), que

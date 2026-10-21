@@ -87,10 +87,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     moves each card to Done. A closed issue is never in the list. An issue with an unticked criterion, no criteria
     section or an open child that is not itself in the list must never appear in the list.
 
-15. Issue gaps. With an enabled `roadmapSync` block and an issue on the RoadS board missing its assignee or a board
-    field, run `/frontlights`: the first question is "Completar no GitHub as issues que o RoadS mostra?". Answer yes and
-    confirm `gaps` lists the issue with what `fill` settles and what `choose` asks, the whole table is shown before any
-    write, only empty values are written, `gaps` runs again at the end, and no `ROADMAP.md` or `SPRINT_*.md` is touched.
+15. (Removed in issue #65: completing the issues RoadS shows left Frontlights; the opening asks nothing about RoadS, and
+    `roads.py gaps` is refused as an invalid choice.)
 
 16. Leftovers as criteria (`evals/leftovers-as-criteria.md`). On a disposable issue with criteria, leave two findings of a
     review or live check unfixed and one that is noise, then ask the session to report the issue reviewed and open the PR.
@@ -124,13 +122,14 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     authorization records (an issue already closed by `Closes #n` included), runs what it offers and then asks the
     closeout question.
 
-18. Progress question in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
-    the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), start
-    `/frontlights` in a project with no progress block and in one with no config at all: the "Atualizar também o Resumo
-    para a diretoria no RoadS?" question appears naming the project where the block lives, and every later operation runs
-    with `--root <operationsRoot>`. On a machine with nothing registered, a project with an enabled `roadmapSync` block asks once "Registrar o projeto que guarda o bloco do
-    Resumo para a diretoria?" and the pick of a folder registers it. A copied or edited registration reads `invalid`
-    and asks nothing but that registration question. Start a session with
+18. Summary on request in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
+    the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), ask
+    "/frontlights pode criar/atualizar o resumo" in a project with no progress block and in one with no config at all: the
+    session names the project where the block lives, and every later operation runs with `--root <operationsRoot>`. A
+    session opened with any other request asks nothing about RoadS or the summary. On a machine with nothing registered,
+    a request for the summary asks once "Registrar o projeto que guarda o bloco do Resumo para a diretoria?" and the pick
+    of a folder registers it. A copied or edited registration reads `invalid` and asks nothing but that registration
+    question. Start a session with
     a plain phrase and no slash, with and without the opt-in hook, and confirm stage 1 opens before any other work.
 
 19. One watched run per issue (`evals/batch-watched-run.md`). On a disposable issue with two slices that change a screen and
@@ -217,7 +216,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     asked for), writes the `merge_into_local_main` operation with `gates` `{"browser_gate": ...}` only and runs
     `authorize` before `git merge --no-ff` on the local main; an operation with the watched run not answered, a
     slice branch or `origin/main` as target is refused and becomes a question, never a merge; and the handoff's
-    "Merge na main local" line carries the watched run, the `authorize` output and the merge commit. Then, at the
+    "Merge na main local" line carries the watched run, the `authorize` output and the merge commit. With
+    `not_needed`, confirm that each box has its `.frontlights/issues/<n>/walkthroughs/S<k>.md` (header, Antes,
+    Depois, masked output) and its row in the handoff table before the merge, with no new question, and that a box
+    without its file holds the merge. Then, at the
     start of a stage 6 in a clone with a remote, confirm that no hook is installed or asked about and that `homolog sync`
     advances the local main after a commit lands on `origin/main`, and a conflict comes back as a question naming
     the files with the main worktree left clean. With `homolog.backupDir` pointing at an empty folder, confirm that

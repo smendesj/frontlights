@@ -25,9 +25,9 @@ class SkillTests(unittest.TestCase):
     def setUp(self):
         self.text = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
 
-    def test_stage_one_asks_after_the_progress_question_and_only_when_there_is_something_to_close(self):
+    def test_stage_one_opens_with_the_closeout_question_only_when_there_is_something_to_close(self):
         stage1 = ' '.join(self.text.split('## 1.')[1].split('## 2.')[0].split())
-        self.assertIn('**Closeout question, right after the progress question.**', stage1)
+        self.assertIn('**Closeout question, the only question at the opening.**', stage1)
         self.assertIn('closeout.py" candidates', stage1)
         self.assertIn('Only when `candidates` reports `ask` true', stage1)
         # review r1 of issue 63 (R1-1): an issue closed by `Closes #n` only counts in `alreadyDone`, so the cleanup
@@ -50,11 +50,11 @@ class SkillTests(unittest.TestCase):
         for word in ('board.status', 'done_option_missing', 'project.done', 'gh auth refresh -s project'):
             with self.subTest(gone=word):
                 self.assertNotIn(word, stage1)
-        question = stage1.split('**Closeout question, right after the progress question.**')[1]
+        question = stage1.split('**Closeout question, the only question at the opening.**')[1]
         for word in ('mover', 'closedUnchecked', 'item-edit'):
             with self.subTest(word=word):
                 self.assertNotIn(word, question)
-        self.assertLess(stage1.index('Progress question'), stage1.index('Closeout question'))
+        self.assertNotIn('Progress question', stage1)  # issue 65: the summary runs on request, never at the opening
         self.assertLess(stage1.index('Closeout question'), stage1.index('Then choose the lightest path'))
 
     def test_stage_seven_is_its_own_approval_and_never_merges_or_reopens(self):

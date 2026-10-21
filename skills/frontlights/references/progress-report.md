@@ -7,9 +7,12 @@ sends the collected content to RoadS as a draft. Reviewing, editing, checking th
 to e-mail and marking as sent all happen in RoadS. Frontlights never e-mails anything and never
 marks anything as sent.
 
-This step runs only when `progress_report.py status` reports `ask` true: an enabled
-`roadmapSync.progress` block in `.frontlights/config.json` (shape in `examples/config.json`), the
-project's own or the registered home's (next section).
+This step runs only when the user asks for the summary ("/frontlights pode criar/atualizar o resumo", or any
+other request for it), from any project; the opening of a session never asks about it (`SKILL.md`, stage 1,
+"Board summary on request"). It goes on to the steps below only when `progress_report.py status` reports
+`ask` true: an enabled `roadmapSync.progress` block in `.frontlights/config.json` (shape in
+`examples/config.json`), the project's own or the registered home's (next section). When `ask` is false
+and nothing is to be registered, say the `message` in one line and come back to the request.
 
 The collectors and the push command are the project's own commands, written in that config file.
 This step runs them, so the exact block must be approved by the user first (step 2). The helper is
@@ -22,7 +25,7 @@ quote the helper's English messages only when useful.
 
 ## Where the block lives
 
-The block belongs to one project (RoadS, say), but the question is asked in any project.
+The block belongs to one project (RoadS, say), but the summary can be asked for in any project.
 `status --root <project>` uses the project's own block when it has one, enabled or not, and
 otherwise the registered home: the project the user registered once as the home of the block.
 It reports `source` (`project`, `home` or null), `operationsRoot` (the project every other
@@ -30,8 +33,11 @@ operation runs in, because the collectors, the draft guide and the approval all 
 `home.root` and `homeState` (`own`, `registered`, `none` or `invalid`).
 
 - `ask` false with `homeState` `none` or `invalid`, or `source` `home` with the message that the
-  registered project no longer declares a block, after the stage 1 question of registering was answered
-  yes: find the candidates first, read-only: the folders next to the main worktree of the project the
+  registered project no longer declares a block: the user has no other way to make the summary run, so ask
+  once per session with `AskUserQuestion`: "Registrar o projeto que guarda o bloco do Resumo para a
+  diretoria?" (say in the text whether nothing is registered, the record is not trusted or the registered
+  project lost its block). Options: "Sim, escolher a pasta" and "Agora não"; on "Agora não", say nothing more
+  about it in this session and come back to the request. On yes, find the candidates first, read-only: the folders next to the main worktree of the project the
   session opened (the parent of `git rev-parse --path-format=absolute --git-common-dir`, never the linked
   worktree) and any the user names, whose `.frontlights/config.json` has an enabled `roadmapSync.progress`
   block. Check each candidate with `progress_report.py status --root <candidate>` (`source` `project`, `configured` true and `ask`
@@ -41,7 +47,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
   registration only says where the block is (the block there still needs its own approval, step 2) and
   is kept in the user's home directory, never in a repository. The user's pick is the explicit yes:
   only then run `progress_report.py home --set <project>`, then run `status` again and go on with the
-  progress question in the same session. `home` alone shows the registration; `home --clear` removes it,
+  summary the user asked for, in the same session. `home` alone shows the registration; `home --clear` removes it,
   also only after an explicit yes. A project the helper refuses (no enabled, valid block there) is
   reported with its message.
 - A project with its own block never uses the registered home, even when its block is disabled; that is also

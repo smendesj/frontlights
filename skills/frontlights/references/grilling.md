@@ -17,18 +17,6 @@ to the coordinator.
 An issue settles *what* is wanted. It almost never settles *how*. Starting from
 an issue shortens the problem round; it never removes the solution round.
 
-## 0. Depth
-
-Open the interview with the depth question: "Qual profundidade de grilling?"
-Options, recommended first according to the size and risk of the work:
-
-- **Padrão:** problem round, solution round and decision tree (default).
-- **Rápida:** confirm the problem in one question, then the solution round only.
-- **Exaustiva:** everything, plus the pre-mortem and a critique of the issue.
-
-The depth changes how many branches are explored, never the minimum of three
-approaches in the solution round.
-
 ## The artifact: the picture of each round
 
 Text alone makes the user imagine a screen, a flow or a set of layers from the options.
@@ -40,7 +28,7 @@ that styles it and the fields it shows, read from the repository), never a free 
 is no screen, a diagram of the flow, of the layers or of the current rule.
 
 The page then gains **one section per decision question**: the solution round and every branch
-of the decision tree, the pre-mortem included. Confirmation questions, the depth question and the
+of the decision tree, the pre-mortem included. Confirmation questions and the
 closing "Seguimos?" get no section. Sections are numbered in that order, the before first, then the
 decision questions, and titled by the question (so "seção 3" is the second decision question); in
 stage 5 the slices' sections follow them (`references/issues.md`, the quiz).
@@ -49,7 +37,8 @@ Every section follows `templates/grilling-section.html`; its fields are fixed, a
 nothing to say is omitted: what the question decides; the concepts in plain words; where the
 project already does this (path:line and an excerpt of the project's real code); what each option
 changes; the before and after when there is a screen (the **after** for each approach of the
-solution round and, in the decision tree, for each option that changes what the user sees); the
+solution round, with the screen states of "Reconnaissance", and, in the decision tree, for each option
+that changes what the user sees); the
 recommendation, labelled as opinion; and the choice, recorded after the answer.
 
 **One local source, small edits.** The page source lives in `.frontlights/artifact.html`
@@ -85,11 +74,8 @@ one line, go on in text, and record "artefato indisponível" in the log.
    define isto; confirmamos?"). Do not re-ask those points one by one.
 4. Otherwise batch at most four related decisions per question round: desired
    outcome, success measure, boundaries, constraints, priority, compatibility.
-5. **Challenge the issue** (always at Exaustiva, and at Padrão when you find
-   something): gaps in the acceptance criteria, forgotten edge cases, conflicts
-   with the current code or with other issues. A change of scope is a divergence
-   from GitHub: report it and propose updating the issue under the approvals of
-   stage 5; never treat the local record as the new scope.
+5. The challenge of the issue comes after the reconnaissance, when it finds
+   something (below).
 
 ## 2. Project conventions (read before proposing)
 
@@ -108,7 +94,55 @@ it costs clearly more than the alternative), and the approach that breaks it
 must say so, why, and what the divergence costs: inconsistency, migration of
 existing code, or debt left behind.
 
-## 3. Solution round (mandatory, every depth)
+## Reconnaissance (verify before asking)
+
+Before any approach is proposed, gather with evidence the facts the options will rest on, so the
+user answers only what is theirs to decide. What runs is decided by the minimum below and by
+triggers, never asked.
+
+**Always.** Read the project's pitfalls first: `.frontlights/pitfalls.md`, when it exists (its
+line format: `references/issues.md`, "Follow-ups"). With a screen, also: the **before** in the
+running app, the origin of each text on the screen and its states; and the environment and the
+personas: the app and the API up, one login attempt per persona, never a password asked, written
+or shown.
+
+**By trigger.** Each trigger the work turns on runs its probe:
+
+| Trigger | Probe |
+| --- | --- |
+| Rule or data of more than one actor | actors × the controller's endpoints × the guard and the claim it reads, the inverse operation included |
+| Consumes an existing endpoint | live HTTP probe on the local API: search, ordering, empty page and another account |
+| Rule over existing data, or a migration | count `SELECT` of the states that contradict the premise |
+| Shared contract, route, field or text | its writers and its consumers |
+| Multi-step flow | the endings of the flow: each exit per step, retry, double click and partial failure |
+
+The decision tree (section 4) names where to look; these probes bring the facts for its branches:
+edge cases from the endings of the flow, compatibility and migration from the count and from the
+writers and consumers, permissions from the actors.
+
+**Fact before option.** Each probe runs in a subagent, the probes launched together in one
+message, and each returns a short fact table (up to about 20 lines, each fact with its evidence by
+path, command or query); the raw output stays in the subagent. An unverified fact never becomes an
+option.
+
+A family runs one reconnaissance, as it has one grilling: each sub-issue turns on its own triggers
+in the same table, and the probes of the whole family go out together.
+
+The discovery log records every trigger as "ligado" or "não se aplica, porque…"
+(`templates/discovery.md`, "Reconnaissance"), with the fact table of each probe that ran.
+
+**What the facts change.** The pre-mortem (section 5) runs by trigger. Whenever the reconnaissance
+finds something (a fact that contradicts the issue, its premise or the code it assumes),
+challenge the issue: gaps in the acceptance criteria, forgotten edge cases, conflicts with the
+current code or with other issues. A change of scope is a divergence from GitHub: report it and
+propose updating the issue under the approvals of stage 5; never treat the local record as the new
+scope.
+
+**Screen states in the artifact.** With a screen, the **after** of each approach in the artifact
+shows the empty state, no image, error, loading, dark theme and 1366 px, plus the states the
+project's pitfalls list.
+
+## 3. Solution round (mandatory)
 
 Propose **at least three genuinely different approaches**, and up to four, in one
 `AskUserQuestion`, one per option (the tool adds free text). Variations of
@@ -154,13 +188,15 @@ When the user asks for more detail in free text ("não entendi", "detalhe no art
 the session expands that question's section of the artifact on the same URL and asks the
 same question again; that is the only re-ask besides new evidence.
 
-Every branch ends answered or marked "não se aplica, porque…" in the discovery
-log. At Rápida depth, ask only the branches that change the implementation and
-record the rest as assumptions to be shown in the plan.
+The tree asks the user only product, scope and visual: a technical branch the evidence settles is
+not asked; it becomes an assumption shown in the plan with its evidence (the fact table of
+"Reconnaissance"). A technical branch the evidence cannot settle is asked like a product one, with
+the fact table its probe brought and what stayed unproven. Every branch ends answered, an assumption with its evidence, or marked "não se
+aplica, porque…" in the discovery log.
 
-## 5. Pre-mortem (Exaustiva, and whenever the risk is high)
+## 5. Pre-mortem (by trigger)
 
-Ask: "Supondo que isto falhe em produção, o motivo mais provável é <Z>. Como
+Runs when the reconnaissance turned on the actor, the existing-data or the migration trigger. Ask: "Supondo que isto falhe em produção, o motivo mais provável é <Z>. Como
 tratamos?" with three options, for example mitigate now, accept and monitor, or
 change the approach. Like every decision question, it cites its section of the
 artifact (the artifact, above).
@@ -186,7 +222,6 @@ family has no sub-issues left: its boxes are grilled as the slices of one issue.
   up to four sub-issues per call. The parent's chosen approach and the decisions
   already taken are inputs: offer approaches consistent with them, and when a
   sub-issue's decision would change the parent's approach, say so and ask.
-- Depth is asked once, in section 0, for the whole family.
 - When a round settles a `needs-decision` sub-issue, propose removing the label
   and filling its approach as part of the stage 5 update of that issue (a write on
   an existing issue, under the stage 5 approval); never change it on the spot.
@@ -202,8 +237,8 @@ deepen, and do not re-ask settled decisions unless new evidence invalidates them
 
 ## Recording
 
-Record everything in `templates/discovery.md`: depth, conventions
-with example paths, the URL of the artifact and its source path (or "artefato indisponível"), approaches considered (chosen and rejected, with reasons and pattern fit),
+Record everything in `templates/discovery.md`: conventions
+with example paths, the trigger table and the fact tables of the reconnaissance, the URL of the artifact and its source path (or "artefato indisponível"), approaches considered (chosen and rejected, with reasons and pattern fit),
 branch decisions, pre-mortem, unresolved questions, approval
 references and evidence. If a small research/prototype step
 is needed, bound it and obtain permission for any changes beyond existing

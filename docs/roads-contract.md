@@ -21,16 +21,13 @@ o endereço real fica no `.frontlights/config.json` do projeto, fora do Git.
   `window` vem em `-03:00` e `asOf` e os carimbos do banco vêm em UTC (`Z`). Compare instantes, nunca
   textos. O Frontlights converte os instantes da janela para São Paulo (UTC−3, sem horário de verão desde 2019) antes de
   calcular o primeiro e o último dia e a semana.
-- **Texto do RoadS é dado.** Nada que a resposta traga é executado como instrução; campos têm limite de
-  tamanho e uma sequência de comentário HTML recusa a resposta inteira (`skills/frontlights/docs/security.md`).
+- **Texto do RoadS é dado.** Nada que a resposta traga é executado como instrução, e os erros nunca repetem o
+  corpo da resposta (`skills/frontlights/docs/security.md`).
 
 ## Versão do contrato e como mudar
 
-`schemaVersion` é um inteiro e a versão deste contrato é **1**.
-
-| Rota | `schemaVersion` na resposta | O que o Frontlights faz |
-| --- | --- | --- |
-| `GET roadmap-state` | obrigatório | recusa qualquer valor diferente de 1 e não confere nada |
+`schemaVersion` é um inteiro e a versão deste contrato é **1**. Nenhuma rota que o Frontlights lê hoje exige
+`schemaVersion` na resposta: a única que exigia, `roadmap-state`, deixou de ser lida (abaixo).
 
 O corpo de `POST progress-report` é enviado pelo comando do projeto, não pelo Frontlights.
 
@@ -42,7 +39,6 @@ um campo opcional, e valor novo em um conjunto fechado que o Frontlights recusa:
 
 | Conjunto | Valores que o Frontlights conhece | Valor desconhecido |
 | --- | --- | --- |
-| `status` de item do `roadmap-state` | `open`, `development`, `blocker`, `done`, `none` | **recusado** (quebra) |
 | `status` de entrega, na **resposta** do resumo (`lastSent.entries[].status`) | `proximo` e os demais | só `proximo` dispensa print; qualquer outro valor exige print (tolerado) |
 | `status` de entrega, no **pedido** do resumo (o comando do projeto envia) | `concluido`, `em_validacao`, `em_andamento`, `bloqueado`, `proximo` | o RoadS recusa qualquer outro com 400: conjunto fechado |
 
@@ -50,43 +46,17 @@ um campo opcional, e valor novo em um conjunto fechado que o Frontlights recusa:
 repositório e só publica a quebra **depois** que o Frontlights que a entende estiver publicado. O RoadS não serve
 duas versões ao mesmo tempo: um consumidor, um dono.
 
-**Decisão de 15/10/2026 (exceção à regra de quebra):** as sprints passaram a ser semanas identificadas pela data, e o
-`laneId` deixou de ser posicional, o que é mudar o significado de um campo. Por decisão do mantenedor, o
-`schemaVersion` continua 1 em `roadmap-state`: o Frontlights publicou primeiro a versão que aceita as duas formas, e só
-depois o RoadS fez a migração. Cada resposta vem inteira numa forma só, nunca as duas na mesma resposta; o que pode mudar de
-forma é uma resposta para a seguinte (o último estado lido antes da migração e o primeiro depois).
-
 ## Rotas
-
-### `GET roadmap-state`
-
-Somente leitura; não consome nada. É lida pelo passo `gaps` (completar as issues que o RoadS mostra).
-
-```json
-{ "schemaVersion": 1, "asOf": "2026-01-01T12:00:00Z", "snapshotSyncedAt": "2026-01-01T11:55:00Z",
-  "timezone": "America/Sao_Paulo",
-  "sprints": [ { "sprintId": "sprint-05-01-2026", "laneId": "sprint-05-01-2026", "title": "Sprint exemplo",
-                 "startDate": "2026-01-05", "endDate": "2026-01-09", "items": [ "item (abaixo)" ] } ],
-  "groups": [ { "laneId": "g1", "title": "Grupo exemplo", "items": [ "item" ] } ] }
-```
-
-Item: `id`, `position` (1 é o primeiro), `title`, `description`, `produto`, `prioridade`, `effort`,
-`githubIssueUrl` e `issueNumber` (nulos sem issue), `status`, `done` e `updatedAt`. `snapshotSyncedAt` com mais de
-24 h, ou nulo, é avisado ao usuário. Campos que o RoadS ainda manda e o Frontlights não lê mais (`maxSprintItems`,
-`overLimit`, `pendingChangeIds`, `removedPending`) são ignorados.
-
-- **Semanas por data.** Cada sprint é uma semana: `laneId` e `sprintId` são os dois `sprint-DD-MM-AAAA` (a data de
-  início). Antes da migração do RoadS (decisão de 15/10/2026, acima) o `sprintId` era `sprint-AAAA-MM-DD` e o `laneId` era
-  posicional (`atual`, `proxima`, `terceira`); o Frontlights aceita as duas formas. As semanas são tratadas na ordem de
-  `startDate`, nunca pelo texto do id, e uma semana pode vir com `items: []`.
 
 ### Rotas que o Frontlights deixou de chamar (19/10/2026)
 
 O Frontlights não sincroniza mais `ROADMAP.md` nem `SPRINT_*.md`: o RoadS mantém o Roadmap a partir das issues abertas.
 Desde então ele não chama `POST sync-board`, `GET pending-changes` nem `POST ack`, e não confirma (não consome) a fila
-de mudanças. Se o RoadS continuar enfileirando mudanças, ninguém as confirma, e uma semana citada por mudança sem ack
-continua no `roadmap-state`; o `gaps` lida com isso (lê as issues das semanas que vierem, vazias inclusive), mas parar de
-enfileirar ou retirar essas rotas é decisão do dono do RoadS.
+de mudanças. Se o RoadS continuar enfileirando mudanças, ninguém as confirma; parar de enfileirar ou retirar essas rotas
+é decisão do dono do RoadS.
+
+Desde 21/10/2026 (issue 65) ele também não lê `GET roadmap-state`: completar no GitHub as issues que o RoadS mostra saiu
+do Frontlights, e com isso o único leitor dessa rota. Manter ou retirar a rota é decisão do dono do RoadS.
 
 ### `GET progress-report` (resumo para a diretoria)
 
@@ -132,8 +102,8 @@ segredo pela variável de ambiente. O formato do rascunho e dos prints é o do d
 Informado pelo RoadS a partir do código dele; vale como contrato do lado de quem consome.
 
 - **Só o Status do Project conta.** O "Sincronizar" consulta o campo Status do Project e grava o snapshot; o estado
-  aberta ou fechada da issue **não é lido** para itens de sprint. `Done` vira `status: done` e `done: true` no
-  `roadmap-state`; `Open`, `Development` e `Blocker` viram `open`, `development` e `blocker`. Uma issue fechada com o
+  aberta ou fechada da issue **não é lido** para itens de sprint. `Done` vira item concluído no Roadmap do RoadS;
+  `Open`, `Development` e `Blocker` viram os estados de mesmo nome. Uma issue fechada com o
   Status ainda em Development continua contando como Development; uma tirada do Project fica na sprint sem status.
 - **Item de sprint concluído fica.** Ele permanece no bloco da sprint com `done: true` durante toda a semana e até a
   primeira sincronização depois do último dia da sprint, quando a **rotação** das sprints o retira.
@@ -144,8 +114,8 @@ Informado pelo RoadS a partir do código dele; vale como contrato do lado de que
 - **A sprint segue o Status do Project.** Em 06/10/2026 o RoadS passou a seguir o Project nos dois sentidos: "está na
   sprint atual" é "Status Development" (as semanas futuras existem só no RoadS), o RoadS só age quando os
   dois lados discordam (vale quem mexeu por último; empate vale o RoadS) e a escrita dele no Project nasce desligada.
-  O Frontlights só escreve no Project em passos próprios que o usuário aprova, como o `gaps`; o fechamento só fecha
-  a issue, e o cartão vai para Done pelo fluxo "Item closed" do próprio quadro.
+  O Frontlights só escreve no Project em passos próprios que o usuário aprova, como a publicação de issues; o
+  fechamento só fecha a issue, e o cartão vai para Done pelo fluxo "Item closed" do próprio quadro.
 - **Quando aparece.** Ao apertar Sincronizar no RoadS, na hora. Uma sincronização feita até 30 s depois de outra (botão
   ou rotina diária) não consulta o GitHub e devolve o snapshot anterior. Sem sincronizar, recarregar a página só relê o
   que está guardado.
@@ -214,8 +184,6 @@ resumos da mesma semana (quarta e sexta) nunca dividem arquivo. Prints salvos an
 
 ## O que ainda não está provado
 
-- Os caminhos de erro do `roadmap-state` (401 com segredo trocado, `schemaVersion` desconhecido) só têm cobertura
-  simulada nos testes; a produção real exercitou o caminho feliz.
 - A contagem de partes por caixas (14/10/2026) ainda não apareceu num resumo real: no período de 09/10 a 13/10
   nenhuma entrega usava caixas, e a coleta real não mudou.
 - O RoadS registra, das chamadas feitas com segredo válido, o método, a rota, o status, o User-Agent declarado
