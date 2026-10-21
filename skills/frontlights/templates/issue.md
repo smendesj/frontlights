@@ -46,13 +46,17 @@ teto. Todo critério falha no commit de partida; o que já é verdadeiro antes
 do trabalho não é critério. Cada caixa fecha só com evidência. Uma slice estacionada ganha, como
 último sub-item da caixa, `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, antes da
 marcação; não copie esse sub-item para uma slice que não está estacionada, porque o RoadS lê
-qualquer caixa aberta com ele como bloqueada.
+qualquer caixa aberta com ele como bloqueada. O roteiro confirma a caixa: a persona é um rótulo
+(`conta 1`, `conta 2`, usuário de teste criado ou `sem tela`), nunca login, e o antes é o que o
+reconhecimento gravou no commit de partida.
 
 - [ ] S1. <resultado observável de ponta a ponta desta slice>
   - Entrega: <o que dá para demonstrar quando ela termina>
   - Seams: <interfaces públicas em que o comportamento é observado>
   - Camadas: <as camadas que ela toca>
   - Depende de: <slices anteriores, ou nenhuma>
+  - Roteiro: <persona> · <passos>
+    → antes: <o que os passos mostram no commit de partida>; depois: <o que mostram quando a slice entra>
 
 Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra
 aqui como mais um critério (`- [ ] Pendência (achado da revisão): <resultado observável>.

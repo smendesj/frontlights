@@ -36,7 +36,8 @@ The slices are the acceptance criteria of the issue: one box per slice, in depen
 blockers first, so the first can start at once. Each box is one observable, end-to-end
 result, and right below it, in sub-items without a box, Entrega (what can be demoed when it
 is done), Seams (the public interfaces where the behavior is observed), Camadas (the layers
-it touches) and Depende de (the earlier slices that release it, or "nenhuma"):
+it touches), Depende de (the earlier slices that release it, or "nenhuma") and the walkthrough
+in two lines, `Roteiro: <persona> · <passos>` and `→ antes: …; depois: …`:
 
 ```markdown
 - [ ] S1. <observable, end-to-end result>
@@ -44,7 +45,15 @@ it touches) and Depende de (the earlier slices that release it, or "nenhuma"):
   - Seams: <public interfaces>
   - Camadas: <layers it touches>
   - Depende de: nenhuma
+  - Roteiro: <persona> · <steps>
+    → antes: <what the steps show at the base>; depois: <what they show once the slice lands>
 ```
+
+The walkthrough is how the box is confirmed: who runs it, the steps, and what they show before
+and after. The persona is a label (`conta 1`, `conta 2`, a test user the run creates, or `sem tela`
+when the slice has no screen and the steps are commands), never a login. The before is recorded at
+the base by the reconnaissance of the grilling (`references/grilling.md`, "Reconnaissance"), so it
+is an observation, not a guess; the after is what the same steps must show once the slice lands.
 
 Every criterion fails at the base commit: name the observation that would show it false
 and confirm it is false at the commit the work starts from; a criterion already true before
@@ -61,10 +70,18 @@ sub-issue. Leftover boxes do not count toward the cap: they arrive later, from a
 review or a test, and `validate-plan` never sees them.
 
 Record the slices in `plan.json` under `slices` of each issue (`examples/plan.json`): `id`
-(`S1`, `S2`, ...), `title`, `delivers`, `seams`, `layers` and `depends_on` (ids that come
-earlier in the list). `validate-plan` refuses the sixth slice of an issue, a slice without
-`delivers`, with an unknown, later or repeated dependency, or without seams and layers; with
-`slices` present, `acceptance` and `vertical_check` are optional, because the slices carry both.
+(`S1`, `S2`, ...), `title`, `delivers`, `seams`, `layers`, `depends_on` (ids that come
+earlier in the list) and `walkthrough`, with `persona`, `steps`, `before` and `after`.
+`validate-plan` refuses the sixth slice of an issue, a slice without `delivers`, with an
+unknown, later or repeated dependency, without seams and layers, or without `walkthrough` or with an empty `before`
+(it checks shapes only: the persona is not looked up); with `slices` present, `acceptance` and `vertical_check` are
+optional, because the slices carry both.
+
+An old issue, published before the walkthrough existed, gets it when it is resumed, never in a
+batch: when it enters the grilling or stage 6, the reconnaissance runs and each of its open boxes
+gains its two `Roteiro:` lines, appended to the body by the write rule of the leftover (append
+only), under the approval of the plan, and its plan gains the `walkthrough` of each open slice.
+Ticked boxes stay as they are.
 
 **The quiz comes before the body.** Show the numbered list of the slices first, each with
 its title, "Depende de", what it delivers and, for each slice, the section of the artifact that
