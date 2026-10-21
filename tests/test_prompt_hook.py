@@ -49,6 +49,7 @@ class ReminderTests(HookTestCase):
                 self.assertIn('/frontlights', context)
                 self.assertIn('etapa 1', context)
                 self.assertIn('resumo', context)
+                self.assertNotIn('issues do RoadS', context)   # issue 65: no RoadS question at the opening
                 self.assertIn('mesmo nome', context)    # says it is the plugin, not a session or project of the same name
 
     def test_a_prompt_that_does_not_mention_it_gets_nothing(self):

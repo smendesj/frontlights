@@ -663,16 +663,14 @@ class PluginContractTests(unittest.TestCase):
     def read(self, *parts):
         return (ROOT.joinpath(*parts)).read_text(encoding='utf-8')
 
-    def test_skill_asks_the_progress_question_right_after_the_issue_gaps_question(self):
-        stage1 = self.read('skills', 'frontlights', 'SKILL.md').split('## 1.')[1].split('## 2.')[0]
-        question = 'Atualizar também o Resumo para a diretoria no RoadS?'
-        self.assertIn(question, stage1)
-        self.assertIn('progress_report.py', stage1)
-        self.assertIn('references/progress-report.md', stage1)
-        self.assertLess(stage1.index('Completar no GitHub as issues que o RoadS mostra?'), stage1.index(question))
-        self.assertLess(stage1.index(question), stage1.index('Then choose the lightest path'))
-        self.assertIn('Sim, preparar o resumo agora', stage1)
-        self.assertIn('Não, seguir com o pedido', stage1)
+    def test_skill_runs_the_summary_on_request_and_never_asks_it_at_the_opening(self):
+        stage1 = ' '.join(self.read('skills', 'frontlights', 'SKILL.md').split('## 1.')[1].split('## 2.')[0].split())
+        self.assertNotIn('Atualizar também o Resumo para a diretoria no RoadS?', stage1)
+        self.assertNotIn('Sim, preparar o resumo agora', stage1)
+        rule = stage1.split('**Board summary on request.**')[1].split('**')[0]
+        self.assertIn('/frontlights pode criar/atualizar o resumo', rule)
+        self.assertIn('progress_report.py" status', rule)
+        self.assertIn('references/progress-report.md', rule)
         self.assertIn('references/progress-report.md', self.read('skills', 'frontlights', 'SKILL.md').split('## Rules')[0])
 
     def test_reference_exists_and_covers_every_step(self):

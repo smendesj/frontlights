@@ -28,20 +28,60 @@ class ReleaseManifestTests(unittest.TestCase):
         for folder in ('scripts', 'templates', 'examples', 'docs', 'references'):
             self.assertTrue((ROOT / 'skills' / 'frontlights' / folder).is_dir(), folder)
         self.assertFalse((ROOT / '.claude-plugin').exists())
-        for name in ('grilling', 'issue', 'issues', 'development', 'issue-gaps'):
-            self.assertFalse((ROOT / 'skills' / 'frontlights' / 'references' / 'roadmap-sync.md').exists())
+        for name in ('grilling', 'issue', 'issues', 'development', 'progress-report'):
             self.assertIn(f'references/{name}.md', text)
             self.assertTrue((ROOT / 'skills' / 'frontlights' / 'references' / f'{name}.md').is_file())
+        for gone in ('roadmap-sync', 'issue-gaps'):
+            with self.subTest(gone=gone):
+                self.assertFalse((ROOT / 'skills' / 'frontlights' / 'references' / f'{gone}.md').exists())
+                self.assertNotIn(f'references/{gone}.md', text)
 
-    def test_every_session_asks_about_the_issue_gaps_before_the_request(self):
+    def test_the_opening_asks_only_the_closeout_question(self):
+        # issue 65: the session opens with no RoadS question; the summary runs when the user asks for it
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
-        stage1 = text.split('## 1.')[1].split('## 2.')[0]
-        self.assertIn('every session', stage1)
-        self.assertIn('Completar no GitHub as issues que o RoadS mostra?', stage1)
-        self.assertLess(stage1.index('roads.py" status'), stage1.index('Then choose the lightest path'))
-        self.assertIn('say `message` in one line', ' '.join(stage1.split()))
+        stage1 = ' '.join(text.split('## 1.')[1].split('## 2.')[0].split())
+        opening = stage1.split('Then choose the lightest path')[0]
+        self.assertEqual(opening.count('AskUserQuestion'), 1)
+        self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', opening)
+        for gone in ('roads.py" status', 'Completar no GitHub as issues que o RoadS mostra?',
+                     'Atualizar também o Resumo para a diretoria no RoadS?',
+                     'Registrar o projeto que guarda o bloco do Resumo para a diretoria?',
+                     'Issue-gaps question', 'Progress question', 'every session'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, stage1)
         self.assertNotIn('Atualizar a sprint e o roadmap', text)
         self.assertNotIn('roadmap_sync', text)
+
+    def test_the_summary_runs_when_the_user_asks_for_it_from_any_project(self):
+        text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
+        stage1 = ' '.join(text.split('## 1.')[1].split('## 2.')[0].split())
+        rule = stage1.split('**Board summary on request.**')[1].split('**')[0]
+        for phrase in ('only when the user asks for it', 'from any project', 'progress_report.py" status',
+                       'references/progress-report.md', '`--root <operationsRoot>`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+        self.assertLess(stage1.index('**Board summary on request.**'), stage1.index('Then choose the lightest path'))
+        reference = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'progress-report.md')
+                             .read_text(encoding='utf-8').split())
+        self.assertIn('runs only when the user asks for the summary', reference)
+        self.assertIn('Registrar o projeto que guarda o bloco do Resumo para a diretoria?', reference)
+        self.assertNotIn('stage 1 question', reference)
+        self.assertNotIn('progress question', reference)
+
+    def test_issue_gaps_is_gone_from_the_skill_and_its_documentation(self):
+        skill = ROOT / 'skills' / 'frontlights'
+        files = (sorted(skill.rglob('*.md')) + sorted(skill.rglob('*.py')) + [ROOT / 'README.md']
+                 + sorted((ROOT / 'evals').glob('*.md')) + sorted((ROOT / 'docs').glob('*.md')))
+        owned_elsewhere = {skill / 'references' / 'issues.md', skill / 'references' / 'development.md'}
+        banned = ('issue-gaps', 'Completar no GitHub as issues que o RoadS mostra', 'roads.py status|approve|gaps',
+                  'Atualizar também o Resumo para a diretoria no RoadS', 'da pergunta das issues do RoadS')
+        for path in files:
+            if path in owned_elsewhere:
+                continue
+            flat = ' '.join(path.read_text(encoding='utf-8').split())
+            for phrase in banned:
+                with self.subTest(file=str(path.relative_to(ROOT)), phrase=phrase):
+                    self.assertNotIn(phrase, flat)
 
     def test_session_start_never_looks_for_remote_control(self):
         skill = ROOT / 'skills' / 'frontlights'

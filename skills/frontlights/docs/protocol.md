@@ -270,18 +270,11 @@ O Frontlights não sincroniza roadmap nem sprint: o RoadS mantém o Roadmap a pa
 `status` de `scripts/roads.py` as lista em `obsoleteKeys`; a aprovação do par (URL, variável) continua em
 `.frontlights/roadmap-sync/approval.json`.
 
-A pergunta da etapa 1 sobre as issues do RoadS roda o passo `gaps` (`references/issue-gaps.md`). Ele só lê: `GET
-roadmap-state` (nada é consumido), e no GitHub só as issues do repositório do `config.json`,
-por `gh api graphql`, com a conta ativa do `gh`. Uma URL do RoadS fora desse repositório é ignorada
-e listada em `skipped`; issue fechada não é tocada. O resultado separa o que o config resolve
-sozinho (`fill`) do que exige escolha (`choose`), e informa os campos do quadro sem opção
-(`unfillable`). As escritas seguem a tabela aprovada pelo usuário, com o `gh` da sessão e as
-permissões vigentes, só em valor vazio, e terminam relendo com `gaps`. Sem `roadmap-state` válido
-(endpoint ausente, `schemaVersion` diferente de 1, campo de tipo errado, data inválida ou fora dos
-anos 2000 a 2100), o passo é recusado; `snapshotStale` indica cópia do quadro com mais de 24 h ou ausente.
+O Frontlights também não completa as issues que o RoadS mostra e não lê `roadmap-state`: o passo `gaps` saiu na
+issue 65, e a abertura da sessão não faz pergunta nenhuma sobre o RoadS.
 
-O passo do resumo para a diretoria (`scripts/progress_report.py`) vem logo depois da pergunta das
-issues do RoadS, em qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
+O passo do resumo para a diretoria (`scripts/progress_report.py`) roda só quando o usuário pede o resumo, em
+qualquer projeto, e só existe quando há um bloco `roadmapSync.progress` habilitado: o do
 próprio projeto ou o do projeto que o usuário registrou como dono (`progress_report.py home --set`, com o sim
 dele; o `status` informa `source`, `operationsRoot` e `homeState`, e as demais operações rodam em
 `operationsRoot`). A ordem é: `status`,
