@@ -7,13 +7,16 @@
   opções já estão na sessão; a seção responde "o que isso implica".
   Os campos são fixos e seguem esta ordem. Visual, Cenário por opção e Consequências estão em toda
   seção (uma frase cada basta numa pergunta simples); os outros campos, sem nada a dizer, são omitidos.
-  O Visual segue o tipo de pergunta (references/grilling.md): tela, antes e depois por opção;
+  O Visual segue o tipo de pergunta (references/grilling.md): tela, o print da base como antes e,
+  por opção, o mesmo print do antes com marcações por cima (caixas, setas e textos em HTML);
   fluxo, linha do tempo por opção; regra, tabela de casos; camadas, diagrama por opção; nome ou
   texto, comparação lado a lado de onde aparece.
-  Só classes e tokens de CSS da página, nada de estilo inline. Troque cada marcador <...>
+  Só classes e tokens de CSS da página, nada de estilo inline (a posição de cada marca vem de uma
+  regra de CSS da página, pelo id da marca). Troque cada marcador <...>
   e apague este comentário. Código real do projeto entra (até 15 linhas, com o caminho),
   com o valor de todo segredo trocado por ***; registro real, dado de pessoa, endpoint real e
-  nome de cliente ou organização nunca entram: cenários e telas usam dados inventados.
+  nome de cliente ou organização nunca entram, nem no print (só conta e dados de teste); os cenários
+  usam dados inventados.
 -->
 <section class="secao" id="secao-<n>">
   <h2 class="secao-titulo">Seção <n>: <pergunta></h2>
@@ -25,15 +28,21 @@
 
   <div class="campo campo-visual">
     <h3>Visual</h3>
-    <!-- Caso de tela: antes e depois por opção. Nos outros tipos, troque pelo desenho do tipo. -->
+    <!-- Caso de tela: o print da base como antes e, por opção, o mesmo print do antes com marcações.
+         Nos outros tipos, troque pelo desenho do tipo. -->
     <div class="comparacao">
       <figure class="antes">
         <figcaption>Antes</figcaption>
-        <div class="tela"><a tela atual, montada do template real, com dados inventados></div>
+        <img class="print" src="<o print da base, asset do artefato ou embutido>" alt="<o que a tela mostra>">
       </figure>
       <figure class="depois">
         <figcaption>Depois: <opção></figcaption>
-        <div class="tela"><a tela com esta opção, com dados inventados></div>
+        <div class="print-marcado">
+          <img class="print" src="<o mesmo print do antes>" alt="<o que a tela mostra>">
+          <div class="marca marca-caixa" id="marca-<n>-1"></div>
+          <div class="marca marca-seta" id="marca-<n>-2"></div>
+          <p class="marca marca-texto" id="marca-<n>-3"><o que esta opção muda neste ponto da tela></p>
+        </div>
       </figure>
     </div>
   </div>
