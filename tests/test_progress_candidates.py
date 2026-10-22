@@ -292,8 +292,18 @@ class TextTests(unittest.TestCase):
 
     def test_the_watched_test_keeps_clean_prints_for_the_summary(self):
         text = self.flat('skills', 'frontlights', 'references', 'browser-testing.md')
-        for phrase in ('Prints kept for the progress summary', 'candidates.json', 'DEPOIS only, never ANTES', 'visibleFiles',
-                       'Without the ANTES/DEPOIS strip', 'a single print per delivery'):
+        for phrase in ('Prints kept for the progress summary', 'candidates.json', 'visibleFiles',
+                       'Without the ANTES/DEPOIS strip', 'a single print per delivery',
+                       'the `depois-<cover>-S<n>` print of the watched run',
+                       'its ANTES print of the same criterion, `antes-<cover>-S<n>`, goes with it as its `before`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn('DEPOIS only, never ANTES', text)
+
+    def test_the_summary_lists_the_before_beside_its_print(self):
+        text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
+        for phrase in ('"before": "antes-101-S1.png"', 'the ANTES print of the same criterion, copied beside it',
+                       'the pair counts as one of the 40', 'leave `before` out when the delivery has no ANTES print'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 

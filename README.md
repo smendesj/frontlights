@@ -367,8 +367,10 @@ um). Com o pedido do resumo, o Frontlights:
    oferecido enquanto o código que ele mostra é o código entregue, e é copiado (nunca movido) com o
    número da entrega, não o da parte. Grava as imagens
    na pasta dos prints e reescreve o `captions.json` a cada execução, nunca acrescentando ao anterior
-   (imagens que não estão nele são ignoradas). Cada item é `{"file", "caption", "issue"}`, com
-   `issue` opcional: o número inteiro da issue da entrega. Com `weekShots`, a pasta é a do resumo (`<semana>/<weekShots>/<dd_MM do último dia>`) e
+   (imagens que não estão nele são ignoradas). Cada item é `{"file", "caption", "issue", "before"}`, com
+   `issue` opcional: o número inteiro da issue da entrega; `before`, também opcional, é o print ANTES do
+   mesmo critério (`antes-<cover>-S<n>.png`), na mesma pasta e com as mesmas regras do `file`: o RoadS o
+   mostra minimizado acima do print na web e aberto acima dele no e-mail, e o par conta como um dos 40. Com `weekShots`, a pasta é a do resumo (`<semana>/<weekShots>/<dd_MM do último dia>`) e
    os prints são obrigatórios (veja abaixo); sem ele, a skill pergunta se o resumo leva prints;
 6. mostra o rascunho completo, com cada print e sua legenda, e, com a sua aprovação, envia ao RoadS
    com `push --draft <arquivo>` (mais `--to <último dia do período>` com `weekShots`); o comando do
