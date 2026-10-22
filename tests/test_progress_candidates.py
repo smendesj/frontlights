@@ -303,9 +303,15 @@ class TextTests(unittest.TestCase):
     def test_the_summary_lists_the_before_beside_its_print(self):
         text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
         for phrase in ('"before": "antes-101-S1.png"', 'the ANTES print of the same criterion, copied beside it',
-                       'the pair counts as one of the 40', 'leave `before` out when the delivery has no ANTES print'):
+                       'the pair counts as one of the 40', 'leave `before` out when the delivery has no ANTES print',
+                       'RoadS shows it open above the print in the e-mail and in the preview, and folded above it, opening'
+                       ' on a click, in the week view'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        self.assertNotIn('folded above the print on the web', text)
+        readme = self.flat('README.md')
+        self.assertIn('aberto acima do print no e-mail e na Prévia, e recolhido na semana', readme)
+        self.assertNotIn('minimizado acima do print na web', readme)
 
 
 if __name__ == '__main__':

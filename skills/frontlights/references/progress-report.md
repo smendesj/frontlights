@@ -232,8 +232,8 @@ operation runs in, because the collectors, the draft guide and the approval all 
      name in that folder, `caption` plain Portuguese, `issue` the integer number of the delivery's
      issue, once per delivery (leave `issue` out for a print that belongs to no delivery; it goes at the
      end of the e-mail, and the user must ask for it), and `before` the plain name, in the same folder, of the
-     ANTES print of that screen (same rules as `file`; RoadS shows it folded above the print on the web and open above
-     it in the e-mail, and it uses the print's caption); leave `before` out when the delivery has no ANTES print; the
+     ANTES print of that screen (same rules as `file`; RoadS shows it open above the print in the e-mail and in the preview, and folded above it, opening
+     on a click, in the week view; it uses the print's caption, and a print already sent never gains a `before`); leave `before` out when the delivery has no ANTES print; the
      pair counts as one of the 40. Images not listed are ignored, so old ones never go
      out by accident.
    - Look at every image yourself before showing it. Retake the blurry, empty or error ones. Each
