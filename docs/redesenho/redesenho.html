@@ -1,0 +1,569 @@
+<title>Redesenho do Frontlights</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (72ch) with full-width chart bands; numbers first, then what changes, then the roadmap. */
+:root {
+  --bg: #f5f6f8;
+  --surface: #fcfcfb;
+  --fg: #141618;
+  --fg-2: #4f545b;
+  --fg-3: #7b818a;
+  --line: #d9dce1;
+  --accent: #2a78d6;   /* hoje */
+  --after: #1baf7a;    /* depois */
+  --after-ink: #0e7a53;
+  --warn: #c98500;
+  --chip: #e7ebf1;
+  --display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a; --surface: #1c1f23; --fg: #eceef0; --fg-2: #b9bec6; --fg-3: #8a9099; --line: #30353c;
+    --accent: #3987e5; --after: #22b983; --after-ink: #5fd4a8; --warn: #e0a62a; --chip: #262a30; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a; --surface: #1c1f23; --fg: #eceef0; --fg-2: #b9bec6; --fg-3: #8a9099; --line: #30353c;
+  --accent: #3987e5; --after: #22b983; --after-ink: #5fd4a8; --warn: #e0a62a; --chip: #262a30; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 17px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 64px; }
+main { max-width: 1040px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(30px, 4.5vw, 44px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: clamp(22px, 2.6vw, 28px); font-weight: 600; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
+h3 { font-size: 18px; font-weight: 600; margin-top: 28px; }
+p, li { max-width: 72ch; }
+p { margin: 12px 0; }
+.eyebrow { font-family: var(--display); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); font-weight: 600; }
+header { padding-block: 40px 8px; }
+header p.lead { font-size: 20px; color: var(--fg-2); max-width: 64ch; }
+.hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 24px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.tile .k { font-family: var(--display); font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .k small { font-size: 15px; font-weight: 600; color: var(--fg-3); margin-left: 4px; }
+.tile .l { color: var(--fg-2); font-size: 14px; margin-top: 4px; }
+.tile .d { color: var(--after-ink); font-weight: 600; font-size: 14px; }
+.band { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 8px; margin-top: 18px; }
+.band h3 { margin-top: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; color: var(--fg-2); margin: 8px 0 4px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .a::before { background: var(--accent); } .legend .b::before { background: var(--after); }
+svg { width: 100%; height: auto; display: block; font-family: var(--body); }
+svg text { fill: var(--fg); font-size: 13px; }
+svg text.mut { fill: var(--fg-3); }
+svg text.lab { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+svg .grid { stroke: var(--line); stroke-width: 1; }
+svg .hoje { fill: var(--accent); } svg .depois { fill: var(--after); }
+svg rect.bar:hover { opacity: 0.8; }
+.twocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.twocol > * { min-width: 0; }
+.tbl { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { border-top: 0; font-family: var(--display); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.d { color: var(--after-ink); font-weight: 600; white-space: nowrap; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; background: var(--chip); padding: 1px 5px; border-radius: 4px; }
+pre { font-family: var(--mono); font-size: 13.5px; line-height: 1.45; background: var(--chip); border-radius: 8px; padding: 12px 14px; overflow-x: auto; max-width: 100%; }
+ul { padding-left: 22px; } li { margin: 6px 0; }
+.note { border-left: 3px solid var(--warn); padding: 6px 14px; color: var(--fg-2); background: var(--surface); border-radius: 0 8px 8px 0; max-width: 72ch; }
+.chip { display: inline-block; font-family: var(--display); font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--fg-2); margin-right: 4px; }
+.chip.ok { color: var(--after-ink); } .chip.no { color: var(--fg-3); text-decoration: line-through; }
+.waves { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.wave { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.wave .w { font-family: var(--display); font-size: 12px; color: var(--fg-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.wave ol { margin: 6px 0 0; padding-left: 20px; font-size: 15px; } .wave li { margin: 3px 0; }
+.src { font-size: 14px; color: var(--fg-3); }
+footer { margin-top: 48px; color: var(--fg-3); font-size: 14px; }
+@media (max-width: 600px) { body { font-size: 16px; } .tile .k { font-size: 26px; } }
+@media (prefers-reduced-motion: no-preference) { svg rect.bar { transition: opacity .15s; } }
+</style>
+
+<main>
+<header>
+  <div class="eyebrow">Frontlights · análise de 13 sessões reais · 22/10/2026</div>
+  <h1>Redesenho do Frontlights</h1>
+  <p class="lead">O que o fluxo custa hoje por issue, onde o custo está e o que muda para gastar menos tokens e fechar cada issue mais rápido, sem mexer no que funciona nem nas decisões já tomadas.</p>
+  <div class="hero" id="hero"></div>
+  <p class="src">Issue típica = 3 slices, com tela; valores medidos nas issues #28 (RoadS), #74 (FrontlightS) e #N2 (projeto A). "Depois" é estimativa com premissas explícitas na última seção.</p>
+</header>
+
+<h2>1. Onde o custo está hoje</h2>
+<p>Nas 13 sessões de 20 a 22/10, a sessão principal processou <strong>1,30 bilhão de tokens</strong> em 4.463 turnos (292k de contexto por turno) e os subagentes mais <strong>0,95 bilhão</strong> em 6.445 turnos. Foram 5.177 minutos de relógio, 1.337 deles esperando resposta a uma pergunta. O custo é <em>contexto × turnos</em>, e a etapa 6 é 55% dos turnos e 65% dos tokens, a 340k por turno.</p>
+<div class="band">
+  <h3>Tokens processados e contexto médio por etapa (13 sessões)</h3>
+  <div id="stages-measured"></div>
+  <p class="src">Fonte: metrics.json gerado dos transcritos; a etapa começa na primeira leitura da referência correspondente.</p>
+</div>
+<div class="twocol">
+  <div class="band">
+    <h3>O que faz o contexto crescer</h3>
+    <ul>
+      <li>Uma conversa faz as etapas 0 a 7 inteiras: entra na etapa 6 com 110 a 350k e termina em 200 a 780k. A regra "renovar perto de 100k" nunca foi obedecida porque nada mede.</li>
+      <li>Saídas brutas de ferramenta: JSON de 438 KB da suíte, 46 KB do release-plan, <code>cat</code> de arquivos inteiros, HTML do artefato escrito à mão (1.250 tokens de saída por turno no grilling).</li>
+      <li>O texto da skill pesa pouco em tokens (2 a 7% do contexto), mas a hierarquia está invertida: o SKILL.md carrega ramos raros em todo turno e as referências são lidas inteiras porque os ponteiros apontam para parágrafos sem título.</li>
+    </ul>
+  </div>
+  <div class="band">
+    <h3>O que gasta turnos à toa</h3>
+    <ul>
+      <li>Passos mecânicos sem script: charter em Python inline (5 vezes numa sessão), <code>--issues</code> do cleanup por glob em quase toda abertura, <code>authorize</code> pulado sem nada barrar.</li>
+      <li>42 erros de ferramenta em 13 sessões (3,2 por sessão), quase todos por flag adivinhada, caminho ou encoding.</li>
+      <li>Perguntas: 16 a 44 por issue; o grilling percorre a árvore em ordem fixa com 8 a 12 perguntas; projetos sem tela geram duas perguntas onde cabe uma; "Mesclar?" com PR bloqueada em 2 sessões.</li>
+      <li>Um fechamento custou 173 turnos e 33 M numa sessão própria; outro, 53 turnos e 40 M porque herdou 718k de contexto da etapa 6.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>2. Antes e depois por issue típica</h2>
+<div class="band">
+  <div class="legend"><span class="a">Hoje (medido)</span><span class="b">Depois (estimado)</span></div>
+  <div id="issue-compare"></div>
+</div>
+<div class="tbl"><table>
+  <thead><tr><th>Por issue típica</th><th class="n">Hoje</th><th class="n">Depois</th><th>Δ</th><th>De onde vem</th></tr></thead>
+  <tbody>
+    <tr><td>Turnos da sessão principal</td><td class="n">400</td><td class="n">≈ 315</td><td class="d">−21%</td><td>scripts no lugar de passos à mão; fronteira de perguntas</td></tr>
+    <tr><td>Tokens processados na principal</td><td class="n">112 M</td><td class="n">≈ 70 M</td><td class="d">−38%</td><td>janelas por fronteira; saídas resumidas; menos turnos</td></tr>
+    <tr><td>Tokens em subagentes</td><td class="n">40 M</td><td class="n">≈ 32 M</td><td class="d">−20%</td><td>notas de exploração; worker.md por ponteiro</td></tr>
+    <tr><td>Contexto médio por turno</td><td class="n">280k</td><td class="n">≈ 220k</td><td class="d">−21%</td><td>janela nova a ≈ 130k em cada fronteira</td></tr>
+    <tr><td>Pico de contexto</td><td class="n">400 a 780k</td><td class="n">≈ 210 a 250k</td><td class="d">janela</td><td>a #22 do RoadS não teria parado por limite</td></tr>
+    <tr><td>Perguntas ao usuário</td><td class="n">20</td><td class="n">≈ 15</td><td class="d">−25%</td><td>fronteira no grilling; uma pergunta sem tela; fechamento em uma</td></tr>
+    <tr><td>Relógio ativo</td><td class="n">170 min</td><td class="n">≈ 138 min</td><td class="d">−19%</td><td>0,86 min por turno; preparo do teste assistido</td></tr>
+    <tr><td>Espera pelo usuário</td><td class="n">40 min</td><td class="n">≈ 32 min</td><td class="d">só perguntas a menos</td><td>nenhuma mudança de texto toca a espera</td></tr>
+    <tr><td>Erros de ferramenta</td><td class="n">5</td><td class="n">≈ 2</td><td class="d">−60%</td><td>defaults e <code>hint</code> em todo script</td></tr>
+    <tr><td>Fechamento (à parte)</td><td class="n">113 turnos · 36,5 M</td><td class="n">≈ 25 · 4 M</td><td class="d">−78% · −89%</td><td>sessão nova + <code>closeout run/apply</code></td></tr>
+    <tr><td>Texto da skill</td><td class="n">59,4k palavras</td><td class="n">≈ 26,8k</td><td class="d">−55%</td><td>vira script, ponteiro ou some</td></tr>
+  </tbody>
+</table></div>
+<p class="note"><strong>Sinceridade sobre o ganho.</strong> As lentes de texto prometeram −15 a −20% dos tokens; os juízes de números refizeram as contas sessão a sessão e o corte de texto vale <strong>1 a 3%</strong> do processado. O ganho real vem de janelas por fronteira, scripts que colapsam turnos a 340k, saídas resumidas e menos perguntas. Em dinheiro o corte é menor que em tokens, porque contexto repetido é <em>cache read</em>. A base do host (~100k por turno: sistema, ferramentas, conectores) é 36% do total e a skill não a alcança.</p>
+
+<h2>3. Por etapa</h2>
+<div class="band">
+  <div class="legend"><span class="a">Hoje</span><span class="b">Depois</span></div>
+  <div id="stage-compare"></div>
+</div>
+<div class="tbl"><table>
+  <thead><tr><th>Etapa</th><th class="n">Turnos</th><th class="n">Tokens</th><th class="n">Perguntas</th><th class="n">Minutos</th><th>O que muda</th></tr></thead>
+  <tbody>
+    <tr><td>0 a 2 · abertura e inspeção</td><td class="n">10 → 4</td><td class="n">1,0 → 0,5 M</td><td class="n">1 → 1</td><td class="n">8 → 3</td><td><code>open</code> lê e planeja; <code>cleanup run</code> executa num Bash só; <code>inspect</code> roda sempre</td></tr>
+    <tr><td>3 · grilling</td><td class="n">120 → 105</td><td class="n">24 → 18 M</td><td class="n">10 → 6</td><td class="n">60 → 45</td><td>fronteira de decisões (≈ 10 → 6 rodadas); artefato por script, uma publicação por rodada; grilling.md 2.859 → 1.530</td></tr>
+    <tr><td>4 e 5 · issue e slices</td><td class="n">90 → 55</td><td class="n">26 → 11 M</td><td class="n">3 → 2</td><td class="n">30 → 18</td><td><code>publish-issue</code>, <code>append</code>, <code>render-criteria</code>; template 1.335 → 600 palavras; issues.md 6.024 → 1.500</td></tr>
+    <tr><td>6 · desenvolvimento e release</td><td class="n">200 → 150</td><td class="n">68 → 40 M</td><td class="n">5 → 5</td><td class="n">95 → 70</td><td>janela a 130k; charter, slice, merge e release por comando; driver do teste assistido; development.md 10.924 → 2.800</td></tr>
+    <tr><td>7 · fechamento</td><td class="n">113 → 25</td><td class="n">36,5 → 4 M</td><td class="n">6 → 1</td><td class="n">19 → 8</td><td>sessão nova; <code>closeout run</code> grava a lista carimbada, <code>apply</code> escreve</td></tr>
+  </tbody>
+</table></div>
+
+<h2>4. O que muda no fluxo</h2>
+<div class="band">
+  <h3>Contexto ao longo de uma issue: uma conversa só versus janelas por fronteira</h3>
+  <div id="windows"></div>
+  <p class="src">Hoje: medido (entrada da etapa 6 entre 110 e 350k; pico 400 a 780k). Depois: cada fronteira (plano publicado; slice na branch da issue; issue na main local; PR aberta) grava checkpoint e handoff, e a janela seguinte nasce a ≈ 130k quando o host permite abri-la sem parar.</p>
+</div>
+<div class="twocol">
+  <div class="band">
+    <h3>Oito mudanças, em ordem de peso</h3>
+    <ol>
+      <li><strong>Janelas por fronteira.</strong> Checkpoint e handoff em toda fronteira; janela nova condicional ao host, nunca uma parada; fechamento em sessão nova acima de ~300k. −25 a −40% do processado da principal.</li>
+      <li><strong>Etapa 6 por comando.</strong> <code>charter</code> com ownership e prefixo do config, <code>slice open/merge</code>, <code>homolog merge</code> com <code>authorize</code> embutido, <code>release plan/go/status/landed</code> lendo o bloqueio da PR. ≈ −35 turnos e −10 M por issue; <code>authorize</code> deixa de ser pulável.</li>
+      <li><strong>Abertura e fechamento por comando.</strong> <code>open</code> + <code>cleanup run</code> (junções desfeitas, lixo de build sem pergunta); <code>closeout run/apply</code>: 113 → 25 turnos, 6 → 1 perguntas.</li>
+      <li><strong>Teste assistido entregue.</strong> <code>serve.py window open/hold/shot/close</code> com o Playwright do projeto, brief do condutor preenchido por script, <code>browser-gate --answer</code>. Passou/falhou continua da sessão e do usuário. −10 a −15 min por issue com tela.</li>
+      <li><strong>Saídas resumidas.</strong> Todo script imprime até 80 linhas; o JSON inteiro vai para <code>.frontlights/out/</code>. −5 a −8 M por issue.</li>
+      <li><strong>Coordenador magro.</strong> SKILL.md de ~1.700 palavras; development.md com índice e títulos reais, lido por seção; <code>worker.md</code> e <code>tdd.md</code> lidos por quem executa; notas de exploração para os implementers.</li>
+      <li><strong>Grilling pela fronteira.</strong> Toda decisão com pré-requisitos resolvidos é perguntada na mesma chamada (até 4), recomendada primeiro, sem jargão. Template de issue de 600 palavras. ≈ 10 → 6 rodadas.</li>
+      <li><strong>Base dos scripts.</strong> <code>--root/--config/--issue</code> deduzidos, UTF-8 sempre, erro com <code>hint</code>, conta <code>gh</code> e repositório conferidos a cada escrita, fim do <code>claude/</code> em código.</li>
+    </ol>
+  </div>
+  <div class="band">
+    <h3>O que não muda</h3>
+    <ul>
+      <li>Português ao usuário; toda pergunta por <code>AskUserQuestion</code> com 2 a 4 opções; aprovação por link com carimbo, revisão e sha; aprovações separadas de descoberta, texto e publicação.</li>
+      <li>GitHub como fonte; a spec é a issue; slices são caixas; nunca sub-issue nova; uma branch e uma PR por issue; no máximo 5 slices.</li>
+      <li>Etapa 6 sob autorização permanente; operações negadas só com "Sim" em pergunta própria; o merge da PR é do usuário.</li>
+      <li>O teste assistido é o único portão; suítes e revisão só a pedido; nenhum hook que bloqueia.</li>
+      <li>Main local como homologação; release por PR única via refspec; branches <code>PREFIX/</code> (o prefixo vem do config do projeto).</li>
+      <li>O que funcionou em todas as sessões: fatias paralelas em worktrees, coordenador rerroda os testes antes do merge, carimbo e releitura do publicado, reconhecimento por subagentes, browser-gate detectando <em>stale</em>, TDD vermelho→verde.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4b. O fluxo novo, passo a passo</h2>
+<p>O que você vê continua o mesmo: as mesmas perguntas, nos mesmos pontos, a mesma janela do Chrome com a faixa, os mesmos prints na pasta da sprint e o mesmo resumo para a diretoria. O que muda é por baixo: quem faz cada passo (sessão, script ou subagente), quantas sessões uma issue atravessa e quanto contexto cada uma carrega.</p>
+
+<div class="band">
+  <h3>Uma issue com tela, do pedido à release</h3>
+  <pre class="mermaid">
+flowchart TB
+  subgraph J1["Janela 1 · pedido → plano publicado (≈ 110 turnos, 100 → 240k)"]
+    direction TB
+    A0["0–2 · frontlights.py open · cleanup.py run · inspect --summary"] --> A1
+    A1["3 · Grilling pela fronteira<br/>reconhecimento em subagentes → notes/<br/>artefato por frontlights.py artifact"] --> A2
+    A2["Chrome ANTES abre aqui (faixa 'ANTES: base', conta de teste)<br/>print do antes → artefato e pasta da sprint"] --> A3
+    A3["4 · issue.md → texto aprovado por link e carimbo"] --> A4
+    A4["5 · slices (≤ 5 caixas S‹n›) → plano aprovado<br/>frontlights.py publish-issue --approved"]
+  end
+  A4 -. "checkpoint + handoff.md" .-> B0
+  subgraph J2["Janela 2 · etapa 6 (≈ 150 turnos, 130 → 230k)"]
+    direction TB
+    B0["frontlights.py charter (ownership, prefixo do config)"] --> B1
+    B1["slice open S1 S2 S3 → uma worktree por slice<br/>implementers em paralelo, brief por ponteiro (worker.md, tdd.md, notes/)"] --> B2
+    B2["slice merge S‹k› → rerroda os testes, merge --no-ff na branch da issue<br/>ANTES do critério já capturado na janela aberta"] --> B3
+    B3["Chrome DEPOIS (faixa 'DEPOIS: branch') → prints depois-*<br/>3 perguntas: Aprovado · Quero alterações · Ainda não<br/>browser-gate --answer grava o registro"] --> B4
+    B4["homolog.py merge → integra, gate, authorize, main local, bundle"] --> B5
+    B5["Chrome MAIN LOCAL: teste livre (serve.py free-test)<br/>hotfix → --free-test-fix"] --> B6
+    B6["homolog.py release plan · body-check · go → PR única<br/>release status lê reviewDecision · merge é do usuário"]
+  end
+  B6 -. "release landed · sessão nova se > 300k" .-> C0
+  subgraph J3["Janela 3 · fechamento (≈ 25 turnos)"]
+    C0["closeout.py run → lista carimbada → 1 pergunta → apply --expect --answer"] --> C1["retro.md oferecida uma vez"]
+  end
+  </pre>
+  <p class="src">As linhas pontilhadas são fronteiras de janela: checkpoint e handoff gravados; a sessão seguinte nasce pelo host quando dá para abrir sem parar, senão a conversa continua. Nenhuma pergunta nova aparece por causa da fronteira.</p>
+</div>
+
+<div class="band">
+  <h3>As três janelas do Chrome e para onde vão os prints</h3>
+  <div id="chrome-timeline"></div>
+  <p class="src">A janela ANTES abre no grilling (issue #74, regra atual) e fica aberta enquanto as slices rodam; o DEPOIS abre depois da última slice com tela, na branch da issue; o teste livre abre na main local. Todos os prints vão para <code>SCRUM/&lt;ano&gt;/&lt;segunda&gt;/evidencias/&lt;repo&gt;/&lt;issue&gt;</code>; <code>progress_report.py keep</code> escolhe os do resumo e o RoadS mostra o antes aberto acima do depois (RoadS#35).</p>
+</div>
+
+<div class="twocol">
+  <div class="band">
+    <h3>Hoje: a sessão monta cada passo</h3>
+    <ul>
+      <li>Uma conversa só faz as etapas 0 a 7; o contexto chega a 400 a 780k.</li>
+      <li>A janela ANTES é aberta com um driver escrito de memória (cdp.js), 24 min de preparo; os prints são renomeados e movidos à mão.</li>
+      <li>Charter em Python inline; <code>authorize</code> pode ser pulado; merge na main local em 6 passos soltos; release em 7 a 8 chamadas.</li>
+      <li>Cada implementer recebe o brief com as regras coladas e reexplora o código que o reconhecimento já tinha lido.</li>
+      <li>Saídas de 46 a 438 KB caem na conversa e são reprocessadas com <code>python -c</code>.</li>
+      <li>Fechamento numa conversa que já carrega 700k de contexto: 53 a 173 turnos.</li>
+    </ul>
+  </div>
+  <div class="band">
+    <h3>Depois: scripts fazem o passo, a sessão decide</h3>
+    <ul>
+      <li>Três janelas por issue (plano, etapa 6, fechamento), cada uma começando a ≈ 130k; <code>resume --issue n</code> diz o próximo passo.</li>
+      <li><code>serve.py window open --strip "ANTES: base"</code> abre o Chrome com o Playwright do projeto; <code>shot --pass antes --criterion S1</code> grava o print direto na pasta da sprint.</li>
+      <li><code>charter</code>, <code>slice open/merge</code>, <code>homolog merge</code> (com <code>authorize</code> dentro) e <code>release</code>: um comando por passo, que recusa o estado errado.</li>
+      <li>O brief aponta para <code>worker.md</code>, <code>tdd.md</code> e <code>notes/</code>; o implementer lê o que a sonda achou em vez de procurar de novo.</li>
+      <li>Todo script imprime até 80 linhas e grava o JSON inteiro em <code>.frontlights/out/</code>.</li>
+      <li>Fechamento em sessão nova: <code>run</code> grava a lista carimbada, uma pergunta, <code>apply</code> escreve.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="band">
+  <h3>Uma slice, hoje e depois</h3>
+  <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant S as Sessão
+  participant W as Implementer (worktree)
+  participant G as Branch da issue
+  participant C as Chrome
+  rect rgba(42,120,214,0.10)
+  note over S,C: Hoje · 5 a 6 chamadas por slice
+  S->>S: git worktree add -b (à mão) · editar o charter com python -c
+  S->>W: brief com as regras coladas (1 a 2k palavras)
+  W-->>S: relatório longo + reexploração do código
+  S->>S: reler o diff · rerrodar os testes · git merge --no-ff · git push · closeout.py tick --box
+  S->>C: driver de memória para o print do ANTES (cdp.js)
+  end
+  rect rgba(27,175,122,0.12)
+  note over S,C: Depois · 2 chamadas por slice
+  S->>W: frontlights.py slice open S2 → brief por ponteiro (worker.md, tdd.md, notes/)
+  W-->>S: ≤ 20 linhas (comandos e códigos de saída)
+  S->>G: frontlights.py slice merge S2 → rerroda os testes, merge --no-ff, argv do push
+  S->>C: serve.py window shot --pass antes --criterion S2 (janela já aberta)
+  S->>S: tick só depois do "Aprovado" do DEPOIS
+  end
+  </pre>
+</div>
+
+<h3>Você perguntou: isso foi levado em conta?</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Ponto</th><th>Hoje</th><th>Na proposta</th><th>Lacuna encontrada agora</th></tr></thead>
+  <tbody>
+    <tr><td>Janela ANTES no grilling, com prints para o resumo</td><td>Abre na rodada do problema (issue #74), faixa "ANTES: base", conta de teste, base servida de um checkout destacado; o print do antes vai para o artefato e para a pasta da sprint; <code>keep</code> escolhe os do resumo.</td><td>Mantida e entregue por script: <code>serve.py window open --strip "ANTES: …"</code>, <code>shot --pass antes</code> resolve a pasta da sprint sozinho, <code>artifact init --before &lt;print&gt;</code>; a regra "abre aqui e fica aberta" está na linha da etapa 3 do SKILL.md novo.</td><td><strong>Fronteira de janela.</strong> A ANTES abre na janela 1 e precisa estar aberta na janela 2. Correção: <code>window open</code> grava <code>cdpUrl</code>, <code>pid</code> e <code>profileDir</code> em <code>browser/window.json</code>; a sessão nova faz <code>window attach</code> e, se a janela morreu, reabre na base sem pergunta. <strong>Print antes do número.</strong> Num grilling que começa de um pedido, <code>shot</code> grava em <code>.frontlights/evidencias-pendentes/</code> e <code>publish-issue</code> move para a pasta da issue, como as notas. Entram na issue 8.</td></tr>
+    <tr><td>Janela DEPOIS: confirmação e prints</td><td>Abre depois da última slice com tela, na branch da issue; cada caso duas vezes, um print por critério; três perguntas; o registro é escrito à mão; <code>stale</code> quando o código muda.</td><td>Mantida: <code>window open --strip "DEPOIS: …"</code>, <code>shot --pass depois</code>, <code>browser-gate --answer "&lt;literal&gt;"</code> grava o registro na própria chamada, <code>record --pass</code> por passada; as três perguntas e o <code>stale</code> ficam pinados; nenhum script julga passou/falhou.</td><td>Nenhuma.</td></tr>
+    <tr><td>Teste livre na main local</td><td>Janela com faixa "MAIN LOCAL: teste livre", holder sem prazo, lote de critérios; hotfix volta pela slice.</td><td>Mantido: <code>serve.py free-test start|stop|commands</code>; <code>homolog merge --free-test-fix</code> para o hotfix; <code>tdd.md</code> lido pelo coordenador antes de um hotfix.</td><td>Nenhuma.</td></tr>
+    <tr><td>RoadS</td><td>Lê as caixas <code>S&lt;n&gt;</code>, o sub-item <code>Bloqueada:</code>, o <code>before</code> do resumo (RoadS#35) e os prints escolhidos em <code>candidates.json</code>; o rascunho é aprovado por link antes do <code>push</code>.</td><td>Nada muda no RoadS: o formato das caixas, o <code>Bloqueada:</code>, o <code>before</code> e o <code>candidates.json</code> ficam iguais; o contrato (<code>docs/roads-contract.md</code>) entra na skill e <code>test_pointers</code> o confere; a mudança de "Camadas" no template só segue depois de confirmar o que o RoadS consome.</td><td>Nenhuma obrigatória. Opcional, mais tarde: a retro pós-release mandar ao RoadS as lacunas de desenho que viraram critério depois da aprovação (o <code>issue-gaps</code> que já foi para lá), para o resumo mostrar quanto do escopo nasceu depois.</td></tr>
+  </tbody>
+</table></div>
+
+<h2>5. Scripts novos e a prosa que cada um aposenta</h2>
+<p>Convenção comum em <code>scripts/_cli.py</code>: <code>--root</code>, <code>--tree</code>, <code>--config</code> e <code>--issue</code> deduzidos da worktree; UTF-8 em todo <code>main</code>; erro de uso em JSON com <code>hint</code>; resumo no stdout e JSON inteiro em <code>.frontlights/out/</code>. Nenhum script faz <code>git push</code>, <code>gh pr create</code>, <code>gh pr merge</code>, fecha issue sem <code>apply</code> aprovado, apaga sem o "Sim" ou julga o teste assistido.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Comando</th><th>O que faz</th><th>Aposenta em prosa</th></tr></thead>
+  <tbody>
+    <tr><td><code>frontlights.py open</code></td><td>fetch, plano de limpeza a partir dos registros de autorização, candidatos a fechamento; não remove nada</td><td>SKILL.md "Closeout question" 274 → 85; closeout.md passo 5 1.609 → 300</td></tr>
+    <tr><td><code>cleanup.py run --from-authorizations</code></td><td>executa o plano fresco: desfaz junções antes do <code>worktree remove</code>, lixo de build (<code>bin</code>, <code>obj</code>, <code>.next</code>, <code>.tsbuildinfo</code>) sem pergunta, pagina acima de 50</td><td>security.md "Fechamento e limpeza" (mecânica); 4 perguntas por lixo de build em 13 sessões</td></tr>
+    <tr><td><code>stamp.py approve &lt;file&gt; --revision rN</code></td><td>guarda a revisão anterior, carimba, imprime a linha da pergunta e a prévia (diff real a partir de r2)</td><td>SKILL.md "Show before approval" 438 → 150</td></tr>
+    <tr><td><code>frontlights.py charter new|renew|add</code></td><td>grava o charter completo com ownership obrigatória e prefixo do config; guarda o anterior; imprime o anúncio em português</td><td>development.md "The charter"; Python inline (5 vezes numa sessão)</td></tr>
+    <tr><td><code>frontlights.py slice open|merge</code></td><td>worktree e branch da slice; merge <code>--no-ff</code> após rerrodar os testes nos seams; recusa worktree suja ou teste vermelho; devolve o argv do push</td><td>development.md "Slices in order" 900 → 300</td></tr>
+    <tr><td><code>homolog.py merge --issue n</code></td><td>pré-condições, branch de integração, browser-gate, walkthroughs, <code>authorize</code>, merge na main local, bundle, registro</td><td>development.md "Into the local main" 1.070 → 220; <code>authorize</code> nunca mais pulado</td></tr>
+    <tr><td><code>homolog.py release plan|body-check|go|status|landed</code></td><td>valida o corpo pela PR, imprime o argv do push e do <code>gh pr create</code>; <code>status</code> lê <code>reviewDecision</code> e <code>mergeStateStatus</code>; <code>landed</code> prepara o pós-merge</td><td>development.md "The release" 1.738 → 520; "Mesclar?" com PR bloqueada some</td></tr>
+    <tr><td><code>closeout.py run</code> · <code>apply --expect --answer</code></td><td>lista carimbada em português; <code>apply</code> recomputa, recusa lista mudada, fecha, tica os pais, verifica</td><td>closeout.md passos 1 a 4, 1.791 → 650</td></tr>
+    <tr><td><code>closeout.py append --items|--spec|--walkthrough|--pitfall</code></td><td>captura o corpo em bytes, insere após o último item, relê e recusa divergência; grava a linha de pitfalls no mesmo lote</td><td>issues.md "A leftover as an acceptance criterion" 840 → 120</td></tr>
+    <tr><td><code>frontlights.py publish-issue --approved</code></td><td>confere o carimbo, cria a issue, quadro, campos e <code>--blocked-by</code>, relê o GitHub; conta e repositório conferidos</td><td>issues.md "Project board" 958 → 150</td></tr>
+    <tr><td><code>frontlights.py artifact init|section|choose</code></td><td>esqueleto do artefato do grilling a partir do template; uma publicação por rodada, nunca <code>edits</code></td><td>grilling.md "The artifact" 950 → 300; chamada recusada pelo hook em 4 sessões</td></tr>
+    <tr><td><code>serve.py window open|hold|shot|close|brief</code></td><td>Chrome visível pelo Playwright do projeto, faixa ANTES/DEPOIS, holder, prints na pasta da sprint, brief do condutor preenchido</td><td>browser-testing.md "Browser" e janela, 1.700 → 250; 24 min de preparo</td></tr>
+    <tr><td><code>browser-gate --answer</code> · <code>record --pass</code></td><td>a resposta do usuário grava o registro na própria chamada; registro por passada no formato único de protocol.md</td><td>browser-testing.md "The record" 790 → 130; result.json à mão</td></tr>
+    <tr><td><code>checkpoint --issue n</code> · <code>resume</code> · <code>archive</code></td><td>checkpoint e retomada por número (buscam o snapshot sozinhos); <code>archive</code> fecha a rodada sem rename à mão</td><td>protocol.md "Ponto de retomada" 226 → 90; registros antigos bloqueando a rodada seguinte</td></tr>
+  </tbody>
+</table></div>
+
+<h2>6. Texto da skill, arquivo a arquivo</h2>
+<div class="band">
+  <div class="legend"><span class="a">Hoje</span><span class="b">Depois</span></div>
+  <div id="files"></div>
+  <p class="src">Palavras. Total 59,4k → 26,8k (−55%). O que sai vira script, ponteiro ou é apagado; o que migra, migra uma vez, com o teste que o pina.</p>
+</div>
+<div class="twocol">
+  <div class="band">
+    <h3>Arquivos novos</h3>
+    <ul>
+      <li><code>references/worker.md</code> (280): casa única das regras do brief; apontado por todo brief, nunca colado.</li>
+      <li><code>references/tdd.md</code> (700): funde tdd-tests e tdd-mocking; lido pelo implementer; "Diagnosing an unexpected red" (reproduzir o vermelho antes da hipótese).</li>
+      <li><code>references/family.md</code> (900): o ramo da família legada, lido só quando a etapa 2 encontra sub-issues abertas (1 das 13 sessões).</li>
+      <li><code>references/browser-conductor.md</code> (900): brief do condutor com placeholders, preenchido por script.</li>
+      <li><code>references/retro.md</code> (400): oferecida uma vez após o merge da release; cada achado com um destino: check, pitfalls, regra, no-op.</li>
+      <li><code>references/setup.md</code> (200): só quando <code>inspect</code> relata config ou bloco ausente.</li>
+    </ul>
+  </div>
+  <div class="band">
+    <h3>Template da issue: 1.335 → 600 palavras</h3>
+    <p>Ficam as cinco seções da spec (Problema, Solução, Decisões de implementação, Decisões de teste, Fora de escopo), os Critérios como caixas <code>S&lt;n&gt;</code> com Entrega, Seams, Camadas, Depende de e Roteiro antes/depois, Camadas da fatia com o rastreio quando há tela, Navegador e testes ligados, e uma Propriedade de 25 palavras.</p>
+    <p>Sai: as ~700 palavras de instrução dentro do corpo (passam a viver em issues.md e browser-testing.md, e <code>issue-lint</code> recusa se voltarem), "Pontos de evidência" (nunca preenchido) e o parágrafo de abertura.</p>
+  </div>
+</div>
+
+<h2>7. Roteiro: 11 issues no próprio Frontlights</h2>
+<p>Em ondas pela dependência real; issues da mesma onda rodam em paralelo, cada uma na sua worktree, com no máximo 5 slices e entrada na main local na ordem 1, 2, 4, 8, 3, 5, 7, 6, 9, 11, 10. Cada issue já tem Problema, Solução, Propriedade, Testes e o antes → depois por slice no documento completo.</p>
+<div class="waves" id="waves"></div>
+<div class="tbl"><table>
+  <thead><tr><th>#</th><th>Issue</th><th>Entrega</th><th>Ganho</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Base dos scripts</td><td><code>_cli.py</code>: defaults, <code>hint</code>, UTF-8, <code>emit()</code> com resumo e JSON em <code>out/</code>, prefixo sem <code>claude/</code>, conta <code>gh</code> conferida, <code>validate-plan</code> nomeia o campo</td><td>−1 a −2 erros por sessão; −5 a −8 M por issue; fim dos incidentes de prefixo e conta</td></tr>
+    <tr><td>2</td><td>Abertura e fechamento por comando</td><td><code>open</code>, <code>cleanup run</code>, <code>closeout run/apply</code>; closeout.md 3.907 → 1.150</td><td>fechamento 113 → 25 turnos, 6 → 1 perguntas</td></tr>
+    <tr><td>3</td><td>SKILL.md roteiro, índices e ponteiros reais</td><td>SKILL.md ~1.700 palavras com tabela de ponteiros; títulos reais; <code>test_skill_md</code>, <code>test_pointers</code>, <code>test_budget</code> como catracas</td><td>−6 a −7k tokens por turno; fim das leituras inteiras</td></tr>
+    <tr><td>4</td><td>Etapa 6 por comando</td><td><code>charter</code>, <code>slice open/merge</code>, <code>homolog merge</code>, <code>release</code>, <code>free-test</code></td><td>≈ −35 turnos e −10 M por issue; <code>authorize</code> deixa de ser pulável</td></tr>
+    <tr><td>5</td><td>Textos da etapa 6</td><td>development.md 10.924 → 2.800; <code>tdd.md</code>, <code>worker.md</code>, <code>family.md</code>; notas de exploração</td><td>−15k tokens por turno após a leitura; worker não relê referências</td></tr>
+    <tr><td>6</td><td>Grilling e spec</td><td><code>artifact</code> por script; grilling.md 1.530 com fronteira; template de issue 600</td><td>≈ 10 → 6 rodadas; −5 a −12 min por issue</td></tr>
+    <tr><td>7</td><td>Etapa 5 por comando</td><td><code>publish-issue</code>, <code>append</code>, <code>render-criteria</code>, <code>issue-lint</code>; issues.md 6.024 → 1.500</td><td>publicação 7 → 2 turnos; lote de achados 3,1 → 1 chamada</td></tr>
+    <tr><td>8</td><td>Teste assistido entregue</td><td><code>serve.py window</code>, <code>browser-gate --answer</code>, <code>record</code>, brief do condutor; browser-testing.md 8.499 → 2.500</td><td>−10 a −15 min e −9 a −15 M por issue com tela</td></tr>
+    <tr><td>9</td><td>Janelas e retomada</td><td>regra "Windows", checkpoint por fronteira, <code>resume</code> com o próximo passo, handoff em português de 250 palavras; métricas em <code>evals/metrics/</code></td><td>−25 a −40% do processado da principal; pico ≈ 210 a 250k</td></tr>
+    <tr><td>10</td><td>Poda dos docs e testes-espelho</td><td>security.md 6.644 → 3.200; protocol.md 5.972 → 3.600; helper único nos testes; lint de duplicação que só relata</td><td>higiene de fonte única; 1 a 3% dos tokens</td></tr>
+    <tr><td>11</td><td>Setup, revisão em dois eixos e retro</td><td><code>init-config</code>, <code>setup.md</code>, revisão Spec + Standards a pedido, <code>retro.md</code>, pr.md 743 → 300</td><td>−1 pergunta em projeto sem tela; retro ≈ 10 min por release</td></tr>
+  </tbody>
+</table></div>
+<p class="note"><strong>Custo do programa e retorno.</strong> Pelo custo medido de uma issue do próprio Frontlights (#74: 199 min, 123 M), as 11 issues custam na ordem de 25 a 35 horas de sessão e 1,2 a 1,6 bilhão de tokens. O retorno em tokens (≈ −50 M por issue) se paga em umas 25 a 30 issues; em minutos (≈ −32 por issue), em umas 50. O retorno imediato é de outra natureza: <code>authorize</code> nunca mais pulado, conta e repositório conferidos antes de escrever num repositório público, contexto que não estoura, teste assistido que não é refeito de memória, e uma skill de 27k palavras que dá para manter.</p>
+
+<h2>8. O que veio das skills do Matt Pocock</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Skill do Matt</th><th>Decisão</th><th>Onde entra no Frontlights</th></tr></thead>
+  <tbody>
+    <tr><td><code>writing-for-agents</code></td><td><span class="chip ok">régua</span></td><td>Ponteiros com condição, duas cargas, hierarquia da informação, no-ops apagados; vira teste em <code>test_pointers</code> e <code>test_budget</code> (issue 3)</td></tr>
+    <tr><td><code>grilling</code></td><td><span class="chip ok">adaptado</span></td><td>A fronteira de decisões dentro da árvore (issue 6); o artefato, o print do antes e o pre-mortem são do Frontlights e ficam</td></tr>
+    <tr><td><code>to-spec</code></td><td><span class="chip ok">adaptado</span></td><td>Template de 600 palavras: Problema, Solução, decisões com alternativas rejeitadas, seams, Fora de escopo</td></tr>
+    <tr><td><code>to-tickets</code></td><td><span class="chip ok">adaptado</span></td><td>Slices como tracer bullets com Depende de e o quiz (granularidade, dependências, fundir ou dividir); tickets separados rejeitados: a spec é a issue</td></tr>
+    <tr><td><code>implement-spec</code></td><td><span class="chip ok">parte</span></td><td><code>worker.md</code> com briefs por ponteiro e notas de exploração (issue 5); o merger subagent rejeitado: só a sessão principal mescla</td></tr>
+    <tr><td><code>tdd</code> · <code>diagnosing-bugs</code></td><td><span class="chip ok">adaptado</span></td><td><code>tdd.md</code> lido pelo implementer, com "Diagnosing an unexpected red" (120 palavras das 1.427)</td></tr>
+    <tr><td><code>code-review</code></td><td><span class="chip ok">a pedido</span></td><td>Dois eixos, Spec e Standards, com lista de smells (issue 11); nunca portão</td></tr>
+    <tr><td><code>pr</code></td><td><span class="chip ok">já estava</span></td><td>pr.md 743 → 300; o catálogo de visuais aponta para a skill <code>pr</code> instalada</td></tr>
+    <tr><td><code>retro</code></td><td><span class="chip ok">adaptado</span></td><td><code>retro.md</code> oferecido uma vez após o merge; cada achado com destino; lê registros, nunca o transcrito</td></tr>
+    <tr><td><code>handoff</code></td><td><span class="chip ok">copiado</span></td><td>"Não duplique o que já está na issue, no commit ou no diff: aponte"; handoff de 250 palavras em português</td></tr>
+    <tr><td><code>setup-matt-pocock-skills</code></td><td><span class="chip ok">parte</span></td><td><code>setup.md</code> de 200 palavras e <code>init-config</code>; a instalação continua a junção</td></tr>
+    <tr><td><code>implement</code> · <code>grill-me</code> · skills por etapa</td><td><span class="chip no">rejeitado</span></td><td>"commit to the current branch", code-review como fechamento, <code>disable-model-invocation</code> e roteador contrariam worktree por slice, teste assistido como único portão e a frase comum como gatilho</td></tr>
+    <tr><td><code>triage</code> · <code>wayfinder</code> · <code>domain-modeling</code> · <code>codebase-design</code></td><td><span class="chip no">fora agora</span></td><td>Sem casa no fluxo ou sem evidência nas 13 sessões</td></tr>
+  </tbody>
+</table></div>
+
+<h2>9. Premissas e como conferir</h2>
+<ul>
+  <li>Issue típica = média de #28 RoadS (sessão sessão), #74 FrontlightS (sessão) e #N2 projeto A (sessão + sessão): 400 turnos, 280k de contexto médio, 112 M na principal, 40 M em subagentes, 20 perguntas, 170 min ativos + 40 de espera, 5 erros.</li>
+  <li>1 turno da etapa 6 ≈ 340k processados e ≈ 0,86 min ativo (839 M / 2.471 turnos; 3.840 min / 4.463 turnos). Início de janela nova ≈ 130k.</li>
+  <li>Espera por pergunta ≈ 2 min com o usuário presente; os 1.337 min medidos só caem pelas perguntas a menos.</li>
+  <li>1,75 token por palavra (SKILL.md: 5.316 palavras = 9,3k tokens). Contexto repetido é cache read, por isso o custo em dinheiro cai menos que o processado.</li>
+  <li>O ganho do teste assistido vem de uma sessão medida e deve ser confirmado nas próximas 3 issues do projeto A.</li>
+  <li>Nenhum ganho é somado duas vezes; os números dos juízes prevalecem sobre os das lentes.</li>
+  <li>Como conferir: <code>metrics.py</code> gera o <code>metrics.json</code> dos transcritos (turnos, contexto por turno, tokens por etapa, perguntas, espera, erros); a issue 9 o versiona em <code>evals/metrics/</code> e a retro o roda nas 3 issues seguintes antes de ampliar qualquer corte.</li>
+</ul>
+<footer>Método: retro de 13 sessões reais (20 a 22/10/2026), 9 análises por lente, 69 propostas fortes julgadas por regressão, decisões do usuário e números, síntese e crítica de completude. O documento completo (16 mil palavras, com os 11 corpos de issue e o esqueleto do SKILL.md novo) acompanha esta página.</footer>
+</main>
+
+<script>
+(function () {
+  const fmt = (n) => n.toLocaleString('pt-BR');
+  // 1. Hero tiles
+  const hero = [
+    { k: '112 M', d: '→ ≈ 70 M', l: 'tokens processados por issue (sessão principal)', dd: '−38%' },
+    { k: '400', d: '→ ≈ 315', l: 'turnos por issue', dd: '−21%' },
+    { k: '170 min', d: '→ ≈ 138', l: 'relógio ativo por issue', dd: '−19%' },
+    { k: '20', d: '→ ≈ 15', l: 'perguntas por issue', dd: '−25%' },
+    { k: '59,4k', d: '→ ≈ 26,8k', l: 'palavras na skill', dd: '−55%' },
+  ];
+  document.getElementById('hero').innerHTML = hero.map(h =>
+    `<div class="tile"><div class="k">${h.k}<small>${h.d}</small></div><div class="l">${h.l}</div><div class="d">${h.dd}</div></div>`).join('');
+
+  // helpers: horizontal paired bars with direct labels (relief rule), to scale
+  function pairedBars(el, rows, opts) {
+    const W = 920, rowH = 44, left = opts.left || 210, right = 90, top = 8;
+    const max = Math.max(...rows.flatMap(r => [r.a, r.b]));
+    const scale = (v) => (W - left - right) * (v / max);
+    const H = top + rows.length * rowH + 8;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${opts.label}">`;
+    [0.25, 0.5, 0.75, 1].forEach(f => { const x = left + scale(max * f); s += `<line class="grid" x1="${x}" x2="${x}" y1="${top}" y2="${H - 8}"/>`; });
+    rows.forEach((r, i) => {
+      const y = top + i * rowH;
+      s += `<text x="${left - 10}" y="${y + 24}" text-anchor="end">${r.name}</text>`;
+      s += `<rect class="bar hoje" x="${left}" y="${y + 6}" width="${scale(r.a)}" height="13" rx="2"><title>Hoje: ${r.al || fmt(r.a)}</title></rect>`;
+      s += `<text class="lab" x="${left + scale(r.a) + 6}" y="${y + 17}">${r.al || fmt(r.a)}</text>`;
+      s += `<rect class="bar depois" x="${left}" y="${y + 22}" width="${scale(r.b)}" height="13" rx="2"><title>Depois: ${r.bl || fmt(r.b)}</title></rect>`;
+      s += `<text class="lab" x="${left + scale(r.b) + 6}" y="${y + 33}">${r.bl || fmt(r.b)}</text>`;
+    });
+    s += '</svg>';
+    el.innerHTML = s;
+  }
+
+  // 2. Per-issue comparison (normalised per metric, so one scale per row: use percent of 'hoje')
+  pairedBars(document.getElementById('issue-compare'), [
+    { name: 'Turnos', a: 400, b: 315, al: '400', bl: '≈ 315' },
+    { name: 'Tokens principal (M)', a: 112, b: 70, al: '112 M', bl: '≈ 70 M' },
+    { name: 'Tokens subagentes (M)', a: 40, b: 32, al: '40 M', bl: '≈ 32 M' },
+    { name: 'Contexto médio (k)', a: 280, b: 220, al: '280k', bl: '≈ 220k' },
+    { name: 'Relógio ativo (min)', a: 170, b: 138, al: '170', bl: '≈ 138' },
+    { name: 'Perguntas', a: 20, b: 15, al: '20', bl: '≈ 15' },
+    { name: 'Erros de ferramenta', a: 5, b: 2, al: '5', bl: '≈ 2' },
+  ].map(r => ({ ...r, _a: r.a, _b: r.b })).map(r => ({ name: r.name, a: 100, b: Math.round(100 * r.b / r.a), al: r.al, bl: r.bl })), { label: 'Antes e depois por issue, cada linha em percentual do valor de hoje' });
+
+  // 1. Measured stages: tokens (M) and context per turn (k)
+  (function () {
+    const rows = [
+      { name: '0 a 2 abertura', tok: 20, turns: 177, ctx: 112 },
+      { name: '3 grilling', tok: 139, turns: 777, ctx: 179 },
+      { name: '4 issue', tok: 21, turns: 94, ctx: 227 },
+      { name: '5 slices', tok: 210, turns: 712, ctx: 295 },
+      { name: '6 desenvolvimento', tok: 839, turns: 2471, ctx: 340 },
+      { name: '7 fechamento', tok: 74, turns: 232, ctx: 318 },
+    ];
+    const W = 920, rowH = 34, left = 190, right = 230, top = 24;
+    const max = 839, scale = (v) => (W - left - right) * (v / max);
+    const H = top + rows.length * rowH + 8;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tokens processados por etapa nas 13 sessões">`;
+    s += `<text class="mut" x="${left}" y="14">tokens processados (milhões)</text><text class="mut" x="${W - right + 12}" y="14">turnos · contexto/turno</text>`;
+    [200, 400, 600, 800].forEach(v => { const x = left + scale(v); s += `<line class="grid" x1="${x}" x2="${x}" y1="${top}" y2="${H - 8}"/><text class="mut lab" x="${x}" y="${H - 0}" text-anchor="middle">${v}</text>`; });
+    rows.forEach((r, i) => {
+      const y = top + i * rowH;
+      s += `<text x="${left - 10}" y="${y + 18}" text-anchor="end">${r.name}</text>`;
+      s += `<rect class="bar hoje" x="${left}" y="${y + 6}" width="${scale(r.tok)}" height="16" rx="2"><title>${r.name}: ${r.tok} M em ${fmt(r.turns)} turnos</title></rect>`;
+      s += `<text class="lab" x="${left + scale(r.tok) + 6}" y="${y + 18}">${r.tok} M</text>`;
+      s += `<text class="lab mut" x="${W - right + 12}" y="${y + 18}">${fmt(r.turns)} · ${r.ctx}k</text>`;
+    });
+    s += '</svg>';
+    document.getElementById('stages-measured').innerHTML = s;
+  })();
+
+  // 3. Stage comparison: tokens per stage, hoje vs depois (typical issue)
+  pairedBars(document.getElementById('stage-compare'), [
+    { name: '0 a 2 abertura', a: 1.0, b: 0.5, al: '1,0 M · 10 turnos', bl: '≈ 0,5 M · 4' },
+    { name: '3 grilling', a: 24, b: 18, al: '24 M · 120 turnos', bl: '≈ 18 M · 105' },
+    { name: '4 e 5 issue e slices', a: 26, b: 11, al: '26 M · 90 turnos', bl: '≈ 11 M · 55' },
+    { name: '6 desenvolvimento', a: 68, b: 40, al: '68 M · 200 turnos', bl: '≈ 40 M · 150' },
+    { name: '7 fechamento', a: 36.5, b: 4, al: '36,5 M · 113 turnos', bl: '≈ 4 M · 25' },
+  ], { label: 'Tokens por etapa, hoje e depois, por issue típica', left: 200 });
+
+  // 4. Windows diagram: context over turns, today vs windows
+  (function () {
+    const W = 920, H = 300, left = 70, right = 20, top = 20, bottom = 40;
+    const pw = W - left - right, ph = H - top - bottom;
+    const maxT = 400, maxC = 800;
+    const x = (t) => left + pw * (t / maxT), y = (c) => top + ph * (1 - c / maxC);
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Contexto por turno ao longo de uma issue: hoje e com janelas por fronteira">`;
+    [200, 400, 600, 800].forEach(c => { s += `<line class="grid" x1="${left}" x2="${W - right}" y1="${y(c)}" y2="${y(c)}"/><text class="mut lab" x="${left - 8}" y="${y(c) + 4}" text-anchor="end">${c}k</text>`; });
+    s += `<text class="mut" x="${left}" y="${H - 8}">turno 0</text><text class="mut" x="${W - right}" y="${H - 8}" text-anchor="end">turno 400</text>`;
+    // today: 100k -> 230k by turn 120 (grilling) -> 300k by 200 -> 500k by 400 (range band to 780)
+    const today = [[0, 100], [120, 230], [200, 300], [300, 400], [400, 520]];
+    const todayHi = [[0, 110], [120, 270], [200, 350], [300, 560], [400, 780]];
+    let band = 'M' + today.map(p => `${x(p[0])},${y(p[1])}`).join(' L') + ' L' + todayHi.slice().reverse().map(p => `${x(p[0])},${y(p[1])}`).join(' L') + ' Z';
+    s += `<path d="${band}" fill="var(--accent)" opacity="0.18"/>`;
+    s += `<path d="M${today.map(p => `${x(p[0])},${y(p[1])}`).join(' L')}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`;
+    // windows: segments restarting at 130k at boundaries 110, 160, 215, 275 (slice boundaries), 300 (local main), 315 (PR)
+    const segs = [[0, 110, 100, 240], [110, 165, 130, 200], [165, 220, 130, 200], [220, 275, 130, 200], [275, 300, 130, 180], [300, 315, 130, 160]];
+    segs.forEach((g, i) => {
+      s += `<path d="M${x(g[0])},${y(g[2])} L${x(g[1])},${y(g[3])}" fill="none" stroke="var(--after)" stroke-width="2.5"/>`;
+      if (i > 0) s += `<line x1="${x(g[0])}" x2="${x(g[0])}" y1="${y(g[2])}" y2="${y(segs[i - 1][3])}" stroke="var(--after)" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+    });
+    s += `<text x="${x(300)}" y="${y(560) - 6}" text-anchor="middle" style="fill:var(--accent)">hoje: uma conversa, pico 400 a 780k</text>`;
+    s += `<text x="${x(180)}" y="${y(130) + 18}" text-anchor="middle" style="fill:var(--after-ink)">depois: janela nova a ≈ 130k em cada fronteira</text>`;
+    s += `<text class="mut lab" x="${x(110)}" y="${y(250) - 8}" text-anchor="middle">plano</text><text class="mut lab" x="${x(165)}" y="${y(210) - 8}" text-anchor="middle">S1</text><text class="mut lab" x="${x(220)}" y="${y(210) - 8}" text-anchor="middle">S2</text><text class="mut lab" x="${x(275)}" y="${y(210) - 8}" text-anchor="middle">S3</text><text class="mut lab" x="${x(300)}" y="${y(190) - 8}" text-anchor="middle">main local</text>`;
+    s += '</svg>';
+    document.getElementById('windows').innerHTML = s;
+  })();
+
+  // 4b. Chrome windows timeline across the issue
+  (function () {
+    const W = 920, H = 250, left = 20, right = 20, top = 30;
+    const pw = W - left - right;
+    const x = (p) => left + pw * p; // p in [0,1] along the issue
+    const stages = [['0–2', 0, 0.04], ['3 grilling', 0.04, 0.30], ['4–5 issue e slices', 0.30, 0.42], ['6 slices', 0.42, 0.70], ['DEPOIS', 0.70, 0.78], ['main local · livre', 0.78, 0.90], ['release', 0.90, 1]];
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="As três janelas do Chrome ao longo da issue e o destino dos prints">`;
+    stages.forEach((g, i) => {
+      s += `<rect x="${x(g[1])}" y="${top}" width="${x(g[2]) - x(g[1])}" height="22" fill="var(--chip)" stroke="var(--line)"/>`;
+      s += `<text class="lab mut" x="${(x(g[1]) + x(g[2])) / 2}" y="${top + 15}" text-anchor="middle">${g[0]}</text>`;
+    });
+    const lanes = [
+      { y: 80, name: 'Chrome ANTES', from: 0.06, to: 0.70, color: 'var(--accent)', note: 'abre na rodada do problema · base servida · prints antes-* por critério · fecha após a última evidência' },
+      { y: 125, name: 'Chrome DEPOIS', from: 0.70, to: 0.78, color: 'var(--after)', note: 'branch da issue · cada caso 2× · prints depois-* · 3 perguntas · único portão' },
+      { y: 170, name: 'Chrome MAIN LOCAL', from: 0.80, to: 0.90, color: 'var(--warn)', note: 'teste livre · holder sem prazo · hotfix → --free-test-fix' },
+    ];
+    lanes.forEach(l => {
+      s += `<text x="${x(0)}" y="${l.y - 6}" style="font-weight:600">${l.name}</text>`;
+      s += `<rect x="${x(l.from)}" y="${l.y}" width="${x(l.to) - x(l.from)}" height="14" rx="3" fill="${l.color}" opacity="0.9"><title>${l.name}: ${l.note}</title></rect>`;
+      s += `<text class="lab mut" x="${x(0)}" y="${l.y + 30}">${l.note}</text>`;
+    });
+    // boundaries
+    [[0.42, 'fronteira: plano publicado'], [0.90, 'fronteira: PR aberta']].forEach(b => {
+      s += `<line x1="${x(b[0])}" x2="${x(b[0])}" y1="${top + 22}" y2="${H - 36}" stroke="var(--fg-3)" stroke-dasharray="4 4"/>`;
+      s += `<text class="lab mut" x="${x(b[0]) + 4}" y="${H - 40}">${b[1]}</text>`;
+    });
+    s += `<text class="lab" x="${x(0)}" y="${H - 10}">prints → SCRUM/&lt;ano&gt;/&lt;segunda&gt;/evidencias/&lt;repo&gt;/&lt;issue&gt; → progress_report.py keep → resumo (RoadS mostra antes e depois)</text>`;
+    s += '</svg>';
+    document.getElementById('chrome-timeline').innerHTML = s;
+  })();
+
+  // 6. Files
+  pairedBars(document.getElementById('files'), [
+    { name: 'development.md', a: 10924, b: 2800 },
+    { name: 'browser-testing.md', a: 8499, b: 2500 },
+    { name: 'docs/security.md', a: 6644, b: 3200 },
+    { name: 'issues.md', a: 6024, b: 1500 },
+    { name: 'docs/protocol.md', a: 5972, b: 3600 },
+    { name: 'SKILL.md', a: 5316, b: 1700 },
+    { name: 'closeout.md', a: 3907, b: 1150 },
+    { name: 'progress-report.md', a: 3787, b: 2400 },
+    { name: 'grilling.md', a: 2859, b: 1530 },
+    { name: 'templates/issue.md', a: 1335, b: 600 },
+    { name: 'review.md', a: 752, b: 950 },
+    { name: 'templates/pr.md', a: 743, b: 300 },
+    { name: 'templates/handoff.md', a: 724, b: 250 },
+    { name: 'issue.md', a: 596, b: 330 },
+    { name: 'tdd-tests + tdd-mocking → tdd.md', a: 493, b: 700 },
+  ], { label: 'Palavras por arquivo da skill, hoje e depois', left: 250 });
+
+  // 7. Waves
+  const waves = [
+    { w: 'Onda 1', items: ['1 Base dos scripts'] },
+    { w: 'Onda 2 (paralela)', items: ['2 Abertura e fechamento', '4 Etapa 6 por comando', '8 Teste assistido entregue'] },
+    { w: 'Onda 3', items: ['3 SKILL.md roteiro e ponteiros'] },
+    { w: 'Onda 4 (paralela)', items: ['5 Textos da etapa 6', '6 Grilling e spec', '7 Etapa 5 por comando', '9 Janelas e retomada', '11 Setup, revisão e retro'] },
+    { w: 'Onda 5', items: ['10 Poda dos docs e testes-espelho'] },
+  ];
+  document.getElementById('waves').innerHTML = waves.map(w => `<div class="wave"><div class="w">${w.w}</div><ol style="list-style:none;padding-left:0">${w.items.map(i => `<li>${i}</li>`).join('')}</ol></div>`).join('');
+})();
+</script>
