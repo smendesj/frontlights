@@ -220,17 +220,21 @@ operation runs in, because the collectors, the draft guide and the approval all 
    - **Using a kept print.** Copy, never move: copy the chosen file into the summary folder under a plain name
      that starts with the cover's number, look at the image again (a person's name or data, a login, a path or
      the ANTES/DEPOIS strip means retake or drop it), and list it in `captions.json` with `issue` the cover's
-     number, never the slice's. The original stays where it is.
+     number, never the slice's; its `before` is the ANTES print of the same criterion, copied beside it and looked at
+     the same way. The original stays where it is.
    - To capture a new print ("Capturar novos", and what "Misturar" leaves out), offer to capture it from the
      product running on this computer, following the project's own instructions for running it. Use only test data, never real person or customer
      data, and never production. Crop out the browser chrome and the identity of the signed-in user.
      JPEG or PNG, at most 1 MB and about 1920 px wide each, at most 40 in total.
    - Save the images in that folder and write `captions.json` there, from scratch on every run, never appending to an earlier one: the week folder holds one folder per summary, and this one is the
      folder of this summary only. It is a JSON list in the order wanted,
-     `[{"file": "101-tela.png", "caption": "one plain sentence", "issue": 101}]`: `file` is a plain
+     `[{"file": "101-tela.png", "caption": "one plain sentence", "issue": 101, "before": "antes-101-S1.png"}]`: `file` is a plain
      name in that folder, `caption` plain Portuguese, `issue` the integer number of the delivery's
      issue, once per delivery (leave `issue` out for a print that belongs to no delivery; it goes at the
-     end of the e-mail, and the user must ask for it). Images not listed are ignored, so old ones never go
+     end of the e-mail, and the user must ask for it), and `before` the plain name, in the same folder, of the
+     ANTES print of that screen (same rules as `file`; RoadS shows it folded above the print on the web and open above
+     it in the e-mail, and it uses the print's caption); leave `before` out when the delivery has no ANTES print; the
+     pair counts as one of the 40. Images not listed are ignored, so old ones never go
      out by accident.
    - Look at every image yourself before showing it. Retake the blurry, empty or error ones. Each
      image goes to the user with its caption in the next step, as part of the draft that is approved.
@@ -247,7 +251,7 @@ operation runs in, because the collectors, the draft guide and the approval all 
    command picks the prints from `shotsDir` itself (its `captions.json` and the images it lists). With
    `weekShots`, run `push --draft <file> --to <to>` (and the same `--meeting`, if you used it for `shots`) instead:
    the helper checks `captions.json`, every
-   image and the rule of one print per visible delivery, and passes the summary folder to the push command
+   image (each `before` included) and the rule of one print per visible delivery, and passes the summary folder to the push command
    as `{shotsDir}` (which the config must give as a whole argument). A refusal names the missing issues; go back to step 6 for them. Add
    `--shot <file> --caption <text>` only when the config has neither `shotsDir` nor `weekShots`, once
    per screenshot the user approved. The sign-in line of the e-mail comes from the project's local files, never from the

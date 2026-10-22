@@ -51,8 +51,8 @@ O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.f
 
 ### Issue #<a>
 
-- **Antes:** <print do teste assistido, ou o teste vermelho: comando e falha>
-  **Depois:** <print do teste assistido, ou o mesmo teste verde: comando e resultado>
+- **Antes:** <print `antes-<cover>-S<n>.png` do teste assistido, um por critério, ou o teste vermelho: comando e falha>
+  **Depois:** <print `depois-<cover>-S<n>.png` do teste assistido, um por critério, ou o mesmo teste verde: comando e resultado>
 - **Portões:** teste assistido <resposta do usuário, ou `not_needed`>.
 - **Testes e revisão:** só quando rodaram: <comando, contagem, saída>; revisão independente <rodadas, `review-gate`
   atual>. Apague a linha quando nenhum rodou (por exemplo, numa issue feita "só com teste assistido").

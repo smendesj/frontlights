@@ -193,7 +193,8 @@ class TheStagesPointToTheRuleTests(unittest.TestCase):
     def test_commands_stay_in_full_in_the_browser_testing_reference(self):
         text = flat('skills', 'frontlights', 'references', 'browser-testing.md')
         self.assertIn('statement shown in full', text)
-        self.assertIn('the statements shown in full with `AskUserQuestion`', text)
+        # issue 74, S2: os dados de teste ficam para reuso, e a lista de resíduo com `DELETE` saiu
+        self.assertNotIn('the statements shown in full with `AskUserQuestion`', text)
 
 
 if __name__ == '__main__':

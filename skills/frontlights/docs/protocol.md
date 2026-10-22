@@ -235,12 +235,15 @@ O `frontlights.py browser-gate --config <config> --base <base> --root <worktree>
 `pergunta.resposta`; só código que não é teste nem documento, depois da decisão, a torna `stale`. A pendência
 `teste_assistido`, só quando a pergunta está devida (a última fatia de tela fechou o ciclo e não há resposta), atravessa janelas: `checkpoint --pending teste_assistido`, `resume` (o campo `pending` traz a lista, e a sessão a lê antes de tudo) e
 `context --pending teste_assistido` (com `ask_before_continuing` em `handoff` e `stop`).
-O passo do navegador começa com a pergunta "pronto para assistir?"; com o sim, roda em janela
-visível em duas passagens do mesmo cenário e da mesma conta, a base ("ANTES") e depois a branch
-("DEPOIS"), com cada caso duas vezes e a janela de cada passagem aberta cerca de 5 minutos no fim, presa por um processo em segundo plano
-cujo término avisa quem conduz o teste: o usuário fechar a janela (ou os 5 minutos acabarem) é o aviso para iniciar a DEPOIS e,
-depois dela, para entregar o relatório. Com os resultados no texto, o
-usuário decide por `AskUserQuestion`: "Assistir de novo" (nova rodada das duas passagens, sem repetir
+O teste assistido tem duas passagens do mesmo cenário e da mesma conta, cada janela aberta depois da pergunta
+"pronto para assistir?": a base ("ANTES"), numa janela que abre na rodada do problema do grilling, tira os prints
+do artefato e, aprovado o plano, roda o `Fluxo:` de cada critério na base enquanto as slices andam, presa por um
+processo em segundo plano sem limite de tempo (reaberta sem pergunta quando uma captura ainda é devida); e, no fim,
+só a DEPOIS, na branch entregue, com cada caso duas vezes e a janela aberta cerca de 5 minutos no fim, presa por
+um processo em segundo plano cujo término avisa quem conduz o teste: o usuário fechar a janela (ou os 5 minutos
+acabarem) é o aviso para entregar o relatório. Cada passagem guarda um print por critério,
+`antes-<cover>-S<n>.png` e `depois-<cover>-S<n>.png` (no texto, `antes#<cover>-S<n>`). Com os resultados no texto, o
+usuário decide por `AskUserQuestion`: "Assistir de novo" (nova rodada só da DEPOIS, sem repetir
 "pronto para assistir?"), "Aprovado", "Precisa de alteração" (nenhuma etapa seguinte roda; a mudança
 volta ao laço de testes, ou segue a escada de destinos se ampliar o escopo) ou "Pode prosseguir" (sem
 aprovar). Uma falha de produto na DEPOIS faz a pergunta de falha vir antes e substituir esta. O
@@ -250,7 +253,7 @@ com a resposta literal), cada passagem com a branch e o `head` servidos, a orige
 e depois de desfazer (nunca a linha inteira); o valor original fica antes em
 `.frontlights/issues/<n>/browser/perfil-original.json`. O `ANTES` sobe a base com `serve start
 --root <checkout-da-base> --issue <n>`, que guarda o registro dele no próprio checkout, e esse
-registro é encerrado com `serve stop` antes do relato. As reservas de `"port": "auto"` ficam na pasta comum do Git (`frontlights-serve/ports/`),
+registro é encerrado com `serve stop` quando nenhuma captura ANTES é mais devida, e sempre antes do relato. As reservas de `"port": "auto"` ficam na pasta comum do Git (`frontlights-serve/ports/`),
 compartilhada pelas worktrees; fora do Git, em `.frontlights/serve/ports/`, e repositórios
 diferentes não veem as reservas uns dos outros. Os códigos de `checks` são 0 passou, 1 falha de produto, 2
 config recusada e 3 infraestrutura. Toda falha vira pergunta por `AskUserQuestion`; sem

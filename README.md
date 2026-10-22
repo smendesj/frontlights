@@ -367,8 +367,10 @@ um). Com o pedido do resumo, o Frontlights:
    oferecido enquanto o código que ele mostra é o código entregue, e é copiado (nunca movido) com o
    número da entrega, não o da parte. Grava as imagens
    na pasta dos prints e reescreve o `captions.json` a cada execução, nunca acrescentando ao anterior
-   (imagens que não estão nele são ignoradas). Cada item é `{"file", "caption", "issue"}`, com
-   `issue` opcional: o número inteiro da issue da entrega. Com `weekShots`, a pasta é a do resumo (`<semana>/<weekShots>/<dd_MM do último dia>`) e
+   (imagens que não estão nele são ignoradas). Cada item é `{"file", "caption", "issue", "before"}`, com
+   `issue` opcional: o número inteiro da issue da entrega; `before`, também opcional, é o print ANTES do
+   mesmo critério (`antes-<cover>-S<n>.png`), na mesma pasta e com as mesmas regras do `file`: o RoadS o
+   mostra minimizado acima do print na web e aberto acima dele no e-mail, e o par conta como um dos 40. Com `weekShots`, a pasta é a do resumo (`<semana>/<weekShots>/<dd_MM do último dia>`) e
    os prints são obrigatórios (veja abaixo); sem ele, a skill pergunta se o resumo leva prints;
 6. mostra o rascunho completo, com cada print e sua legenda, e, com a sua aprovação, envia ao RoadS
    com `push --draft <arquivo>` (mais `--to <último dia do período>` com `weekShots`); o comando do
@@ -476,17 +478,19 @@ navegador ou rede, o teste é relatado como não executado e nunca conta como ap
 exemplo em `examples/browser-app/` mostra o fluxo de ponta a ponta.
 
 **Dados de teste que o teste cria.** Regra permanente, para todo projeto: o teste de navegador e o de
-permissões entre contas criam os usuários, contas ou tenants, empresas, perfis, concessões e demais dados
-que o `Fluxo:` precisa para rodar completo (o não-dono da mesma conta, um login de outra conta, um perfil
-restrito) e os removem no fim. Falta de login nunca é motivo para pular um caso, e nenhum texto delegado a
+permissões entre contas usam qualquer conta de teste que já existe e criam sob demanda os usuários, contas ou
+tenants, empresas, perfis, concessões e demais dados que o `Fluxo:` precisa para rodar completo (o não-dono da
+mesma conta, um login de outra conta, um perfil restrito). Esses dados e contas ficam para reuso: no banco de
+desenvolvimento local nada é removido no fim da passada, e os mesmos servem à ANTES e à DEPOIS; só o perfil
+movido volta ao original. Falta de login nunca é motivo para pular um caso, e nenhum texto delegado a
 um subagente proíbe a criação. Só no banco de desenvolvimento local (o de homologação), pelos endpoints do próprio
-produto, nunca em produção, staging ou banco remoto compartilhado, nem com dado de pessoa ou cliente real. Os ids criados ficam em `dados-de-teste.json` (nunca login
-ou senha), a remoção é conferida item a item, e o que o produto não apaga (excluir um usuário só o
-anonimiza) é listado com o `DELETE` exato, só dos ids criados, para você aprovar.
+produto, nunca em produção, staging ou banco remoto compartilhado, nem com dado de pessoa ou cliente real. O tipo
+e o id de cada item criado ficam em `dados-de-teste.json` (nunca login ou senha), para reuso.
 
-**Prints para o resumo.** O teste assistido guarda só um print da ANTES e um da DEPOIS por issue (a tela que
-melhor mostra o que mudou, no mesmo ponto nas duas), nunca um por passo ou por repetição; um caso que falha pode guardar
-a sua imagem de falha. Na passada DEPOIS ele também guarda, para cada entrega, um único
+**Prints para o resumo.** O teste assistido guarda um print por critério em cada passada,
+`antes-<cover>-S<n>.png` e `depois-<cover>-S<n>.png` (no texto, `antes#<cover>-S<n>`; a tela que
+melhor mostra o que o critério muda, no mesmo ponto nas duas), nunca um por passo ou por repetição; um caso que falha pode guardar
+a sua imagem de falha, `falha-<caso>`. Na passada DEPOIS ele também guarda, para cada entrega, um único
 print limpo (sem a faixa, sem a barra do navegador, sem identidade nem dado de pessoa) no `resumo/` da pasta
 de evidências, com um `candidates.json` que diz a parte, a entrega (`cover`), o repositório, o instante e os arquivos visíveis com o id Git que tinham. O resumo só copia o
 que você escolher na etapa dos prints.
@@ -499,15 +503,18 @@ em que o teste rodou, `<scrumRoot>/<pasta da segunda-feira>/evidencias/<reposit�
 pasta é sincronizada e compartilhada com a empresa: só dados de teste aparecem nos prints. Sem esses campos, tudo
 fica em `.frontlights/issues/<n>/browser/` como antes (os do resumo na worktree principal).
 
-Antes de abrir o navegador, o Frontlights pergunta (uma vez por issue) se você está
+Antes de abrir cada janela do navegador, o Frontlights pergunta se você está
 pronto para assistir. Com o sim, o teste roda em um Chrome dirigido pelo Playwright, de janela visível e
 maximizada, nunca oculta e com perfil descartável (nunca o navegador embutido do Claude nem o Claude in Chrome, que só
-abre a aba da prévia), no banco de desenvolvimento local, que é o de homologação, em duas passagens do mesmo cenário, com a mesma conta: primeiro a base (faixa
-na página "ANTES: main") e depois a branch entregue ("DEPOIS: branch X"). Cada caso roda duas
-vezes, os avisos ficam na tela o tempo necessário para serem lidos e a janela de cada passagem
-permanece aberta cerca de 5 minutos no fim. Fechar a janela (ou os 5 minutos acabarem) avisa quem
-conduz o teste: ao fechar a janela da ANTES, a DEPOIS começa; ao fechar a da DEPOIS, o relatório
-chega, sem ninguém ficar esperando à toa. Prefere-se o back real e, quando o assunto é permissão, um perfil restrito
+abre a aba da prévia), no banco de desenvolvimento local, que é o de homologação, em duas passagens do mesmo cenário, com a mesma conta. A ANTES abre no grilling (faixa
+na página "ANTES: origin/main"), numa porta própria: tira os prints das telas para o artefato e, aprovado o plano, roda
+o `Fluxo:` de cada critério na base enquanto as fatias andam; a janela fica aberta, sem limite de tempo, até a
+última evidência ANTES ou até você fechá-la, e reabre sem pergunta quando uma captura ainda é devida (com porta
+fixa, os servidores das fatias esperam a ANTES fechar; nenhuma fatia aplica migração no banco local antes disso). No
+fim, só a DEPOIS roda, na branch entregue ("DEPOIS: branch X"). Cada caso roda duas
+vezes, os avisos ficam na tela o tempo necessário para serem lidos e a janela da DEPOIS
+permanece aberta cerca de 5 minutos no fim. Fechar a janela da DEPOIS (ou os 5 minutos acabarem) avisa quem
+conduz o teste, e o relatório chega, sem ninguém ficar esperando à toa. Prefere-se o back real e, quando o assunto é permissão, um perfil restrito
 real: o usuário de teste muda de perfil pelo endpoint do próprio produto, depois de você confirmar
 que o banco por trás é o de desenvolvimento local, nunca um remoto compartilhado, e volta no fim. O valor original fica salvo em disco antes da
 mudança (só o campo de perfil, nunca a linha inteira) e é conferido depois de desfazer. Resposta
@@ -516,7 +523,7 @@ usa porta própria e o Frontlights encerra só o que ele mesmo subiu. Se a sua r
 sem assistir", o registro traz `assistido: false`.
 
 Com os resultados no texto, o Frontlights pergunta o que fazer com o que você viu: "Assistir de novo"
-(repete as duas passagens numa janela nova, sem repetir a pergunta de pronto), "Aprovado" (você
+(repete só a DEPOIS numa janela nova, sem repetir a pergunta de pronto), "Aprovado" (você
 confirma que a DEPOIS fez o esperado), "Precisa de alteração" (você diz o que mudar e a issue volta
 para o ajuste, sem seguir para as próximas etapas) ou "Pode prosseguir" (segue sem aprovar, e o
 relatório diz que foi assistido, não aprovado). Ele nunca escolhe por você nem trata o silêncio como
@@ -527,7 +534,7 @@ vem antes e substitui esta.
 que ela já tem), nunca um por CA, branch ou worktree. A pergunta sai quando a última fatia que muda a tela fecha o ciclo de testes
 e toda fatia já fechada está mesclada na branch da issue (um merge depois do registro reabre a pergunta,
 como `stale`), antes da revisão independente de qualquer uma delas, quando você pede uma: as fatias só de API ou só de testes não seguram a
-pergunta, e um `pending` antes disso é esperado e não pergunta nada. O DEPOIS roda no estado entregue das
+pergunta, e um `pending` antes disso é esperado e não pergunta nada. A ANTES já rodou desde o grilling; o DEPOIS roda no estado entregue das
 fatias que já fecharam o ciclo: a branch da issue, quando toda fatia de tela já está mesclada nela, ou uma worktree de integração
 local, nunca enviada, que junta a branch da issue e as fatias ainda abertas; a integração da família reaproveita essa worktree e não repete o teste.
 
@@ -693,8 +700,8 @@ worktree, com CAs independentes em paralelo dentro da issue e entre issues; cada
 TDD (nenhum teste quando você pede a implementação "só com teste assistido"), um ponto
 de retomada (`checkpoint --slice`) e uma caixa marcada com evidência, e uma sessão nova retoma pela primeira caixa
 aberta. A autorização cobre, só para as issues da família ou do lote, o trabalho do dia a dia (editar, testar,
-commitar, rodar a migration no banco de desenvolvimento local, criar e remover dados de teste pelos endpoints do
-produto, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com o
+commitar, rodar a migration no banco de desenvolvimento local depois de a janela ANTES fechar, criar dados de teste
+pelos endpoints do produto e deixá-los para reuso, comentar e marcar critérios) e os merges cobertos, entre eles o da branch da issue na main local com o
 teste assistido respondido; a branch da issue sobe para o GitHub a cada fatia mesclada, a main local só sai na
 release, e a PR da release é a única do fluxo. Cada operação
 negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com "Sim" e "Não" e o comando exato;
@@ -731,8 +738,10 @@ recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igu
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
-do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
-camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
+do problema com o antes (com tela, um print do sistema rodando na base, tirado com conta de teste e dados de teste
+na janela do teste assistido e limpo como os prints do resumo, com o depois de cada opção sendo o mesmo print com
+marcações por cima; sem tela, o diagrama do fluxo, das camadas ou da regra atual) e acrescido de uma seção por
+pergunta de decisão: a rodada da solução e cada ramo da
 árvore, o pré-mortem incluído; confirmações e o "Seguimos?" do fim não ganham seção.
 Cada seção segue o modelo `templates/grilling-section.html`, com os campos e a regra de
 `references/grilling.md` ("The artifact"): explica o que a pergunta implica, sem repeti-la. Cada seção entra por uma edição
@@ -741,7 +750,8 @@ reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação
 publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
 artefato que mostra o que ela entrega, numerada depois das seções do grilling. Entra trecho de código real do
 projeto (até 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
-(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra. A URL e o caminho da fonte
+(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra, nem num print. Sem conta de
+teste ou com a base fora do ar, o grilling para até a conta existir e a base subir. A URL e o caminho da fonte
 ficam no log de descoberta; "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a
 sessão avisa numa linha, segue em texto e registra "artefato indisponível".
 

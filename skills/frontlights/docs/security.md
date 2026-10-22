@@ -36,11 +36,12 @@ pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights 
 A entrevista publica um artefato, uma página privada da ferramenta de artefatos do
 host, na mesma URL em todas as rodadas, e essa página fica fora da máquina: por isso separa código de dado.
 Código entra: um trecho real do código do projeto, de até 15 linhas e com o caminho, com o valor de
-todo segredo (senha, token, chave, string de conexão) trocado por `***`. Dado nunca entra: o antes é montado do
-template real do componente (HTML e CSS lidos do repositório) e preenchido com dados inventados, e nenhum
-registro real, dado de pessoa, endpoint real, nome de cliente ou organização entra na página, nem dentro de um
-trecho de código. A fonte da página fica em `.frontlights/artifact.html`, fora do versionamento. Os prints do
-produto em execução são do teste assistido, nunca do artefato. Sem ferramenta de artefatos, a sessão segue em
+todo segredo (senha, token, chave, string de conexão) trocado por `***`. Dado nunca entra: com tela, o antes é um
+print do sistema rodando na base, tirado com conta de teste e dados de teste, limpo pela regra de
+`references/browser-testing.md`, "Prints kept for the progress summary", item "Clean", e o depois é o mesmo print
+com marcações; os cenários usam dados inventados, e nenhum registro real, dado de pessoa, endpoint real, nome de
+cliente ou organização entra na página, nem num print nem dentro de um trecho de código. A fonte da página fica em
+`.frontlights/artifact.html`, fora do versionamento. Sem ferramenta de artefatos, a sessão segue em
 texto e registra "artefato indisponível" no log de descoberta. É regra da skill, não barreira: nenhum script monta a página.
 
 ## Subagentes
@@ -320,7 +321,8 @@ O resumo para a diretoria (`scripts/progress_report.py`) executa comandos lidos 
   um script, não uma barreira: um print de código mudado depois só é barrado se a skill o consultar).
 - **Prints do teste assistido na pasta da sprint (`evidence-dir`):** decisão do mantenedor (19/10/2026). Quando
   o config do projeto tem `roadmapSync.scrumRoot` e `weekFolderPattern` (com o `roadmapSync` ligado ou não), os
-  prints da rodada (antes, depois e de falha) e os guardados para o resumo vão para
+  prints da rodada (`antes-<cover>-S<n>.png`, `depois-<cover>-S<n>.png`, um por critério, e `falha-<caso>`) e os
+  guardados para o resumo vão para
   `<scrumRoot>/<weekFolderPattern da segunda-feira da rodada>/evidencias/<repositório>/<issue>` (e o `resumo/`
   dela), não para o `.frontlights` da worktree, que a limpeza remove (depois de copiá-lo para `.frontlights/issues/<n>/worktrees/` da principal). Os registros (`result.json` e os demais)
   continuam no `.frontlights` e apontam para a pasta em `pastaDosPrints`.
@@ -392,30 +394,33 @@ homologação (`homolog suite`) também executam comandos lidos do `.frontlights
   saída e registro (também codificados em URL); um valor com menos de 4 caracteres ou com o texto
   do marcador de máscara é recusado, porque não pode ser ocultado com segurança.
 - **Dados que o teste cria:** o usuário decidiu, de forma permanente e para todo projeto, que o teste de
-  navegador e o de permissões entre contas criam os usuários, contas ou tenants, empresas, perfis e demais
-  dados de teste que o `Fluxo:` pede, e os removem no fim; faltar login nunca é motivo para pular um caso e
+  navegador e o de permissões entre contas usam qualquer conta de teste que já existe e criam sob demanda os
+  usuários, contas ou tenants, empresas, perfis e demais dados de teste que o `Fluxo:` pede, e que esses dados
+  e contas ficam para reuso: no banco de desenvolvimento local, nada é removido no fim da passada, e os mesmos
+  servem à ANTES e à DEPOIS; apagar dado continua operação negada (`references/development.md`, "Standing
+  authorization and the denied operations"), e o perfil movido continua sendo desfeito (item "Teste assistido e
+  perfil de teste"). Faltar login nunca é motivo para pular um caso e
   nenhum texto delegado a um subagente pode proibir a criação. Os limites são os do teste assistido: só o
   banco de desenvolvimento local (o de homologação), pelos endpoints do próprio produto, nunca produção,
   staging, banco remoto compartilhado nem dado de pessoa ou cliente real. A senha de um login criado fica só em arquivo local fora do Git e chega ao
-  navegador por variável de ambiente do processo. Os ids criados ficam em `dados-de-teste.json` (nunca
-  login, senha ou a linha inteira); a remoção é conferida item a item e uma sessão que ache uma entrada
-  sem `removido: true` remove antes de tudo. O que o produto não apaga é listado com o `DELETE` exato, só dos
-  ids criados, e roda depois da aprovação do usuário; a escrita direta fora dos endpoints continua só
+  navegador por variável de ambiente do processo. O tipo e o id de cada item criado ficam em `dados-de-teste.json`, para
+  reuso (nunca login, senha ou a linha inteira); a escrita direta fora dos endpoints continua só
   com a instrução exata aprovada. É uma regra da skill, não uma barreira técnica; e as máscaras do Frontlights cobrem só os valores de
   `browserTest.users`, então a senha de um login criado pelo teste não é mascarada pelos auxiliares: ela nunca é
   impressa, gravada em registro nem repetida na conversa.
 - **Instância isolada do teste assistido (`browserTest.isolated`):** o teste assistido roda em processos e
   portas próprios, nunca nas portas da prévia, e no próprio banco de desenvolvimento local, que é o de homologação,
   nunca numa cópia: o bloco não tem passo de banco, e os dados que o `Fluxo:` pede são criados pelos endpoints do
-  produto e removidos no fim, como diz o item anterior. Os processos da instância rodam sem shell, nunca produção,
+  produto e ficam para reuso, como diz o item anterior. Os processos da instância rodam sem shell, nunca produção,
   staging nem banco remoto compartilhado, e o `inspect` recusa o bloco que ainda declare `copyDatabase` ou
   `dropDatabase` (mesmo `null`, com a mensagem de apagar os dois campos), shell embutido, host que não é local, porta
   fixa igual à da prévia ou do `serve`, `baseUrl` fixa que não é a porta de um processo isolado, ou `cwd` de
   processo que sai da worktree. É regra da skill, não barreira: o Frontlights não lê para que banco o back do
   projeto aponta, por isso a pergunta do teste assistido confirma que é o local de desenvolvimento.
-- **Teste assistido e perfil de teste:** o teste com o usuário assistindo só roda depois da
-  resposta dele à pergunta "pronto para assistir?", no ambiente local e com contas de
-  `browserTest.users`. Quando o ponto é permissão, ele pode mover um usuário de teste de perfil
+- **Teste assistido e perfil de teste:** cada janela do teste com o usuário assistindo (a ANTES, que abre no
+  grilling e fica aberta enquanto as slices andam, e a DEPOIS, no fim) só abre depois da
+  resposta dele à pergunta "pronto para assistir?" (a reabertura da ANTES não pergunta), no ambiente local e com
+  contas de teste. Quando o ponto é permissão, ele pode mover um usuário de teste de perfil
   pelo endpoint do próprio produto, chamado com um login de `browserTest.users`, e nunca por
   escrita direta no banco. É uma escrita no banco de teste: a conferência de host só cobre
   `baseUrl` e `health`, e um back local pode apontar para um banco remoto compartilhado, então
@@ -426,7 +431,7 @@ homologação (`homolog suite`) também executam comandos lidos do `.frontlights
   num `finally` e conferida contra o salvo, e uma sessão que o encontre sem desfazer
   confirmado o restaura primeiro. O registro traz só o campo de perfil, nunca a linha inteira.
   Nada disso vale para conta real, staging ou produção. O `ANTES` roda a base com `serve
-  start --root <checkout-da-base>`, o `serve stop` encerra só os pids que o registro da issue
+  start --root <checkout-da-base>`, numa porta própria (`auto`), o `serve stop` encerra só os pids que o registro da issue
   guardou, e um processo que o teste não subiu nunca é encerrado. A janela é de um perfil
   descartável do navegador, nunca o pessoal do usuário. A aba da prévia é do usuário (aberta uma vez no Claude in
   Chrome dele) e fica fora dessa regra: a sessão não a dirige, e o teste assistido nunca usa a prévia nem as portas dela

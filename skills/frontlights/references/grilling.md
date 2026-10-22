@@ -23,9 +23,13 @@ Text alone makes the user imagine a screen, a flow or a set of layers from the o
 So there is one **artifact** per grilling: a private page published with the host's artifact
 tool (`Artifact` in Claude Code, a claude.ai page that also opens on the phone), created at
 the problem round with the **before** and then updated **on the same URL**, never one page per
-round. The before is the screen built from the real template of the component (its HTML, the CSS
-that styles it and the fields it shows, read from the repository), never a free sketch; when there
-is no screen, a diagram of the flow, of the layers or of the current rule.
+round. With a screen, the before is a **print of the system running at the base** (`origin/<base>`),
+taken with a test account and test data in the disposable Chrome window of the watched run (`references/browser-testing.md`),
+its ANTES window, which opens here and stays open ("The ANTES window, from the grilling"), never a screen rebuilt from the template or redrawn in the style of
+the page; without a screen, it is a diagram of the flow, of the layers or of the current rule. The
+print follows the clean-print rule of `references/browser-testing.md`, "Prints kept for the progress
+summary", item "Clean", and enters the page as an image of the artifact: an asset of the host's
+artifact tool, or embedded in the page when the host has nowhere to keep assets.
 
 The page then gains **one section per decision question**: the solution round and every branch
 of the decision tree, the pre-mortem included. Confirmation questions and the
@@ -49,7 +53,7 @@ The visual follows the kind of question:
 
 | The question is about | The visual |
 | --- | --- |
-| A screen | before and after per option, the **after** for each approach of the solution round with the screen states of "Reconnaissance" |
+| A screen | the before print and, per option, the **same print with markings** overlaid in HTML (boxes, arrows and texts on top), never a redrawn screen; the **after** for each approach of the solution round with the screen states of "Reconnaissance" |
 | A flow or an order of steps | a timeline per option, side by side |
 | A rule | a table of cases: made-up input and the result under each option |
 | Layers, files or where something lives | a layers diagram per option, showing what each touches |
@@ -66,13 +70,12 @@ back with the artifact tool's read and go on editing that copy.
 **Code, never data.** The page lives outside the machine. A real excerpt of the project's code (up
 to 15 lines, with its path) may enter it, with the value of any secret (password, token, key,
 connection string) replaced by `***`; real records, people's data, real endpoints and client or
-organization names stay out of the page, code excerpts included, and the screens are filled with
-made-up names, numbers and texts.
+organization names stay out of the page, code excerpts included: real data never enters, not even in
+a print, which shows only test data, and the scenarios use made-up names, numbers and texts.
 
 The question cites its section ("artefato, seção 2"; without a screen, "seção 1: fluxo e camadas,
 antes"); the option `preview` stays the text of the option, so "artefato" is the page, "preview" is
-the field. Never a real screenshot of the running product (that belongs to the watched run) and
-never an inline widget: the page is the only visual. When the host has no artifact tool, say so in
+the field. Never an inline widget: the page is the only visual. When the host has no artifact tool, say so in
 one line, go on in text, and record "artefato indisponível" in the log.
 
 ## 1. Problem round
@@ -80,7 +83,11 @@ one line, go on in text, and record "artefato indisponível" in the log.
 1. Summarize the observation or issue, source/timestamp, affected users and the
    observed pain. Publish the artifact with the **before** (above) before the problem is
    confirmed, so the user confirms what they see, not what they imagine, and the
-   confirmation question cites its section.
+   confirmation question cites its section. With a screen, the before print needs a test account
+   and the base up: any test account that already exists (those of `browserTest.users` or any other)
+   serves, and the session may create one on demand; when there is no test account or the base does
+   not come up, the grilling stops there and goes on only once the account exists and the base is up,
+   never with a rebuilt screen in place of the print.
 2. Separate evidence from inference and untested assumptions. Read relevant code
    and existing issues; identify duplicates, contradictions and missing context.
 3. When an issue already answers outcome, users, success measure and boundaries,
@@ -154,7 +161,8 @@ scope.
 
 **Screen states in the artifact.** With a screen, the **after** of each approach in the artifact
 shows the empty state, no image, error, loading, dark theme and 1366 px, plus the states the
-project's pitfalls list.
+project's pitfalls list, as notes on its one marked print (where each state shows and what it
+says), never one print per state; the evidence of the after still comes from the watched run.
 
 ## 3. Solution round (mandatory)
 
