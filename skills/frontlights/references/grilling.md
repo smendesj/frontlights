@@ -24,8 +24,8 @@ So there is one **artifact** per grilling: a private page published with the hos
 tool (`Artifact` in Claude Code, a claude.ai page that also opens on the phone), created at
 the problem round with the **before** and then updated **on the same URL**, never one page per
 round. With a screen, the before is a **print of the system running at the base** (`origin/<base>`),
-taken with a test account and test data in the disposable Chrome window of the watched run
-(`references/browser-testing.md`), never a screen rebuilt from the template or redrawn in the style of
+taken with a test account and test data in the disposable Chrome window of the watched run (`references/browser-testing.md`),
+its ANTES window, which opens here and stays open ("The ANTES window, from the grilling"), never a screen rebuilt from the template or redrawn in the style of
 the page; without a screen, it is a diagram of the flow, of the layers or of the current rule. The
 print follows the clean-print rule of `references/browser-testing.md`, "Prints kept for the progress
 summary", item "Clean", and enters the page as an image of the artifact: an asset of the host's

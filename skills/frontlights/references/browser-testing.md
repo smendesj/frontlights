@@ -12,8 +12,8 @@ before any request; `serve start` does not check the `health` host, so keep
 `health` and `baseUrl` on `127.0.0.1`, `localhost` or `::1`, on the branch under test
 (a watched run also serves the base, see below); never point a test at a real, staging or production environment. Installing Playwright or a browser in the target project is out of
 scope: use what the session and the project already have. A run never stops or skips a case
-for lack of test data: it creates what the `Fluxo:` needs and removes it afterwards (section "Test data the
-run creates").
+for lack of test data: it uses the test accounts that exist, creates what the `Fluxo:` needs and keeps it for
+reuse (section "Test data the run creates").
 
 ## What the plan turns on
 
@@ -34,7 +34,8 @@ running anything:
 A missing section on an issue that changes screens, or a field that contradicts the
 diff, parks the issue and goes to `AskUserQuestion` (`browser-gate` finds that
 contradiction from the diff); never turn tests on or off alone. Run only what is on, in this order: `checks regression`, `serve start`,
-`checks integration`, browser and cross-account steps (the browser step opens with
+`checks integration`, browser and cross-account steps (the DEPOIS pass: its ANTES already ran from the grilling,
+"Watched run" below; the browser step opens with
 the watched-run question below and, when the user watched, ends with the question of
 what to do next), `checks smoke` (it reuses the running serve),
 `serve stop` of the issue (never `preview stop`: the preview stays up). The commands below read `browserTest` and `checks` from the project's
@@ -50,7 +51,8 @@ slices; a family that already exists (an issue with the sub-issues it already ha
 for the family, its sub-issues being roots too. A slice that only changes tests or only the API
 does not hold the question back.
 
-**When the question comes out.** Only at these points, each one after `browser-gate`: (a) when the
+**When the question comes out.** The question of DEPOIS (the ANTES window has its own, in the grilling: "Watched
+run", below; ANTES evidence never answers the gate) comes out only at these points, each one after `browser-gate`: (a) when the
 last slice that changes the screen has closed its TDD loop and every slice already closed is merged
 into the branch of the issue (the issue's worktree is a root: a merge after the record changes its
 code and turns the gate `stale`, like any later code change), the normal moment, which comes before
@@ -65,12 +67,13 @@ that is parked or dropped leaves the batch, and the question names the slices it
 comes back later is a new decision (`stale`). The session does not
 wait for the sibling slices, their reviews or the family integration.
 
-**What runs.** One ANTES on the approved base of the batch and one DEPOIS on the delivered state of
+**What runs.** The ANTES of the batch, on its approved base, already ran while the slices were worked ("The ANTES
+window, from the grilling", below), so at this point the run is only DEPOIS, on the delivered state of
 the slices that have closed their loop at that moment: the branch of the issue itself when every such
 slice is already merged into it, otherwise a local integration worktree (never pushed) that merges
 the issue branch and the slice branches still open, the one the family
 integration of `development.md` reuses and redoes after a fix. Every `Fluxo:` of the batch runs in
-those same two passes. A slice that closes its loop after the run and changes what a `Fluxo:`
+that same pass, at the same place as its ANTES. A slice that closes its loop after the run and changes what a `Fluxo:`
 exercises (the same screen or route) makes the session ask again by hand, with the options of `stale`, because the gate cannot see
 that; until it is answered the report says "implementada, aguardando teste assistido", never "completa".
 
@@ -263,22 +266,28 @@ and the issue never counts as passed on that test.
 ## Watched run: before and after, with the user watching
 
 Whenever the plan turns the browser test on (`Toca o frontend: sim`) or `browser-gate`
-finds a visible change, ask once per issue (the section above), before the browser opens its
-first window (the servers may already be up), with `AskUserQuestion`: "Pronto para
+finds a visible change, the watched run has two passes of the same scenario: ANTES on the base, whose window
+opens in the grilling and stays open while the slices are worked ("The ANTES window, from the grilling", below),
+and, at the end, DEPOIS on the delivered state (the section above). Before each of the two windows opens (the
+first ANTES window, at the problem round of the grilling, and the DEPOIS window, at the points of the section
+above; the servers may already be up), ask with `AskUserQuestion`: "Pronto para
 assistir ao teste de navegador da issue #<n>?" (for a family that already exists, "das issues #<n>, #<m> e #<k>",
-each one named in the text). The text says what comes: first the
-base (ANTES), then the delivered state (DEPOIS), each case twice, and the window stays open
-for about 5 minutes at the end; that the run creates the test data the `Fluxo:` needs (users, accounts and
-the like) and removes it afterwards; and, when the `Fluxo:` moves a test user to a restricted
+each one named in the text). The text says what comes: for ANTES, the screens of the base for the artifact and,
+once the plan is approved, the `Fluxo:` of each criterion on the base, one print per criterion, the window
+staying open until the last ANTES print; for DEPOIS, the delivered state, each case twice, one print per
+criterion, and the window stays open for about 5 minutes at the end; that the run uses the test accounts that
+exist and creates the test data the `Fluxo:` needs (users, accounts and
+the like), which stays on the local development database for reuse; and, when the `Fluxo:` moves a test user to a restricted
 profile, that this changes data of the test database through the product's endpoint
 and that it will be undone. Options: "Sim, pode rodar" first and recommended;
 "Ainda não" (park the browser test and go on with other work, run nothing; the user
-says when ready); "Rodar sem assistir" (a hidden window is acceptable; record
+says when ready; in the grilling, the problem round waits for the before print, `references/grilling.md`);
+"Rodar sem assistir" (a hidden window is acceptable; record
 `assistido: false`). When the `Fluxo:` moves a profile, a fourth option, "Sem mudar
-perfil", runs both passes without the move and declares in the report that the
+perfil", runs the pass without the move and declares in the report that the
 permission behavior was not checked against the real back. Never open the browser
-before the answer. Passes never overlap: one issue at a time (a batch counts as one),
-never several windows at once on the same account and database.
+before the answer. A reopened ANTES window asks nothing (below). Passes never overlap while one is running: one issue at a time (a batch counts as one),
+never several passes at once on the same account and database; an ANTES window that is open but idle holds no other issue back.
 
 When the user will watch:
 
@@ -303,33 +312,47 @@ When the user will watch:
   Serve it from a checkout of that
   base, a detached-HEAD worktree made with `git worktree add` at `origin/<base>`; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
-  --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
+  --issue <n>`). Before the issue exists (a grilling that starts from a request), the base checkout is named after the discovery log
+  and serves on a provisional record, `serve start --root <base-checkout> --issue 0`, unique to that checkout; once the issue is published, its prints move to the evidence folder of the issue and the record stays until the window closes. DEPOIS runs the same `Fluxo:`, same account, same data, on the
   delivered state (the branch of the issue, or the local integration of it with the slices that
-  closed their loop and are not merged yet), served from its worktree; both passes run on the local
-  development database. Give both servers an `auto` port of their
-  own. A process with a fixed port runs one pass at a time, in this order: stop the
-  issue's own server (the standard order started it earlier), start ANTES, run it,
-  `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts, then
-  start the issue's server again (`checks smoke` needs it up). A watched run never serves from the main worktree (the
+  closed their loop and are not merged yet), served from its worktree, at the end; both passes run on the local
+  development database. The base server takes an `auto` port of its own, so it stays up beside the servers
+  of the slices and of the issue. In a project whose processes have only fixed ports, the servers of the slices and of the issue wait for the ANTES window to close, and `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS
+  starts. A watched run never serves from the main worktree (the
   free test is the only exception, "The free test window"). After each `serve start`
   confirm that the process answering on the port is the recorded one or a descendant
   of it (`serve status` and the owning pid of `Get-NetTCPConnection -LocalPort
-  <port>`), or DEPOIS could be answered by the base. Stop the ANTES record in every
-  case before reporting.
+  <port>`), or DEPOIS could be answered by the base. Stop the ANTES record once no ANTES capture is due, and in
+  every case before reporting.
+- **The ANTES window, from the grilling.** In an issue with a screen, the ANTES window (the visible window above,
+  with the strip "ANTES: <base>", a test account and the base served from its detached checkout) opens at the problem
+  round of the grilling (`references/grilling.md`), after the question above, and stays open: first it takes the
+  prints of the screens for the before of the artifact (that rule is the grilling's); then, once the plan is approved
+  with the `Fluxo:` of each criterion written (stage 5), the same window runs the `Fluxo:` of each criterion on the
+  base and keeps the ANTES evidence of each one, while the slices go on in parallel (`development.md`, "Slices in
+  order"). It closes when the last ANTES evidence is taken or when the user closes it; the session closes it itself
+  after the last one. Its holder has no time limit, like the free test's: the 5 minutes of "Pace" apply only to
+  DEPOIS. A window closed before the last ANTES evidence (by the user, a crash or the end of a session) reopens on the
+  base, with no question, when the next capture is due; `result.json` says which criteria still lack their ANTES.
+  Each ANTES evidence records the `head` of the base it ran on. When the base receives, before DEPOIS, another
+  change in the screen files of a criterion (after `git fetch`, a file of its slice's `by_root` in `browser-gate`
+  that differs between that `head` and `origin/<base>`), the ANTES of that criterion runs again at the end, on the
+  new base, before DEPOIS, in a reopened window.
 - **The isolated instance.** When the project declares `browserTest.isolated` (which
   `inspect` validates), the watched run runs on processes and ports of its own and never touches
   the preview. The database is the local development database itself, which is the homologation database, never a copy:
   the block has no database step, and `inspect` refuses one that still declares a copy or a drop
-  of the database (`docs/security.md`). ANTES and DEPOIS run one after the other in that instance:
+  of the database (`docs/security.md`). ANTES and DEPOIS never run at once in that instance:
   bring up the processes of `browserTest.isolated.processes` from the checkout of the
-  base, check each health, run ANTES, stop them, then bring them up from the delivered
+  base, check each health and keep them up while the ANTES window is open, stop them when it closes, then, at
+  the end, bring them up from the delivered
   state for DEPOIS, and open `browserTest.isolated.baseUrl` in the disposable window
   each time; never on the ports of the preview. The session (or the driver of the run)
   starts those processes itself, from their argv, without a shell, and stops only what it started. A
   process with `"port": "auto"` gets a free port the session picks before starting it,
   passed in `PORT` and in place of `{port}` in its argv, its health and the `baseUrl`,
   as `serve` does for its own; a fixed `port` is used as declared. The data the `Fluxo:`
-  needs is created and removed on that database as section "Test data the run creates" says.
+  needs is created on that database and kept, as section "Test data the run creates" says.
   Without the block, the passes run on the issue's own serve as above.
 - **A strip on every page.** The test injects a fixed strip into the page, pinned to the
   top edge across the full width, thin, above every other element and never
@@ -339,8 +362,9 @@ When the user will watch:
   login, password or local path ever goes into the strip.
 - **Pace.** Each case runs twice in each pass. Hold every popup, toast and dialog
   on screen long enough to be read (a few seconds), not the instant the assertion
-  passes. After the last step of each pass (ANTES and DEPOIS) leave the window open for
-  about 5 minutes, held by a background process so that the wait never blocks the agent.
+  passes. After the last step of DEPOIS leave the window open for
+  about 5 minutes, held by a background process so that the wait never blocks the agent; the ANTES window is
+  held the same way, with no time limit ("The ANTES window, from the grilling").
   The holder is started in the background (the shell tool's run_in_background option) by whoever drives the pass, and it
   exits when the user closes the window (the browser's `disconnected` event) or when the 5
   minutes end, whichever comes first; at the 5 minutes it closes the window itself before
@@ -350,8 +374,9 @@ When the user will watch:
   wakes the driver when the user closes the window early. The holder of the free test has no time limit ("The
   free test window", below).
 - **Window closed, next step.** The notice is the same whether the user closed the window
-  or the 5 minutes ended it: the session goes on without waiting for anyone. When the ANTES holder exits, stop the ANTES server and
-  only then start DEPOIS; never start DEPOIS before that notice. When the DEPOIS holder
+  or the 5 minutes ended it: the session goes on without waiting for anyone. When the ANTES holder exits, stop the ANTES
+  server once no ANTES capture is still due (otherwise the window reopens when the next one is), and only after that
+  start DEPOIS; never start DEPOIS before that notice. When the DEPOIS holder
   exits, the pass is over and the driver reports at once. When a subagent drives the
   passes, it does not return its report before the DEPOIS holder exits, so that the
   session waiting for the report is woken by the window closing. The closing question
@@ -359,18 +384,22 @@ When the user will watch:
   text and any restricted profile is already restored, when the session itself drives the
   passes; with a subagent it is asked once the report arrives, with the window already
   closed. Closing the window or the 5 minutes ending is never an answer to that question.
-- **One print per pass.** The watched run keeps exactly one print of ANTES and one of DEPOIS
-  per issue (for a batch, per issue of the batch), never one per step or per repetition: the
-  single screen that shows best what the `Fluxo:` changes, taken at the same place in both passes so the
-  two can be compared. The step results, console errors and failed requests go to the text
-  and to `result.json`, not to images. The check that the strip and every edge of the page are inside the
+- **One print per criterion.** Each pass keeps exactly one print per criterion (the box `S<n>` whose `Fluxo:`
+  it walks), never one per step or per repetition: the single screen that shows best what that criterion changes,
+  taken at the same place in ANTES and DEPOIS so the two can be compared. The files are
+  `antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png` (`<cover>` the top-level issue, `S<n>` the criterion),
+  with a hyphen because `#` breaks a URL and the check of the push; where it is text (a caption, the report, a
+  label) it is `antes#<cover>-S<n>` and `depois#<cover>-S<n>`. Console errors and failed requests go to the text,
+  and the result of each step stays in text, only in `result.json`, never in an image. The check that the strip and
+  every edge of the page are inside the
   window is only a look: do not keep that image. A case that fails may keep its one failure image, named
-  `falha-<caso>`, beside the two; a passing case never does.
-- **Faithful ANTES.** The base must run against the data it expects. When the issue
-  has a migration, run ANTES before applying it to the local development database;
-  once it is applied, say in the report that ANTES is not a faithful baseline.
+  `falha-<caso>`, beside them; a passing case never does.
+- **Migrations wait for ANTES.** No slice applies a migration to the local development database while ANTES is
+  still owed: the condition and what the report says when it is broken are those of the covered operation of
+  running migrations (`development.md`, "Standing authorization and the denied operations").
 
-Compare the two passes case by case in the report. ANTES failing where the issue
+At the end the watched run runs only DEPOIS; compare it with the ANTES evidence case by case, criterion by
+criterion, in the report. ANTES failing where the issue
 fixes something is expected; DEPOIS differing from the `Fluxo:` is a product
 failure.
 
@@ -384,8 +413,8 @@ teste assistido da issue #<n>?" (for a batch, "das issues #<n>, #<m> e #<k>", as
 Options, in this order: "Assistir de novo", "Aprovado",
 "Precisa de alteração" and "Pode prosseguir", each saying what it does:
 
-- "Assistir de novo": closes the open window, runs both passes again as above, in a new window, with no new
-  "pronto para assistir?" (the batch already answered it). Start ANTES again and, when
+- "Assistir de novo": closes the open window and runs only DEPOIS again as above, in a new window, with no new
+  "pronto para assistir?" (the batch already answered it); the ANTES evidence stays. When
   the `Fluxo:` moves a profile, save the original value again, move and undo it again (the
   previous round's undo was already read back). Ask this question again at the end;
   each round adds one to `rodadas`.
@@ -455,7 +484,8 @@ not start on top of it, and ask (switch to `auto`, wait, or another port).
 ## Test data the run creates
 
 The user's standing decision, for every project and every run (watched or not): a browser or cross-account
-test creates the test data the `Fluxo:` needs to run completely and removes it afterwards. Missing data is
+test uses any test account that already exists (those of `browserTest.users` or any other test account),
+creates on demand the test data the `Fluxo:` needs to run completely, and keeps it for reuse. Missing data is
 never a reason to skip a case, shorten a pass, park the run or ask the user to supply a login.
 
 - **What.** Users (the owner and a non-owner of the same account, a user with a restricted profile), a
@@ -463,29 +493,28 @@ never a reason to skip a case, shorten a pass, park the run or ask the user to s
   `Fluxo:` touches, as far as the product lets a test create them.
 - **How.** Through the product's own endpoints and screens, called with a login of `browserTest.users`.
   The only exception to "never write the database directly" is the one exact statement the user approves
-  (see "Real back first" and "Cleanup" below).
+  (see "Real back first").
 - **Where.** Only on the local development database (the homologation one) that "Real back first" already requires. Never
   production, staging or a shared remote database. Never read, change or reuse a real person's or customer's
-  user, profile or data: the run touches only what it created or the logins of `browserTest.users`.
+  user, profile or data: the run touches only test accounts and test data (what a run created, the logins of
+  `browserTest.users` or another test account).
+- **Kept for reuse.** On the local development database (the homologation one), the test data of the `Fluxo:`
+  is not removed at the end of a pass: the same accounts and data serve ANTES and DEPOIS, the next round and
+  later runs, and the accounts a session creates stay for reuse. The profile a `Fluxo:` moved is still undone
+  ("Real back first", `perfil-original.json`). Deleting data stays a denied operation (`development.md`,
+  "Standing authorization and the denied operations").
 - **Record.** Before the first creation write `.frontlights/issues/<n>/browser/dados-de-teste.json` (the
-  issue's folder; the lead issue's for a family that already exists) and add each item as it is created: its kind and id, `removido: false`. Never the
+  issue's folder; the lead issue's for a family that already exists) and add each item as it is created: its
+  kind and id, for reuse. Never the
   login, the password or a whole row. The password of a created login goes only into a git-ignored local
   file of the project and reaches the browser through an environment variable of the process; never into
   a record, a caption, the strip, a screenshot, the conversation or a brief.
-- **Cleanup.** At the end of the run: after the closing answer of a watched one (not after "Assistir de
-  novo", where the data stays for the next round, and after "Precisa de alteração" only once the changed
-  flow has run again and been answered), and right after the last case of a run with no watcher. Remove the items in reverse order of creation through the same endpoints, in a `finally`,
-  read each one back and set `removido: true`. A session that finds a `dados-de-teste.json` with an entry
-  not marked `removido: true` removes it first, as it does for `perfil-original.json`. What the product
-  cannot remove (deleting a user only anonymizes it, say) is never left unreported: list it in the report
-  with the exact `DELETE` statement of each id this run created (the local development database, only those ids),
-  and run them only after the user approves the statements shown in full with `AskUserQuestion`.
 - **Briefs.** Every brief handed to a subagent or another session that runs the test carries this
   section's rule. A brief never says "não crie usuário", "pare se faltar login" or "espere a decisão";
-  a brief that runs the test says to create what is missing and to remove it afterwards.
+  a brief that runs the test says to create what is missing, or to use a test account that exists, and to keep it
+  for reuse.
 - **Not a question.** This is not asked per run; the watched-run question only says that it happens.
-  Ask only about what this section does not settle: a statement outside the product's endpoints, and the
-  residue statements above.
+  Ask only about what this section does not settle: a statement outside the product's endpoints.
 
 ## The free test window
 
@@ -533,7 +562,8 @@ Account 1 runs every browser test. Account 2 enters only when `Conta:` names it 
 
 Any data of one account visible to, or changeable by, the other is a
 product failure. A missing account 2, or an account 2 that is the same account or tenant as account 1 when the
-case is cross-tenant, is test data the run creates (previous section): create it, never reuse account 1 as both.
+case is cross-tenant, is test data the run creates (previous section): use another test account that exists or
+create it, never reuse account 1 as both.
 
 ## Every failure is a question
 
@@ -570,13 +600,15 @@ issue and the file is the family's) with `pastaDosPrints` (the `evidenceDir` of 
 `head`, `diff_sha256`, the account used (`conta 1` or `conta 2`, never the login),
 each step and its result, console and network errors, screenshot file names, the
 failure kind and the user's answer. A watched run adds `assistido` (true or
-false), `rodadas` (how many times the user watched both passes), `aprovacao` (`aprovado`,
+false), `rodadas` (how many times the user watched DEPOIS), `aprovacao` (`aprovado`,
 `prosseguir` or `alteracao`) with the answer to the closing question verbatim, one entry
-per pass (`ANTES`/`DEPOIS`, with the branch and `head` served and `repeticoes: 2`), the
+per pass (`ANTES`/`DEPOIS`, with the branch and `head` served and `repeticoes: 2`; ANTES with the `head` of the
+base each criterion ran on and the criteria that still lack their ANTES), the
 source of each response (`back real` or `interceptada`) and,
 when a profile was moved, only the profile field before and after the undo (never
 the whole row, which can hold a login or a password hash); its screenshots are
-exactly one per pass and issue, named `antes-<n>` and `depois-<n>` (`<n>` is the issue), plus `falha-<caso>` for a failed
+exactly one per pass and criterion, named `antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png` ("One print per
+criterion", above), plus `falha-<caso>` for a failed
 case. Screenshots go to `evidenceDir`, named by file name in `result.json`; `perfil-original.json` and
 `dados-de-teste.json` stay beside `result.json`. The
 records of `.frontlights/issues/<n>/checks/` sit beside it. The records are
