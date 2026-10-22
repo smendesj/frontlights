@@ -324,7 +324,9 @@ print with markings; without one, a diagram of the flow, the layers or the curre
 on the same URL with one section per decision question, each following
 `templates/grilling-section.html` and added by a small edit of the local source; real code excerpts
 with secrets masked, never real data, and the URL and the source path in the discovery log
-(`references/grilling.md`, "The artifact"); without the tool, say so in one line and go on in text.
+(`references/grilling.md`, "The artifact"); without the tool, say so in one line and go on in text. With a
+screen, the ANTES window of the watched run opens there and stays open until its last ANTES evidence
+(`references/browser-testing.md`, "Watched run").
 Keep facts, inferences and assumptions separate. Optional
 research and prototypes are driven by uncertainty and stay out of the product until
 stage 6.
@@ -369,7 +371,8 @@ is not edited. Stages 4 and 5 run in the same window. Publish only after approva
 verify by rereading GitHub: the body, the boxes (the x/y the issue list shows) and the board
 values. If permissions block writes, preserve the approved draft and identify the exact
 blocked operation. In a project whose config has a `preview` block, the preview comes up right after the plan
-is approved, before the first slice (`references/development.md`, "The start of stage 6").
+is approved, before the first slice (`references/development.md`, "The start of stage 6"); in an issue with a
+screen, the approved `Fluxo:` of each criterion then runs on the base in the ANTES window, open since stage 3.
 
 Every issue the session creates, on any path and at any stage, follows the publication rules
 of `references/issues.md` ("Project board": every top-level issue joins the configured board with
@@ -396,10 +399,11 @@ goes, in this order:
    `origin/<base>` by `gh issue develop` and pushed after each slice merge; one worktree per slice, merged into the branch of the issue when its loop
    closes (TDD by default, never a gate; no tests under "só com teste assistido", development.md, "Which
    tests run when"); independent slices at once, and the legwork around each open slice fanned out.
-4. **The watched run** (`references/browser-testing.md`): one per issue, when the last slice that
-   changes the screen closes its loop; the only gate of stage 6. The run creates and later removes
-   the test users and data its flow needs. While it is due and unanswered, it is the
-   `teste_assistido` pending of the checkpoint.
+4. **The watched run** (`references/browser-testing.md`): one per issue, when the last slice that changes the
+   screen closes its loop, only its DEPOIS, one print per criterion (its ANTES, open since the grilling, took the
+   ANTES evidence of each criterion while the slices ran); the only gate of stage 6. The run uses the test
+   accounts that exist and creates on demand the test users and data its flow needs, which stay for reuse. While
+   it is due and unanswered, it is the `teste_assistido` pending of the checkpoint.
 5. **Findings** (development.md, "Review, checkpoints and renewal"): every open finding that came up
    (the watched run, a review the user asked for, tests that ran) with its destination (the gate of the
    Follow-ups section of `references/issues.md`). The independent review runs only when the user asks

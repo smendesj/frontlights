@@ -132,7 +132,7 @@ class IsolatedWatchedRunTests(unittest.TestCase):
         rule = watched.split('**The isolated instance.**')[1].split('- **A strip on every page.**')[0]
         for phrase in ('`browserTest.isolated`', 'the local development database itself',
                        'which is the homologation database, never a copy',
-                       'ANTES and DEPOIS run one after the other in that instance',
+                       'ANTES and DEPOIS never run at once in that instance',
                        'never on the ports of the preview', '"Test data the run creates"',
                        'without a shell', 'stops only what it started', 'Without the block'):
             with self.subTest(phrase=phrase):

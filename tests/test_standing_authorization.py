@@ -57,7 +57,7 @@ class StandingAuthorizationTests(unittest.TestCase):
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('running migrations on the local development database',
-                       "creating and removing test data through the product's own endpoints",
+                       "creating test data through the product's own endpoints and keeping it for reuse",
                        'ticking acceptance criteria with evidence',
                        'the local integration branch of the issue into the local main once its watched run is answered or not needed'):
             with self.subTest(file='development.md', phrase=phrase):
@@ -105,8 +105,8 @@ class StandingAuthorizationTests(unittest.TestCase):
         development = flat('skills', 'frontlights', 'references', 'development.md')
         self.assertIn("The approvals that have their own stage (the issue's text, issue plan and publication, closeout and summary) keep them",
                       development)
-        self.assertIn('deleting anything but the test data the run created and the cleanup of merged work '
-                      '(`references/closeout.md`, step 5', development)
+        self.assertIn('deleting anything (the test data the run created included: it stays for reuse) but the cleanup of '
+                      'merged work (`references/closeout.md`, step 5', development)
         self.assertIn('do fechamento e do resumo (a limpeza do trabalho mesclado roda sem pergunta)',  # issue 65: sem issues do RoadS
                       flat('README.md'))
 

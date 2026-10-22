@@ -13,17 +13,22 @@ Expected, in this order:
    nothing at this point.
 2. S2 (API only) closes its loop. Still nothing is asked: a slice that only changes the API never holds the
    question back, and S2 alone is `not_needed`.
+0. The ANTES window opened at the problem round of the grilling, after its own "Pronto para assistir ao teste de
+   navegador da issue #N?", and, once the plan was approved, ran the `Fluxo:` of S1 and S3 on the base
+   (`antes-N-S1.png`, `antes-N-S3.png`) while the slices were worked; it closed after the last ANTES evidence.
 3. S3 closes its loop and its branch is merged into the issue branch (S2's as well, so every closed slice is in
    the issue branch before the record). Before any review is dispatched, `browser-gate` is `pending` and the session asks one
-   "Pronto para assistir ao teste de navegador da issue #N?" naming the slices it covers (S1 and S3). It does not
+   "Pronto para assistir ao teste de navegador da issue #N?" for DEPOIS, naming the slices it covers (S1 and S3). It does not
    ask once per slice, branch or worktree, and it does not wait for the issue's independent review.
 4. "Ainda não": nothing opens, the gate stays `pending`, the handoff carries `teste_assistido`, `checkpoint --pending
    teste_assistido` records it, `resume` in a new session lists it first and the session asks the question before any
    review. With `context --pending teste_assistido` and 100 thousand tokens, the answer carries
    `ask_before_continuing`, and the question goes out before more is spent.
-5. "Sim, pode rodar": one ANTES on the remote base (`origin/<base>`) and one DEPOIS on the branch of the issue when every screen slice is
+5. "Sim, pode rodar": only DEPOIS runs (the ANTES on the remote base, `origin/<base>`, already ran), on the branch of
+   the issue when every screen slice is
    already merged into it, otherwise on a local integration worktree that merges the issue branch and the slice
-   branches still open (never pushed), every `Fluxo:` in the same two passes, then the closing question. After
+   branches still open (never pushed), every `Fluxo:` in that one pass, one print per criterion at the same place as
+   its ANTES (`depois-N-S1.png`, `depois-N-S3.png`), then the closing question. After
    "Aprovado" the record, `.frontlights/issues/<n>/browser/result.json`, carries `situacao`, `lote.roots` (the
    screen slices) and `pergunta.resposta`; `browser-gate` is `answered`.
 6. An independent review of the issue, only when the user asked for one, starts only now. Edit a test file or a document: still `answered`. Change a

@@ -112,7 +112,9 @@ nunca deste texto: aqui não entram login, senha nem URL.
 
 `Toca o frontend:` é uma declaração, e o `browser-gate` a confere com o diff: uma mudança visível
 com `não` vira pergunta. O teste assistido é um por issue, o portão do merge na main local, antes da
-revisão quando ela é pedida, não um por CA, branch ou worktree; a pergunta sai quando a última CA que muda a tela fecha o ciclo e toda CA já fechada
+revisão quando ela é pedida, não um por CA, branch ou worktree. A janela ANTES abre no grilling, depois da pergunta
+"pronto para assistir?", e roda o `Fluxo:` de cada CA na base enquanto as CAs andam; a pergunta da DEPOIS sai quando a
+última CA que muda a tela fecha o ciclo e toda CA já fechada
 está mesclada na branch da issue.
 
 ## Dependências
