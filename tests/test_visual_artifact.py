@@ -260,6 +260,14 @@ class PrintOfTheBaseTests(unittest.TestCase):
         self.assertIn('a print of the system running at the base, taken with a test account', stage3)
         self.assertNotIn('built from the real template', stage3)
 
+    def test_the_screen_states_are_notes_on_the_marked_print(self):
+        grilling = read('skills', 'frontlights', 'references', 'grilling.md')
+        states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
+        for phrase in ('as notes on its one marked print', 'never one print per state',
+                       'the evidence of the after still comes from the watched run'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, states)
+
     def test_the_after_is_the_same_print_with_markings(self):
         artifact = self.artifact()
         for phrase in ('the **same print with markings** overlaid in HTML (boxes, arrows and texts on top)',

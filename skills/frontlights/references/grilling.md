@@ -161,7 +161,8 @@ scope.
 
 **Screen states in the artifact.** With a screen, the **after** of each approach in the artifact
 shows the empty state, no image, error, loading, dark theme and 1366 px, plus the states the
-project's pitfalls list.
+project's pitfalls list, as notes on its one marked print (where each state shows and what it
+says), never one print per state; the evidence of the after still comes from the watched run.
 
 ## 3. Solution round (mandatory)
 
