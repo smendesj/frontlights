@@ -627,10 +627,11 @@ The DEPOIS pass of a watched run is also the cheapest moment to take the prints 
 diretoria" will need (`progress-report.md` step 6 offers them). The summary shows a single print per
 delivery, so this costs at most one extra capture per delivery.
 
-- **Which.** In DEPOIS only, never ANTES, a single print per delivery (the top-level issue of the
-  family): the one screen, message or list a person would recognise as what changed, taken right after
-  the case passes. It is normally the `depois-<n>` print of the watched run, cleaned as below; take a
-  second one only when that print cannot be cleaned.
+- **Which.** A single print per delivery (the top-level issue of the family), taken in DEPOIS: the one
+  screen, message or list a person would recognise as what changed, taken right after the case passes. It is
+  normally the `depois-<cover>-S<n>` print of the watched run, cleaned as below; take a second one only when
+  that print cannot be cleaned. When the delivery has one, its ANTES print of the same criterion, `antes-<cover>-S<n>`, goes with it as its `before`
+  (`progress-report.md`, step 6), cleaned the same way.
 - **Clean.** Without the ANTES/DEPOIS strip, without the browser chrome, with no login, no person's name or
   data and no local path: crop, or choose another view of the same result, or take no print for that case. Test
   data only. JPEG or PNG, at most 1 MB and about 1920 px wide. Look at every image yourself and retake the
