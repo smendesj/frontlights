@@ -56,7 +56,21 @@ class AntesOpensInTheGrillingTests(unittest.TestCase):
                        'reopens on the base, with no question, when the next capture is due',
                        'the ANTES of that criterion runs again at the end',
                        'The base server takes an `auto` port of its own',
-                       'the servers of the slices wait for the ANTES window to close'):
+                       'the servers of the slices and of the issue wait for the ANTES window to close'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, WATCHED)
+
+    def test_a_grilling_without_an_issue_serves_the_base_on_a_provisional_record(self):
+        for phrase in ('Before the issue exists',
+                       'named after the discovery log',
+                       '`serve start --root <base-checkout> --issue 0`',
+                       'once the issue is published, its prints move to the evidence folder of the issue'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, WATCHED)
+
+    def test_only_a_running_pass_holds_another_issue_back(self):
+        for phrase in ('Passes never overlap while one is running',
+                       'an ANTES window that is open but idle holds no other issue back'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, WATCHED)
 

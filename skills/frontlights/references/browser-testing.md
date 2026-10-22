@@ -286,8 +286,8 @@ says when ready; in the grilling, the problem round waits for the before print, 
 `assistido: false`). When the `Fluxo:` moves a profile, a fourth option, "Sem mudar
 perfil", runs the pass without the move and declares in the report that the
 permission behavior was not checked against the real back. Never open the browser
-before the answer. A reopened ANTES window asks nothing (below). Passes never overlap: one issue at a time (a batch counts as one),
-never several windows at once on the same account and database.
+before the answer. A reopened ANTES window asks nothing (below). Passes never overlap while one is running: one issue at a time (a batch counts as one),
+never several passes at once on the same account and database; an ANTES window that is open but idle holds no other issue back.
 
 When the user will watch:
 
@@ -312,12 +312,12 @@ When the user will watch:
   Serve it from a checkout of that
   base, a detached-HEAD worktree made with `git worktree add` at `origin/<base>`; for that stacked issue the
   parent's own worktree can serve as ANTES. It gets its own record (`serve start --root <base-checkout>
-  --issue <n>`). DEPOIS runs the same `Fluxo:`, same account, same data, on the
+  --issue <n>`). Before the issue exists (a grilling that starts from a request), the base checkout is named after the discovery log
+  and serves on a provisional record, `serve start --root <base-checkout> --issue 0`, unique to that checkout; once the issue is published, its prints move to the evidence folder of the issue and the record stays until the window closes. DEPOIS runs the same `Fluxo:`, same account, same data, on the
   delivered state (the branch of the issue, or the local integration of it with the slices that
   closed their loop and are not merged yet), served from its worktree, at the end; both passes run on the local
   development database. The base server takes an `auto` port of its own, so it stays up beside the servers
-  of the slices and of the issue. In a project whose processes have only fixed ports, the servers of the slices
-  wait for the ANTES window to close, and `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS
+  of the slices and of the issue. In a project whose processes have only fixed ports, the servers of the slices and of the issue wait for the ANTES window to close, and `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS
   starts. A watched run never serves from the main worktree (the
   free test is the only exception, "The free test window"). After each `serve start`
   confirm that the process answering on the port is the recorded one or a descendant

@@ -7,15 +7,15 @@ authorization, with the three slice worktrees (`slice` in each entry) and the is
 
 Expected, in this order:
 
+0. The ANTES window opened at the problem round of the grilling, after its own "Pronto para assistir ao teste de
+   navegador da issue #N?", and, once the plan was approved, ran the `Fluxo:` of S1 and S3 on the base
+   (`antes-N-S1.png`, `antes-N-S3.png`) while the slices were worked; it closed after the last ANTES evidence.
 1. S1 closes its TDD loop first and its branch is merged into the issue branch. The session does not ask yet: S3,
    which changes the screen, is still in its loop. `browser-gate` (`--root` the issue worktree and the open slice
    worktrees, each slice named with `--stacked <its branch>=<the branch of its issue>`) is `pending`, which asks
    nothing at this point.
 2. S2 (API only) closes its loop. Still nothing is asked: a slice that only changes the API never holds the
    question back, and S2 alone is `not_needed`.
-0. The ANTES window opened at the problem round of the grilling, after its own "Pronto para assistir ao teste de
-   navegador da issue #N?", and, once the plan was approved, ran the `Fluxo:` of S1 and S3 on the base
-   (`antes-N-S1.png`, `antes-N-S3.png`) while the slices were worked; it closed after the last ANTES evidence.
 3. S3 closes its loop and its branch is merged into the issue branch (S2's as well, so every closed slice is in
    the issue branch before the record). Before any review is dispatched, `browser-gate` is `pending` and the session asks one
    "Pronto para assistir ao teste de navegador da issue #N?" for DEPOIS, naming the slices it covers (S1 and S3). It does not
