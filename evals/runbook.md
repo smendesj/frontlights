@@ -242,7 +242,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the release is merged the same issue is offered for closing.
 28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33). On a
     disposable request that changes one screen, confirm the session publishes one artifact at the problem round
-    with the before built from the real template and fictitious data only, adds on the same URL one section per
+    with the before as a print of the system running at the base (a test account, test data only; each after the
+    same print with markings), adds on the same URL one section per
     decision question (the solution round with one after per approach, every branch asked and the pre-mortem),
     each following `templates/grilling-section.html` and added by a small edit of `.frontlights/artifact.html`,
     with real code excerpts whose secret values are masked as `***`, records the URL and the source path once in

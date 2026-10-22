@@ -88,7 +88,9 @@ its title, "Depende de", what it delivers and, for each slice, the section of th
 shows what it delivers: the artifact of the grilling (`references/grilling.md`, "The artifact"),
 updated on the same URL as the grilling with one section per slice, numbered after the
 grilling's sections and titled by the slice (its S-number and title), where the drawing of each
-slice is the screen, the flow or the layers as they stand once that slice lands, under the same
+slice is the screen, the flow or the layers as they stand once that slice lands (with a screen, the
+same before print with the markings of what that slice changes; `references/grilling.md`, "The
+artifact"), under the same
 rule for code and data as the grilling. Each slice section follows the same model
 (`templates/grilling-section.html`) and opens with what can be demoed when the slice is done; the
 drawing of the slice is its Visual. Without the artifact tool, the list says

@@ -731,8 +731,10 @@ recusa uma porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igu
 
 **Artefato visual.** A entrevista deixa de ser só texto: há um artefato por entrevista, na mesma URL (uma
 página privada publicada pela ferramenta de artefatos do Claude, que também abre no celular), criado na rodada
-do problema com o antes (a tela montada do template real do componente ou, sem tela, o diagrama do fluxo, das
-camadas ou da regra atual) e acrescido de uma seção por pergunta de decisão: a rodada da solução e cada ramo da
+do problema com o antes (com tela, um print do sistema rodando na base, tirado com conta de teste e dados de teste
+na janela do teste assistido e limpo como os prints do resumo, com o depois de cada opção sendo o mesmo print com
+marcações por cima; sem tela, o diagrama do fluxo, das camadas ou da regra atual) e acrescido de uma seção por
+pergunta de decisão: a rodada da solução e cada ramo da
 árvore, o pré-mortem incluído; confirmações e o "Seguimos?" do fim não ganham seção.
 Cada seção segue o modelo `templates/grilling-section.html`, com os campos e a regra de
 `references/grilling.md` ("The artifact"): explica o que a pergunta implica, sem repeti-la. Cada seção entra por uma edição
@@ -741,7 +743,8 @@ reescrevendo a página inteira; sem o arquivo local (sessão nova, compactação
 publicada e segue editando essa cópia. Na lista numerada das CAs (o quiz da etapa 5), cada CA com a seção do
 artefato que mostra o que ela entrega, numerada depois das seções do grilling. Entra trecho de código real do
 projeto (até 15 linhas, com o caminho), com o valor de todo segredo trocado por `***`; dado real
-(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra. A URL e o caminho da fonte
+(registro, dado de pessoa, endpoint, nome de cliente ou organização) nunca entra, nem num print. Sem conta de
+teste ou com a base fora do ar, o grilling para até a conta existir e a base subir. A URL e o caminho da fonte
 ficam no log de descoberta; "preview" continua sendo só o campo das opções da pergunta. Sem a ferramenta, a
 sessão avisa numa linha, segue em texto e registra "artefato indisponível".
 

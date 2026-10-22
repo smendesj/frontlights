@@ -318,8 +318,9 @@ when it is. Sub-issues join the same interview instead of being left out: one
 labelled `needs-decision`, or whose body names no approach, gets its own solution
 round in this session; the ones that already settle theirs are confirmed together
 in one question (`references/grilling.md`). There is one artifact per grilling: a private page
-published with the host's artifact tool, created at the problem round with the before (the screen
-built from the real template, or a diagram of the flow, the layers or the current rule) and updated
+published with the host's artifact tool, created at the problem round with the before (with a screen,
+a print of the system running at the base, taken with a test account, and each option's after the same
+print with markings; without one, a diagram of the flow, the layers or the current rule) and updated
 on the same URL with one section per decision question, each following
 `templates/grilling-section.html` and added by a small edit of the local source; real code excerpts
 with secrets masked, never real data, and the URL and the source path in the discovery log
