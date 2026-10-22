@@ -475,6 +475,61 @@ class CaptionsTests(WeekShotsTestCase):
         self.assertIn('online-only', result['message'])
 
 
+class BeforeTests(WeekShotsTestCase):
+    """Issue 74, S3: a entrada do print do depois leva, opcional, o print do antes em `before`, na mesma pasta, com a
+    mesma regra de nome, formato e tamanho; o par conta como um dos 40."""
+
+    def setUp(self):
+        super().setUp()
+        self.approved()
+
+    def test_a_print_with_its_before_is_pushed(self):
+        self.prints([{'file': 'depois-1123-S1.png', 'caption': 'A tabela com a coluna nova.', 'issue': 1123,
+                      'before': 'antes-1123-S1.png'}],
+                    files={'depois-1123-S1.png': PNG, 'antes-1123-S1.png': JPEG})
+        result = self.push()
+        self.assertTrue(result['ok'], result)
+
+    def test_a_bad_before_is_refused_naming_the_file(self):
+        cases = [
+            ({}, 'antes-1123-S1.png'),
+            ({'antes-1123-S1.png': b'GIF89a' + b'0' * 20}, 'antes-1123-S1.png'),
+            ({'antes-1123-S1.png': PNG + b'0' * pr.MAX_SHOT_BYTES}, 'antes-1123-S1.png'),
+        ]
+        for extra, name in cases:
+            with self.subTest(extra=list(extra)):
+                self.prints([{'file': 'depois-1123-S1.png', 'caption': 'x', 'issue': 1123, 'before': name}],
+                            files={'depois-1123-S1.png': PNG, **extra})
+                result = self.push()
+                self.assertFalse(result['ok'], result)
+                self.assertIn('before', result['message'])
+                self.assertIn(name, result['message'])
+                self.assertFalse((self.out / 'push.json').exists())
+        for name in ('antes#1123-S1.png', '../antes.png', '', 3):
+            with self.subTest(name=name):
+                self.prints([{'file': 'depois-1123-S1.png', 'caption': 'x', 'before': name}],
+                            files={'depois-1123-S1.png': PNG})
+                result = self.push()
+                self.assertFalse(result['ok'], result)
+                self.assertIn('before', result['message'])
+
+    def test_the_before_is_never_the_same_file_as_a_print(self):
+        self.prints([{'file': 'a.png', 'caption': 'x', 'before': 'a.png'}], files={'a.png': PNG})
+        self.assertIn('before', self.push()['message'])
+
+    def test_the_pair_counts_as_one_of_the_forty(self):
+        many = [{'file': f'p{n}.png', 'caption': 'x', 'before': f'b{n}.png'} for n in range(pr.MAX_SHOTS)]
+        files = {**{f'p{n}.png': PNG for n in range(pr.MAX_SHOTS)}, **{f'b{n}.png': PNG for n in range(pr.MAX_SHOTS)}}
+        self.prints(many, files=files)
+        self.assertTrue(self.push()['ok'])
+
+    def test_one_before_may_serve_two_prints(self):
+        self.prints([{'file': 'd1.png', 'caption': 'x', 'before': 'antes.png'},
+                     {'file': 'd2.png', 'caption': 'y', 'before': 'antes.png'}],
+                    files={'d1.png': PNG, 'd2.png': PNG, 'antes.png': PNG})
+        self.assertTrue(self.push()['ok'])
+
+
 class OnePrintPerDeliveryTests(WeekShotsTestCase):
     def setUp(self):
         super().setUp()

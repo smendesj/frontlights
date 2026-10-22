@@ -60,10 +60,16 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     child is verified, confirm it is merged into the parent's branch and the family enters the local main
     through the parent's branch, with no rebase or force-push.
 13. Watched browser run. On an issue that touches the frontend, confirm the "pronto
-    para assistir?" question comes before any window opens, the window is a visible
+    para assistir?" question comes before each window opens (the ANTES one in the grilling, the DEPOIS one at the
+    end), the window is a visible
     Chrome, the strip reads "ANTES: origin/main" and then "DEPOIS: branch <name>", each case
-    runs twice, popups stay long enough to read, and the window of each pass stays open about
-    5 minutes at the end. Close the ANTES window early and confirm DEPOIS starts at once;
+    runs twice, popups stay long enough to read, and the DEPOIS window stays open about
+    5 minutes at the end. Confirm the ANTES window opens at the problem round of the grilling, takes the prints of the
+    artifact, stays open with no time limit and, once the plan is approved, runs the `Fluxo:` of each criterion on
+    the base while the slices run, with the base served on an `auto` port of its own; close it before its last
+    ANTES evidence and confirm it reopens on the base with no question when the next capture is due, and that no
+    slice applies a migration to the local development database before it closes. At the end only DEPOIS runs, with
+    one print per criterion (`antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png`);
     close the DEPOIS window early and confirm the session is woken with the report (never
     by polling), and that neither the closing nor the 5 minutes ending counts as the answer. Move a test user to a restricted profile through the product's
     endpoint and confirm the row is identical after the undo. Confirm another
@@ -71,7 +77,7 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     Confirm the closing question offers "Assistir de novo",
     "Aprovado", "Precisa de alteração" and "Pode prosseguir" and that nothing runs
     after it until it is answered. "Assistir de novo" opens a new window and a second
-    round (ANTES again, the profile moved and undone again) with no second "pronto para
+    round (only DEPOIS again, the profile moved and undone again) with no second "pronto para
     assistir?"; "Aprovado" and "Pode prosseguir" go on to `checks smoke`, and the
     `result.json` carries `rodadas` and `aprovacao` with the answer verbatim;
     "Precisa de alteração" asks what to change and runs no later step. With a
@@ -145,12 +151,13 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
 20. Test data the run creates, and prints kept for the summary (`evals/test-data-and-summary-prints.md`). On a disposable
     family whose flow needs a non-owner and a login of another account that the config does not have, confirm the run
     creates them through the product, records only kinds and ids in `dados-de-teste.json`, runs the two cases in both
-    passes, removes everything after the closing answer and reports the residue with the exact `DELETE`, never skipping a
+    passes with the same data, and leaves the data and accounts on the local development database for reuse (only a
+    moved profile is undone), never skipping a
     case for a missing login and never carrying "não crie usuário" in a brief. The DEPOIS pass keeps clean prints in the
     `summaryDir` that `evidence-dir` printed (`resumo/` of the issue's folder in the sprint folder); at the summary's prints step `candidates` lists them, the user picks "Usar os do teste assistido",
     "Capturar novos" or "Misturar" per delivery, the chosen print is copied with the cover's number, and a print whose
-    visible code changed is not offered. Count the images the run left in its `evidenceDir`: one `antes-<n>` and one
-    `depois-<n>` per issue (plus a `falha-<caso>` only for a failed case), never one per step. Try a `captions.json`
+    visible code changed is not offered. Count the images the run left in its `evidenceDir`: one `antes-<cover>-S<n>.png`
+    and one `depois-<cover>-S<n>.png` per criterion (plus a `falha-<caso>` only for a failed case), never one per step. Try a `captions.json`
     with two prints for the same delivery and confirm `push` refuses it, naming the issue.
 
 21. Progress of the whole family in the summary. With a facts file whose entry carries `subIssues` over the whole tree and
@@ -242,7 +249,8 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the release is merged the same issue is offered for closing.
 28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33). On a
     disposable request that changes one screen, confirm the session publishes one artifact at the problem round
-    with the before built from the real template and fictitious data only, adds on the same URL one section per
+    with the before as a print of the system running at the base (a test account, test data only; each after the
+    same print with markings), adds on the same URL one section per
     decision question (the solution round with one after per approach, every branch asked and the pre-mortem),
     each following `templates/grilling-section.html` and added by a small edit of `.frontlights/artifact.html`,
     with real code excerpts whose secret values are masked as `***`, records the URL and the source path once in

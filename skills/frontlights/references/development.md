@@ -34,8 +34,10 @@ an issue still waiting for its release loses its mapping when its charter is ove
 **Covered**, for the issues of the family or batch at hand: editing, testing, committing, the covered merges
 below, the creation of the branch of the issue on GitHub when its work starts and the push of the branch of the
 issue after each slice merge and after a fix of the free test ("Slices in order", below; a charter never lists `push_issue_branch` among what it
-does not allow), running migrations on the local development database, creating and removing test data through the
-product's own endpoints, commenting on the issues and ticking acceptance criteria with evidence. Before the
+does not allow), running migrations on the local development database, never before the ANTES window of the issue
+has closed (`references/browser-testing.md`, "Watched run"; when one was applied before it, the report says that
+ANTES is not faithful), creating test data through the product's own endpoints and keeping it for reuse, commenting
+on the issues and ticking acceptance criteria with evidence. Before the
 release, GitHub receives only the branch of each issue, with only the commits of the issue on top of
 `origin/<base>`, never a commit that is only in the local main: the branches of the slices, the preview branch and
 the local main stay local and are never pushed, and the only pull request is the release's, offered at the end of
@@ -74,8 +76,8 @@ approved merge; "The release", below), changing the board (adding an
 item, moving a card, editing a field), deploying or publishing to production, editing a migration already
 registered (on the base branch or applied anywhere but the local development database), writing the remote main
 (`origin/main`, the base branch on GitHub) or a protected branch (the local main is written only by the covered
-merge, with its watched run answered or not needed), turning on a setting, key or flag in production, and deleting anything but
-the test data the run created and the cleanup of merged work (`references/closeout.md`, step 5: the worktrees and
+merge, with its watched run answered or not needed), turning on a setting, key or flag in production, and deleting anything (the test data the run created included: it
+stays for reuse) but the cleanup of merged work (`references/closeout.md`, step 5: the worktrees and
 local branches of the issues, slices and release already merged into the approved base, removed without a question,
 and of remote branches only the branch of a released issue). Run it only after "Sim" and record the answer verbatim in the handoff. A "Sim"
 covers that one operation; another operation, another PR or a later moment gets its own question. "Não",
@@ -166,8 +168,10 @@ project with a preview ("The start of stage 6"), so the slice reaches the user's
 and a broken build goes back to the slice that owns the file before the next one starts. The session may end in the middle of an issue: the handoff names
 the slice in progress with its worktree, and the slices already ticked, and a fresh session resumes at the first
 open box, in order, in that slice's worktree. Slices run in parallel inside an issue and between issues; the fan-out rule of
-`SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). The watched
-run stays one per issue, when the last slice that changes the screen closes its loop, and it is the only gate of the
+`SKILL.md` keeps the agents busy around each open slice (Dispatch and ownership, below). In an issue with a screen,
+while the slices run, the ANTES window, open since the grilling, runs the `Fluxo:` of each criterion on the base
+(`browser-testing.md`, "Watched run"). The watched
+run stays one per issue, when the last slice that changes the screen closes its loop (its DEPOIS), and it is the only gate of the
 merge into the local main; a broader suite and an independent review run only when the user asks for them ("Which
 tests run when"; "Review, checkpoints and renewal"). The stacked wave
 and the family integration below (children merged into the parent's branch, and the family entering
@@ -437,11 +441,12 @@ sandbox controls still apply. Unexpected effects stop the affected issue.
 
 When anything the issue changes is visible on the screen (its `## Navegador e testes ligados`
 says so, or `frontlights.py browser-gate` finds it in the diff), the watched run belongs to the
-issue as a whole, not to this slice alone: [browser-testing.md](browser-testing.md) asks "pronto
-para assistir?" once the last slice of the issue that changes the screen has closed its loop and every closed slice is merged into the branch of the issue,
+issue as a whole, not to this slice alone: its ANTES ran from the grilling, and [browser-testing.md](browser-testing.md) asks "pronto
+para assistir?" for its DEPOIS once the last slice of the issue that changes the screen has closed its loop and every closed slice is merged into the branch of the issue,
 and before an independent review of any of them, when the user asked for one, and ends with the user's choice of watching
 again, approving, asking for a change or going on; its records join the evidence below. Any brief that hands the
-run to a subagent carries that reference's rule on test data: create what the flow needs, remove it afterwards.
+run to a subagent carries that reference's rule on test data: create what the flow needs, or use a test account that
+exists, and keep it for reuse.
 Once the question is due and until the user has answered, the run is the `teste_assistido` pending of the checkpoint;
 while a screen slice is still in its loop it is not (the handoff lists the open slice).
 

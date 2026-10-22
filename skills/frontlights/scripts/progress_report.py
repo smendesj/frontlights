@@ -711,9 +711,28 @@ def read_json_file(path, what):
         raise Refusal(f'{what} could not be read as JSON')
 
 
+def require_print(folder, name, label):
+    """`name` is a plain JPEG or PNG in `folder`, kept on this device, at most MAX_SHOT_BYTES, checked by content."""
+    require(isinstance(name, str) and SHOT_NAME.fullmatch(name), f'{label} must be a plain .png, .jpg or .jpeg '
+                                                                 'name in the prints folder, without a path')
+    path = os.path.join(folder, name)
+    tag = rs.reparse_tag(path)
+    require(tag == 0 or rs.cloud_tag(tag), f'{label} {name} is missing, a link or another reparse point')
+    require(os.path.isfile(path), f'{label} {name} is not a file in the prints folder')
+    info = os.stat(path)
+    require(not getattr(info, 'st_file_attributes', 0) & rs.OFFLINE_MASK,
+            f'{label} {name} is an online-only cloud file; keep it on this device first')
+    require(info.st_size <= MAX_SHOT_BYTES, f'{label} {name} is larger than 1 MB')
+    with open(path, 'rb') as handle:
+        head = handle.read(8)
+    require(head.startswith(b'\x89PNG\r\n\x1a\n') or head.startswith(b'\xff\xd8\xff'),
+            f'{label} {name} is not a PNG or JPEG image')
+
+
 def validated_captions(folder):
-    """`captions.json` of the prints folder: `[{file, caption, issue?}]`, every file a plain JPEG or PNG
-    name in that folder, at most MAX_SHOTS of them and MAX_SHOT_BYTES each, checked by content."""
+    """`captions.json` of the prints folder: `[{file, caption, issue?, before?}]`, every file a plain JPEG or PNG
+    name in that folder, at most MAX_SHOTS of them and MAX_SHOT_BYTES each, checked by content. `before` is the
+    ANTES print of the same entry, checked the same way; the pair counts as one of the MAX_SHOTS."""
     listing = os.path.join(folder, 'captions.json')
     tag = rs.reparse_tag(listing)
     require(tag == 0 or rs.cloud_tag(tag), 'captions.json is missing from the prints folder, or is a link or another reparse point')
@@ -727,7 +746,8 @@ def validated_captions(folder):
     seen = set()
     for index, item in enumerate(items):
         label = f'captions.json[{index}]'
-        require(isinstance(item, dict) and set(item) <= {'file', 'caption', 'issue'}, f'{label} must be {{file, caption, issue}}')
+        require(isinstance(item, dict) and set(item) <= {'file', 'caption', 'issue', 'before'},
+                f'{label} must be {{file, caption, issue, before}}')
         name = item.get('file')
         require(isinstance(name, str) and SHOT_NAME.fullmatch(name), f'{label}.file must be a plain .png, .jpg or .jpeg '
                                                                      'name in the prints folder, without a path')
@@ -736,18 +756,15 @@ def validated_captions(folder):
         require(isinstance(item.get('caption'), str) and item['caption'].strip(), f'{label}.caption must be a sentence')
         issue = item.get('issue')
         require(issue is None or (type(issue) is int and issue > 0), f'{label}.issue must be a positive integer or absent')
-        path = os.path.join(folder, name)
-        tag = rs.reparse_tag(path)
-        require(tag == 0 or rs.cloud_tag(tag), f'{label}.file {name} is missing, a link or another reparse point')
-        require(os.path.isfile(path), f'{label}.file {name} is not a file in the prints folder')
-        info = os.stat(path)
-        require(not getattr(info, 'st_file_attributes', 0) & rs.OFFLINE_MASK,
-                f'{label}.file {name} is an online-only cloud file; keep it on this device first')
-        require(info.st_size <= MAX_SHOT_BYTES, f'{label}.file {name} is larger than 1 MB')
-        with open(path, 'rb') as handle:
-            head = handle.read(8)
-        require(head.startswith(b'\x89PNG\r\n\x1a\n') or head.startswith(b'\xff\xd8\xff'),
-                f'{label}.file {name} is not a PNG or JPEG image')
+        require_print(folder, name, f'{label}.file')
+        if 'before' in item:
+            before = item['before']
+            require_print(folder, before, f'{label}.before')
+            require(before.casefold() != name.casefold(), f'{label}.before {before} is the print itself')
+    for index, item in enumerate(items):
+        before = item.get('before')
+        require(before is None or before.casefold() not in seen,
+                f'captions.json[{index}].before {before} is also listed as a print')
     return items
 
 

@@ -323,7 +323,7 @@ class WatchedRunTextTests(unittest.TestCase):
                        'A bare timer or `sleep` is not a holder', 'never start DEPOIS before that notice',
                        'does not return its report before the DEPOIS holder exits',
                        'is never an answer to that question',
-                       'One print per pass', 'never one per step or per repetition', 'do not keep that image',
+                       'One print per criterion', 'never one per step or per repetition', 'do not keep that image',
                        'never fall back to a hidden window silently',
                        'serve start --root <base-checkout> --issue <n>'):
             with self.subTest(phrase=phrase):
@@ -349,7 +349,7 @@ class WatchedRunTextTests(unittest.TestCase):
         after = flat(re.search(r'\*\*After the watched run.*?(?=\n\*\*Real back first)', self.text, re.S).group(0))
         for phrase in ('"O que fazer depois do teste assistido da issue #<n>?"',
                        'Options, in this order: "Assistir de novo", "Aprovado", "Precisa de alteração" and "Pode prosseguir"',
-                       'new window', 'no new "pronto para assistir?"', 'Start ANTES again',
+                       'new window', 'no new "pronto para assistir?"', 'runs only DEPOIS again',
                        '`aprovacao: "aprovado"`', '`aprovacao: "prosseguir"`', '`aprovacao: "alteracao"`',
                        'not approved by the user', 'in their own words', 'destination ladder',
                        'Never pick an answer for the user', 'never read the 5 minutes or a silence as an answer',
@@ -385,7 +385,7 @@ class WatchedRunTextTests(unittest.TestCase):
         self.assertIn('A watched run adds `assistido`', evidence)
         self.assertIn('`rodadas`', evidence)
         self.assertIn('`aprovacao` (`aprovado`, `prosseguir` or `alteracao`)', evidence)
-        self.assertIn('exactly one per pass and issue, named `antes-<n>` and `depois-<n>`', evidence)
+        self.assertIn('exactly one per pass and criterion, named `antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png`', evidence)
         self.assertIn('only the profile field before and after the undo', evidence)
         self.assertIn('the watched-run question below', flat(self.text))
         self.assertIn('"pronto para assistir?"', flat(read('skills', 'frontlights', 'references', 'development.md')))

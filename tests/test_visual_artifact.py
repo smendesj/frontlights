@@ -62,7 +62,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         for phrase in ('one **artifact** per grilling',
                        'created at the problem round with the **before**',
                        'updated **on the same URL**', 'never one page per round',
-                       'built from the real template of the component', 'never a free sketch',
+                       'a **print of the system running at the base**',
                        'a diagram of the flow, of the layers or of the current rule',
                        '**one section per decision question**',
                        'the solution round and every branch of the decision tree, the pre-mortem included',
@@ -73,7 +73,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                        'a field with nothing to say is omitted',
                        'the **after** for each approach',
                        '"artefato" is the page, "preview" is the field',
-                       'Never a real screenshot', 'never an inline widget',
+                       'Never an inline widget',
                        'say so in one line, go on in text', 'artefato indisponível'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
@@ -145,7 +145,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                        'each slice section of the stage 5 quiz', 'why it is a problem'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
-        for kind, drawing in (('A screen', 'before and after per option'),
+        for kind, drawing in (('A screen', 'the before print and, per option, the **same print with markings**'),
                               ('A flow or an order of steps', 'a timeline per option, side by side'),
                               ('A rule', 'a table of cases'),
                               ('Layers, files or where something lives', 'a layers diagram per option'),
@@ -191,7 +191,8 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
     def test_the_skill_names_the_artifact_in_stage_3(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
         stage3 = flat(skill.split('## 3.')[1].split('## 4.')[0])
-        for phrase in ('one artifact per grilling', 'the same URL', 'built from the real template',
+        for phrase in ('one artifact per grilling', 'the same URL', 'a print of the system running at the base',
+                       'the same print with markings',
                        'created at the problem round with the before', 'one section per decision question',
                        '`templates/grilling-section.html`', 'a small edit of the local source',
                        'real code excerpts with secrets masked, never real data',
@@ -221,7 +222,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         for phrase in ('trecho real do código do projeto', 'até 15 linhas',
                        'o valor de todo segredo (senha, token, chave, string de conexão) trocado por `***`',
                        'nenhum registro real, dado de pessoa, endpoint real, nome de cliente ou organização entra na página',
-                       'fica fora da máquina', 'nunca do artefato', 'artefato indisponível'):
+                       'fica fora da máquina', 'artefato indisponível'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
         self.assertNotIn('só dados fictícios', flat(raw_security))
@@ -231,6 +232,115 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                        'trecho de código real', 'segredo trocado por `***`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
+
+
+class PrintOfTheBaseTests(unittest.TestCase):
+    """Issue 74, S1: com tela, o antes é um print do sistema rodando na base, tirado com conta de teste na janela do
+    teste assistido; o depois é o mesmo print com marcações em HTML; sem print o grilling para; sem tela, o diagrama."""
+
+    def artifact(self):
+        return flat(section_containing(read('skills', 'frontlights', 'references', 'grilling.md'), 'The artifact'))
+
+    def security(self):
+        return flat(section_containing(read('skills', 'frontlights', 'docs', 'security.md'), 'Artefato do grilling'))
+
+    def test_the_before_is_a_print_of_the_base_with_a_test_account(self):
+        artifact = self.artifact()
+        for phrase in ('With a screen, the before is a **print of the system running at the base** (`origin/<base>`)',
+                       'taken with a test account and test data',
+                       'in the disposable Chrome window of the watched run (`references/browser-testing.md`)',
+                       'never a screen rebuilt from the template or redrawn in the style of the page',
+                       'without a screen, it is a diagram of the flow, of the layers or of the current rule'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, artifact)
+        for gone in ('built from the real template of the component', 'never a free sketch'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, artifact)
+        stage3 = flat(read('skills', 'frontlights', 'SKILL.md').split('## 3.')[1].split('## 4.')[0])
+        self.assertIn('a print of the system running at the base, taken with a test account', stage3)
+        self.assertNotIn('built from the real template', stage3)
+
+    def test_the_screen_states_are_notes_on_the_marked_print(self):
+        grilling = read('skills', 'frontlights', 'references', 'grilling.md')
+        states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
+        for phrase in ('as notes on its one marked print', 'never one print per state',
+                       'the evidence of the after still comes from the watched run'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, states)
+
+    def test_the_after_is_the_same_print_with_markings(self):
+        artifact = self.artifact()
+        for phrase in ('the **same print with markings** overlaid in HTML (boxes, arrows and texts on top)',
+                       'never a redrawn screen'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, artifact)
+        quiz = flat(section_containing(read('skills', 'frontlights', 'references', 'issues.md'),
+                                       'Slices as acceptance criteria'))
+        self.assertIn('with a screen, the same before print with the markings of what that slice changes', quiz)
+        template = read('skills', 'frontlights', 'templates', 'grilling-section.html')
+        for phrase in ('o print da base', 'o mesmo print do antes', 'class="marca'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, template)
+        self.assertNotIn('montada do template real', template)
+
+    def test_the_ban_on_the_print_is_gone_and_data_still_never_enters(self):
+        artifact = self.artifact()
+        self.assertNotIn('Never a real screenshot', artifact)
+        self.assertNotIn('that belongs to the watched run', artifact)
+        self.assertIn('real data never enters, not even in a print', artifact)
+        security = self.security()
+        self.assertNotIn('Os prints do produto em execução são do teste assistido', security)
+        self.assertNotIn('nunca do artefato', security)
+        for phrase in ('Dado nunca entra', 'o antes é um print do sistema rodando na base',
+                       'tirado com conta de teste e dados de teste', 'o depois é o mesmo print com marcações',
+                       'nem num print'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertNotIn('montado do template real', security)
+
+    def test_no_print_stops_the_grilling(self):
+        grilling = read('skills', 'frontlights', 'references', 'grilling.md')
+        problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
+        for phrase in ('any test account that already exists (those of `browserTest.users` or any other) serves',
+                       'the session may create one on demand',
+                       'when there is no test account or the base does not come up, the grilling stops',
+                       'goes on only once the account exists and the base is up'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, problem)
+
+    def test_the_print_points_to_the_clean_rule_without_copying_it(self):
+        pointer = '`references/browser-testing.md`, "Prints kept for the progress summary", item "Clean"'
+        artifact = self.artifact()
+        self.assertIn(pointer, artifact)
+        self.assertIn("an image of the artifact: an asset of the host's artifact tool, or embedded in the page when "
+                      'the host has nowhere to keep assets', artifact)
+        self.assertIn(pointer, self.security())
+        for copied in ('1 MB', 'browser chrome', 'ANTES/DEPOIS strip'):
+            with self.subTest(copied=copied):
+                self.assertNotIn(copied, artifact)
+
+    def test_readme_acceptance_and_dry_run_describe_the_print(self):
+        readme = flat(read('README.md'))
+        for phrase in ('print do sistema rodando na base', 'o mesmo print com marcações', 'o grilling para'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, readme)
+        self.assertNotIn('a tela montada do template real', readme)
+        acceptance = read('docs', 'acceptance.md')
+        row = acceptance[acceptance.index('| 28. Artefato visual'):].split('\n')[0]
+        for phrase in ('issue 74', 'print do sistema rodando na base', 'o mesmo print com marcações',
+                       'o grilling para'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, row)
+        self.assertNotIn('antes montado do template real', row)
+        case = flat(read('evals', 'grilling-artifact.md'))
+        for phrase in ('a print of the system running at the base', 'the same print with markings',
+                       'the grilling stops', 'a screen rebuilt from the template'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, case)
+        self.assertNotIn('built from the real template', case)
+        self.assertNotIn('a real screenshot of the running product in the grilling', case)
+        runbook = flat(read('evals', 'runbook.md'))
+        self.assertNotIn('the before built from the real template', runbook)
 
 
 class ArtifactInTheSliceQuizTests(unittest.TestCase):
