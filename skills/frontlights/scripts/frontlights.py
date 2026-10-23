@@ -2932,7 +2932,7 @@ def board_mismatch(board_, fields, field, value):
                 f'{", ".join(fields) or "nenhum"}', {'fields': list(fields)})
     options = fields[field]
     if options is not None and value is not None and value not in options:
-        return ('board_option_unknown', f'o campo {field} de {where} não tem a opção {value}; as opções que existem: '
+        return ('board_option_unknown', f'o campo {field} do quadro {board_["owner"]} #{board_["number"]} não tem a opção {value}; as opções que existem: '
                 f'{", ".join(options) or "nenhuma"}', {'field': field, 'value': value, 'options': options})
     return None
 
