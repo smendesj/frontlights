@@ -35,7 +35,7 @@ BUDGET = {
     'references/tdd-mocking.md': 202,
     'references/tdd-tests.md': 291,
     'templates/artifact-page.html': 444,   # redesenho, issue 6
-    'templates/discovery.md': 339,
+    'templates/discovery.md': 292,
     'templates/grilling-section.html': 244,
     'templates/handoff.md': 729,
     'templates/issue.md': 756,

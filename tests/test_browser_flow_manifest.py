@@ -118,8 +118,10 @@ class BrowserFlowManifestTests(unittest.TestCase):
                     self.assertNotIn(sentence, flat)
             if name == 'SKILL.md':
                 # redesenho, issue 3: a etapa 6 cita os comandos entregues `serve.py window brief` e
-                # `serve.py free-test start`; nenhum outro verbo do `serve.py` sai da referência.
-                text = text.replace('`serve.py window brief`', '').replace('`serve.py free-test start`', '')
+                # `serve.py free-test start`; a etapa 3 (issue 6) cita o print da base, `serve.py window shot --pass
+                # antes`; nenhum outro verbo do `serve.py` sai da referência.
+                text = (text.replace('`serve.py window brief`', '').replace('`serve.py free-test start`', '')
+                        .replace('`serve.py window shot --pass antes`', ''))
             with self.subTest(file=name):
                 self.assertNotIn('serve.py', text)
                 self.assertNotIn('checks.py', text)

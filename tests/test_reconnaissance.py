@@ -147,7 +147,8 @@ class ReconnaissanceInTheSkillTests(unittest.TestCase):
         self.assertNotIn('depth', stage3.lower())
         for phrase in ('Read `references/grilling.md`', 'reconnaissance by trigger', 'pitfalls first',
                        'facts in subagents', 'a fact before an option',
-                       'the decision tree asks product, scope and visual only'):
+                       'the decision tree asks product, scope and visual only',
+                       'by frontier (every settled decision in one call, at most four)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
         self.assertLess(stage3.index('reconnaissance by trigger'), stage3.index('at least three'))

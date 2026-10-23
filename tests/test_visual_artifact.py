@@ -202,7 +202,10 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         # redesenho, issue 3: a etapa 3 diz só "One artifact per grilling, the base print first" e aponta para
         # grilling.md, "The artifact"; o resto da regra vive lá, nas palavras da referência
         stage3 = flat(skilltext.stage(3))
-        for phrase in ('One artifact per grilling', 'the base print first', '(`references/grilling.md`, "The artifact")'):
+        # redesenho, issue 6: a etapa 3 cita os comandos do print da base e do artefato
+        for phrase in ('One artifact per grilling', 'the base print first', '(`references/grilling.md`, "The artifact")',
+                       '`serve.py window shot --pass antes`', '`frontlights.py artifact init`',
+                       '`frontlights.py artifact section` per question', 'one publication per round, never `edits`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
         self.assertNotIn('only fictitious data', stage3)
