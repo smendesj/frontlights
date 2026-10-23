@@ -31,6 +31,43 @@ operações negadas (cada uma com a própria pergunta e o "Sim") estão numa lis
 repositório clonado não consiga ligá-la nem ampliá-la. É uma regra da skill, não uma barreira: os
 pedidos de permissão nativos do Claude Code continuam valendo, e o Frontlights não os altera.
 
+## Utilitários: o que cada um lê, grava e chama
+
+Todo script importa `scripts/_cli.py`, que só deduz caminhos e formata a saída: `--root` é a worktree principal
+(`git rev-parse --git-common-dir`), a árvore é a worktree da pasta atual, `--config` é o
+`<root>/.frontlights/config.json` e `--issue` sai só da entrada do charter cuja `path` é a árvore (sem ela, recusa
+com `hint`, nunca escolhe). Uma saída acima de 4 KB ou 80 linhas vira resumo, e o JSON inteiro vai para
+`<árvore>/.frontlights/out/` (a única gravação do `_cli`, dentro da pasta que o projeto já deixa fora do Git);
+`stamp`, `authorize`, `tick`, `verify` e `checkpoint` saem sempre inteiros. Os limites de cada um estão nas
+seções deste arquivo; a tabela é o índice.
+
+| Utilitário | Lê | Grava | Chama |
+|---|---|---|---|
+| `frontlights.py` (`inspect`, `validate-plan`, `authorize`, `evidence`, `review-gate`) | config, plano, charter, árvore Git | nada | `git` (leitura) |
+| `frontlights.py checkpoint`, `resume`, `archive` | issue (`gh api`, leitura), handoff, registros da issue | `checkpoint*.json` da árvore; renomeia `result.json` e `merge-local-main*.json` com `-r<k>` | `gh api` (leitura), `git` (leitura) |
+| `stamp.py` | o documento | `approvals.json` (só com `--approve`) | nada |
+| `homolog.py` | config, registros, Git | `sync`: merge coberto na main local; `bundle`: arquivo novo em `homolog.backupDir`; `suite`: registros da suíte | `git` sem shell; `fetch` do remoto já configurado |
+| `closeout.py` | issues e PRs (GraphQL, leitura), registros | só `tick`: o corpo da issue, com conferência de conta e repositório antes | `gh` sem shell |
+| `cleanup.py` | worktrees, branches, registros | só `archive`: cópia dos registros da worktree (sem `out/`) para a principal | `git` (leitura) |
+| `serve.py`, `checks.py`, `browser_gate.py` | config (`browserTest`, `checks`), árvore | registros da issue, `serve/`, `preview/` | os `argv` do config, sem shell (seção `serve`, `checks` e o teste no navegador) |
+| `progress_report.py`, `roads.py` | config, fatos do projeto | aprovações e rascunhos do resumo | RoadS (seção do resumo) |
+
+## Regras da sessão
+
+- Rode os scripts de dentro da worktree em que o trabalho está, sem `--root`, `--config` nem `--issue`; quando
+  um script recusar com `hint`, passe exatamente o que o `hint` pede. Nunca adivinhe uma flag: o `--help` de cada
+  script é a lista.
+- Uma saída resumida (`summary: true`) traz `full`, o caminho do JSON inteiro: leia dele só a chave que a etapa
+  precisa, nunca o arquivo inteiro na conversa; `--full` (ou `--json`) imprime tudo quando o todo é preciso.
+- O prefixo das branches vem de `--prefix`, senão de `branchPrefix` do config, senão do `branch_prefix` do
+  charter; nenhum script tem um padrão próprio. Um registro antigo sem a chave é lido com `prefixSource: legacy`.
+- Antes de cada escrita pelo `gh`, o script confere de novo (sem cache) a conta (`gh api user`) e o repositório da
+  pasta (`gh repo view`) contra `repository` e, quando houver, `github.account` do config. `account_mismatch` ou
+  `repository_mismatch` viram a pergunta que o script devolve, por `AskUserQuestion`: "Trocar para <conta> com
+  `gh auth switch --user <conta>` e repetir" ou "Parar". A troca de conta é do usuário; nenhum script a faz.
+- Nenhum script faz `git push`, `gh auth switch`, `gh pr merge` ou apaga registro; o que eles imprimem como
+  comando a rodar continua sujeito às regras da etapa (`references/development.md`).
+
 ## Artefato do grilling
 
 A entrevista publica um artefato, uma página privada da ferramenta de artefatos do

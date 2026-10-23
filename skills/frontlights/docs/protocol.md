@@ -136,6 +136,9 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
 ```text
 .frontlights/
   config.json
+  out/<verbo>-<AAAAMMDD-HHMMSS>-<pid>.json   JSON inteiro de uma saída longa que o script resumiu (`_cli.emit()`,
+                   acima de 4 KB ou 80 linhas), na worktree em que ele rodou: horário de São Paulo, os 5 últimos por
+                   verbo; fica fora da cópia que a limpeza faz dos registros da worktree
   discovery.md
   artifact.html    fonte local do artefato do grilling, editada a cada seção e publicada na mesma URL
   issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
@@ -156,11 +159,13 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     issue.json
     handoff.md
     artifact.html          fonte do artefato do grilling quando a issue já está publicada
-    checkpoint.json
+    checkpoint.json        gravado por `checkpoint --issue <n>` na worktree, que lê sozinho o retrato da issue pelo `gh`
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)
     evidence/<data-hora>.txt
     review.json            evidência a que a revisão independente, quando o usuário a pediu, ficou vinculada (`review-gate`)
     merge-local-main.json  operação do merge na main local, conferida pelo `authorize`
+    merge-local-main*-r<k>.json, browser/result-r<k>.json   registros de uma rodada anterior, renomeados com o sufixo
+                           da rodada por `frontlights.py archive --issue <n>` para a rodada seguinte começar sem eles
     walkthroughs/S<k>.md   roteiro de uma caixa rodado sem tela (cabeçalho, Antes, Depois, saída mascarada), condição do merge na main local
     teste-livre-cas.md     rascunho dos CAs novos, uma caixa por correção pedida no teste livre; ao fechar a janela, o lote aprovado por link e carimbo e escrito na issue só por acréscimo, antes da release ("The free test on the local main")
     body-before|body-new|body-after-<carimbo>.md   cópias do corpo que o `closeout.py tick` guarda
