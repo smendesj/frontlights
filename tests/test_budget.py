@@ -20,7 +20,7 @@ SLACK = 1.10
 # issue 5); só desce
 BUDGET = {
     'SKILL.md': 1820,  # teto de 2.000 durante o redesenho (test_skill_md); a issue 10 volta à contagem do dia
-    'docs/protocol.md': 3106,   # redesenho, issue 10: tabela curta, árvore dos registros, ponteiros
+    'docs/protocol.md': 2938,   # redesenho, issue 10: tabela curta, árvore dos registros, ponteiros
     'docs/security.md': 3716,   # redesenho, issue 10: tabela por utilitário, regras da sessão e recusas geradas
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,

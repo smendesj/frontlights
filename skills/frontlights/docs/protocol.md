@@ -10,8 +10,8 @@
 | Issue | Redigir o corpo a partir da descoberta, sem nova entrevista | A revisão carimbada e aprovada; nada publicado |
 | Slices | Cortar em slices (bloqueadoras primeiro, até cinco por issue), cada slice com a seção do artefato que mostra o que ela entrega, e pedir a aprovação por link e carimbo (`SKILL.md`, "Show before approval") | Quiz respondido, corpos carimbados aprovados |
 | Publicação | Só as criações e atualizações aprovadas | Releitura do GitHub |
-| Desenvolvimento | Sob a autorização permanente: a branch da issue, criada no GitHub a partir da `origin/<base>` por `gh issue develop`, ligada à issue e enviada a cada fatia mesclada, entra na main local por merge só com o teste assistido respondido ou dispensável, o único portão; a prévia sobe logo depois da aprovação do plano, antes da primeira CA, numa aba do Claude in Chrome do usuário, é refeita a cada CA pronta e só para a pedido; sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta de fim do teste, e só o "Sim, terminei" leva à release; cada negada só com o "Sim" | O teste assistido, os testes e a revisão quando rodaram, e a saída do `authorize` do merge na main local |
-| Release | Ao fim de cada issue homologada, depois de fechada a janela do teste livre: `homolog.py release plan`, sem suíte obrigatória (a suíte inteira só a pedido do usuário), a oferta e, com o "Sim", o push por refspec e a PR única; o merge só com o "Sim" | Saída do plano, respostas literais, `merge-status` |
+| Desenvolvimento | Sob a autorização permanente: a branch da issue, criada no GitHub a partir da `origin/<base>` por `gh issue develop`, ligada à issue e enviada a cada fatia mesclada, entra na main local por merge só com o teste assistido respondido ou dispensável, o único portão; a prévia, em `references/development.md`, "The start of stage 6"; o teste livre, em `references/development.md`, "The free test on the local main"; cada negada só com o "Sim" | O teste assistido, os testes e a revisão quando rodaram, e a saída do `authorize` do merge na main local |
+| Release | `homolog.py release plan`, a oferta e, com o "Sim", o push por refspec e a PR única; o merge só com o "Sim" (`references/development.md`, "The release") | Saída do plano, respostas literais, `merge-status` |
 | Fechamento | Fechar e marcar no pai só o que a lista carimbada aprovada traz | Lista carimbada, `stamp --check`, releitura |
 | Limpeza | Remover sem pergunta o que o `cleanup.py run` replaneja; perguntar cada `ask` | Comandos rodados, `verify`, `cleanup-<data>.json` |
 
@@ -47,8 +47,7 @@ O fechamento (`scripts/closeout.py`) segue `references/closeout.md`. Uma issue c
 branch ainda não está em `origin/<base>` fica fora como `awaiting_release` até a release que a leva ser mesclada. O
 `homolog.py release plan` nomeia a branch `<prefixo>release-<data>` (o prefixo do registro de autorização mais
 recente por `issued_at`; os registros sem `issued_at` válido ficam abaixo dos que têm, e o empate vai para o último
-nome de arquivo) e devolve `closes`. A release é oferecida ao fim de cada issue homologada (`references/development.md`,
-"The release"), e "Agora não" deixa a issue homologada na main local até a próxima oferta. E a PR única leva o corpo do modelo `templates/pr.md`, com uma linha `Closes #n`
+nome de arquivo) e devolve `closes`, e a PR única leva o corpo do modelo `templates/pr.md`, com uma linha `Closes #n`
 por issue de `closes`. A sessão age só sobre a resposta do `merge-status`, em que só `merged_into_base` vale. Para
 uma sub-issue, a aprovação do fechamento inclui marcar no pai o item que a cita (`parentTicks`; o `closeout.py
 tick-check` confere antes e depois). A limpeza (`scripts/cleanup.py run`, nunca com `--force`) roda antes do
@@ -204,12 +203,8 @@ banco, pasta de reservas). Sem subagentes, a sessão avisa numa linha e registra
 coordenadora é uma só: só ela pergunta, aprova, escreve no GitHub, roda uma negada e grava o handoff; o brief segue
 `references/worker.md`. O relato de um subagente é afirmação, não evidência, e o revisor nunca é o autor.
 
-**Rodadas de teste.** O TDD por slice é a prática padrão: o laço de cada slice roda os testes dela, os módulos que ela
-toca e a verificação de tipos. Esses testes são evidência, nunca portão: nenhuma suíte segura o merge na main local
-nem a release. Suítes mais amplas (`homolog suite` e `homolog suite-gate`, `review-gate` para uma revisão, e neste
-repositório `python tests/suite.py`, com `--impact <base>` ou `FRONTLIGHTS_SUITE=rapida`, ou o `python -m unittest
-discover -s tests -v`) são ferramentas opcionais, rodadas só a pedido do usuário; nenhuma conferência inteira é
-exigida, e a CI de um projeto, quando houver, não é esperada nem é portão ("Which tests run when").
+**Rodadas de teste.** O que roda em cada slice e quando está em `references/development.md`, "Which tests run when":
+nenhuma suíte é portão, e as mais amplas rodam só a pedido do usuário.
 
 ## Ponto de retomada e continuação
 

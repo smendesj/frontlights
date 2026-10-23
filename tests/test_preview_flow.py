@@ -14,15 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import doctext
 import skilltext
 
 
-def read(*parts):
-    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
-
-
-def flat(text):
-    return ' '.join(text.split())
+read, flat = doctext.read, doctext.flat  # redesenho, issue 10: o helper único
 
 
 def between(text, start, end):
@@ -76,9 +72,9 @@ class PreviewInTheFlowTests(unittest.TestCase):
 
     def test_the_docs_and_the_readme_follow(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
-        for phrase in ('a prévia sobe logo depois da aprovação do plano, antes da primeira CA',
-                       'numa aba do Claude in Chrome', 'é refeita a cada CA pronta', 'só para a pedido',
-                       '`serve stop` da issue (nunca o da prévia)', 'preview/registry.json'):
+        # redesenho, issue 10: o protocolo era cópia de development.md sobre a prévia; agora aponta para lá
+        doctext.assertPointsTo(self, protocol, 'references/development.md', 'The start of stage 6')
+        for phrase in ('`serve stop` da issue (nunca o da prévia)', 'preview/registry.json'):
             with self.subTest(file='protocol', phrase=phrase):
                 self.assertIn(phrase, protocol)
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))

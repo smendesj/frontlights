@@ -25,6 +25,7 @@ import frontlights
 import homolog
 import roads as rs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import doctext
 import gitfixture
 import skilltext
 from test_closeout import DONE_ALL, DONE_PARTIAL, FakeGh, node
@@ -33,12 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
 
 
-def read(*parts):
-    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
-
-
-def flat(*parts):
-    return ' '.join(read(*parts).split())
+read, flat = doctext.read, doctext.doc  # redesenho, issue 10: o helper único
 
 
 def stage(number):
@@ -533,9 +529,9 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertNotIn(gone, body)
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
-                       '"Agora não" deixa a issue homologada na main local',
-                       'sem suíte obrigatória (a suíte inteira só a pedido do usuário)',
+        # redesenho, issue 10: a oferta da release e o "Agora não" eram cópia de development.md; o protocolo aponta
+        doctext.assertPointsTo(self, protocol, 'references/development.md', 'The release')
+        for phrase in ('| Release |',
                        'release/suite.json a suíte inteira da release (`homolog suite --release`, só a pedido do usuário)',
                        'release/suite-full-<data-hora>.log',
                        'release/suite-<sha>.json cópia do mesmo registro por ponta (o sha completo do head), que a '
@@ -595,10 +591,8 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(skill.index(seven), skill.index(eight))
         self.assertNotIn('7. **The release**', skill)
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('o teste livre na main local, em "The free test on the local main"',
-                       'Ao fim de cada issue homologada, depois de fechada a janela do teste livre'):
-            with self.subTest(file='protocol.md', phrase=phrase):
-                self.assertIn(phrase, protocol)
+        self.assertIn('o teste livre na main local, em "The free test on the local main"', protocol)
+        doctext.assertPointsTo(self, protocol, 'references/development.md', 'The release')  # redesenho, issue 10
         self.assertIn('M --> L["Teste livre<br/>na main local"]', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_a_fix_in_the_free_test_is_made_at_once_and_its_criteria_go_in_one_batch(self):
@@ -663,8 +657,8 @@ class LocalMainTextTests(unittest.TestCase):
         # onde a etapa aponta.
         self.assertIn('`serve.py free-test start` ("The free test on the local main")', stage(6))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        self.assertIn('sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta '
-                      'de fim do teste, e só o "Sim, terminei" leva à release', protocol)
+        # redesenho, issue 10: o teste livre sem tela vive em development.md; o protocolo aponta
+        doctext.assertPointsTo(self, protocol, 'references/development.md', 'The free test on the local main')
 
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
