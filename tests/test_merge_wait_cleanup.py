@@ -286,7 +286,7 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       'a família entra na main local pela branch do pai, com as filhas dentro',
                                       'a issue não é relatada como revisada com ela; o portão do merge na main local (o teste assistido)',
                                       '(`parentTicks`', '`closeout.py tick-check` confere antes e depois',
-                                      '`scripts/cleanup.py plan|verify`', 'nunca com `--force`',
+                                      '`scripts/cleanup.py run`', 'nunca com `--force`',  # redesenho, issue 10: a limpeza por comando
                                       'roda antes do fechamento, logo depois do `git pull --ff-only`, sem pergunta',
                                       'o único `git push origin --delete` é o da branch da issue, quando `origin/<base>` já contém a ponta dela no GitHub',
                                       'worktrees/<pasta>-<tip curto>/ cópia do `.frontlights` de cada worktree da issue'),
