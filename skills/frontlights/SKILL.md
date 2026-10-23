@@ -42,6 +42,7 @@ Portuguese to the user; English only in `SKILL.md` and `references/`. In the use
 | references/development.md | stage 6, by section; on resume |
 | references/worker.md | every subagent brief, and the subagent that gets one |
 | references/tdd.md | implementer briefs; a free-test hotfix |
+| references/family.md | a family that already exists (open sub-issues) |
 | references/browser-testing.md | before any pass; the first non-zero `browser-gate` |
 | references/browser-conductor.md | filled by `serve.py window brief`; read to drive the passes |
 | references/review.md | only in a requested review's brief |

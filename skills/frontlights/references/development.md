@@ -18,8 +18,7 @@ and `message` (a refusal adds `reason` and `hint`); its flags are in its `--help
 | Slices in order | opening, merging and ticking each slice |
 | Which tests run when | choosing what a slice's loop runs |
 | Dispatch and ownership | dispatching implementers and helpers (their brief: `references/worker.md`) |
-| Stacked branches: parent and children without waiting for the merge | a family that already exists |
-| Integrating a family before the local main | a family that already exists, before the local main |
+| Integrating a family before the local main | a family that already exists (`references/family.md`) |
 | Review, checkpoints and renewal | findings, the review the user asks for, a checkpoint, the final report |
 | When the review is done | a review round ends |
 | Into the local main | the issue's slices are merged and the watched run is answered or not needed |
@@ -119,7 +118,8 @@ The handoff names the slice in progress and its worktree; a fresh session resume
 parallel inside an issue and between issues. Meanwhile the ANTES window, open since the grilling, runs the `Fluxo:` of
 each criterion on the base; the watched run stays one per issue, when the last slice that changes the screen closes its
 loop, and it is the only gate of the merge into the local main; a broader suite and an independent review run only
-when the user asks for them. Stacking children on a parent applies only to a family that already exists.
+when the user asks for them. Stacking children on a parent applies only to a family that already exists
+(`references/family.md`).
 
 ### Which tests run when
 
@@ -163,87 +163,11 @@ wait: dispatch in the same message read-only workers that prepare the next slice
 resource (one that shares a port or a database runs one at a time). When the user asked for a review, the reviewer is never the implementer. Only one
 worker edits a slice's worktree at a time; the readers edit nothing; the merge is this session's.
 
-## Stacked branches: parent and children without waiting for the merge
-
-Making children wait for the parent to reach the base serializes the family behind a human
-step. So, in a family that already exists, whenever an issue of the family depends on another one (a child that
-lists its parent in `Depends on`, or a sibling chain), stage 6 **stacks** the
-dependent on its dependency's branch. Under the standing authorization this is not
-asked: the announcement says it. The choice "Como as filhas se apoiam no pai?" comes
-back as a question only when the user asks to change it, with "Empilhadas no pai (Recomendada)" first (each child branches from the
-parent's branch and, once verified, is merged into it) and "Esperar o merge do pai" second
-(each child starts from the parent's branch once the parent is in the local main). Only the branch of each issue
-of the family is pushed, by the same rule as any issue ("Slices in order", below), and no pull request is opened
-for the parent or a child: the branch of a stacked child is created with `gh issue develop <child> --repo <repo>
---base <parent branch> --name <branch_prefix>issue-<child>` once the parent's branch is on GitHub, and the family
-enters the local main as one,
-through the parent's branch, once its watched run is answered or not needed ("Into the local main", below), and reaches
-GitHub with the release. Record the stacking in the
-authorization with the repository operations it needs: a branch cut from a branch that is not the base, and
-the covered merges of "Standing authorization and the denied operations" (above), which are the only merges it
-allows; merging a PR, writing the remote main, deploying and releasing stay on the denied list. When the user
-chose to wait, a dependent stays parked until its dependency is in the local main.
-
-**Concurrency.** Recommend as ceiling the number of independent children whose
-`ownership` does not overlap, and never less than the first wave. Read the stacked
-wave from `schedule --limit 24` run on a throwaway copy of the plan in which the
-parent is marked `verified`; the real plan is not edited. Children whose
-ownership overlaps do not run together: `schedule` serializes them, and the
-question says so.
-
-**Rules.**
-
-- A child leaves its dependency's branch once the dependency is `verified` on it
-  (acceptance evidence current for that branch's HEAD; its tests green, outside a run "só
-  com teste assistido"). Create the child's worktree from that
-  exact commit (`git worktree add -b <branch_prefix><name> <path> <sha>`), record the
-  `<sha>` in the handoff and in the plan, and only `"base": "<dependency-branch>"` in
-  its worktree entry of the authorization (the commit does not exist when the
-  authorization is approved, so it never goes there). Confirm with `git merge-base
-  --is-ancestor <sha> HEAD`.
-- Stack on one dependency only. An issue that depends on two unmerged branches, unless
-  one already contains the other (a sibling stacked on the parent, say), is
-  parked and the question goes to the user; `schedule` does not detect it, so read
-  each dependent's `Depends on` yourself. Children of one parent stack on the
-  parent, never on each other; a child that needs a sibling's code lists it in
-  `Depends on` and stacks on that sibling's branch.
-- When the dependency's branch moves after the child started (fixes), the
-  child brings it in with `git merge <dependency-branch>`, reruns its tests (outside a
-  run "só com teste assistido") and refreshes the evidence; the new hashes make a review
-  already done stale. Check
-  `git merge-base --is-ancestor` at each material boundary. Use a merge, never a rebase or a
-  force-push.
-- A verified child is merged into its parent's branch (`git merge --no-ff <child-branch>` in the
-  parent's worktree, a covered merge) once it is verified. The merge changes the parent's HEAD, so the
-  parent's evidence is refreshed. A child merged into the parent while a sibling is still open is brought into that
-  sibling with `git merge <parent-branch>`: conflicts on the hunks the child shares with the sibling are
-  resolved in that merge commit, keeping the sibling's own changes on top of what the parent already has,
-  and shown in the diff of the family.
-- The family enters the local main through the parent's branch, with every verified child merged into
-  it, by the gate of "Into the local main": the watched run answered (or not needed) for the family. A child not verified yet keeps the family
-  out: it is parked with its question and the parent waits, unless the user chooses to let the parent go
-  alone (then the child starts over from the parent's branch once the parent is in the local main, as in
-  "Esperar o merge do pai").
-- A conflict on anything beyond the parent's own content, or a dependency closed without being
-  merged, is a stop condition: park the child and ask.
-
 ## Integrating a family before the local main
 
-Each branch passing alone does not prove the family works together: a test of one child
-can assert the very behavior another child changes on purpose, and a clean Git merge
-does not prove the family works together. Before a family with more than one branch enters the local
-main, integrate it locally: an integration worktree from the parent's branch that
-merges every verified child branch (local only: never pushed, never a PR), then run
-the type checks (and a suite when the user asked for one). The watched browser run already happened, once
-for the batch; `browser-gate` says whether its record still covers this
-code, and `stale` asks again. When a local integration worktree already served that run, this
-integration is the same one: reuse it and redo it after a fix. Findings follow the destination ladder; a fix goes to the branch that owns
-the file, never to the integration branch, and the integration is redone after it.
-A batch of independent issues watched together (no parent) gets the same kind of local
-integration worktree, cut from the local main; the stage 6 authorization names that merge even
-when no stacking question is asked. The family enters the local main only after that integration, with its watched
-run answered or not needed for the integrated code. Record the integration worktree, the merged
-HEADs and the results in the handoff. The integration branch is evidence, never delivered.
+A family that already exists (a parent with sub-issues) stacks its children on the parent's branch and is integrated
+locally before the local main; the family enters the local main as one, through the parent's branch, once its watched
+run is answered or not needed: `references/family.md`, "Stacking" and "Integrating before the local main".
 
 ## Review, checkpoints and renewal
 
