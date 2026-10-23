@@ -267,15 +267,19 @@ Work without an issue: `git merge main` in its worktree, an operation naming its
 
 The watched run tests the branch; the free test lets the user test the local main before anything goes to GitHub. In
 an issue whose `browser-gate` was `answered`, right after the merge into the local main and the bundle, the session
-runs `serve.py free-test start --issue <n>` without a question, then its `window.commands`: a window on the local main
-and the local development database (the homologation one), already logged in (`references/browser-testing.md`, "The
-free test window"). One line says the window is theirs until they close it.
+runs `serve.py free-test start --issue <n>` without a question; with `served.status: sessao_sobe` the session brings
+the API and the web of the main worktree up itself, never asking the user to. Then the roteiro: `frontlights.py
+artifact roteiro --issue <n> --content <file>` adds the last section of the artifact, one group per criterion (its
+`Fluxo:` in plain words, the account by its label, what the screen should show), republished on the same URL; each
+free-test fix adds its group. Then its `window.commands`: a window on the local main and the local development
+database (the homologation one), already logged in (`references/browser-testing.md`, "The free test window"). One line
+says the window is theirs until they close it, with the link to the roteiro at the end of the artifact.
 
 - **Without a screen, in the terminal.** When `browser-gate` said `not_needed`, no window opens and no product is
   served: give the commands of `serve.py free-test commands`, each in its own code block, then ask
   "Terminou de testar a main local?", "Sim, terminei" first and "Ainda testando", which leaves it pending; never answer
   it for the user.
-- **The user leads.** No script, no print and no time limit; the session helps on request.
+- **The user leads.** The roteiro guides and binds nothing: no print and no time limit; the session helps on request.
 - **One free test per homologated issue.** After an "Agora não" to the release, the next issue's free test covers
   everything accumulated in the local main. Closing the window right away is how the user skips it.
 - **A fix asked in the free test.** Fix it at once on the branch of the issue, TDD by default, push it (covered), then

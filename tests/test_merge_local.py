@@ -408,10 +408,13 @@ class FreeTestTests(unittest.TestCase):
             self.serve.free_test_start(str(self.config), str(self.root), 12)
         self.assertIn('free-test commands', str(caught.exception))
 
-    def test_a_project_that_starts_its_own_environment_is_asked_and_nothing_starts(self):
+    def test_without_processes_the_session_brings_the_product_up_and_never_asks_the_user(self):
+        # GeoCloud #1124, 23/10/2026: a sessão pediu ao usuário que subisse API e web para o teste livre
         self.configure({'baseUrl': 'http://127.0.0.1:4200/'})
         result = self.serve.free_test_start(str(self.config), str(self.root), 12)
-        self.assertEqual(result['served']['status'], 'ambiente_do_usuario')
+        self.assertEqual(result['served']['status'], 'sessao_sobe')
+        self.assertNotIn('question', result['served'])
+        self.assertIn('nunca peça ao usuário que suba', result['served']['next'])
         self.assertTrue(self.draft.is_file())
         opened, held = result['window']['commands']
         self.assertEqual(opened[opened.index('--strip') + 1], 'MAIN LOCAL: teste livre')

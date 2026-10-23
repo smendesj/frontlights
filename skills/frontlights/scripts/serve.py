@@ -11,8 +11,8 @@ Operations (each prints one JSON object on stdout):
   stop    kill the whole process tree of each recorded process, remove the record and release the issue's
           port reservations (`reservas_liberadas`; also when there is no record, which still reports a refusal).
   free-test start|stop|commands --issue <n>  (redesign, issue 4) the free test on the local main, from the main
-          worktree: `start` runs `start` there (or, without browserTest.processes, says the environment is the
-          user's: `ambiente_do_usuario` with the question), creates .frontlights/issues/<n>/teste-livre-cas.md (the
+          worktree: `start` runs `start` there (or, without browserTest.processes, `sessao_sobe`: the session brings
+          the API and the web up itself, never the user), creates .frontlights/issues/<n>/teste-livre-cas.md (the
           draft of the new criteria) and gives the argv of `serve.py window open|hold` with the strip
           "MAIN LOCAL: teste livre" and a holder without a time limit; `stop` stops only what `start` started and
           counts the boxes of the draft (the batch before the release); `commands`, for an issue without a screen,
@@ -1888,9 +1888,10 @@ def free_test_start(config_file, root, issue):
         served = start(config_file, root, issue)
         started = True
     else:
-        served = {'status': 'ambiente_do_usuario',
-                  'question': 'O ambiente do projeto está de pé na main local, no banco local de desenvolvimento?',
-                  'options': ['Sim, está de pé na main local', 'Vou subir agora']}
+        served = {'status': 'sessao_sobe',
+                  'next': 'Sem browserTest.processes: suba você mesmo a API e o web da worktree principal (a main '
+                          'local), no banco local de desenvolvimento, confira que respondem e só então abra a janela; '
+                          'nunca peça ao usuário que suba. Pare o que subiu no free-test stop.'}
         started = False
     with io_guard('gravar o rascunho dos CAs do teste livre'):
         draft.parent.mkdir(parents=True, exist_ok=True)
@@ -1909,7 +1910,7 @@ def free_test_start(config_file, root, issue):
     return {'ok': True, 'status': 'started', 'issue': issue, 'served': served, 'window': window, 'draft': str(draft),
             'record': str(record_file),
             'message': (f'Teste livre da issue #{issue} na main local: o produto da worktree principal '
-                        f'{"subiu" if started else "é do usuário (pergunte se está de pé)"}; abra a janela pelos '
+                        f'{"subiu" if started else "não subiu: a sessão o sobe (served.next)"}; abra a janela pelos '
                         f'comandos de `window` (faixa "{FREE_TEST_STRIP}", holder sem prazo). Fechar a janela encerra '
                         'o teste livre; então rode `free-test stop`.')}
 

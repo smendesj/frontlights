@@ -190,13 +190,14 @@ class OpenAndCloseTests(WindowCase):
                                 '--base-url', 'https://staging.example.com/')
         self.assertEqual((code, out['category']), (1, 'uso'))
 
-    def test_a_project_without_processes_is_the_users_environment(self):
+    def test_a_project_without_processes_is_brought_up_by_the_session(self):
         config = json.loads(json.dumps(CONFIG))
         del config['browserTest']['processes']
         self.write_config(config)
         code, out = self.window('open', '--issue', '12', '--strip', 'ANTES: origin/main')
-        self.assertEqual(out['ambiente'], 'ambiente_do_usuario')
-        self.assertIn('de pé na branch', out['question'])
+        self.assertEqual(out['ambiente'], 'sessao_sobe')
+        self.assertNotIn('question', out)
+        self.assertIn('nunca pede ao usuário que suba', out['next'])
 
     def test_the_cli_routes_window_to_its_own_parser(self):
         done = subprocess.run([sys.executable, str(SCRIPTS / 'serve.py'), 'window', '--help'], capture_output=True,

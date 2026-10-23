@@ -3415,7 +3415,7 @@ def build_parser():
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p = sub.add_parser('artifact', add_help=False,
-                       help='stage 3: the skeleton of the grilling artifact, init|section|choose (_artifact.py); '
+                       help='stage 3: the skeleton of the grilling artifact, init|section|choose|roteiro (_artifact.py); '
                             'delegated before this parser runs')
     p.add_argument('artifact_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. section --n 3')
     p = sub.add_parser('publish-issue', help='stage 5: publish the approved plan (stamp --check first, blockers first, '

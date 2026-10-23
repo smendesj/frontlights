@@ -13,6 +13,10 @@
            code excerpt above 15 lines. A missing source with an artifact URL in the discovery log is refused with
            "leia a página publicada de volta para <caminho>".
   choose   `--n 3 --answer "<literal>"`: writes the answer in the Escolha field of that section.
+  roteiro  `--content <roteiro.md>`: the last section, "Roteiro do teste livre", written after the merge into the local
+           main and before the free test window opens: one `## <critério ou correção>` per group, an optional
+           `Conta: conta1|conta2` line, `- ` steps and one `Esperado:` line each. Always the last section; a second call
+           replaces it. Refuses a group without steps or without Esperado, inline style or script, and a password.
 
 Every write prints `publish.file_path` (and, from `init --before`, `publish.files`): the session publishes the whole
 source once per round with the host's artifact tool, on the same URL, never by `edits`. The content, the publication
@@ -259,7 +263,8 @@ def put_section(page, n, markup):
         return page[:found.start()] + markup + '\n' + page[found.end():]
     later = [(int(m.group(1)), m.start()) for m in re.finditer(r'<section class="secao[^"]*" id="secao-(\d+)">', page)
              if int(m.group(1)) > n]
-    at = min(later)[1] if later else page.index(END)
+    script = page.find(ROTEIRO_OPEN)
+    at = min(later)[1] if later else (script if script >= 0 else page.index(END))
     return page[:at] + markup + '\n' + page[at:]
 
 
@@ -369,10 +374,74 @@ def op_choose(root, issue, n, answer):
     return publish(source, sections=[n])
 
 
+ROTEIRO_OPEN = '<section class="secao secao-roteiro" id="roteiro">'
+ROTEIRO_RE = re.compile(re.escape(ROTEIRO_OPEN) + r'.*?</section>\n?', re.S)
+SECRET = re.compile(r'\b(senha|password|passwd|pwd)\b\s*[:=]', re.I)
+
+
+def render_roteiro(path):
+    path = Path(path)
+    if not path.is_file():
+        raise Refusal('content_missing', f'roteiro: o arquivo {path} não existe',
+                      hint='## S1 <critério>, Conta: conta1, - passo, Esperado: ...')
+    text = path.read_text(encoding='utf-8-sig')
+    lowered = text.lower()
+    if 'style=' in lowered or '<script' in lowered:
+        raise Refusal('inline_style', 'roteiro: estilo inline ou script no conteúdo')
+    if SECRET.search(text):
+        raise Refusal('secret', 'roteiro: uma senha no conteúdo; a conta entra só pelo rótulo (conta1, conta2)',
+                      hint='Conta: conta1')
+    groups, current = [], None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if line.startswith('## '):
+            current = {'title': line[3:].strip(), 'account': None, 'steps': [], 'expected': None}
+            groups.append(current)
+        elif current is None or not stripped:
+            continue
+        elif stripped.startswith('- '):
+            current['steps'].append(stripped[2:])
+        elif plain(stripped).startswith('conta:'):
+            current['account'] = stripped.split(':', 1)[1].strip()
+        elif plain(stripped).startswith('esperado:'):
+            current['expected'] = stripped.split(':', 1)[1].strip()
+    if not groups:
+        raise Refusal('roteiro_empty', 'roteiro: nenhum grupo ## <critério>', hint='## S1 <critério>')
+    parts = [ROTEIRO_OPEN, '<h2 class="secao-titulo">Roteiro do teste livre</h2>',
+             '<p>Na janela "MAIN LOCAL: teste livre", siga um grupo por vez e marque o que conferiu. O teste é seu: '
+             'peça ajuda ou uma correção a qualquer momento.</p>']
+    for group in groups:
+        if not group['steps'] or not group['expected']:
+            missing = 'o passo a passo' if not group['steps'] else 'a linha Esperado:'
+            raise Refusal('roteiro_incomplete', f'roteiro, "{group["title"]}": falta {missing}',
+                          hint='- passo, depois Esperado: <o que a tela mostra>')
+        parts.append(f'<div class="campo">\n<h3>{inline(group["title"])}</h3>')
+        if group['account']:
+            parts.append(f'<p>Conta: {inline(group["account"])}</p>')
+        parts.append('<ol>' + ''.join(f'<li>{inline(step)}</li>' for step in group['steps']) + '</ol>')
+        parts.append(f'<p><strong>Esperado:</strong> {inline(group["expected"])}</p>\n</div>')
+    parts.append('</section>')
+    return '\n'.join(parts), len(groups)
+
+
+def op_roteiro(root, issue, content):
+    if not content:
+        raise Refusal('usage', 'roteiro precisa de --content', hint='--content roteiro.md')
+    source, page = read_source(root, issue)
+    markup, count = render_roteiro(content)
+    page = ROTEIRO_RE.sub('', page)
+    page = page.replace(END, markup + '\n' + END, 1)
+    source.write_text(page, encoding='utf-8')
+    result = publish(source, sections=['roteiro'])
+    result['groups'] = count
+    result['message'] += ' O roteiro é a última seção: diga ao usuário o link e que ele está no fim da página.'
+    return result
+
+
 def parser():
     p = _cli.JsonParser(prog='frontlights.py artifact', description=__doc__,
                         formatter_class=__import__('argparse').RawDescriptionHelpFormatter)
-    p.add_argument('artifact_op', choices=('init', 'section', 'choose'))
+    p.add_argument('artifact_op', choices=('init', 'section', 'choose', 'roteiro'))
     p.add_argument('--root', help='worktree principal, onde fica .frontlights (padrão: a principal)')
     p.add_argument('--issue', help='issue já publicada: a fonte vai para .frontlights/issues/<n>/artifact.html')
     p.add_argument('--title', action='append', default=[], help='init: título da página; section: a pergunta, um por --n')
@@ -381,7 +450,7 @@ def parser():
     p.add_argument('--before', help='init: o print da base (serve.py window shot --pass antes --name base), publicado como antes.png')
     p.add_argument('--n', type=int, action='append', default=[], help='section e choose: o número da seção; section aceita vários')
     p.add_argument('--option', action='append', default=[], help='section: uma opção; com vários --n, "<n>:<opção>"')
-    p.add_argument('--content', action='append', default=[], help='section: o arquivo com os campos em ## <campo>, um por --n')
+    p.add_argument('--content', action='append', default=[], help='section: o arquivo com os campos em ## <campo>, um por --n; roteiro: o roteiro do teste livre')
     p.add_argument('--image', default=IMAGE, help=f'section, tipo tela: o print publicado (padrão {IMAGE})')
     p.add_argument('--answer', help='choose: a resposta literal do usuário')
     return _cli.output_flags(p)
@@ -396,6 +465,10 @@ def run(args):
                        args.kind[0] if args.kind else 'tela', args.before)
     if args.artifact_op == 'section':
         return op_section(root, args.issue, args.n, args.kind, args.title, args.option, args.content, args.image)
+    if args.artifact_op == 'roteiro':
+        if len(args.content) > 1:
+            raise Refusal('usage', 'roteiro leva um --content')
+        return op_roteiro(root, args.issue, args.content[0] if args.content else None)
     if len(args.n) != 1 or not args.answer:
         raise Refusal('usage', 'choose leva um --n e --answer', hint='--n 3 --answer "<resposta literal>"')
     return op_choose(root, args.issue, args.n[0], args.answer)

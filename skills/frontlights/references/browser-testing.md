@@ -87,10 +87,10 @@ A Direct change with no issue has no plan: ask "Informar a issue", "Dispensar o 
 `serve start|status|stop` brings up `browserTest.processes` in a worktree, records pids and ports and kills only the
 trees it started; `checks regression|integration|smoke` run the suites. Their flags, exit codes and categories are
 in `python "${CLAUDE_SKILL_DIR}/scripts/serve.py" --help` and `checks.py --help`, the outputs are JSON, and every
-failure is a question ("Every failure is a question"). A project whose `browserTest` declares only the accounts
-starts its own environment: skip `serve start` and `serve stop`, confirm with the user that the environment is up and
-on the branch under test (`window open` says `ambiente_do_usuario`), and never start or stop a process this session did
-not start. A dev server that pins its own ports keeps a fixed `port`, and then only one issue at a time can run it:
+failure is a question ("Every failure is a question"). A project whose `browserTest` declares only the accounts has
+no `serve start`: the session itself brings up the API and the web of the tree under test (`window open` says
+`sessao_sobe`), checks they answer, stops them before reporting, never asks the user to bring them up, and offers to
+declare those commands in `browserTest.processes`; it never stops a process it did not start. A dev server that pins its own ports keeps a fixed `port`, and then only one issue at a time can run it:
 say so when recommending parallelism. The preview is not part of the watched run (`development.md`, "The start of
 stage 6"). Stop what this session started before reporting the issue.
 
@@ -182,7 +182,12 @@ each criterion (`browser-gate record`). What the window must be:
   (`development.md`, "Standing authorization and the denied operations").
 
 At the end the watched run runs only DEPOIS; compare it with the ANTES evidence criterion by criterion in the report.
-ANTES failing where the issue fixes something is expected; DEPOIS differing from the `Fluxo:` is a product failure.
+**Two confirmations, code and screen.** Each criterion with a screen is confirmed twice at each end: by code (red at
+the base, green on the branch of the issue) and by screen (ANTES shows the defect, DEPOIS shows it fixed). ANTES
+failing where the issue fixes something is the expected confirmation that the problem exists; an ANTES that does not
+reproduce it becomes a question before any code for that criterion ("Não reproduzi o problema do S<n> na base. Como
+seguimos?": "Ajustar o critério", "Já está resolvido na base: tirar da issue", "Faltam dados: criar e repetir").
+DEPOIS differing from the `Fluxo:` is a product failure; a green test never stands in for it.
 
 **After the watched run: ask what comes next.** It is asked only when the user watched (`assistido: true`). Once the
 result of each case is in the text (ANTES and DEPOIS side by side, with the evidence folder) and any moved profile is
@@ -254,7 +259,7 @@ test happens in the terminal (`development.md`, "The free test on the local main
 - **The product.** `python "${CLAUDE_SKILL_DIR}/scripts/serve.py" start --config <config> --root <main worktree> --issue <n>`,
   on the local main, on the local development database (the homologation one), never on the ports of the preview.
   This is the only exception to the rule that a watched run never serves from the main worktree, and it holds only
-  for the free test. A project that starts its own environment is asked to bring it up on the local main.
+  for the free test. Without `browserTest.processes`, the session brings it up itself on the local main (`sessao_sobe`).
 - **The window.** Chrome driven by Playwright, visible (`headless: false`), never Claude's built-in browser nor Claude
   in Chrome, in a disposable profile, never the user's personal one, with `viewport: null`, opened by `window open`
   and logged in with account 1 of `browserTest.users`, typed only into the login form.
@@ -263,7 +268,7 @@ test happens in the terminal (`development.md`, "The free test on the local main
 - **The holder.** `window hold --minutes none`, in the background. The holder has no time limit: the 5 minutes of the
   watched run do not apply, and it exits only on the browser's `disconnected` event; its exit wakes the session, which
   runs `serve stop` for what it started (`python "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <main worktree> --issue <n>`).
-- **Help on request.** The user leads: no script, no ANTES/DEPOIS and no print is required, and the test creates no
+- **Help on request.** The user leads, guided by the roteiro at the end of the artifact: no ANTES/DEPOIS and no print is required, and the test creates no
   test data of its own. While the window is open the session helps on request: it reads the screen, the console and
   the network and explains what it sees; it clicks or types only when the user asks. A fix the user asks for is the one
   case in which the session edits code while the window is open (`development.md`, "The free test on the local main");

@@ -24,8 +24,8 @@ The window comes from the script, never from memory:
    every new page and its exit wakes you: `python "{{SCRIPTS}}/serve.py" window hold --issue {{ISSUE}} --minutes {{HOLD}}`.
    A bare timer or `sleep` is not a holder.
 3. Look at `checkShot` (never keep it). With `fits: false`, or the strip or an edge of the page cut off, resize and
-   look again; never go on with a cut-off window. With `ambiente: ambiente_do_usuario`, stop and tell the session:
-   the user starts the environment and confirms it is up on the branch under test.
+   look again; never go on with a cut-off window. With `ambiente: sessao_sobe`, the environment is the session's: if
+   the page does not answer, stop and tell the session, which brings it up.
 4. Drive the page with the Playwright the script found ({{PLAYWRIGHT}}): `chromium.connectOverCDP("<cdpUrl>")`, then
    `browser.contexts()[0].pages()`. Without Playwright (`driver: cdp`), drive it over the CDP port yourself, put the
    strip on every page and log in through the form.

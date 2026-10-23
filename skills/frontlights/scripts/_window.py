@@ -26,8 +26,8 @@ prints go to `.frontlights/evidencias-pendentes/` (`antes-pendente-<label>.png`)
 `--issue <n>` moves them into the issue's folders, renamed with the number (`pendentesMovidos`).
 
 The window never judges a pass: passed or failed is the session's and the user's. It starts no server: with
-`browserTest.processes` the servers are `serve start`'s; without them the environment is the user's
-(`ambiente: ambiente_do_usuario`) and the session asks whether it is up on the branch under test.
+`browserTest.processes` the servers are `serve start`'s; without them the session brings the environment up itself
+(`ambiente: sessao_sobe`), never the user.
 """
 
 import json
@@ -325,8 +325,9 @@ def ours_alive(state):
 def environment_of(block):
     if isinstance(block, dict) and block.get('processes'):
         return 'serve', None
-    return 'ambiente_do_usuario', ('O projeto sobe o próprio ambiente (sem browserTest.processes): pergunte ao usuário '
-                                   'se ele está de pé na branch em teste antes da primeira passada.')
+    return 'sessao_sobe', ('Sem browserTest.processes: a sessão sobe ela mesma a API e o web da árvore em teste, no '
+                           'banco local de desenvolvimento, confere que respondem e para o que subiu; nunca pede ao '
+                           'usuário que suba. Ofereça declarar os comandos em browserTest.processes.')
 
 
 def op_open(config_file, root, tree, issue, strip, base_url, account, reopen_of=None):
@@ -378,10 +379,10 @@ def op_open(config_file, root, tree, issue, strip, base_url, account, reopen_of=
         result.update(fits=None, checkShot=None, login='condutor')
         result['message'] = ('Sem Playwright no projeto: o Chrome abriu com a porta de depuração (cdpUrl) e quem conduz '
                              'injeta a faixa, faz o login e confere a tela. Nada foi instalado.')
-    environment, question = environment_of(block)
+    environment, todo = environment_of(block)
     result['ambiente'] = environment
-    if question:
-        result['question'] = question
+    if todo:
+        result['next'] = todo
     if moved:
         result['pendentesMovidos'] = moved
     if reopen_of is not None:

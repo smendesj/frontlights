@@ -216,7 +216,7 @@ class FreeTestWindowTests(unittest.TestCase):
         self.assertIn('The holder of the free test has no time limit ("The free test window", below)', pace)
 
     def test_the_user_leads_and_the_session_helps_on_request(self):
-        for phrase in ('The user leads: no script, no ANTES/DEPOIS and no print is required',
+        for phrase in ('The user leads, guided by the roteiro at the end of the artifact: no ANTES/DEPOIS and no print is required',
                        'the session helps on request', 'reads the screen, the console and the network and explains',
                        'clicks or types only when the user asks', 'never writes to the database on its own'):
             with self.subTest(phrase=phrase):
