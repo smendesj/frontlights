@@ -15,6 +15,7 @@ and `message` (a refusal adds `reason` and `hint`); its flags are in its `--help
 | Standing authorization and the denied operations | first, before the charter; before any denied operation |
 | Work without an issue | the Direct path, or a Short one that publishes no issue |
 | The start of stage 6 | the sync of the local main and the preview, before the first slice |
+| Issue already decided | stage 6 with no grilling in this session, before the first slice |
 | Slices in order | opening, merging and ticking each slice |
 | Which tests run when | choosing what a slice's loop runs |
 | Dispatch and ownership | dispatching implementers and helpers (their brief: `references/worker.md`) |
@@ -91,6 +92,28 @@ slice: `serve preview refresh` in the main worktree with every issue branch in p
 work in progress out of the preview; it follows the work and stops only when the user asks. The tab belongs to the
 user, outside the rule of the disposable window, and the watched run never uses the preview nor its ports. A conflict
 or a broken build is one line, then a question.
+
+### Issue already decided
+
+When the work reaches this stage with no grilling in this session (an issue published elsewhere, by a triage
+among them, or a problem round with no question and an empty tree), the interview is skipped, never the facts, the
+stamp, the artifact nor the ANTES. Before the first slice is cut, in this order:
+
+1. **Facts.** Each slice fails today at the base, with evidence: a triage's `fatos/<n>.md` serves when written on the
+   same `origin/<base>` commit; otherwise the probes of `references/grilling.md`, "Reconnaissance", run in subagents.
+   A fact that contradicts the issue becomes a question before any code.
+2. **Base.** With a screen, the ANTES window opens after its "Pronto para assistir?" (`references/browser-testing.md`,
+   "Watched run"), takes the base print and stays open.
+3. **Artifact.** `frontlights.py artifact init`, then one section per decision the issue records: the approach (and
+   the rejected ones the body names), each decision and each slice, each saying what it implies, with no `artifact
+   choose`; published once (`references/grilling.md`, "The artifact").
+4. **Stamp.** `.frontlights/issues/<n>/plano.md` lists the slices as the issue states them, the facts of step 1 and
+   where the approval came from (a stamp, an applied triage, or none recorded), cites the artifact's URL and is
+   approved by link and stamp (`SKILL.md`, "Show before approval", with `--stage 5`). No slice is cut before that
+   "Aprova"; the announcing block and the handoff name the stamp and the URL.
+5. **ANTES of each criterion.** As the slices start, the same window runs the `Fluxo:` of each criterion on the base,
+   so every ANTES print is ready before the code ends; a criterion without a `Fluxo:` gets one written from its
+   text. After the implementation, DEPOIS runs alone ("After the loop").
 
 ## Slices in order
 

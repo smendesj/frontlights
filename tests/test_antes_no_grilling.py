@@ -10,7 +10,7 @@ janela DEPOIS.
 (b) Nenhuma slice aplica migração no banco local antes de o ANTES fechar (condição da operação coberta, em
 `references/development.md`); aplicada antes, o relatório diz que o ANTES não é fiel.
 (c) No fim, só a DEPOIS, um print por critério, no mesmo ponto do ANTES; "Assistir de novo" repete só a DEPOIS; o
-ritmo da DEPOIS não muda (cada caso duas vezes, cerca de 5 minutos).
+ritmo da DEPOIS: cada caso uma vez, nunca repetido (uma ANTES e uma DEPOIS), cerca de 5 minutos.
 (d) Nomes `antes-<cover>-S<n>.png`, `depois-<cover>-S<n>.png` e `falha-<caso>`; no texto, `antes#<cover>-S<n>`.
 (e) Contas e dados de teste ficam para reuso no banco local de desenvolvimento; nada de remoção no fim da passada;
 o perfil movido continua sendo desfeito.
@@ -122,18 +122,53 @@ class MigrationsWaitTests(unittest.TestCase):
         self.assertEqual(homes, ['skills/frontlights/references/development.md'])
 
 
+class IssueAlreadyDecidedTests(unittest.TestCase):
+    # GeoCloud, 23/10/2026: uma issue pronta (da triagem) foi direto à etapa 6, sem conferir as fatias no código, sem
+    # carimbo, sem artefato e sem prints do ANTES
+    def decided(self):
+        text = read('skills', 'frontlights', 'references', 'development.md')
+        return flat(re.search(r'^### Issue already decided\n(.*?)(?=^##)', text, re.S | re.M).group(1))
+
+    def test_skipping_the_interview_keeps_facts_stamp_artifact_and_antes(self):
+        for phrase in ('never the facts, the stamp, the artifact nor the ANTES', 'Before the first slice is cut',
+                       'Each slice fails today at the base, with evidence', 'same `origin/<base>` commit',
+                       'A fact that contradicts the issue becomes a question before any code',
+                       'takes the base print and stays open', 'one section per decision the issue records',
+                       'where the approval came from (a stamp, an applied triage, or none recorded)',
+                       'approved by link and stamp', 'No slice is cut before that "Aprova"',
+                       'every ANTES print is ready before the code ends', 'DEPOIS runs alone'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.decided())
+
+    def test_the_steps_run_in_order(self):
+        text = self.decided()
+        marks = [text.index(m) for m in ('**Facts.**', '**Base.**', '**Artifact.**', '**Stamp.**',
+                                         '**ANTES of each criterion.**')]
+        self.assertEqual(marks, sorted(marks))
+
+    def test_stage_6_points_to_it(self):
+        self.assertIn('`references/development.md`, "Issue already decided"', flat(read('skills', 'frontlights', 'SKILL.md')))
+        self.assertIn('| Issue already decided |', read('skills', 'frontlights', 'references', 'development.md'))
+
+
 class OnlyDepoisAtTheEndTests(unittest.TestCase):
     def test_the_end_runs_only_depois_with_one_print_per_criterion(self):
         for phrase in ('At the end the watched run runs only DEPOIS',
                        '**One print per criterion.**',
                        'at the same place in ANTES and DEPOIS',
                        'the result of each step stays in text, only in `result.json`',
-                       'Each case runs twice in each pass', 'about 5 minutes'):
+                       'Each case runs once in each pass, never repeated', 'about 5 minutes'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, WATCHED)
         self.assertNotIn('One print per pass', WATCHED)
+        self.assertNotIn('twice', WATCHED)
         what_runs = flat(re.search(r'\*\*What runs\.\*\*.*?(?=\n\n)', REFERENCE, re.S).group(0))
         self.assertIn('only DEPOIS', what_runs)
+
+    def test_the_conductor_runs_each_case_once(self):
+        conductor = flat(read('skills', 'frontlights', 'references', 'browser-conductor.md'))
+        self.assertIn('Run each case once, never repeated.', conductor)
+        self.assertNotIn('twice', conductor)
 
     def test_watching_again_runs_only_depois(self):
         after = flat(re.search(r'\*\*After the watched run.*?(?=\n\*\*Real back first)', REFERENCE, re.S).group(0))

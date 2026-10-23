@@ -109,7 +109,7 @@ opens (the first ANTES window, at the problem round of the grilling, and the DEP
 with `AskUserQuestion`: "Pronto para assistir ao teste de navegador da issue #<n>?" (for a family that already exists,
 "das issues #<n>, #<m> e #<k>"). The text says what comes: for ANTES, the screens of the base for the artifact and,
 once the plan is approved, the `Fluxo:` of each criterion on the base, the window staying open until the last ANTES
-print; for DEPOIS, each case twice, one print per criterion, and the window open for about 5 minutes at the end; that
+print; for DEPOIS, each case once, one print per criterion, and the window open for about 5 minutes at the end; that
 the run uses the test accounts that exist and creates the test data the `Fluxo:` needs, which stays on the local
 development database for reuse; that the database behind the server is the local development database (ask the user
 to confirm it when the project does not say so); and, when the `Fluxo:` moves a test user to a restricted profile,
@@ -162,7 +162,7 @@ each criterion (`browser-gate record`). What the window must be:
 - **A strip on every page.** A fixed strip pinned to the top edge across the full width, by an init script: "ANTES:
   origin/main" (the base's own name otherwise) and "DEPOIS: branch <name>". No login, password or local path ever goes
   into the strip; `window open` refuses one.
-- **Pace.** Each case runs twice in each pass. Hold every popup, toast and dialog on screen long enough to be read.
+- **Pace.** Each case runs once in each pass, never repeated: one ANTES, one DEPOIS. Hold every popup, toast and dialog on screen long enough to be read.
   After the last step of DEPOIS the window stays open for about 5 minutes, held by a background process so that the
   wait never blocks the agent: `window hold --minutes 5`, started with the shell tool's run_in_background option by
   whoever drives the pass. It exits when the user closes the window (the browser's `disconnected` event) or the

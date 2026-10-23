@@ -39,7 +39,7 @@ For each criterion, in order:
 
 1. Walk its `Fluxo:` step by step on {{BASE_URL}}, comparing each screen with the expected result, and check the
    effect in the back and the database through the product's own read path, never only what the screen shows.
-2. Run each case twice. Hold every popup, toast and dialog on screen long enough to be read (a few seconds), not the instant
+2. Run each case once, never repeated. Hold every popup, toast and dialog on screen long enough to be read (a few seconds), not the instant
    the assertion passes.
 3. Take exactly one print for the criterion, the single screen that shows best what it changes, at the same place in
    ANTES and DEPOIS: `python "{{SCRIPTS}}/serve.py" window shot --issue {{ISSUE}} --pass {{PASS}} --criterion S<n>`.
