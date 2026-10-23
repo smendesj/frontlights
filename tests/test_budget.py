@@ -20,8 +20,8 @@ SLACK = 1.10
 # issue 5); só desce
 BUDGET = {
     'SKILL.md': 1800,
-    'docs/protocol.md': 6611,
-    'docs/security.md': 8136,
+    'docs/protocol.md': 6289,   # issue 7: "Quadro e publicação" vira registros e ponteiro
+    'docs/security.md': 8112,   # issue 7: "Revisão e sobras"
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
@@ -29,7 +29,7 @@ BUDGET = {
     'references/family.md': 1442,
     'references/grilling.md': 1893,
     'references/issue.md': 360,
-    'references/issues.md': 6063,
+    'references/issues.md': 2609,   # issue 7: etapa 5 por comando
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
     'references/progress-report.md': 3797,

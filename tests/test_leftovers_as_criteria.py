@@ -100,64 +100,27 @@ class RecipeTests(unittest.TestCase):
                 self.assertIn(phrase, self.recipe)
 
     def test_it_changes_scope_so_it_is_approved_before_any_write(self):
-        for phrase in ('like any update of a published issue, it keeps what is there and is approved before it is written',
+        for phrase in ('Like any update of a published issue, it keeps what is there and is approved before it is written',
                        'the exact text', 'approved in that single question', 'Nothing is written before the answer'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
-    def test_the_capture_is_byte_exact_without_a_shell_redirect_and_with_a_windows_safe_name(self):
-        for phrase in ('never with a shell redirect', 'Windows PowerShell re-encodes redirected output',
-                       "json.loads(subprocess.run(['gh','issue','view','<n>','--repo','<repo>','--json','body']",
-                       "pathlib.Path(r'<file>').write_bytes(b.encode('utf-8'))", 'body-before-<YYYYMMDDTHHMMSSZ>.md',
-                       'a colon is not valid in a Windows file name', 'create the folder first when it does not exist',
-                       'is the baseline'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.recipe)
-
-    def test_the_documented_capture_command_writes_the_body_byte_for_byte(self):
-        match = re.search(r'python -c "(import json,subprocess,pathlib;.*?)"`', self.recipe)
-        self.assertIsNotNone(match, 'the capture command is no longer documented in one piece')
-        body = '## Acceptance criteria\r\n- [x] Comportamento \u2713\r\n- [ ] Pend\u00eancia\n\n'
-        with tempfile.TemporaryDirectory() as folder:
-            target = Path(folder) / 'body-before.md'
-            code = match.group(1).replace('<n>', '12').replace('<repo>', 'OWNER/REPOSITORY').replace('<file>', str(target))
-            answer = SimpleNamespace(stdout=json.dumps({'body': body}).encode('utf-8'))
-            with mock.patch('subprocess.run', return_value=answer) as run:
-                exec(code, {})
-            argv = run.call_args.args[0]
-            self.assertEqual(argv, ['gh', 'issue', 'view', '12', '--repo', 'OWNER/REPOSITORY', '--json', 'body'])
-            written = target.read_bytes()
-        self.assertEqual(written, body.encode('utf-8'))      # CRLF kept, accents intact
-        self.assertFalse(written.startswith(b'\xef\xbb\xbf'))   # no byte-order mark
-
-    def test_the_write_rereads_before_writing_only_adds_and_never_overwrites_a_changed_body(self):
-        for phrase in ('with only the new items inserted right after the last item of the section',
-                       'by an exact-replace edit of the copy and never by retyping the whole body',
-                       'git diff --no-index --ignore-cr-at-eol --numstat <before> <new>` must show no deleted line',
-                       'Capture the body once more right before writing',
-                       'git diff --no-index --ignore-cr-at-eol --exit-code <before> <now>',
-                       'any difference means someone edited the issue meanwhile, so stop and show it instead of overwriting',
-                       'gh issue edit <n> --repo <repo> --body-file <file>', 'never an interpolated string',
-                       'GitHub offers no compare-and-swap'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.recipe)
-
-    def test_the_write_is_verified_by_the_closeout_count_and_by_the_difference(self):
-        for phrase in ('python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" candidates --config <config> --root <project> --issues <n>',
-                       'Run the same closeout command again', 'criteria.total`, under `candidates` or `excluded`',
-                       'grown by the number of items added', 'unchecked_criteria', 'open_children',
-                       'with the same flag (`--ignore-cr-at-eol`)',
-                       'the only differences are the added lines, inside the section '
-                       '(in a legacy migration, also the removed legacy lines)',
+    def test_the_write_is_one_command_that_captures_inserts_rereads_and_stops_on_a_divergence(self):
+        """Issue 7 do redesenho: a captura com `python -c`, os dois `git diff --no-index` e a contagem pelo
+        `closeout.py candidates` viraram `closeout.py append`, coberto em tests/test_closeout_append.py."""
+        for phrase in ('`closeout.py append --issue <n> --items <stamped file> [--pitfall <file>]`',
+                       'captures the body byte for byte', 'inserts after the last item of the section',
+                       'captures again right before writing (someone edited it: it stops)',
+                       'rereads and prints `criteria.total` before and after',
                        'restoring the saved body is a write of its own and needs its own approval'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
+        for gone in ('python -c', 'git diff --no-index', 'closeout.py" candidates'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, self.recipe)
 
     def test_the_approved_text_the_answer_and_the_write_are_recorded(self):
-        for phrase in ('the approved text', "the user's literal answer with a reference", 'handoff',
-                       "authorization's record of GitHub writes"):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.recipe)
+        self.assertIn('The handoff keeps the text, the literal answer and the files `append` printed', self.recipe)
 
     def test_the_criterion_is_ticked_only_with_evidence_and_never_to_get_the_issue_closed(self):
         self.assertIn('Tick it only with evidence', self.recipe)
@@ -167,14 +130,15 @@ class RecipeTests(unittest.TestCase):
         self.assertIn('the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing keyword '
                       '(`Closes`, `Fixes`, `Resolves`), in its body and in the commit messages', self.recipe)
         self.assertIn('the merge would close the issue with the criterion unticked', self.recipe)
+        # issue 7 do redesenho: a frase dizia "While one is open the issue..." em issues.md; o pin de
+        # development.md abaixo segue igual
         self.assertIn('While such a criterion is open the issue is not in the `closes` of `release-plan`, so the PR '
                       'cites it without a closing keyword, in its body and in the commit messages',
                       flat('skills', 'frontlights', 'references', 'development.md'))
 
     def test_a_legacy_section_is_moved_only_on_request_by_a_write_of_its_own_and_the_closeout_only_warns(self):
-        for phrase in ('already kept in a section of its own', 'only when the user asks for it',
-                       'with its own approval', 'removed from the old section',
-                       'the only differences are those added lines and those removed ones', '`pending_outside_criteria`'):
+        for phrase in ('kept in a section of its own', 'only when the user asks for it',
+                       'with its own approval', '`pending_outside_criteria`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 

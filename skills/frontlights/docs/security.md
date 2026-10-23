@@ -235,19 +235,17 @@ A revisão independente roda só quando o usuário a pede e não é portão. Qua
 quem a fez: um arquivo de revisão tirado depois de uma correção faz uma revisão velha parecer atual, e quem salva
 o arquivo precisa salvá-lo na hora em que o revisor se vinculou. Um HEAD destacado tem `branch` vazio e é aceito.
 
-Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue de origem ou uma
-issue de topo, nunca uma sub-issue nova. Isso é uma
-escrita no corpo de uma issue, feita pela sessão com o `gh` dela e sob as permissões vigentes, só depois de o
-arquivo exato, com o carimbo, ser aprovado no lote dos achados (`SKILL.md`, "Show before approval"); o corpo anterior fica guardado, só se acrescenta (a
-migração de uma seção legada, pedida por você, também remove os itens movidos, e a linha `Bloqueada:` de uma
-slice que destravou é apagada antes da marcação), a releitura confere a diferença e nenhum utilitário do
-Frontlights faz essa escrita. A conversão de uma família em issue + CAs (`references/issues.md`,
-"Converting a family") é a única exceção: o corpo do pai é substituído, só depois de o antes e o depois,
-num arquivo carimbado, serem aprovados, uma aprovação por família; o corpo anterior fica guardado em
-`.frontlights/issues/<n>/`, a diferença é relida, e o fechamento das filhas convertidas e o ajuste do
-quadro continuam operações negadas, cada uma com a própria pergunta e o "Sim". O Frontlights não impede a sessão de
-encerrar com o achado só no texto do PR: o portão é uma regra da skill, não uma barreira, e o `closeout.py` é o
-que impede que a issue seja proposta para fechar com o critério aberto.
+As escritas no corpo de uma issue publicada saem só de comandos que conferem o `stamp --check` do arquivo aprovado
+(`SKILL.md`, "Show before approval") e a conta e o repositório (`_cli.gh_account`) antes de cada escrita, sem shell:
+`frontlights.py publish-issue` cria as issues aprovadas, põe no quadro e relê (numa issue adotada, só labels,
+blocked-by e quadro, nunca o corpo); `closeout.py append` só acrescenta linhas aprovadas, com o corpo anterior
+guardado, uma captura de novo logo antes da escrita (outra edição no meio: para e mostra, nada escrito) e a releitura;
+`closeout.py tick` marca uma caixa. Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue
+de origem ou uma issue de topo, nunca uma sub-issue nova (`references/issues.md`, "Follow-ups"). A conversão de uma
+família (`references/issues.md`, "Converting a family") é a única exceção ao só acréscimo: uma aprovação por família, o
+corpo anterior fica guardado, e fechar as filhas e mexer no quadro seguem operações negadas, cada uma com a própria
+pergunta. O Frontlights não impede a sessão de encerrar com o achado só no texto do PR: o portão é uma regra da skill,
+não uma barreira, e o `closeout.py` é o que impede que a issue seja proposta para fechar com o critério aberto.
 
 ## Fechamento e limpeza
 

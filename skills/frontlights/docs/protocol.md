@@ -98,48 +98,29 @@ issues, das slices e da release mesclada; o único `git push origin --delete` é
 
 ### Quadro e publicação
 
-Projeto sem remoto é um estado suportado: `repository: null` no `config.json`, no
-plano e na autorização. As issues locais ficam em `.frontlights/issues/<n>/`, e o
-registro de cada uma traz `number`, `title`, `body`, `state` e `source: "local"`,
-sem `html_url`. As branches usam `branch_prefix`, com padrão `claude/`.
+Projeto sem remoto é um estado suportado: `repository: null` no `config.json`, no plano e na autorização. O
+`frontlights.py publish-issue` grava cada issue aprovada em `.frontlights/issues/<n>/issue.json`, com `number`,
+`title`, `body`, `state` e `source: "local"`, sem `html_url`. As branches usam o prefixo do config (`branchPrefix`).
 
-Com `project` no `config.json`, publicar uma issue inclui, na mesma aprovação:
-adicioná-la ao quadro (`gh project item-add`), atribuir o responsável e o tipo
-(`gh issue edit --add-assignee --type`) e preencher cada campo do quadro
-(`gh project item-edit --field --value`). O plano mostrado para aprovação traz esses
-valores por issue, e todo campo recebe valor. Quando o `project` configura `labels`,
-`issue_type_by_label` ou `body_fields`, o plano nomeia também os labels e as linhas do corpo, o
-`validate-plan` imprime os valores finais (`resolved`) e a publicação usa só eles. A conclusão da publicação exige reler,
-pelo GitHub, que a issue está no quadro com os valores aprovados. Projeto local
-(`repository: null`) não tem quadro.
+Registros da etapa 5, fora do Git como os outros:
 
-Regra do quadro: toda issue de topo entra no quadro; sub-issue entra só pelo pai.
-Nenhuma sub-issue nova é criada: uma família que já existe (filhas publicadas antes desta
-regra) é lida, trabalhada e fechada como antes, e o `validate-plan` recusa uma issue
-proposta com `parent`. A conversão de família em issue + CAs (`references/issues.md`), oferecida
-antes de agir numa família e feita em lote a pedido, é a única escrita que substitui um corpo: uma
-aprovação por família, o corpo anterior guardado, as filhas fechadas como convertidas e o quadro
-ajustado só com o "Sim" de cada operação. As dependências entre as issues de um plano nascem como relação
-nativa do GitHub (`gh issue create --blocked-by`, bloqueadoras publicadas primeiro, na
-ordem de `frontlights.py publish-order`) e são relidas em `blockedBy`; a linha `Depends
-on:` do corpo é texto de apoio. Achados de revisão, testes ou conferência seguem a seção
-Follow-ups de `skills/frontlights/references/issues.md`, com três destinos: corrigir no
-PR, critério de aceitação novo na issue de origem, e issue de topo só para escopo novo ou
-problema que atravessa várias issues; nunca uma sub-issue nova. O lote é decidido numa
-única pergunta. Toda pendência que não
-for corrigida no PR vira, na issue de origem, um critério `- [ ]` dentro da seção de
-critérios de aceitação (nunca numa seção à parte, que o fechamento não conta), com
-a evidência que o fechará; como altera o escopo, o texto exato é mostrado e aprovado no
-lote antes de a sessão escrever o corpo (`gh issue edit --body-file`, com o corpo anterior
-guardado, só acréscimo, exceto na migração de uma seção legada, releitura e diferença
-conferidas) e a escrita é registrada no
-documento de passagem de contexto. Antes de relatar uma issue como revisada ou concluída,
-antes do merge na main local e antes de abrir ou atualizar um PR, todo achado em aberto precisa de destino rastreável
-(corrigido, critério novo ou issue de topo); "citado no corpo do PR" nunca é
-destino, e só ruído que não é defeito pode ficar como texto, dito como tal e com a
-evidência. O pai de uma família que já existe só é dado como concluído com as filhas
-fechadas; um achado tardio, depois de a issue fechar, vira issue de topo que a cita,
-nunca sub-issue, e o Frontlights nunca reabre uma issue.
+```text
+.frontlights/
+  publish/<carimbo>.json       estado do publish-issue por aprovação (o carimbo do arquivo aprovado): approved,
+                               sha256, repository, started_at, issues.<id> (number, url, done, adopted, recovered,
+                               failed) e finished_at; o --resume lê daqui o que já foi escrito
+  publish/<carimbo>-<id>.md    o corpo exato entregue ao gh issue create
+  issues/<n>/body-<tipo>-<AAAAMMDDTHHMMSSZ>.md
+                               as capturas do closeout.py capture, append e tick: before, new, now e after
+  pitfalls.md                  as linhas de armadilha, só acréscimo (closeout.py append --pitfall)
+```
+
+As regras vivem em `references/issues.md`. "Project board":
+toda issue de topo entra no quadro; sub-issue entra só pelo pai; o `validate-plan` resolve labels, `body_fields` e
+`issue_type_by_label`, e o `publish-issue` publica só esses valores, com as dependências nativas por `--blocked-by`,
+bloqueadoras primeiro, na ordem de `publish-order`, e relê o GitHub (`blockedBy` incluído). "Follow-ups": corrigir no PR, critério de aceitação novo na issue de origem (nunca numa seção à parte, escrito
+por `closeout.py append`) ou issue de topo, nunca uma sub-issue nova; "citado no corpo do PR" nunca é destino. A
+conversão de família que já existe (`references/issues.md`, "Converting a family") é uma aprovação por família.
 
 ## Registros
 

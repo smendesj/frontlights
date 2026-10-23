@@ -2,6 +2,9 @@
 
 Only inspect performs network reads. No command here publishes issues, executes
 tests, grants Claude permissions, or changes a product repository.
+
+Exception (redesign, issue 7): `publish-issue` publishes the approved plan with gh, only after `stamp --check` of
+the approved file, with the account and the repository checked before every write.
 """
 import argparse
 import contextlib
@@ -2089,6 +2092,516 @@ def slice_cli(action, root, config_path, issue, slices=(), stacked_on=None, owne
         return refusal.result()
 
 
+# ---------------------------------------------------------------- stage 5 by command (redesign, issue 7)
+# `publish-issue` publishes the approved plan: the stamp of the approved file checked first, the issues created
+# blockers first (`publish-order`) with their labels and `--blocked-by`, then the board; an issue that already exists
+# (an adopted one) takes only labels, blocked-by and the board, never a body write. Every write checks the gh account
+# and the repository first; a state file under `.frontlights/publish/` makes `--resume` idempotent.
+
+def walkthrough_lines(item):
+    """The two walkthrough lines of a slice box (references/issues.md, "Slices as acceptance criteria")."""
+    walk = item['walkthrough']
+    return [f'  - Roteiro: {walk["persona"]} · {walk["steps"]}',
+            f'    → antes: {walk["before"]}; depois: {walk["after"]}']
+
+
+def criteria_lines(issue):
+    """The acceptance-criteria boxes of an issue of the plan: one box per slice with Entrega, Seams, Camadas, Depende
+    de and the walkthrough, in the plan's order; an issue without slices, one box per `acceptance` item."""
+    if not issue.get('slices'):
+        return [f'- [ ] {text}' for text in issue.get('acceptance') or []]
+    lines = []
+    for item in issue['slices']:
+        lines += [f'- [ ] {item["id"]}. {item["title"]}', f'  - Entrega: {item["delivers"]}',
+                  f'  - Seams: {"; ".join(item["seams"])}', f'  - Camadas: {", ".join(item["layers"])}',
+                  f'  - Depende de: {", ".join(item.get("depends_on") or []) or "nenhuma"}',
+                  *walkthrough_lines(item)]
+    return lines
+
+
+PUBLISH_FOLDER = Path('.frontlights') / 'publish'
+ISSUE_URL = re.compile(r'https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)')
+REREAD_FIELDS = 'number,title,body,url,state,labels,assignees,issueType,projectItems,blockedBy'
+
+
+class PublishRefusal(Stage6Refusal):
+    """A refusal of `publish-issue`, with the reason the session reads."""
+
+
+def gh_text(argv):
+    """`gh <argv>` without a shell: (exit code, stdout). gh's own output is never repeated in a refusal."""
+    try:
+        done = subprocess.run(['gh', *argv], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              timeout=120, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return 127, ''
+    return done.returncode, done.stdout
+
+
+def gh_reader(gh):
+    """A JSON reader over `gh` for `_cli.gh_account` and the rereads: raises on a failure, never guesses."""
+    def read(argv):
+        code, out = gh(argv)
+        if code != 0:
+            raise PublishRefusal('gh_failed', f'o gh recusou a leitura `gh {" ".join(argv[:2])}`',
+                                 hint='confira a conta ativa (gh auth status) e o acesso ao repositório')
+        try:
+            return json.loads(out)
+        except ValueError:
+            raise PublishRefusal('gh_failed', f'o gh não respondeu JSON a `gh {" ".join(argv[:2])}`') from None
+    return read
+
+
+def normalized(text):
+    """A body compared by its lines: line endings and the empty lines at the end do not count."""
+    lines = re.split(r'\r\n|\r|\n', text)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return '\n'.join(lines)
+
+
+def stamp_check(path, root):
+    """`stamp --check` in the process: {'path', 'sha256', 'approved', 'revision', 'answer'}; `approved` is False when
+    the file changed since its last approval or has none."""
+    import stamp  # noqa: PLC0415
+    file = Path(path)
+    if not file.is_file():
+        raise PublishRefusal('approved_missing', f'o arquivo aprovado {path} não existe',
+                             hint='passe o arquivo carimbado que o usuário aprovou')
+    shown = stamp.shown_path(str(file), root)
+    sha = hashlib.sha256(file.read_bytes()).hexdigest()[:stamp.STAMP_LENGTH]
+    try:
+        entries = [e for e in stamp.read_approvals(Path(root) / stamp.APPROVALS)
+                   if isinstance(e, dict) and e.get('path') == shown]
+    except stamp.Refusal as error:
+        raise PublishRefusal('approvals_unreadable', str(error)) from None
+    last = entries[-1] if entries else None
+    return {'path': shown, 'sha256': sha, 'approved': bool(last) and last.get('sha256') == sha,
+            'revision': last.get('revision') if last else None, 'answer': last.get('answer') if last else None}
+
+
+def issue_body(issue, plan_path):
+    """The body of an issue of the plan: `body` inline, or `body_file` (relative to the plan's folder)."""
+    if nonempty(issue.get('body')):
+        return issue['body']
+    name = issue.get('body_file')
+    if not nonempty(name):
+        raise PublishRefusal('body_missing', f'a issue {issue["id"]} do plano não tem body nem body_file',
+                             hint='ponha em body_file o arquivo do corpo aprovado (relativo à pasta do plano)')
+    file = Path(name) if Path(name).is_absolute() else Path(plan_path).parent / name
+    if not file.is_file():
+        raise PublishRefusal('body_missing', f'o body_file da issue {issue["id"]} não existe: {name}')
+    return file.read_bytes().decode('utf-8-sig')
+
+
+def publish_steps(issue, board_, plan_repo):
+    """The named writes of one issue, in order, as (key, kind, detail); the numbers come at run time."""
+    adopted = nonempty(issue.get('url'))
+    sub = is_sub_issue(issue)
+    resolved = None if board_ is None or sub else resolve_board(board_, issue)
+    labels = (resolved['labels'] if resolved and resolved['labels'] else
+              [x for x in issue.get('labels', []) if isinstance(x, str) and LABEL_NAME.fullmatch(x)])
+    if sub:
+        labels = []
+    if plan_repo is None:
+        return [('local', 'local', {})], resolved, labels
+    steps = []
+    if adopted:
+        if labels:
+            steps.append(('labels', 'labels', {'labels': labels}))
+        if issue['dependencies']:
+            steps.append(('blocked-by', 'blocked-by', {}))
+    else:
+        steps.append(('create', 'create', {'labels': labels}))
+    if resolved is not None:
+        steps.append(('item-add', 'item-add', {}))
+        steps.append(('assignee-type', 'assignee-type', {'assignee': board_.get('assignee'),
+                                                          'issue_type': resolved['issue_type']}))
+        for name, value in resolved['fields'].items():
+            steps.append((f'field:{name}', 'field', {'field': name, 'value': value}))
+    return steps, resolved, labels
+
+
+def step_argv(kind, detail, repo, board_, number, url, title, body_file, blockers):
+    """The argv of one write; `number`, `url` and `blockers` may be placeholders in a dry run."""
+    if kind == 'create':
+        argv = ['issue', 'create', '--repo', repo, '--title', title, '--body-file', str(body_file)]
+        for label in detail['labels']:
+            argv += ['--label', label]
+        if blockers:
+            argv += ['--blocked-by', ','.join(str(b) for b in blockers)]
+        return argv
+    if kind == 'labels':
+        argv = ['issue', 'edit', str(number), '--repo', repo]
+        for label in detail['labels']:
+            argv += ['--add-label', label]
+        return argv
+    if kind == 'blocked-by':
+        return ['issue', 'edit', str(number), '--repo', repo, '--add-blocked-by', ','.join(str(b) for b in blockers)]
+    if kind == 'item-add':
+        return ['project', 'item-add', str(board_['number']), '--owner', board_['owner'], '--url', str(url)]
+    if kind == 'assignee-type':
+        argv = ['issue', 'edit', str(number), '--repo', repo]
+        if detail.get('assignee'):
+            argv += ['--add-assignee', detail['assignee']]
+        return argv + ['--type', detail['issue_type']]
+    if kind == 'field':
+        return ['project', 'item-edit', str(board_['number']), '--owner', board_['owner'], '--url', str(url),
+                '--field', detail['field'], '--value', detail['value']]
+    raise PublishRefusal('step_unknown', f'escrita desconhecida {kind}')
+
+
+def find_by_title(read, repo, title, started_at):
+    """`--resume`: the issue with exactly this title created since `started_at` (`in:title`), or None."""
+    found = read(['issue', 'list', '--repo', repo, '--state', 'all', '--search', f'{title} in:title',
+                  '--json', 'number,title,url,createdAt', '--limit', '30'])
+    start = dt.datetime.fromisoformat(started_at)
+    hits = []
+    for item in found if isinstance(found, list) else []:
+        if not isinstance(item, dict) or item.get('title') != title:
+            continue
+        try:
+            created = dt.datetime.fromisoformat(str(item.get('createdAt', '')).replace('Z', '+00:00'))
+        except ValueError:
+            continue
+        if created >= start - dt.timedelta(minutes=2):   # the clocks of this machine and of GitHub may differ a little
+            hits.append(item)
+    if len(hits) > 1:
+        raise PublishRefusal('resume_ambiguous', f'{len(hits)} issues com o título "{title[:80]}" desde o início da '
+                             'publicação; nada foi criado', hint='diga qual é a certa e grave o número no arquivo de estado')
+    return hits[0] if hits else None
+
+
+def reread_issue(read, repo, number, expected):
+    """The reread of GitHub after the writes: body, boxes, labels, assignee, type, board and blockers."""
+    import closeout  # noqa: PLC0415  (closeout imports this module)
+    view = read(['issue', 'view', str(number), '--repo', repo, '--json', REREAD_FIELDS])
+    body = view.get('body') if isinstance(view, dict) else None
+    if not isinstance(body, str):
+        return {'verified': False, 'problems': ['sem corpo na releitura']}
+    problems = []
+    if expected.get('body') is not None and normalized(body) != normalized(expected['body']):
+        problems.append('corpo diferente do aprovado')
+    names = {(x.get('name') or '').casefold() for x in view.get('labels') or [] if isinstance(x, dict)}
+    missing = [x for x in expected.get('labels', []) if x.casefold() not in names]
+    if missing:
+        problems.append('labels ausentes: ' + ', '.join(missing))
+    if expected.get('board'):
+        if not view.get('projectItems'):
+            problems.append('fora do quadro')
+        kind = view.get('issueType') or {}
+        kind = kind.get('name') if isinstance(kind, dict) else kind
+        if expected.get('issue_type') and (kind or '').casefold() != expected['issue_type'].casefold():
+            problems.append(f'tipo {kind or "vazio"}, esperado {expected["issue_type"]}')
+        assignee = expected.get('assignee')
+        logins = [(x.get('login') or '').casefold() for x in view.get('assignees') or [] if isinstance(x, dict)]
+        if assignee and (not logins or (assignee != '@me' and assignee.casefold() not in logins)):
+            problems.append(f'responsável ausente ({assignee})')
+    blocked = {x.get('number') for x in view.get('blockedBy') or [] if isinstance(x, dict)}
+    absent = [b for b in expected.get('blockers', []) if b not in blocked]
+    if absent:
+        problems.append('blocked-by ausente: ' + ', '.join(f'#{b}' for b in absent))
+    counts = closeout.criteria(body) or (0, 0)
+    return {'verified': not problems, 'problems': problems, 'criteria': {'checked': counts[0], 'total': counts[1]}}
+
+
+def publish_issue(plan_path, approved, root, config_path=None, dry_run=False, resume=False, gh=None, account=None):
+    """`publish-issue` (see the block comment above); the result dict, `ok: false` with `reason` on a refusal."""
+    try:
+        return publish_run(Path(plan_path), approved, Path(root), config_path, dry_run, resume, gh, account)
+    except PublishRefusal as refusal:
+        return {'operation': 'publish-issue', **refusal.result()}
+    except _cli.AccountMismatch as mismatch:
+        return {'operation': 'publish-issue', **mismatch.result(written=False)}
+
+
+def publish_entries(plan, plan_path, board_, approval, approved_text, same_file):
+    """Per issue, in publish order: its steps, resolved board values, labels and body, every body and title found
+    letter by letter in the approved file (the plan itself, when the plan is the stamped file)."""
+    entries = []
+    by_id = {i['id']: i for i in plan['issues']}
+    for ident in publish_order(plan):
+        issue = by_id[ident]
+        steps, resolved, labels = publish_steps(issue, board_, plan['repository'])
+        body = None if nonempty(issue.get('url')) else issue_body(issue, plan_path)
+        if body is not None:
+            findings = lint_body(body)
+            if findings:
+                raise PublishRefusal('lint_failed', f'o corpo da issue {ident} ainda tem texto de instrução ou marcador '
+                                     'sem preencher; nada foi publicado', findings=findings,
+                                     hint='tire do corpo (issue-lint --body <arquivo>), mostre e aprove de novo')
+            if not same_file and normalized(body) not in approved_text:
+                raise PublishRefusal('body_not_approved', f'o corpo da issue {ident} não está, letra por letra, no '
+                                     f'arquivo aprovado {approval["path"]}',
+                                     hint='o arquivo aprovado traz o corpo inteiro de cada issue; aprove de novo')
+            for name, value in (resolved or {}).get('body_fields', {}).items():
+                if f'**{name}:** {value}' not in body:
+                    raise PublishRefusal('body_field_missing', f'o corpo da issue {ident} não tem a linha '
+                                         f'**{name}:** {value} que o quadro pede',
+                                         hint='ponha a linha no corpo e aprove de novo')
+        if not same_file and issue['title'] not in approved_text:
+            raise PublishRefusal('title_not_approved', f'o título da issue {ident} não está no arquivo aprovado '
+                                 f'{approval["path"]}', hint='o arquivo aprovado traz a tabela das issues; aprove de novo')
+        entries.append({'issue': issue, 'steps': steps, 'resolved': resolved, 'labels': labels, 'body': body})
+    return entries
+
+
+def publish_run(plan_path, approved, root, config_path, dry_run, resume, gh, account):
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    config = config if isinstance(config, dict) else {}
+    plan = load(plan_path)
+    project = config.get('project')
+    try:
+        validate_plan(plan, project)
+    except ValueError as error:
+        where = {'path': error.path} if isinstance(error, PlanError) else {}
+        raise PublishRefusal('plan_invalid', f'o plano não passa no validate-plan: {error}', **where) from None
+    repo = plan['repository']
+    if 'repository' in config and config.get('repository') != repo:
+        raise PublishRefusal('repository_mismatch', f'o plano publica em {repo or "projeto local"} e o config pede '
+                             f'{config.get("repository") or "projeto local"}', hint='corrija o plano ou o config')
+    board_ = board(project, repo) if repo is not None else None
+    approval = stamp_check(approved, root)
+    approved_text = normalized(Path(approved).read_bytes().decode('utf-8-sig', errors='replace'))
+    entries = publish_entries(plan, plan_path, board_, approval, approved_text,
+                              Path(approved).resolve() == plan_path.resolve())
+    if dry_run:
+        return publish_dry_run(entries, repo, board_, approval)
+    if not approval['approved']:
+        raise PublishRefusal('not_approved', f'{approval["path"]} ({approval["sha256"]}) não confere com a última '
+                             f'aprovação registrada ({approval["revision"] or "nenhuma"}); nada foi publicado',
+                             hint='mostre o arquivo e peça a aprovação por link e carimbo (stamp --approve) de novo')
+    state_path = root / PUBLISH_FOLDER / f'{approval["sha256"]}.json'
+    state = load(state_path) if state_path.is_file() else None
+    if state and not resume and any(v.get('done') for v in state.get('issues', {}).values()):
+        raise PublishRefusal('partial_publication', 'esta aprovação já tem publicação registrada em '
+                             f'{state_path.relative_to(root).as_posix()}; nada foi escrito', hint='repita com --resume: '
+                             'ele relê o GitHub pelo título antes de criar o que falta')
+    if state is None:
+        state = {'approved': approval['path'], 'sha256': approval['sha256'], 'repository': repo,
+                 'started_at': _cli.sao_paulo_now().isoformat(timespec='seconds'), 'issues': {}}
+    if repo is None:
+        return publish_local(entries, root, state, state_path, approval)
+    return publish_remote(entries, plan, config, repo, board_, root, state, state_path, approval, resume,
+                          gh or gh_text, account)
+
+
+def publish_remote(entries, plan, config, repo, board_, root, state, state_path, approval, resume, gh, account):
+    read = gh_reader(gh)
+    check_account = account or (lambda data: _cli.gh_account(data, read))
+    numbers = {i['id']: i['id'] for i in plan['issues'] if nonempty(i.get('url'))}
+    for key, saved in state['issues'].items():
+        if saved.get('number'):
+            numbers[int(key)] = saved['number']
+    relative_state = state_path.relative_to(root).as_posix()
+    published, writes = [], 0
+    for entry in entries:
+        issue, ident = entry['issue'], entry['issue']['id']
+        saved = state['issues'].setdefault(str(ident), {'done': []})
+        if nonempty(issue.get('url')):
+            saved.update(number=ident, url=issue['url'], adopted=True)
+        elif not saved.get('number') and resume:
+            hit = find_by_title(read, repo, issue['title'], state['started_at'])
+            if hit:
+                saved.update(number=hit['number'], url=hit['url'], recovered=True)
+                saved['done'] = list(dict.fromkeys(saved['done'] + ['create']))
+                numbers[ident] = hit['number']
+        blockers = [numbers[d] for d in issue['dependencies'] if d in numbers]
+        for key, kind, detail in entry['steps']:
+            if key in saved['done']:
+                continue
+            check_account(config)   # before every write, never cached: another session may switch the account
+            body_file = None
+            if kind == 'create':
+                body_file = root / PUBLISH_FOLDER / f'{approval["sha256"]}-{ident}.md'
+                body_file.parent.mkdir(parents=True, exist_ok=True)
+                body_file.write_bytes(entry['body'].encode('utf-8'))
+            argv = step_argv(kind, detail, repo, board_, saved.get('number'), saved.get('url'), issue['title'],
+                             body_file, blockers)
+            code, out = gh(argv)
+            writes += 1
+            if code != 0:
+                saved.setdefault('failed', []).append(key)
+                write_json_file(state_path, state)
+                raise PublishRefusal('write_failed', f'o gh recusou `gh {" ".join(argv[:2])}` da issue {ident}; a '
+                                     'publicação parcial está no arquivo de estado', stateFile=relative_state,
+                                     hint='corrija a causa e repita com --resume (só as escritas que faltam)')
+            if kind == 'create':
+                match = ISSUE_URL.search(out or '')
+                if not match or match.group(1).casefold() != repo.casefold():
+                    write_json_file(state_path, state)
+                    raise PublishRefusal('create_unclear', f'o gh não devolveu a URL da issue {ident} criada',
+                                         hint='repita com --resume: ele procura a issue pelo título antes de criar',
+                                         stateFile=relative_state)
+                saved.update(number=int(match.group(2)), url=match.group(0))
+                numbers[ident] = saved['number']
+            saved['done'].append(key)
+            write_json_file(state_path, state)
+        expected = {'body': entry['body'], 'labels': entry['labels'], 'board': entry['resolved'] is not None,
+                    'blockers': blockers}
+        if entry['resolved'] is not None:
+            expected.update(issue_type=entry['resolved']['issue_type'], assignee=board_.get('assignee'))
+        check = reread_issue(read, repo, saved['number'], expected)
+        published.append({'id': ident, 'number': saved['number'], 'url': saved.get('url'),
+                          'adopted': bool(saved.get('adopted')), 'recovered': bool(saved.get('recovered')),
+                          'done': list(saved['done']), **check})
+    state['finished_at'] = _cli.sao_paulo_now().isoformat(timespec='seconds')
+    write_json_file(state_path, state)
+    bad = [p for p in published if not p['verified']]
+    shown = ', '.join(f'#{p["number"]}' for p in published)
+    return {'ok': not bad, 'exitCode': 0 if not bad else 2, 'operation': 'publish-issue', 'repository': repo,
+            'approved': approval, 'order': [e['issue']['id'] for e in entries], 'writes': writes,
+            'published': published, 'stateFile': relative_state,
+            'message': (f'Publicadas e relidas: {shown}; corpo, caixas e quadro conferem.' if not bad else
+                        f'Publicadas: {shown}; a releitura não confere em ' +
+                        ', '.join(f'#{p["number"]} ({"; ".join(p["problems"])})' for p in bad) +
+                        '. Mostre a diferença e pergunte; nada é reescrito sozinho.')}
+
+
+def publish_dry_run(entries, repo, board_, approval):
+    """The named writes, argv by argv, with `<#id>` for a number GitHub has not given yet; nothing runs."""
+    adopted = {e['issue']['id'] for e in entries if nonempty(e['issue'].get('url'))}
+    issues = []
+    for entry in entries:
+        issue, ident = entry['issue'], entry['issue']['id']
+        number = ident if ident in adopted else f'<#{ident}>'
+        blockers = [d if d in adopted else f'<#{d}>' for d in issue['dependencies']]
+        argvs = [['gh', *step_argv(kind, detail, repo, board_, number, issue.get('url') or f'<url #{ident}>',
+                                   issue['title'], issue.get('body_file') or f'<corpo #{ident}>', blockers)]
+                 for _, kind, detail in entry['steps'] if kind != 'local']
+        issues.append({'id': ident, 'adopted': ident in adopted, 'commands': argvs})
+    count = sum(len(i['commands']) for i in issues)
+    return {'ok': True, 'exitCode': 0, 'operation': 'publish-issue', 'dryRun': True, 'repository': repo,
+            'approved': approval, 'order': [e['issue']['id'] for e in entries], 'issues': issues,
+            'message': f'Ensaio: {count} escrita(s) em {len(issues)} issue(s), na ordem de publish-order; nada foi '
+                       'escrito.' + ('' if approval['approved'] else
+                                     f' {approval["path"]} ainda não tem aprovação que confira.')}
+
+
+def publish_local(entries, root, state, state_path, approval):
+    """A project without a remote: each approved body becomes `.frontlights/issues/<n>/issue.json` (`source: local`)."""
+    published = []
+    for entry in entries:
+        issue = entry['issue']
+        record = root / '.frontlights' / 'issues' / str(issue['id']) / 'issue.json'
+        if record.is_file() and str(issue['id']) not in state['issues']:
+            raise PublishRefusal('local_exists', f'{record.relative_to(root).as_posix()} já existe; nada foi gravado',
+                                 hint='uma issue local já publicada não é recriada')
+        if entry['body'] is not None:
+            write_json_file(record, {'number': issue['id'], 'title': issue['title'], 'body': entry['body'],
+                                     'state': 'open', 'source': 'local'})
+        state['issues'][str(issue['id'])] = {'number': issue['id'], 'done': ['local']}
+        published.append({'id': issue['id'], 'number': issue['id'], 'url': None, 'verified': True, 'problems': [],
+                          'record': record.relative_to(root).as_posix()})
+    write_json_file(state_path, state)
+    return {'ok': True, 'exitCode': 0, 'operation': 'publish-issue', 'repository': None, 'approved': approval,
+            'published': published, 'stateFile': state_path.relative_to(root).as_posix(),
+            'message': f'Projeto sem remoto: {len(published)} issue(s) gravadas em .frontlights/issues/<n>/issue.json.'}
+
+
+# ---------------------------------------------------------------- render-criteria and issue-lint (redesign, issue 7)
+# `render-criteria` prints the boxes of an issue of the plan for its body; `issue-lint` refuses a body that still
+# carries the template's instruction text or an unfilled `<placeholder>` (the instructions live in
+# references/issues.md and references/issue.md, never in a published body). It reads one issue with gh, or local
+# bodies with --body: the bodies a daily triage proposes go through the same lint before they are shown.
+
+# Sentences of the issue template's instructions (the template before the redesign carried ~700 words of them under
+# its sections); a body that still holds one was published with the instructions in it.
+INSTRUCTION_PHRASES = (
+    'As seções até "Fora de escopo" são a spec',
+    'O problema do ponto de vista de quem usa',
+    'A solução do ponto de vista de quem usa',
+    'O que é um bom teste aqui',
+    'O que foi recusado, com o motivo. São as linhas mais úteis da página',
+    'As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice, com o',
+    'Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra',
+    'A fatia é esta issue mais as sub-issues dela',
+    'A fatia só é definida depois da leitura de todas as camadas',
+    'Rastreio dos campos, botões e ações que a fatia toca na tela, feito por busca no código',
+    'é uma declaração, e o `browser-gate` a confere com o diff',
+    'Troque `none` pelos links canônicos',
+    'Arquivos e componentes, arquivos gerados, migrations, portas',
+    'Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sessão',
+    'Data e hora, branch/PR, hashes exatos de `HEAD` e do diff',
+)
+HTML_TAGS = {'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em', 'h1', 'h2',
+             'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'ol', 'p', 'picture', 'pre', 'q', 's',
+             'samp', 'source', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
+             'thead', 'tr', 'tt', 'u', 'ul', 'var', 'video'}
+PLACEHOLDER = re.compile(r'<(?!!--)([^<>\n`]{1,120})>')
+INLINE_CODE = re.compile(r'(`+)(?:(?!\1).)+?\1')
+
+
+def placeholder(inside):
+    """Whether `<inside>` is a template placeholder: not an HTML tag, an autolink or an e-mail."""
+    word = re.match(r'/?([A-Za-z][A-Za-z0-9-]*)', inside)
+    if word and word.group(1).casefold() in HTML_TAGS and (len(inside) == len(word.group(0)) or
+                                                           inside[len(word.group(0))] in ' /'):
+        return False
+    return not re.match(r'[A-Za-z][A-Za-z0-9+.-]*:', inside) and '@' not in inside
+
+
+def lint_body(body):
+    """The findings of a body: [{'line', 'kind': 'instruction'|'placeholder', 'text'}]. Inline code, fenced code and
+    HTML comments are skipped: a placeholder quoted in backticks is a format, not a blank."""
+    import closeout  # noqa: PLC0415  (closeout imports this module)
+    findings = []
+    flat_body = ' '.join(body.split())
+    for phrase in INSTRUCTION_PHRASES:
+        if ' '.join(phrase.split()) in flat_body:
+            line = next((n for n, text in enumerate(re.split(r'\r\n|\r|\n', body), 1) if phrase[:30] in text), None)
+            findings.append({'line': line, 'kind': 'instruction', 'text': phrase[:80]})
+    for number, text in closeout.visible_lines(body):
+        for match in PLACEHOLDER.finditer(INLINE_CODE.sub('', text)):
+            if placeholder(match.group(1)):
+                findings.append({'line': number, 'kind': 'placeholder', 'text': match.group(0)[:80]})
+    return findings
+
+
+def issue_lint(issue=None, bodies=(), config_path=None, gh=None):
+    """`issue-lint`: exit 0 when every body is clean, 1 with the findings otherwise."""
+    targets = []
+    if issue is not None:
+        config = load(config_path) if config_path and Path(config_path).is_file() else {}
+        repo = config.get('repository') if isinstance(config, dict) else None
+        if not repository(repo):
+            raise PublishRefusal('no_repository', 'issue-lint --issue lê o corpo do GitHub: o config não nomeia o '
+                                 'repository', hint='passe --body <arquivo> para um corpo local')
+        view = gh_reader(gh or gh_text)(['issue', 'view', str(issue), '--repo', repo, '--json', 'body'])
+        body = view.get('body') if isinstance(view, dict) else None
+        if not isinstance(body, str):
+            raise PublishRefusal('gh_failed', f'o GitHub não deu o corpo da issue #{issue}')
+        targets.append((f'#{issue}', body))
+    for name in bodies or ():
+        targets.append((str(name), Path(name).read_bytes().decode('utf-8-sig')))
+    if not targets:
+        raise PublishRefusal('nothing_to_lint', 'issue-lint precisa de --issue <n> ou --body <arquivo>')
+    results = [{'source': source, 'findings': lint_body(body)} for source, body in targets]
+    dirty = [r for r in results if r['findings']]
+    return {'ok': not dirty, 'exitCode': 1 if dirty else 0, 'operation': 'issue-lint', 'bodies': results,
+            'message': ('Nenhum texto de instrução nem marcador sem preencher.' if not dirty else
+                        'Texto de instrução ou marcador sem preencher em ' +
+                        ', '.join(f'{r["source"]} ({len(r["findings"])})' for r in dirty) +
+                        ': tire do corpo antes de mostrar ou publicar; a instrução vive nas referências.')}
+
+
+def render_criteria(plan_path, ident, config_path=None):
+    """`render-criteria`: the boxes of issue `ident` of a valid plan, as markdown for its body."""
+    plan = load(plan_path)
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    try:
+        validate_plan(plan, config.get('project') if isinstance(config, dict) else None)
+    except ValueError as error:
+        where = {'path': error.path} if isinstance(error, PlanError) else {}
+        raise PublishRefusal('plan_invalid', f'o plano não passa no validate-plan: {error}', **where) from None
+    found = [i for i in plan['issues'] if str(i['id']) == str(ident).lstrip('#')]
+    if not found:
+        raise PublishRefusal('issue_missing', f'a issue {ident} não está no plano')
+    lines = criteria_lines(found[0])
+    return {'ok': True, 'exitCode': 0, 'operation': 'render-criteria', 'issue': found[0]['id'],
+            'boxes': sum(1 for line in lines if line.startswith('- [ ] ')), 'markdown': '\n'.join(lines) + '\n',
+            'message': 'As caixas para a seção "## Critérios de aceitação" do corpo, na ordem do plano.'}
+
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
@@ -2197,6 +2710,27 @@ def build_parser():
                        help='stage 3: the skeleton of the grilling artifact, init|section|choose (_artifact.py); '
                             'delegated before this parser runs')
     p.add_argument('artifact_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. section --n 3')
+    p = sub.add_parser('publish-issue', help='stage 5: publish the approved plan (stamp --check first, blockers first, '
+                                             'labels, --blocked-by, the board), then reread GitHub')
+    p.add_argument('--plan', required=True, help='the plan; each issue to create carries body or body_file')
+    p.add_argument('--approved', required=True, help='the stamped file the user approved (bodies, board values, writes)')
+    p.add_argument('--dry-run', action='store_true', dest='dry_run', help='print the named writes; write nothing')
+    p.add_argument('--resume', action='store_true', help='continue a partial publication, rereading GitHub by title')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p = sub.add_parser('render-criteria', help='stage 5: the acceptance-criteria boxes of an issue of the plan, '
+                                               'as markdown for its body')
+    p.add_argument('--plan', required=True)
+    p.add_argument('--issue', required=True, help='the id of the issue in the plan')
+    p.add_argument('--config', help='.frontlights/config.json; enforces its project board fields')
+    p.add_argument('--out', help='also write the markdown to this file')
+    p = sub.add_parser('issue-lint', help='refuse a body that still carries the template instructions or an unfilled '
+                                          '<placeholder>')
+    p.add_argument('--issue', help='an issue number, read with gh (repository of the config)')
+    p.add_argument('--body', action='append', default=[], help='a local body file, such as one a daily triage '
+                                                               'proposes; repeatable')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
@@ -2224,6 +2758,12 @@ def resolve_defaults(args):
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root, required=False)
         args.issue = _cli.issue_number(args.issue, _cli.current_tree(), args.root)
+    elif args.command == 'issue-lint':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
+    elif args.command == 'publish-issue':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
     elif args.command == 'browser-gate':
         args.root = args.root or [str(_cli.current_tree())]
         args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
@@ -2300,6 +2840,23 @@ def main():
         elif args.command == 'slice':
             result = slice_cli(args.action, args.root, args.config, args.issue, args.slice, args.stacked_on,
                                args.ownership, args.dir, args.source, args.test, args.watched_only, args.comment_file)
+            code = result['exitCode']
+        elif args.command == 'render-criteria':
+            try:
+                result = render_criteria(args.plan, args.issue, args.config)
+            except PublishRefusal as refusal:
+                result = {'operation': 'render-criteria', **refusal.result()}
+            if args.out and result['ok']:
+                Path(args.out).write_bytes(result['markdown'].encode('utf-8'))
+            code = result['exitCode']
+        elif args.command == 'issue-lint':
+            try:
+                result = issue_lint(args.issue, args.body, args.config)
+            except PublishRefusal as refusal:
+                result = {'operation': 'issue-lint', **refusal.result()}
+            code = result['exitCode']
+        elif args.command == 'publish-issue':
+            result = publish_issue(args.plan, args.approved, args.root, args.config, args.dry_run, args.resume)
             code = result['exitCode']
         elif args.command == 'homolog':
             import homolog
