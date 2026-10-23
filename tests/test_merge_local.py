@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -369,6 +370,67 @@ class HomologMergeTests(Stage6Case):
         saved = json.loads(Path(result['record']).read_text(encoding='utf-8'))
         self.assertEqual((saved['gates'], saved['evidence']), ({'browser_gate': 'answered'}, 'teste livre'))
         self.assertEqual(git(self.root, 'show', 'main:src/fix.py'), 'y = 1')
+
+
+class FreeTestTests(unittest.TestCase):
+    """S5: `serve.py free-test start|stop|commands --issue n` na worktree principal: o produto da main local, o
+    rascunho dos CAs novos e, sem tela, os comandos do teste livre no terminal com a pergunta de fim."""
+
+    def setUp(self):
+        import serve
+        self.serve = serve
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        (self.root / '.frontlights').mkdir()
+        self.config = self.root / '.frontlights' / 'config.json'
+        self.draft = self.root / '.frontlights' / 'issues' / '12' / 'teste-livre-cas.md'
+
+    def configure(self, block):
+        self.config.write_text(json.dumps({'repository': REPO, 'browserTest': block}), encoding='utf-8')
+
+    def test_without_browser_test_there_is_no_window(self):
+        self.configure(None)
+        with self.assertRaises(self.serve.Refusal) as caught:
+            self.serve.free_test_start(str(self.config), str(self.root), 12)
+        self.assertIn('free-test commands', str(caught.exception))
+
+    def test_a_project_that_starts_its_own_environment_is_asked_and_nothing_starts(self):
+        self.configure({'baseUrl': 'http://127.0.0.1:4200/'})
+        result = self.serve.free_test_start(str(self.config), str(self.root), 12)
+        self.assertEqual(result['served']['status'], 'ambiente_do_usuario')
+        self.assertTrue(self.draft.is_file())
+        opened, held = result['window']['commands']
+        self.assertEqual(opened[opened.index('--strip') + 1], 'MAIN LOCAL: teste livre')
+        self.assertEqual(held[-3:], ['hold', '--minutes', 'none'])
+        stopped = self.serve.free_test_stop(str(self.config), str(self.root), 12)
+        self.assertIn('skipped', stopped['stopped'])
+        self.assertIsNone(stopped['batch'])
+
+    def test_the_product_is_served_from_the_main_worktree_and_stopped_with_the_batch(self):
+        self.configure({'baseUrl': 'http://127.0.0.1:4200/', 'processes': []})
+        with unittest.mock.patch.object(self.serve, 'start', return_value={'ok': True}) as started:
+            self.serve.free_test_start(str(self.config), str(self.root), 12)
+        started.assert_called_once_with(str(self.config), str(self.root), 12)
+        with self.draft.open('a', encoding='utf-8') as draft:
+            draft.write('- [x] Correção (do teste livre): a lista ordena. Evidência: abc1234\n'
+                        '- [ ] Correção (do teste livre): o filtro limpa. Evidência que fecha: teste livre\n')
+        with unittest.mock.patch.object(self.serve, 'stop', return_value={'ok': True}) as stopped:
+            result = self.serve.free_test_stop(str(self.config), str(self.root), 12)
+        stopped.assert_called_once_with(str(self.root), 12)
+        self.assertEqual((result['batch']['total'], result['batch']['ticked'], result['batch']['open']), (2, 1, 1))
+
+    def test_without_a_screen_the_commands_and_the_question_come_from_the_charter(self):
+        (self.root / '.frontlights' / 'authorization.json').write_text(
+            json.dumps({'verification_commands': [['python', '-m', 'unittest', 'discover', '-s', 'tests']]}),
+            encoding='utf-8')
+        done = subprocess.run([sys.executable, str(SCRIPTS / 'serve.py'), 'free-test', 'commands', '--issue', '12',
+                               '--root', str(self.root)], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        result = json.loads(done.stdout)
+        self.assertEqual(result['commands'], ['python -m unittest discover -s tests'])
+        self.assertEqual(result['question'], {'text': 'Terminou de testar a main local?',
+                                              'options': ['Sim, terminei', 'Ainda testando']})
 
 
 if __name__ == '__main__':
