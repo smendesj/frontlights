@@ -241,6 +241,18 @@ class ShotTests(WindowCase):
         self.assertTrue(Path(out['path']).is_file())
         self.assertEqual(Path(out['path']).parent, self.root / '.frontlights/issues/12/browser')
 
+    def test_the_shot_writes_the_print_into_result_json_with_the_schema_of_the_gate(self):
+        """Esquema único: `window shot` e `browser-gate record` gravam os campos de protocol.md."""
+        import browser_gate
+        self.window('open', '--issue', '12', '--strip', 'ANTES: origin/main')
+        code, out = self.window('shot', '--issue', '12', '--pass', 'antes', '--criterion', 'S2')
+        record = json.loads((self.root / '.frontlights/issues/12/browser/result.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['passadas']['antes']['criterios']['S2']['print'], 'antes-12-S2.png')
+        self.assertEqual(record['pastaDosPrints'], out['evidenceDir'])
+        self.assertLessEqual(set(record), set(browser_gate.RECORD_FIELDS))
+        self.assertLessEqual(set(record['passadas']['antes']), set(browser_gate.PASS_FIELDS))
+        self.assertLessEqual(set(record['passadas']['antes']['criterios']['S2']), set(browser_gate.CRITERION_FIELDS))
+
     def test_a_shot_goes_to_the_sprint_folder_when_the_config_names_it(self):
         scrum = self.root / 'SCRUM'
         scrum.mkdir()

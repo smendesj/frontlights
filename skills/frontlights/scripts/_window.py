@@ -474,6 +474,11 @@ def op_shot(root, issue, pass_, criterion, name, cover):
     result = {'ok': True, 'file': file_name, 'path': path, 'evidenceDir': folder, 'pass': pass_,
               'criterion': criterion, 'name': name,
               'message': 'Olhe o print antes de guardá-lo: só dados de teste, sem senha, sem pessoa real, sem caminho.'}
+    if issue and criterion:   # the same schema as `browser-gate record` (docs/protocol.md, "Teste no navegador")
+        import browser_gate
+        record = issue_folder(root, issue) / 'result.json'
+        browser_gate.record_print(record, pass_, criterion, file_name, folder)
+        result['record'] = str(record)
     if moved:
         result['pendentesMovidos'] = moved
     return result

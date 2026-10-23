@@ -1410,6 +1410,10 @@ def main():
         # Delegated whole, so its options may come before the file (a REMAINDER would leave them to this parser).
         import stamp
         return stamp.main(sys.argv[2:])  # prints its own JSON
+    if sys.argv[1:2] == ['browser-gate']:
+        # Delegated whole (issue 8): `--answer` and the `record` subcommand live in browser_gate.py, one parser.
+        import browser_gate
+        return browser_gate.main(sys.argv[2:])
     try:
         args = resolve_defaults(_cli.output_flags(build_parser()).parse_args())
     except _cli.UsageError as error:
