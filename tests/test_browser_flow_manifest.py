@@ -254,5 +254,65 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 self.assertIn(field, sources)
 
 
+class DeliveredDriverTextTests(unittest.TestCase):
+    """Issue 8: o teste assistido entregue por script. A referência cita os comandos (nunca um driver de memória),
+    guarda as frases pinadas e as três perguntas, e só encolhe; o brief do condutor e a linha da janela em
+    security.md acompanham."""
+
+    BUDGET = 4750   # catraca: a contagem do dia (issue 8), que só desce
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = read(REFERENCE)
+        cls.flat = ' '.join(cls.text.split())
+
+    def test_the_reference_only_shrinks(self):
+        self.assertLessEqual(len(self.text.split()), self.BUDGET)
+
+    def test_the_pinned_sentences_and_the_three_questions_stay(self):
+        for phrase in ("Chrome driven by Playwright, visible, disposable profile, never Claude's built-in browser nor "
+                       'Claude in Chrome',
+                       'Passes never overlap while one is running: one issue at a time (a batch counts as one) on the '
+                       'same account and database; an ANTES window that is open but idle holds no other issue back',
+                       'the database behind the server is the local development database',
+                       'Closing the window or the 5 minutes ending is never an answer',
+                       '"Pronto para assistir ao teste de navegador da issue #<n>?"',
+                       '"O que fazer depois do teste assistido da issue #<n>?"',
+                       'Report the three kinds separately, then ask with `AskUserQuestion`, one question per failure',
+                       'No script judges a pass: passed or failed is the session\'s and the user\'s'):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.flat)
+
+    def test_the_window_comes_from_the_script_and_the_record_from_the_gate(self):
+        for phrase in ('window brief --issue <n> --pass antes|depois --criteria S1,S2', '`window open`',
+                       '`window attach`', '`window hold`', '`window shot`', '`browser-gate record`',
+                       '--answer "<the option, verbatim>"', 'never by hand', 'never from a driver written from memory',
+                       'progress_report.py" keep'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.flat)
+        self.assertNotIn('cdp.js', self.flat)
+
+    def test_browser_test_null_with_a_visible_file_is_still_unconfigured(self):
+        self.assertIn('`unconfigured` (`ask-how`): something visible changed and the project has no `browserTest` (also '
+                      '`browserTest: null`)', self.flat)
+        self.assertIn('never skip the question', self.flat)
+
+    def test_the_pointers_into_the_reference_still_resolve(self):
+        prints = self.text.split('## Prints kept for the progress summary')[1]
+        self.assertIn('- **Clean.**', prints)   # security.md and grilling.md point to item "Clean"
+        for title in ('## Watched run: before and after, with the user watching', '## The free test window',
+                      '## Test data the run creates', '## Prints kept for the progress summary'):
+            with self.subTest(title=title):
+                self.assertIn(title, self.text)
+
+    def test_security_lists_the_window_and_its_limits(self):
+        security = read(SKILL / 'docs' / 'security.md')
+        row = next(line for line in security.splitlines() if line.startswith('| `serve.py window` |'))
+        for phrase in ('window.json', 'evidencias-pendentes', 'nunca instala nada', 'para só o Chrome que abriu',
+                       'não julga a passada'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, row)
+
+
 if __name__ == '__main__':
     unittest.main()

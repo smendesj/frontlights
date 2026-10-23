@@ -50,6 +50,7 @@ seções deste arquivo; a tabela é o índice.
 | `closeout.py` | issues e PRs (GraphQL, leitura), registros | só `tick`: o corpo da issue, com conferência de conta e repositório antes | `gh` sem shell |
 | `cleanup.py` | worktrees, branches, registros | só `archive`: cópia dos registros da worktree (sem `out/`) para a principal | `git` (leitura) |
 | `serve.py`, `checks.py`, `browser_gate.py` | config (`browserTest`, `checks`), árvore | registros da issue, `serve/`, `preview/` | os `argv` do config, sem shell (seção `serve`, `checks` e o teste no navegador) |
+| `serve.py window` | config (`browserTest.baseUrl`, `users`, `login`, `playwright`), `window.json` | `window.json`, os prints na pasta do `evidence-dir` (antes do número, `.frontlights/evidencias-pendentes/`) e o `print` do critério no `result.json`; o perfil descartável, apagado no fim | Chrome e o Node com o Playwright do projeto, sem shell; nunca instala nada, para só o Chrome que abriu e não julga a passada |
 | `progress_report.py`, `roads.py` | config, fatos do projeto | aprovações e rascunhos do resumo | RoadS (seção do resumo) |
 
 ## Regras da sessão
