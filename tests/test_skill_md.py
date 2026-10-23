@@ -95,7 +95,8 @@ class SkillCommandTests(unittest.TestCase):
         self.assertEqual(problems, [])
 
     def test_the_check_catches_a_guessed_verb_and_flag(self):
-        self.assertTrue(check(['frontlights.py', 'publish-issue']))
+        self.assertTrue(check(['frontlights.py', 'publish-everything']))
+        self.assertEqual(check(['frontlights.py', 'publish-issue', '--approved']), [])
         self.assertTrue(check(['cleanup.py', 'run', '--from-everywhere']))
         self.assertEqual(check(['cleanup.py', 'run', '--from-authorizations', '--yes']), [])
         self.assertEqual(check(['homolog.py', 'release', 'landed']), [])
