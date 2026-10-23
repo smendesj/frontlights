@@ -208,6 +208,43 @@ class TwoAxesTests(unittest.TestCase):
         done = flat(section(self.development, 'When the review is done', '###'))
         self.assertIn('done at the first round that reports 0 sérios and 0 médios', done)
 
+class RetroTests(unittest.TestCase):
+    """Issue 11 do redesenho, S4: retro oferecida uma vez após o merge da release, recusável, nunca hook."""
+
+    def setUp(self):
+        self.text = flat(read('skills', 'frontlights', 'references', 'retro.md'))
+
+    def test_offered_once_after_the_release_and_refusable(self):
+        self.assertLessEqual(len(self.text.split()), 440)
+        self.assertIn('After the merge of a release, offer the retro once (`references/retro.md`; "Agora não" is an '
+                      'option).', flat(skilltext.stage(7)))
+        self.assertIn("| references/retro.md | the user accepts the retro offered after a release's merge; on request |",
+                      flat(skilltext.pointers()))
+        for phrase in ('Once per release, after `release landed` and the closeout: "Fazer a retro desta release?", '
+                       'options "Sim, fazer a retro" and "Agora não".',
+                       'The retro is never a gate: nothing waits on its answer.'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.text)
+
+    def test_it_reads_the_records_never_the_transcript(self):
+        self.assertIn('The records of each issue of the release, never the transcript', self.text)
+        self.assertIn('A fact the records do not hold is not a finding.', self.text)
+
+    def test_each_finding_has_one_of_four_destinations_and_never_a_hook(self):
+        for phrase in ('Each one gets exactly one destination', '**A script check:**', '**A pitfall line:**',
+                       '**A rule in its single home:**', '**A no-op to delete:**',
+                       'Never a hook that blocks: a guard is a test or a warning.',
+                       'in the format of `references/issues.md`, "A pitfall line"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.text)
+
+    def test_the_batch_is_stamped_and_the_skill_is_never_edited_from_a_consumer(self):
+        for phrase in ('It is approved by link and stamp as one batch.',
+                       'each other finding becomes one issue in the Frontlights repository',
+                       'The retro never edits the skill while it runs in a consumer project'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.text)
+
 
 class OnlyTheReviewerReadsItTests(unittest.TestCase):
     """Dentro da skill, o padrão do revisor só é citado onde o coordenador monta o brief e nos registros."""

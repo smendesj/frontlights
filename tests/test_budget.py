@@ -30,6 +30,7 @@ BUDGET = {
     'references/issues.md': 6063,
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
+    'references/retro.md': 417,
     'references/progress-report.md': 3797,
     'references/review.md': 991,
     'references/setup.md': 181,
