@@ -1190,12 +1190,15 @@ class ReadOnlyTests(CloseoutCase):
         self.assertNotIn('subprocess', without_the_writer(source))
         callers = [name for name in re.findall(r'\ndef (\w+)\(', source)
                    if name != 'gh_write' and re.search(r'\bgh_write\b', function_source(source, name))]
-        self.assertEqual(callers, ['op_tick', 'op_apply'])
+        # issue 7 do redesenho: `append` é a terceira escrita (acrescenta linhas aprovadas ao corpo)
+        self.assertEqual(callers, ['op_tick', 'op_apply', 'op_append'])
         self.assertNotIn('os.system', source)
         writes = re.compile(r"open\([^)]*['\"][wax+]")
-        saver, lister, applier = (function_source(source, name) for name in ('save_body', 'op_run', 'op_apply'))
-        self.assertIsNone(writes.search(source.replace(saver, '').replace(lister, '')),
-                          'only save_body and run open a file to write')
+        saver, lister, applier, appender = (function_source(source, name)
+                                            for name in ('save_body', 'op_run', 'op_apply', 'op_append'))
+        self.assertIsNone(writes.search(source.replace(saver, '').replace(lister, '').replace(appender, '')),
+                          'only save_body, run and append (the pitfall line, append-only) open a file to write')
+        self.assertIn("open(target, 'a'", appender)
         self.assertIn("'xb'", saver, 'and never overwrite one')
         self.assertIn("'xb'", lister)
         self.assertEqual(source.count('write_text'), applier.count('write_text'))

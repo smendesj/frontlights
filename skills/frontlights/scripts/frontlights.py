@@ -2098,6 +2098,27 @@ def slice_cli(action, root, config_path, issue, slices=(), stacked_on=None, owne
 # (an adopted one) takes only labels, blocked-by and the board, never a body write. Every write checks the gh account
 # and the repository first; a state file under `.frontlights/publish/` makes `--resume` idempotent.
 
+def walkthrough_lines(item):
+    """The two walkthrough lines of a slice box (references/issues.md, "Slices as acceptance criteria")."""
+    walk = item['walkthrough']
+    return [f'  - Roteiro: {walk["persona"]} · {walk["steps"]}',
+            f'    → antes: {walk["before"]}; depois: {walk["after"]}']
+
+
+def criteria_lines(issue):
+    """The acceptance-criteria boxes of an issue of the plan: one box per slice with Entrega, Seams, Camadas, Depende
+    de and the walkthrough, in the plan's order; an issue without slices, one box per `acceptance` item."""
+    if not issue.get('slices'):
+        return [f'- [ ] {text}' for text in issue.get('acceptance') or []]
+    lines = []
+    for item in issue['slices']:
+        lines += [f'- [ ] {item["id"]}. {item["title"]}', f'  - Entrega: {item["delivers"]}',
+                  f'  - Seams: {"; ".join(item["seams"])}', f'  - Camadas: {", ".join(item["layers"])}',
+                  f'  - Depende de: {", ".join(item.get("depends_on") or []) or "nenhuma"}',
+                  *walkthrough_lines(item)]
+    return lines
+
+
 PUBLISH_FOLDER = Path('.frontlights') / 'publish'
 ISSUE_URL = re.compile(r'https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)')
 REREAD_FIELDS = 'number,title,body,url,state,labels,assignees,issueType,projectItems,blockedBy'

@@ -26,6 +26,16 @@ Operations (each prints one JSON object on stdout):
               reread, tick-check), unless the answer is "Só fechar, sem marcar". A failed close holds its parent back;
               nothing is retried. `verify` of the closed issues, and `closeout-<...>.result.json` beside the list keeps
               the commands, their exit codes, the reread state and the literal answer. Never `--force`.
+  capture     --issue n: the body exactly as GitHub holds it, in .frontlights/issues/<n>/body-before-<stamp>.md
+              (`gh issue view --json body`, bytes, never a shell redirect). Read only on GitHub.
+  append      --issue n with one of --items <stamped file> [--pitfall <file>], --spec <stamped plan> or
+              --walkthrough <stamped plan>: `stamp --check` of that file (and of the pitfall file, approved by the same
+              answer), capture, insert the lines (--items after the last item of the criteria section, refused on a
+              closed issue or one without the section; --spec the boxes of the plan's issue, refused when it already
+              has S<n> boxes; --walkthrough the two Roteiro lines under each open box that lacks them), check that only
+              lines were added, capture again right before the write (a difference: `diverged`, nothing written),
+              `gh issue edit --body-file` with the account checked first, reread (`criteria.before`/`after`; a
+              difference: `diverged_after`) and only then append the pitfall line to .frontlights/pitfalls.md.
   candidates  the open issues that can be closed now, in the order to close them (sub-issues before
               their parent), plus the ones left out and why. Scope: --issues 12,13, or --all (every open
               issue of the repository), or, with neither, the issues this project worked on (folders in
@@ -1644,6 +1654,288 @@ def op_apply(config, root='.', expect=None, answer=None, only=None, gh=None, edi
     return record(outcome)
 
 
+# ---------------------------------------------------------------- append and capture: the body writes of stage 5
+# (redesign, issue 7). `capture` keeps the body exactly as GitHub holds it; `append` inserts approved lines only,
+# never edits what is there: --items after the last item of the criteria section (a leftover, destination 2, with
+# its pitfall line in the same stamped batch), --spec the boxes of an adopted issue, --walkthrough the two `Roteiro:`
+# lines of each open box of an old issue. Every one: stamp --check, capture, insert, check that only lines were
+# added, capture again right before the write (someone edited it: stop), write, reread and count the boxes.
+
+PITFALL_LINE = re.compile(r'- (\d{4}-\d{2}-\d{2}) · #([1-9][0-9]*) · (.+?) · sonda: (.+)')
+PITFALLS = Path('.frontlights') / 'pitfalls.md'
+
+
+def utc_stamp():
+    return dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+
+
+def read_issue_state(gh, repository, number):
+    """(body, state) exactly as GitHub holds them (`gh issue view --json body,state`)."""
+    answer = gh(['issue', 'view', str(number), '--repo', repository, '--json', 'body,state'])
+    body = answer.get('body') if isinstance(answer, dict) else None
+    require(isinstance(body, str), f'GitHub gave no body text for issue #{number}')
+    require(len(body.encode('utf-8')) <= MAX_RECORD_BYTES, f'the body of issue #{number} is larger than 2 MiB')
+    return body, str(answer.get('state') or '').upper()
+
+
+def issue_number_of(issue, verb):
+    require(isinstance(issue, (str, int)) and NUMBER.fullmatch(str(issue).strip()) and valid_number(int(str(issue).strip())),
+            f'{verb} needs one issue number: pass --issue 12')
+    return int(str(issue).strip())
+
+
+def op_capture(config, root, issue, gh=None):
+    """`capture`: the body of --issue, byte for byte, in .frontlights/issues/<n>/body-before-<stamp>.md (read only on
+    GitHub)."""
+    number = issue_number_of(issue, 'capture')
+    _, repository = load_repository(config)
+    records = Path(root) / '.frontlights'
+    require(records.is_dir(), 'capture keeps the body in .frontlights/issues/<n>/ of the project: pass --root')
+    body, state = read_issue_state(gh or rs.gh_default, repository, number)
+    folder = records / 'issues' / str(number)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = save_body(folder, 'before', utc_stamp(), body)
+    counts = criteria(body)
+    return {'ok': True, 'exitCode': 0, 'repository': repository, 'issue': number, 'state': state, 'path': str(path),
+            'sha256': sha12(body.encode('utf-8')), 'bytes': len(body.encode('utf-8')),
+            'criteria': None if counts is None else {'checked': counts[0], 'total': counts[1]},
+            'message': f'Corpo da issue #{number} guardado byte a byte em {path.name}.'}
+
+
+def item_end(body, number):
+    """The last line of the item on `number` with its sub-items (the rule `find_box` uses for the `Bloqueada:` line)."""
+    lines = re.split(r'\r\n|\r|\n', body)
+    shown = {n: heading for n, _, _, heading in sections(body)}
+    own, end, gap = indentation(lines[number - 1]), number, False
+    for later in range(number + 1, len(lines) + 1):
+        whole = lines[later - 1]
+        if not whole.strip():
+            gap = True
+            continue
+        if shown.get(later) or (indentation(whole) <= own and (gap or LIST_ITEM.match(whole))):
+            break
+        gap, end = False, later
+    return end
+
+
+def criteria_items(body):
+    """[(line, label, ticked, has_walkthrough)] of the top items of the criteria section, and the line of its heading
+    (None without a section)."""
+    found, heading_line, items = list(sections(body)), None, []
+    for number, text, kind, heading in found:
+        if kind != 'criteria':
+            continue
+        if heading and heading_line is None:
+            heading_line = number
+            continue
+        item = ITEM.match(text) if not heading else None
+        if item and not any(n < number <= item_end(body, n) for n, *_ in items):
+            label = BOX_LABEL.match(text[item.end():].lstrip(' \t'))
+            items.append([number, f'S{int(label.group(1))}' if label else None, item.group(1) != ' ', False])
+        elif items and not heading and re.match(r'^[ \t]+[-*+][ \t]+Roteiro\s*:', text):
+            items[-1][3] = True
+    return [tuple(i) for i in items], heading_line
+
+
+def insert_lines(body, insertions):
+    """The body with each (after_line, [lines]) inserted, in the body's own line ending; nothing else changes."""
+    ending = re.search(r'\r\n|\r|\n', body)
+    newline = ending.group(0) if ending else '\n'
+    parts = re.split(r'(\r\n|\r|\n)', body)
+    for after, lines in sorted(insertions, key=lambda x: -x[0]):
+        index = 2 * (after - 1)
+        block = ''.join(line + newline for line in lines)
+        if index + 1 < len(parts):
+            parts.insert(index + 2, block)
+        else:
+            parts[index] = parts[index] + newline + block[:-len(newline)]
+    return ''.join(parts)
+
+
+def only_insertions(before, after):
+    """[] when `after` is `before` with lines added and none removed or changed (the `numstat` with no deleted line);
+    else the problems."""
+    import difflib  # noqa: PLC0415
+    old, new = body_lines(before), body_lines(after)
+    problems = []
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        if tag in ('replace', 'delete'):
+            problems.append({'reason': 'line_removed_or_changed', 'lines': [i1 + 1, i2]})
+    return problems
+
+
+def items_from_file(text):
+    """The checklist lines of a stamped items file: open top items `- [ ] ...` with their indented sub-items, nothing
+    ticked, no heading; the trailing empty lines dropped."""
+    lines = body_lines(text.lstrip('﻿'))
+    require(lines and lines != [''], 'the items file is empty')
+    tops = 0
+    for index, line in enumerate(lines):
+        item = ITEM.match(line)
+        if item and indentation(line) == 0:
+            require(item.group(1) == ' ', f'items file, line {index + 1}: a new criterion starts open (`- [ ]`)')
+            tops += 1
+            continue
+        require(index > 0 and line.strip() and indentation(line) > 0,
+                f'items file, line {index + 1}: only `- [ ] ...` items and their indented sub-items, with no empty line')
+        require(not (ITEM.match(line) and ITEM.match(line).group(1) != ' '), f'items file, line {index + 1}: ticked')
+    return lines, tops
+
+
+def approval_of(path, root, what):
+    """frontlights.stamp_check, as a refusal of append when the file has no approval that matches."""
+    try:
+        check = frontlights.stamp_check(path, root)
+    except frontlights.PublishRefusal as error:
+        raise TickRefusal(error.reason, str(error), error.hint)
+    if not check['approved']:
+        raise TickRefusal('not_approved', f'{check["path"]} ({check["sha256"]}) não confere com a última aprovação '
+                          f'registrada ({check["revision"] or "nenhuma"}); nada foi escrito',
+                          hint=f'mostre {what} e peça a aprovação por link e carimbo (stamp --approve) de novo')
+    return check
+
+
+def pitfall_lines(path, number):
+    lines = [line for line in body_lines(Path(path).read_bytes().decode('utf-8-sig')) if line.strip()]
+    require(lines, 'the pitfall file is empty')
+    for line in lines:
+        match = PITFALL_LINE.fullmatch(line)
+        if not match:
+            raise TickRefusal('pitfall_format', f'linha de armadilha fora do formato: {line[:120]!r}',
+                              hint='- <AAAA-MM-DD> · #<n> · <fato> · sonda: <sonda> (references/issues.md, "A pitfall line")')
+        if int(match.group(2)) != number:
+            raise TickRefusal('pitfall_issue', f'a linha de armadilha cita #{match.group(2)}, não a issue #{number}')
+    return lines
+
+
+def plan_issue(plan_path, root, number, config):
+    """The issue `number` of a stamped plan that passes validate-plan."""
+    plan = frontlights.load(plan_path)
+    try:
+        frontlights.validate_plan(plan, config.get('project') if isinstance(config, dict) else None)
+    except ValueError as error:
+        raise TickRefusal('plan_invalid', f'o plano não passa no validate-plan: {error}')
+    found = [i for i in plan['issues'] if i['id'] == number]
+    if not found:
+        raise TickRefusal('plan_issue_missing', f'a issue #{number} não está no plano')
+    return found[0]
+
+
+def op_append(config, root, issue, items=None, spec=None, walkthrough=None, pitfall=None, gh=None, edit=None,
+              account=None):
+    """`append` (see the block comment above): the result dict, `ok: false` with `reason` on a refusal."""
+    number = issue_number_of(issue, 'append')
+    chosen = [x for x in (items, spec, walkthrough) if x]
+    require(len(chosen) == 1, 'append needs exactly one of --items <stamped file>, --spec <plan> or --walkthrough <plan>')
+    require(pitfall is None or items, '--pitfall goes with --items (a leftover criterion leaves its pitfall line)')
+    data, repository = load_repository(config)
+    records = Path(root) / '.frontlights'
+    require(records.is_dir(), 'append keeps the bodies in .frontlights/issues/<n>/ of the project: pass --root')
+    gh, edit = gh or rs.gh_default, edit or gh_write
+    result = {'repository': repository, 'issue': number, 'written': False, 'verified': False, 'files': {},
+              'pitfalls': 0}
+    try:
+        approval = approval_of(chosen[0], root, 'o lote')
+        result['approved'] = approval
+        mode = 'items' if items else 'spec' if spec else 'walkthrough'
+        result['mode'] = mode
+        extra = []
+        if pitfall:
+            pitfall_approval = approval_of(pitfall, root, 'a linha de armadilha')
+            if pitfall_approval['answer'] != approval['answer']:
+                raise TickRefusal('pitfall_not_in_batch', 'a linha de armadilha não foi aprovada pela mesma resposta '
+                                  'do lote; ela não tem pergunta própria', hint='aprove os dois arquivos com a mesma '
+                                  'resposta literal (stamp --approve de cada um)')
+            extra = pitfall_lines(pitfall, number)
+        if items:
+            lines, tops = items_from_file(Path(items).read_bytes().decode('utf-8'))
+        else:
+            source = plan_issue(chosen[0], root, number, data)
+        before, state = read_issue_state(gh, repository, number)
+        if state == 'CLOSED':
+            raise TickRefusal('issue_closed', f'a issue #{number} está fechada: um critério novo vira issue de topo '
+                              'que a cita; nada foi escrito')
+        boxes, heading = criteria_items(before)
+        if mode == 'items':
+            if heading is None:
+                raise TickRefusal('no_criteria_section', f'a issue #{number} não tem a seção de critérios de aceitação: '
+                                  'a sobra vira issue de topo que a cita; nada foi escrito')
+            last = item_end(before, boxes[-1][0]) if boxes else heading
+            insertions = [(last, lines)]
+        elif mode == 'spec':
+            if any(label for _, label, _, _ in boxes):
+                raise TickRefusal('boxes_present', f'a issue #{number} já tem caixas S<n>; nada foi escrito')
+            lines = frontlights.criteria_lines(source)
+            tops = sum(1 for line in lines if ITEM.match(line))
+            if heading is None:
+                end = len(body_lines(before))
+                insertions = [(end, ['', '## Critérios de aceitação', '', *lines])]
+            else:
+                insertions = [(item_end(before, boxes[-1][0]) if boxes else heading, lines)]
+        else:
+            by_label = {s['id'].upper(): s for s in source.get('slices') or []}
+            insertions, tops = [], 0
+            for line, label, ticked, has in boxes:
+                if label and not ticked and not has and label in by_label:
+                    insertions.append((item_end(before, line), frontlights.walkthrough_lines(by_label[label])))
+            if not insertions:
+                raise TickRefusal('nothing_to_append', f'toda caixa aberta da issue #{number} já tem o roteiro (ou o '
+                                  'plano não traz o walkthrough dela); nada foi escrito')
+        new = insert_lines(before, insertions)
+        problems = only_insertions(before, new)
+        require(not problems, 'append built a body that is not the captured one with lines added; nothing was written')
+    except TickRefusal as refusal:
+        failure = {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason,
+                   'message': str(refusal)}
+        if refusal.hint:
+            failure['hint'] = refusal.hint
+        return failure
+    folder = records / 'issues' / str(number)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = utc_stamp()
+    files = result['files']
+    files['before'] = str(save_body(folder, 'before', stamp, before))
+    files['new'] = str(save_body(folder, 'new', stamp, new))
+    if account is not None:
+        try:
+            account(data)
+        except _cli.AccountMismatch as mismatch:
+            return mismatch.result(**result)
+    now, _ = read_issue_state(gh, repository, number)
+    files['now'] = str(save_body(folder, 'now', stamp, now))
+    if body_lines(now) != body_lines(before):
+        return {**result, 'ok': False, 'exitCode': 1, 'reason': 'diverged',
+                'message': f'Alguém editou a issue #{number} depois da captura ({files["before"]} e {files["now"]}): '
+                           'mostre a diferença e pergunte; nada foi escrito.'}
+    try:
+        edit(['issue', 'edit', str(number), '--repo', repository, '--body-file', files['new']])
+    except Refusal as error:
+        return {**result, 'ok': False, 'exitCode': 1, 'reason': 'write_failed',
+                'message': f'{error}; capture o corpo de novo antes de repetir.'}
+    result['written'] = True
+    after, _ = read_issue_state(gh, repository, number)
+    files['after'] = str(save_body(folder, 'after', stamp, after))
+    old, fresh = criteria(before) or (0, 0), criteria(after) or (0, 0)
+    result['criteria'] = {'before': {'checked': old[0], 'total': old[1]},
+                          'after': {'checked': fresh[0], 'total': fresh[1]}}
+    result['inserted'] = sum(len(lines) for _, lines in insertions)
+    if body_lines(after) != body_lines(new) or fresh[1] - old[1] != tops:
+        return {**result, 'ok': False, 'exitCode': 1, 'reason': 'diverged_after',
+                'message': f'A releitura da issue #{number} não é o corpo escrito ({files["new"]} e {files["after"]}): '
+                           'mostre a diferença e pergunte; restaurar o corpo é uma escrita com aprovação própria.'}
+    result['verified'] = True
+    if extra:
+        target = Path(root) / PITFALLS
+        current = target.read_bytes().decode('utf-8') if target.is_file() else ''
+        with open(target, 'a', encoding='utf-8', newline='') as handle:   # append-only: never rewritten
+            handle.write(('' if not current or current.endswith('\n') else '\n') + ''.join(x + '\n' for x in extra))
+        result['pitfalls'] = len(extra)
+    return {**result, 'ok': True, 'exitCode': 0,
+            'message': f'Issue #{number}: {result["inserted"]} linha(s) acrescentada(s), critérios {old[1]} → {fresh[1]}; '
+                       'a releitura confere' + (f'; {len(extra)} linha(s) em .frontlights/pitfalls.md' if extra else '')
+                       + '.'}
+
+
 def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, **options):
     try:
         if operation == 'candidates':
@@ -1660,6 +1952,12 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
                              options.get('comment_file'))
         elif operation == 'run':
             result = op_run(config, root, issues, all_flag, gh, options.get('base'), options.get('remote'))
+        elif operation == 'capture':
+            result = op_capture(config, root, options.get('issue'), gh)
+        elif operation == 'append':
+            result = op_append(config, root, options.get('issue'), options.get('items'), options.get('spec'),
+                               options.get('walkthrough'), options.get('pitfall'), gh, options.get('edit'),
+                               options.get('account'))
         elif operation == 'apply':
             result = op_apply(config, root, options.get('expect'), options.get('answer'), options.get('only'), gh,
                               options.get('edit'), options.get('account'), options.get('pause'))
@@ -1721,6 +2019,22 @@ def build_parser():
     tick.add_argument('--record', help="the result.json of the watched run (default: .frontlights/issues/<n>/browser/"
                                        "result.json under --root; the lead issue's for a family)")
     tick.add_argument('--comment-file', help='a comment posted on the issue once the tick checks')
+    capture = sub.add_parser('capture', allow_abbrev=False,
+                             description='the body of --issue, byte for byte, in .frontlights/issues/<n>/body-before-<stamp>.md')
+    append = sub.add_parser('append', allow_abbrev=False,
+                            description='insert approved lines into the body of --issue, never edit what is there')
+    for command in (capture, append):
+        command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
+        command.add_argument('--root', help='the project whose .frontlights/issues/<n>/ keeps the bodies (default: the '
+                                            'main worktree of the current directory)')
+        command.add_argument('--issue', help='the issue number (default: the issue of the charter entry of the worktree)')
+    group = append.add_mutually_exclusive_group()
+    group.add_argument('--items', help='the stamped file with the new criteria (`- [ ] ...` and sub-items), inserted '
+                                       'after the last item of the criteria section')
+    group.add_argument('--spec', help='the stamped plan: the boxes of this issue into its criteria section')
+    group.add_argument('--walkthrough', help='the stamped plan: the two Roteiro lines of each open box that lacks them')
+    append.add_argument('--pitfall', help='with --items: the pitfall line(s), approved by the same answer, appended to '
+                                          '.frontlights/pitfalls.md after the write checks')
     return parser
 
 
@@ -1730,7 +2044,7 @@ def resolve_defaults(args):
         args.root = str(_cli.root_path(args.root))
     if hasattr(args, 'config'):
         args.config = _cli.config_path(args.config, getattr(args, 'root', None) or _cli.main_worktree())
-    if args.operation == 'tick' and args.issue is None:
+    if args.operation in ('tick', 'capture', 'append') and args.issue is None:
         args.issue = str(_cli.issue_number(None, _cli.current_tree(), args.root))
     return args
 
@@ -1751,9 +2065,11 @@ def main(argv=None):
                      expect=getattr(args, 'expect', None), answer=getattr(args, 'answer', None),
                      only=getattr(args, 'only', None),
                      record=getattr(args, 'record', None), comment_file=getattr(args, 'comment_file', None),
+                     items=getattr(args, 'items', None), spec=getattr(args, 'spec', None),
+                     walkthrough=getattr(args, 'walkthrough', None), pitfall=getattr(args, 'pitfall', None),
                      # checked at every write, never cached: the login and the repository against the config
                      account=((lambda data: _cli.gh_account(data, rs.gh_default))
-                              if args.operation in ('tick', 'apply') else None))
+                              if args.operation in ('tick', 'apply', 'append') else None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     if args.operation in ALIASES:
