@@ -9,7 +9,8 @@ keeping: what a good test is, where tests go, what to mock, the anti-patterns, t
 when a red surprises you. Every section applies on every cycle: consult them before and during the loop, not after.
 
 When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and interface vocabulary match the
-project's domain language, and respect ADRs in the area you're touching.
+project's domain language, and respect ADRs in the area you're touching. Read the exploration notes the brief points to: a note is a map, not
+evidence; confirm each `file:line` and run your red test before fixing.
 
 Follow the conventions recorded in the issue's `## Decisões de implementação` (`## Abordagem e convenções` in issues
 published before this section existed, `## Approach and conventions` before 0.28.1) and in the discovery log:

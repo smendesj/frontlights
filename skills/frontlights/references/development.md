@@ -159,7 +159,7 @@ convenience. With a `path_risk` of `inspect` other than `ok`, give `slice open` 
 claim: read the diff and rerun the commands it names.
 
 **Fan out inside an issue.** The independent slices go at once, one implementer per open slice, in its own worktree, and the agents around them do not
-wait: dispatch in the same message read-only workers that prepare the next slice, and the checks that share no
+wait: dispatch in the same message read-only workers that prepare the next slice (each writes its note, `references/worker.md`), and the checks that share no
 resource (one that shares a port or a database runs one at a time). When the user asked for a review, the reviewer is never the implementer. Only one
 worker edits a slice's worktree at a time; the readers edit nothing; the merge is this session's.
 

@@ -17,14 +17,17 @@ Every brief carries, in this order, and nothing the worker can read for itself:
 2. **Where.** The worktree path, the branch, and the owned paths; the base it was cut from.
 3. **Tests.** The seams of the box and the command that proves it (for an implementer: `references/tdd.md`; a run "só
    com teste assistido": no tests).
-4. **Stage rules.** Only those that apply: test data (create what the flow needs through the product's own endpoints,
+4. **Notes.** The paths of the exploration notes that bear on it (`.frontlights/notes/` before the issue has a
+   number, `.frontlights/issues/<n>/notes/` after; format in `docs/protocol.md`, "Registros"), never a retelling.
+5. **Stage rules.** Only those that apply: test data (create what the flow needs through the product's own endpoints,
    or use a test account that exists, and keep it for reuse), secrets masked before printing, Portuguese for any text
    the user will read.
-5. **Return.** At most 20 lines: what changed, the commands run with exit codes and counts, the paths of the files
+6. **Return.** At most 20 lines: what changed, the commands run with exit codes and counts, the paths of the files
    with the rest (test output, diffs, long reports), and the question or write it needs.
 
-A reader's brief (reconnaissance, a probe, the preparation of the next slice) names the question and the area; it
-edits nothing.
+A reader's brief (reconnaissance, a probe, the preparation of the next slice) names the question, the area and the
+note it writes, in the main worktree's `.frontlights`; it edits nothing else. A note is a map, not evidence: whoever
+reads one confirms each `file:line` and runs their own red test before fixing.
 
 ## What a worker never does
 
