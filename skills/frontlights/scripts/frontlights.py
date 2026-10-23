@@ -769,7 +769,7 @@ def authorize(charter, operation):
 
 
 def run(argv, cwd=None):
-    result = subprocess.run(argv, cwd=cwd, capture_output=True, timeout=45)
+    result = subprocess.run(argv, cwd=cwd, capture_output=True, timeout=45, env=_cli.git_environment())
     require(result.returncode == 0, f'{argv[0]} read failed (exit {result.returncode}); inspect credentials/configuration locally')
     return result.stdout
 
@@ -1600,14 +1600,16 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 
 def git_text(root, *args, timeout=30):
     """Stripped stdout of a Git command run in `root`; raises on any failure."""
-    result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=timeout,
+                            env=_cli.git_environment())
     require(result.returncode == 0, f'git {args[0]} failed (exit {result.returncode})')
     return result.stdout.strip()
 
 
 def git_ok(root, *args, timeout=30):
     """Whether a Git command exits 0, for predicates such as `merge-base --is-ancestor`."""
-    return subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=timeout).returncode == 0
+    return subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=timeout,
+                          env=_cli.git_environment()).returncode == 0
 
 
 def update_check(skill_root=SKILL_ROOT):
@@ -1741,7 +1743,7 @@ class Stage6Refusal(ValueError):
 
 def git_call(cwd, *args, timeout=120):
     """(exit code, stdout, stderr) of `git -C cwd ...` without a shell and without prompts."""
-    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0')
+    environment = _cli.git_environment()
     try:
         done = subprocess.run(['git', '-C', str(cwd), *args], capture_output=True, text=True, encoding='utf-8',
                               errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)

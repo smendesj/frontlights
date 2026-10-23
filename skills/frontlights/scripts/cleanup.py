@@ -150,8 +150,7 @@ PULLS = 'nodes { number state merged mergedAt baseRefName headRefOid }'
 def git(root, *args):
     """(exit code, stdout) of a Git command run in `root` without a shell. Git's own text is data and a failure
     never repeats it. `--no-optional-locks` keeps `git status` from refreshing (writing) the index."""
-    environment = rs.gh_environment()
-    environment['GIT_TERMINAL_PROMPT'] = '0'
+    environment = _cli.git_environment(rs.gh_environment())
     try:
         done = subprocess.run(['git', '-C', str(root), '--no-optional-locks', *args], capture_output=True, text=True,
                               encoding='utf-8', errors='replace', timeout=GIT_TIMEOUT, stdin=subprocess.DEVNULL,
@@ -1095,8 +1094,7 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=(), 
 def execute(argv):
     """(exit code, stdout, stderr) of a command of the plan, run without a shell. Its text is data, never repeated
     whole: only a bounded, cleaned line reaches the result."""
-    environment = rs.gh_environment()
-    environment['GIT_TERMINAL_PROMPT'] = '0'
+    environment = _cli.git_environment(rs.gh_environment())
     try:
         done = subprocess.run(argv, capture_output=True, text=True, encoding='utf-8', errors='replace',
                               timeout=GIT_TIMEOUT * 4, stdin=subprocess.DEVNULL, env=environment)

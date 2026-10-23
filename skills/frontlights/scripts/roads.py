@@ -97,7 +97,7 @@ def write_json_atomic(value, path):
 def main_worktree(root):
     try:
         common = subprocess.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
-                                cwd=root, capture_output=True, text=True, timeout=20)
+                                cwd=root, capture_output=True, text=True, timeout=20, env=_cli.git_environment())
         if common.returncode == 0 and common.stdout.strip():
             return Path(common.stdout.strip()).parent
     except (OSError, subprocess.TimeoutExpired):
@@ -299,7 +299,7 @@ def user_agent():
     client's calls from any other; bare when Git or the checkout is unavailable."""
     try:
         done = subprocess.run(['git', '-C', str(Path(__file__).resolve().parents[1]), 'rev-parse', '--short=12', 'HEAD'],
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=10, env=_cli.git_environment())
         commit = done.stdout.strip() if done.returncode == 0 else ''
     except (OSError, subprocess.TimeoutExpired):
         commit = ''

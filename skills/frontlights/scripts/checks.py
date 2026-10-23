@@ -438,7 +438,7 @@ def count_tests(output):
 
 
 def git_bytes(root, *args):
-    done = subprocess.run(['git', '-C', str(root), *args], capture_output=True)
+    done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, env=_cli.git_environment())
     if done.returncode != 0:
         raise Refused(f'A pasta {Path(root).name} não é uma worktree Git legível.')
     return done.stdout

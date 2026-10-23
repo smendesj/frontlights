@@ -3,7 +3,7 @@
 never pushed to the remote base; the release pushes its tip to a branch name of its own (`git push origin
 main:refs/heads/<release branch>`) and opens one pull request. This module keeps the bench
 current with the remote and plans the release. Every Git call is a list argv run without a shell, with a timeout and
-GIT_TERMINAL_PROMPT=0. `run` knows seven operations, `sync`, `bundle`, `release-plan`, `suite`, `suite-gate`,
+without prompts (`_cli.git_environment`). `run` knows seven operations, `sync`, `bundle`, `release-plan`, `suite`, `suite-gate`,
 `merge` and `release` (redesign, issue 4); an unknown one is a refusal.
 
 Operations (each prints one JSON object on stdout):
@@ -193,7 +193,7 @@ def require(condition, message):
 
 def git(root, *args, timeout=GIT_TIMEOUT):
     """(exit code, stdout, stderr) of a Git command run in `root` without a shell and without prompts."""
-    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0')
+    environment = _cli.git_environment()
     try:
         done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, encoding='utf-8',
                               errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)

@@ -833,14 +833,15 @@ def blob_at(root, ref, path):
     """The Git blob id of `path` in `ref`, or None when it is not there (or Git cannot say)."""
     try:
         done = subprocess.run(['git', '-C', str(root), 'rev-parse', '--verify', '--quiet', f'{ref}:{path}'],
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, text=True, timeout=30, env=_cli.git_environment())
     except (OSError, subprocess.TimeoutExpired):
         return None
     answer = done.stdout.strip()
     if done.returncode != 0 or not BLOB_ID.fullmatch(answer):
         return None
     try:   # a tree (a folder) has an id too: only a file counts
-        kind = subprocess.run(['git', '-C', str(root), 'cat-file', '-t', answer], capture_output=True, text=True, timeout=30)
+        kind = subprocess.run(['git', '-C', str(root), 'cat-file', '-t', answer], capture_output=True, text=True,
+                              timeout=30, env=_cli.git_environment())
     except (OSError, subprocess.TimeoutExpired):
         return None
     return answer if kind.returncode == 0 and kind.stdout.strip() == 'blob' else None

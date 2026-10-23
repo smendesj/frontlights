@@ -75,10 +75,17 @@ def print_usage_error(failure, exit_code=1, **extra):
     return exit_code
 
 
+def git_environment(base=None):
+    """The environment of every Git subprocess of the scripts: `base` (default: this process's environment) with
+    GIT_TERMINAL_PROMPT=0 and GCM_INTERACTIVE=never, so neither Git nor the Git Credential Manager ever waits on a
+    prompt or an account picker that nobody will answer."""
+    return {**(os.environ if base is None else base), 'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'never'}
+
+
 def git_line(cwd, *args):
     try:
         done = subprocess.run(['git', '-C', str(cwd), *args], capture_output=True, text=True, timeout=30,
-                              stdin=subprocess.DEVNULL)
+                              stdin=subprocess.DEVNULL, env=git_environment())
     except (OSError, subprocess.TimeoutExpired):
         return None
     out = done.stdout.strip()

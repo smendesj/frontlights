@@ -132,7 +132,7 @@ NOT_DECISIONS = ('assistir de novo', 'sim, pode rodar', 'rodar o teste assistido
 
 
 def git(root, *args):
-    done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=60)
+    done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=60, env=_cli.git_environment())
     if done.returncode != 0:
         raise ValueError(f'git {args[0]} failed in {root}: {done.stderr.decode("utf-8", "replace").strip()[:200]}')
     return done.stdout

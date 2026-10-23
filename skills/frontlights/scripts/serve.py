@@ -1072,7 +1072,7 @@ def ports_location(root):
     for flags in (['--path-format=absolute', '--git-common-dir'], ['--git-common-dir']):
         try:
             done = subprocess.run(['git', '-C', str(root), 'rev-parse', *flags], capture_output=True, text=True,
-                                  encoding='utf-8', timeout=30)
+                                  encoding='utf-8', timeout=30, env=_cli.git_environment())
         except (OSError, subprocess.SubprocessError):
             continue
         text = done.stdout.strip() if done.returncode == 0 else ''
@@ -1581,7 +1581,7 @@ def git(cwd, *args, timeout=GIT_SECONDS):
     prompts, with a deadline."""
     executable = shutil.which('git')
     require(executable, 'O git não foi encontrado no PATH; o preview refresh precisa dele.')
-    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_MERGE_AUTOEDIT='no')
+    environment = dict(_cli.git_environment(), GIT_MERGE_AUTOEDIT='no')
     try:
         done = subprocess.run([executable, '-C', str(cwd), *args], capture_output=True, text=True, encoding='utf-8',
                               errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)
