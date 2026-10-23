@@ -19,8 +19,8 @@ SLACK = 1.10
 # contagem de 23/10/2026 (integração do redesenho, issue 3); só desce
 BUDGET = {
     'SKILL.md': 1800,
-    'docs/protocol.md': 6611,
-    'docs/security.md': 8136,
+    'docs/protocol.md': 6289,   # issue 7: "Quadro e publicação" vira registros e ponteiro
+    'docs/security.md': 8112,   # issue 7: "Revisão e sobras"
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
