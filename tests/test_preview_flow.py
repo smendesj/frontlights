@@ -205,7 +205,7 @@ class FreeTestWindowTests(unittest.TestCase):
                                                'the main worktree'), 1)
 
     def test_the_holder_has_no_time_limit_and_its_exit_wakes_the_session(self):
-        for phrase in ('The holder has no time limit', 'the 5 minutes of the watched run do not apply',
+        for phrase in ('The holder has no time limit', 'the session never closes this window',
                        "it exits only on the browser's `disconnected` event",
                        'its exit wakes the session, which runs `serve stop` for what it started',
                        '`python "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <main worktree> '

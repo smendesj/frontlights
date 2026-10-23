@@ -11,9 +11,10 @@
           `profileDir` in `.frontlights/issues/<n>/browser/window.json` of the main worktree. Never installs anything.
   attach  the window of `window.json` when it is alive; otherwise it reopens it on the same base and strip, with no
           question (`reopened: true`).
-  hold    `--minutes 5|none`: the holder, in the foreground (whoever drives the pass runs it in the background). It
-          keeps the strip on new pages, exits when the user closes the window (`disconnected`) or when the minutes
-          end (then it closes the window itself) and prints `ended_by`.
+  hold    `[--minutes none|<n>]`: the holder, in the foreground (whoever drives the pass runs it in the background). It
+          keeps the strip on new pages and exits when the window closes (`window close` by the conductor, or the user:
+          `disconnected`) or, given minutes, when they end (then it closes the window itself); prints `ended_by`.
+          Default none: the passes and the free test never wait on a timer.
   shot    `--pass antes|depois --criterion S<n>` (or `--name <label>` for the screens of the artifact): one print in
           the folder `progress_report.py evidence-dir` gives (the sprint folder), `antes-<cover>-S<n>.png`.
   close   stops only the Chrome this helper started (same pid and start time) and removes its profile.
@@ -441,7 +442,7 @@ def op_hold(root, issue, minutes):
             time.sleep(HOLD_POLL_SECONDS)
         ended = 'disconnected' if not ours_alive(state) else 'prazo'
     killed, _ = finish(root, issue, state, ended)
-    message = ('O usuário fechou a janela.' if ended == 'disconnected'
+    message = ('A janela fechou (o window close de quem conduz ou o usuário).' if ended == 'disconnected'
                else f'Os {minutes} minutos acabaram e a janela foi fechada pelo holder.')
     return {'ok': True, 'ended_by': ended, 'closedByHolder': killed, 'seconds': round(time.monotonic() - started),
             'message': message + ' Nenhum dos dois é resposta à pergunta: siga para o relato e a pergunta.'}
@@ -517,14 +518,14 @@ def run(args, root, tree, config_file):
 
 
 ENDINGS = {
-    'antes': ('The ANTES window stays open while the slices are worked; its holder has no time limit. After the last '
-              'ANTES evidence of every criterion, close it with `window close`; a window closed before that (by the '
-              'user, a crash or the end of a session) reopens on the base with `window attach`, with no question, when '
-              'the next capture is due. Tell the session which criteria still lack their ANTES, so it stops the ANTES '
-              'server once none is due.'),
-    'depois': ('After the last step leave the window open: the holder closes it after about 5 minutes, or the user '
-               'closes it sooner. Do not return your report before the holder exits; its exit is what wakes the '
-               'session waiting for you.'),
+    'antes': ('The ANTES window stays open while the slices are worked; its holder has no time limit. Once the last '
+              'criterion has its print and its record, close it at once with `window close`, with no wait, and tell the '
+              'session, which stops the ANTES server; a window closed before that (by the user, a crash or the end of '
+              'a session) reopens on the base with `window attach`, with no question, when the next capture is due. '
+              'Tell the session which criteria still lack their ANTES.'),
+    'depois': ('Once the last criterion has its print and its record, close the window at once with `window close`, '
+               'with no wait, then return your report: the session asks what comes next from the prints, never holding '
+               'the window open for it.'),
 }
 
 
@@ -547,7 +548,7 @@ def op_brief(config_file, root, issue, pass_, criteria, strip, base_url, account
         'STRIP': strip, 'BASE_URL': base_url, 'ACCOUNT': f'conta {account}', 'ACCOUNT_NUMBER': str(account),
         'CRITERIA': ', '.join(names), 'EVIDENCE_DIR': folder, 'RECORD': str(record),
         'WINDOW': (f'open, cdpUrl {state["cdpUrl"]}' if live else 'not open: step 1 opens it'),
-        'SCRIPTS': str(HERE), 'HOLD': 'none' if pass_ == 'antes' else '5',
+        'SCRIPTS': str(HERE), 'HOLD': 'none',
         'PLAYWRIGHT': state.get('playwright') or 'the one `window open` reports in `playwright`',
         'ENDING': ENDINGS[pass_],
     }
@@ -569,10 +570,9 @@ def minutes_value(text):
     try:
         value = int(text)
     except ValueError:
-        raise _cli.UsageError('--minutes é um número de minutos ou none', hint='--minutes 5 (DEPOIS) ou --minutes none '
-                              '(ANTES e teste livre)')
+        raise _cli.UsageError('--minutes é um número de minutos ou none', hint='--minutes none (o padrão)')
     if value < 1:
-        raise _cli.UsageError('--minutes precisa ser 1 ou mais, ou none', hint='--minutes 5')
+        raise _cli.UsageError('--minutes precisa ser 1 ou mais, ou none', hint='--minutes none')
     return value
 
 
@@ -586,7 +586,7 @@ def parser():
     p.add_argument('--strip', help='open: "ANTES: origin/main", "DEPOIS: branch <nome>" ou "MAIN LOCAL: teste livre"')
     p.add_argument('--base-url', help='open: endereço local servido (padrão: browserTest.baseUrl)')
     p.add_argument('--account', type=int, choices=(1, 2), default=1, help='open: conta de browserTest.users')
-    p.add_argument('--minutes', type=minutes_value, default=5, help='hold: 5 (DEPOIS) ou none (ANTES, teste livre)')
+    p.add_argument('--minutes', type=minutes_value, default=None, help='hold: none (padrão; a janela fecha pelo window close) ou minutos')
     p.add_argument('--pass', dest='pass_', choices=PASSES, help='shot e brief: antes ou depois')
     p.add_argument('--criterion', help='shot: S<n>, o critério cujo Fluxo a passada percorre')
     p.add_argument('--name', help='shot: rótulo de uma tela do artefato (no grilling), em vez de --criterion')

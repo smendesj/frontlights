@@ -341,8 +341,9 @@ class BriefTests(WindowCase):
         self.assertIn('DEPOIS: branch PREFIX/issue-12', text)
         self.assertIn('S1, S2', text)
         self.assertIn(opened['cdpUrl'], text)
-        self.assertIn('--minutes 5', text)
-        self.assertIn('Do not return your report before the holder exits', text)
+        self.assertIn('--minutes none', text)
+        self.assertNotIn('--minutes 5', text)
+        self.assertIn('close the window at once with `window close`, with no wait, then return your report', text)
         self.assertNotIn('senha-ficticia', text)
         self.assertEqual(out['window'], 'aberta')
 
@@ -351,6 +352,7 @@ class BriefTests(WindowCase):
         self.assertEqual(code, 0, out)
         text = Path(out['brief']).read_text(encoding='utf-8')
         self.assertIn('--minutes none', text)
+        self.assertIn('close it at once with `window close`, with no wait', text)
         self.assertIn('ANTES: origin/main', text)
         self.assertIn('not open: step 1 opens it', text)
         self.assertEqual(out['window'], 'fechada')
@@ -365,7 +367,8 @@ class BriefTests(WindowCase):
         self.assertIn('You never decide whether the pass passed', text)
         self.assertIn("Chrome driven by Playwright, visible, disposable profile, never Claude's built-in browser nor "
                       'Claude in Chrome', text)
-        self.assertIn('Closing the window or the 5 minutes ending is never an answer', text)
+        self.assertIn('Closing the window is never an answer', text)
+        self.assertNotIn('5 minutes', text)
         self.assertLessEqual(len(text.split()), 990)
 
 

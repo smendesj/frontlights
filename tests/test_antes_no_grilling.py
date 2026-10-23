@@ -10,7 +10,8 @@ janela DEPOIS.
 (b) Nenhuma slice aplica migração no banco local antes de o ANTES fechar (condição da operação coberta, em
 `references/development.md`); aplicada antes, o relatório diz que o ANTES não é fiel.
 (c) No fim, só a DEPOIS, um print por critério, no mesmo ponto do ANTES; "Assistir de novo" repete só a DEPOIS; o
-ritmo da DEPOIS: cada caso uma vez, nunca repetido (uma ANTES e uma DEPOIS), cerca de 5 minutos.
+ritmo: cada caso uma vez, nunca repetido (uma ANTES e uma DEPOIS); a janela fecha sozinha no fim de cada passada,
+sem espera (o teste livre é que fica aberto, do usuário).
 (d) Nomes `antes-<cover>-S<n>.png`, `depois-<cover>-S<n>.png` e `falha-<caso>`; no texto, `antes#<cover>-S<n>`.
 (e) Contas e dados de teste ficam para reuso no banco local de desenvolvimento; nada de remoção no fim da passada;
 o perfil movido continua sendo desfeito.
@@ -157,11 +158,12 @@ class OnlyDepoisAtTheEndTests(unittest.TestCase):
                        '**One print per criterion.**',
                        'at the same place in ANTES and DEPOIS',
                        'the result of each step stays in text, only in `result.json`',
-                       'Each case runs once in each pass, never repeated', 'about 5 minutes'):
+                       'Each case runs once in each pass, never repeated', '**No wait at the end:**'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, WATCHED)
         self.assertNotIn('One print per pass', WATCHED)
         self.assertNotIn('twice', WATCHED)
+        self.assertNotIn('5 minutes', WATCHED)
         what_runs = flat(re.search(r'\*\*What runs\.\*\*.*?(?=\n\n)', REFERENCE, re.S).group(0))
         self.assertIn('only DEPOIS', what_runs)
 

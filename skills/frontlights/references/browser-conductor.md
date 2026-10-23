@@ -69,7 +69,7 @@ is a failure to report, naming the field.
 
 {{ENDING}}
 
-Closing the window or the 5 minutes ending is never an answer to the question the session asks next. Stop only what
+Closing the window is never an answer to the question the session asks next. Stop only what
 you started: `serve.py window close` stops only the Chrome the script opened.
 
 ## Your report

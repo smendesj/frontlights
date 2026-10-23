@@ -338,10 +338,9 @@ class WatchedRunTextTests(unittest.TestCase):
         for phrase in ('never headless', 'The whole screen, always', '`viewport: null`', 'never go on with a cut-off window', 'across the full width', '"ANTES: <base>"', '"DEPOIS: branch <name>"',
                        'disposable browser context or profile', 'ends ANTES before DEPOIS starts',
                        'one issue at a time',
-                       'Each case runs once in each pass, never repeated', 'about 5 minutes', 'the wait never blocks the agent', 'asked while the DEPOIS window is still open',
-                       'run_in_background option', "the browser's `disconnected` event", 'Its exit is the notice',
+                       'Each case runs once in each pass, never repeated', '**No wait at the end:**', 'runs `window close` at once, in ANTES and in DEPOIS', 'The closing question below comes after it, from the prints',
+                       'run_in_background option', "the browser's `disconnected` event",
                        'A bare timer or `sleep` is not a holder', 'never start DEPOIS before that notice',
-                       'does not return its report before the DEPOIS holder exits',
                        'is never an answer to that question',
                        'One print per criterion', 'never one per step or per repetition', 'do not keep that image',
                        'never fall back to a hidden window silently',
@@ -372,7 +371,7 @@ class WatchedRunTextTests(unittest.TestCase):
                        'new window', 'no new "pronto para assistir?"', 'runs only DEPOIS again',
                        '`aprovacao: "aprovado"`', '`aprovacao: "prosseguir"`', '`aprovacao: "alteracao"`',
                        'not approved by the user', 'in their own words', 'destination ladder',
-                       'Never pick an answer for the user', 'never read the 5 minutes or a silence as an answer',
+                       'Never pick an answer for the user', 'never read the window closing or a silence as an answer',
                        'the failure question comes first and replaces this one',
                        'asked only when the user watched'):
             with self.subTest(phrase=phrase):

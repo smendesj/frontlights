@@ -108,8 +108,8 @@ open while the slices are worked, and, at the end, DEPOIS on the delivered state
 opens (the first ANTES window, at the problem round of the grilling, and the DEPOIS window, at the points above), ask
 with `AskUserQuestion`: "Pronto para assistir ao teste de navegador da issue #<n>?" (for a family that already exists,
 "das issues #<n>, #<m> e #<k>"). The text says what comes: for ANTES, the screens of the base for the artifact and,
-once the plan is approved, the `Fluxo:` of each criterion on the base, the window staying open until the last ANTES
-print; for DEPOIS, each case once, one print per criterion, and the window open for about 5 minutes at the end; that
+once the plan is approved, the `Fluxo:` of each criterion on the base, the window closing by itself after the last ANTES
+print; for DEPOIS, each case once, one print per criterion, and the window closing by itself at the end; that
 the run uses the test accounts that exist and creates the test data the `Fluxo:` needs, which stays on the local
 development database for reuse; that the database behind the server is the local development database (ask the user
 to confirm it when the project does not say so); and, when the `Fluxo:` moves a test user to a restricted profile,
@@ -163,16 +163,15 @@ each criterion (`browser-gate record`). What the window must be:
   origin/main" (the base's own name otherwise) and "DEPOIS: branch <name>". No login, password or local path ever goes
   into the strip; `window open` refuses one.
 - **Pace.** Each case runs once in each pass, never repeated: one ANTES, one DEPOIS. Hold every popup, toast and dialog on screen long enough to be read.
-  After the last step of DEPOIS the window stays open for about 5 minutes, held by a background process so that the
-  wait never blocks the agent: `window hold --minutes 5`, started with the shell tool's run_in_background option by
-  whoever drives the pass. It exits when the user closes the window (the browser's `disconnected` event) or the
-  minutes end (then it closes the window) and prints `ended_by`. Its exit is the notice that wakes whoever started it. A bare timer or `sleep` is not a holder. The
-  holder of the free test has no time limit ("The free test window", below).
-- **Window closed, next step.** When the ANTES holder exits, stop the ANTES server once no ANTES capture is due, and
-  only then start DEPOIS; never start DEPOIS before that notice. When the DEPOIS holder exits, the pass is over and the
-  conductor reports at once; a subagent that drives the passes does not return its report before the DEPOIS holder
-  exits. The closing question below is asked while the DEPOIS window is still open when the session itself drives the
-  passes. Closing the window or the 5 minutes ending is never an answer to that question.
+  The holder, `window hold --minutes none`, started with the shell tool's run_in_background option by whoever drives
+  the pass, keeps the strip on new pages; it exits when the window closes (the browser's `disconnected` event) and prints `ended_by`. **No wait at the
+  end:** once the last criterion of a pass has its print and its record, whoever drives it runs `window close` at
+  once, in ANTES and in DEPOIS. The holder of the free test has no time limit ("The free test window", below). A bare
+  timer or `sleep` is not a holder.
+- **Window closed, next step.** When the ANTES window closes, stop the ANTES server once no ANTES capture is due, and
+  only then start DEPOIS; never start DEPOIS before that notice. When the DEPOIS window closes, the pass is over and
+  the conductor reports at once. The closing question below comes after it, from the prints. Closing the window is
+  never an answer to that question.
 - **One print per criterion.** Each pass keeps exactly one print per criterion, taken at the same place in ANTES and
   DEPOIS, never one per step or per repetition: `antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png` (`window shot`
   names them, with a hyphen because `#` breaks a URL and the check of the push; in text, `antes#<cover>-S<n>` and
@@ -182,7 +181,7 @@ each criterion (`browser-gate record`). What the window must be:
   (`development.md`, "Standing authorization and the denied operations").
 
 At the end the watched run runs only DEPOIS; compare it with the ANTES evidence criterion by criterion in the report.
-**Two confirmations, code and screen.** Each criterion with a screen is confirmed twice at each end: by code (red at
+**Two confirmations, code and screen.** Each criterion with a screen is confirmed at each end: by code (red at
 the base, green on the branch of the issue) and by screen (ANTES shows the defect, DEPOIS shows it fixed). ANTES
 failing where the issue fixes something is the expected confirmation that the problem exists; an ANTES that does not
 reproduce it becomes a question before any code for that criterion ("Não reproduzi o problema do S<n> na base. Como
@@ -191,7 +190,7 @@ DEPOIS differing from the `Fluxo:` is a product failure; a green test never stan
 
 **After the watched run: ask what comes next.** It is asked only when the user watched (`assistido: true`). Once the
 result of each case is in the text (ANTES and DEPOIS side by side, with the evidence folder) and any moved profile is
-restored and read back, with the window still open (or already closed, when a subagent drove the passes), ask "O que
+restored and read back, with the window already closed, ask "O que
 fazer depois do teste assistido da issue #<n>?" (for a batch, "das issues #<n>, #<m> e #<k>"). Options, in this order:
 "Assistir de novo", "Aprovado", "Precisa de alteração" and "Pode prosseguir", each saying what it does:
 
@@ -206,7 +205,7 @@ fazer depois do teste assistido da issue #<n>?" (for a batch, "das issues #<n>, 
 - "Pode prosseguir": `aprovacao: "prosseguir"`, watched but not approved by the user; the handoff never says
   "aprovado". It confirms no box.
 
-Never pick an answer for the user, never read the 5 minutes or a silence as an answer and never write `aprovacao:
+Never pick an answer for the user, never read the window closing or a silence as an answer and never write `aprovacao:
 "aprovado"` on your own. When a case of DEPOIS failed, the failure question comes first and replaces this one.
 
 **Real back first.** Prefer the real back end and real data. For permissions, move a test user of `browserTest.users`,
@@ -265,8 +264,8 @@ test happens in the terminal (`development.md`, "The free test on the local main
   and logged in with account 1 of `browserTest.users`, typed only into the login form.
 - **The strip.** On every page, a fixed strip pinned to the top edge across the full width, by an init script, with
   the text "MAIN LOCAL: teste livre" and nothing else.
-- **The holder.** `window hold --minutes none`, in the background. The holder has no time limit: the 5 minutes of the
-  watched run do not apply, and it exits only on the browser's `disconnected` event; its exit wakes the session, which
+- **The holder.** `window hold --minutes none`, in the background. The holder has no time limit and the session never closes this
+  window: it exits only on the browser's `disconnected` event; its exit wakes the session, which
   runs `serve stop` for what it started (`python "${CLAUDE_SKILL_DIR}/scripts/serve.py" stop --config <config> --root <main worktree> --issue <n>`).
 - **Help on request.** The user leads, guided by the roteiro at the end of the artifact: no ANTES/DEPOIS and no print is required, and the test creates no
   test data of its own. While the window is open the session helps on request: it reads the screen, the console and

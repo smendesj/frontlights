@@ -288,7 +288,7 @@ class DeliveredDriverTextTests(unittest.TestCase):
                        'Passes never overlap while one is running: one issue at a time (a batch counts as one) on the '
                        'same account and database; an ANTES window that is open but idle holds no other issue back',
                        'the database behind the server is the local development database',
-                       'Closing the window or the 5 minutes ending is never an answer',
+                       'Closing the window is never an answer',
                        '"Pronto para assistir ao teste de navegador da issue #<n>?"',
                        '"O que fazer depois do teste assistido da issue #<n>?"',
                        'Report the three kinds separately, then ask with `AskUserQuestion`, one question per failure',
