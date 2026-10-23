@@ -1281,6 +1281,10 @@ def op_run(config, root='.', issues=None, base=None, integrations=(), yes=(), gh
 
 # ---------------------------------------------------------------- command line
 
+# The commands the redesign replaced stay for one cycle as aliases (issue 2): they work as before and say what replaces them.
+ALIASES = {'plan': 'cleanup.py plan segue por um ciclo como alias: a abertura lê o plano com `frontlights.py open` '
+                   'e a limpeza roda com `cleanup.py run --from-authorizations`'}
+
 def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
         records=(), source=None, destination=None, remote_branches=(), from_authorizations=False, page=1, yes=(),
         runner=None, out=None):
@@ -1311,7 +1315,8 @@ def build_parser():
     parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
     for name in ('plan', 'verify', 'run'):
-        command = sub.add_parser(name, allow_abbrev=False)
+        command = sub.add_parser(name, allow_abbrev=False,
+                                 description=('alias for one cycle: ' + ALIASES[name]) if name in ALIASES else None)
         command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
         command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
         if name != 'run':
@@ -1370,6 +1375,8 @@ def main(argv=None):
                      source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
+    if args.operation in ALIASES:
+        result['alias'] = ALIASES[args.operation]
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 

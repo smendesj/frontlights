@@ -1535,11 +1535,17 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
     return result
 
 
+# The commands the redesign replaced stay for one cycle as aliases (issue 2): they work as before and say what replaces them.
+ALIASES = {'candidates': 'closeout.py candidates segue por um ciclo como alias: a lista carimbada sai de `closeout.py run` '
+                         'e o fechamento de `closeout.py apply`; a abertura lê com `frontlights.py open`'}
+
+
 def build_parser():
     parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
     for name in ('candidates', 'verify', 'run'):
-        command = sub.add_parser(name, allow_abbrev=False)
+        command = sub.add_parser(name, allow_abbrev=False,
+                                 description=('alias for one cycle: ' + ALIASES[name]) if name in ALIASES else None)
         command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
         command.add_argument('--root', help='project whose .frontlights records name the issues worked on '
                                                  '(default: the main worktree of the current directory)')
@@ -1606,6 +1612,8 @@ def main(argv=None):
                               if args.operation in ('tick', 'apply') else None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
+    if args.operation in ALIASES:
+        result['alias'] = ALIASES[args.operation]
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 

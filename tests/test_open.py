@@ -5,12 +5,15 @@ então o `fetch --prune` roda sem rede) e um `gh` simulado que só aceita leitur
 composto dos simulados de `test_cleanup` (branches e PRs) e de `test_closeout` (issues). Os testes usam GitHub
 simulado: não homologam o GitHub real. Marcadores genéricos (OWNER/REPOSITORY).
 """
+import contextlib
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / 'skills' / 'frontlights' / 'scripts'))
@@ -165,6 +168,32 @@ class OpenTests(OpenCase):
             with self.subTest(flag=flag):
                 self.assertIn(flag, done.stdout)
 
+
+class AliasTests(unittest.TestCase):
+    """Issue 2 do redesenho, S5: `cleanup.py plan` e `closeout.py candidates` seguem por um ciclo como aliases:
+    funcionam como antes, dizem no `--help` e na saída o que os substitui."""
+
+    def test_the_help_and_the_output_name_what_replaces_them(self):
+        import cleanup
+        import closeout
+        for module, operation, argv, replaced in (
+                (cleanup, 'plan', ['plan', '--issues', '12'], ('frontlights.py open', 'cleanup.py run')),
+                (closeout, 'candidates', ['candidates'], ('closeout.py run', 'closeout.py apply'))):
+            with self.subTest(operation=operation):
+                done = subprocess.run([sys.executable, module.__file__, operation, '--help'], capture_output=True,
+                                      text=True, encoding='utf-8')
+                self.assertIn('alias for one cycle', ' '.join(done.stdout.split()))
+                with tempfile.TemporaryDirectory() as folder:
+                    config = Path(folder) / 'config.json'
+                    config.write_text('{}', encoding='utf-8')
+                    out = io.StringIO()
+                    with patch.object(module, 'run', return_value={'ok': True, 'exitCode': 0}), \
+                            contextlib.redirect_stdout(out):
+                        code = module.main([*argv, '--config', str(config), '--root', folder])
+                self.assertEqual(code, 0)
+                alias = json.loads(out.getvalue())['alias']
+                for name in replaced:
+                    self.assertIn(name, alias)
 
 if __name__ == '__main__':
     unittest.main()
