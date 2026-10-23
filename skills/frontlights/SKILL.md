@@ -47,7 +47,7 @@ Portuguese to the user; English only in `SKILL.md` and `references/`. In the use
 | references/closeout.md | stage 7; the stage-1 closeout question |
 | references/retro.md | the user accepts the retro offered after a release's merge; on request |
 | references/setup.md | `inspect` reports `config_missing` or a setup warning |
-| references/progress-report.md | the "Resumo para a diretoria" |
+| references/progress-report.md | the "Resumo para a diretoria", after `progress_report.py status` |
 | templates/pr.md with references/LICENSE-pr.md | the release PR |
 | templates/handoff.md | every handoff |
 | docs/protocol.md | "Registros" at stage 2; "Ponto de retomada e continuação"; "Teste no navegador"; "Contexto e conclusão" |

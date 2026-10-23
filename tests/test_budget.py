@@ -31,7 +31,7 @@ BUDGET = {
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
     'references/retro.md': 417,
-    'references/progress-report.md': 3797,
+    'references/progress-report.md': 2317,
     'references/review.md': 991,
     'references/setup.md': 181,
     'references/tdd-mocking.md': 202,
@@ -40,7 +40,7 @@ BUDGET = {
     'templates/grilling-section.html': 497,
     'templates/handoff.md': 729,
     'templates/issue.md': 1359,
-    'templates/pr.md': 753,
+    'templates/pr.md': 373,
 }
 
 

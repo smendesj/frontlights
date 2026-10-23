@@ -635,7 +635,7 @@ class ShotsDocumentationTests(unittest.TestCase):
     def test_the_reference_describes_the_week_folder_step(self):
         text = self.read('skills', 'frontlights', 'references', 'progress-report.md')
         for needle in ('weekShots', 'shots --to', '--meeting <weekMeeting>', 'weekMeeting', '{shotsDir}', '"issue"', 'proximo',
-                       '40', '1 MB', 'push --draft <file> --to', 'no longer names the folder'):
+                       '40', '1 MB', 'push --draft <file> --to'):
             self.assertIn(needle, text)
 
     def test_security_and_readme_describe_the_write_outside_the_project(self):
