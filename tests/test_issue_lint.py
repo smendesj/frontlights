@@ -55,11 +55,24 @@ class LintTests(unittest.TestCase):
         findings = frontlights.lint_body(FILLED + '| Tela | tratada | #<filha> | |\n- Toca o frontend: <sim | não>\n')
         self.assertEqual([f['text'] for f in findings], ['<filha>', '<sim | não>'])
 
+    def test_real_content_that_looks_like_a_template_is_clean(self):
+        # Achados do teste com as issues abertas de um projeto real (23/10/2026): um rótulo preenchido, uma rota,
+        # mensagens com motivo variável e o "S<k>" de uma conversão não são instrução nem marcador do modelo.
+        body = FILLED + ('- **O que é um bom teste aqui:** o status HTTP de cada rota para cada ator.\n'
+                         '- Roteiro: conta 2 · abrir /settings/profiles/<id>/access pela URL\n'
+                         '- O aviso diz "saved, but the logo was not uploaded: <motivo>".\n'
+                         '- Fecham como "Convertida em CA S<k> da #968"; "dormente até <data>"; "max <ano>".\n')
+        self.assertEqual(frontlights.lint_body(body), [])
+
+    def test_the_old_test_guidance_sentence_is_still_an_instruction(self):
+        body = FILLED + 'O que é um bom teste aqui: só comportamento observável pela interface pública, nunca detalhe\n'
+        self.assertEqual([f['kind'] for f in frontlights.lint_body(body)], ['instruction'])
+
     def test_local_bodies_and_the_exit_code(self):
         with tempfile.TemporaryDirectory() as folder:
             clean, dirty = Path(folder) / 'a.md', Path(folder) / 'b.md'
             clean.write_bytes(FILLED.encode('utf-8'))
-            dirty.write_bytes((FILLED + '\n<o que dá para demonstrar>\n').encode('utf-8'))
+            dirty.write_bytes((FILLED + '\n<o que dá para demonstrar quando ela termina>\n').encode('utf-8'))
             code, out = run('issue-lint', '--body', str(clean), '--root', folder)
             self.assertEqual((code, out['ok']), (0, True))
             code, out = run('issue-lint', '--body', str(clean), '--body', str(dirty), '--root', folder)

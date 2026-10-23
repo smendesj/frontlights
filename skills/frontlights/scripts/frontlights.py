@@ -2867,7 +2867,7 @@ INSTRUCTION_PHRASES = (
     'As seções até "Fora de escopo" são a spec',
     'O problema do ponto de vista de quem usa',
     'A solução do ponto de vista de quem usa',
-    'O que é um bom teste aqui',
+    'O que é um bom teste aqui: só comportamento observável pela interface pública',
     'O que foi recusado, com o motivo. São as linhas mais úteis da página',
     'As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice, com o',
     'Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra',
@@ -2888,13 +2888,36 @@ PLACEHOLDER = re.compile(r'<(?!!--)([^<>\n`]{1,120})>')
 INLINE_CODE = re.compile(r'(`+)(?:(?!\1).)+?\1')
 
 
-def placeholder(inside):
-    """Whether `<inside>` is a template placeholder: not an HTML tag, an autolink or an e-mail."""
+# The placeholders of the issue template before the redesign; the current template's are read from the file. Only
+# these count as blanks: a real body carries its own `<id>` in a route, `<motivo>` in a message or `S<k>` in a
+# conversion note, and those are content (found by linting the open issues of a real project, 23/10/2026).
+LEGACY_PLACEHOLDERS = frozenset({
+    'Um resultado observável', 'as camadas que ela toca', 'campo', 'conta 1 | contas 1 e 2', 'filha',
+    'interfaces públicas em que o comportamento é observado',
+    'navegador, integração, regressão, permissões entre contas, smoke', 'nenhum',
+    'o que dá para demonstrar quando ela termina', 'o que mostram quando a slice entra',
+    'o que os passos mostram no commit de partida', 'passos', 'persona',
+    'resultado observável de ponta a ponta desta slice', 'resultado observável', 'sim | não',
+    'slices anteriores, ou nenhuma', 'teste, medição ou diff revisado'})
+
+
+def template_placeholders():
+    """The `<...>` blanks of `templates/issue.md` (outside inline code) plus the legacy ones."""
+    template = Path(__file__).resolve().parent.parent / 'templates' / 'issue.md'
+    text = INLINE_CODE.sub('', template.read_text(encoding='utf-8')) if template.is_file() else ''
+    return LEGACY_PLACEHOLDERS | {m.group(1) for m in PLACEHOLDER.finditer(text)}
+
+
+def placeholder(inside, blanks=None):
+    """Whether `<inside>` is an unfilled blank of the issue template (not an HTML tag, an autolink, an e-mail, nor
+    a `<...>` the body uses as content)."""
     word = re.match(r'/?([A-Za-z][A-Za-z0-9-]*)', inside)
     if word and word.group(1).casefold() in HTML_TAGS and (len(inside) == len(word.group(0)) or
                                                            inside[len(word.group(0))] in ' /'):
         return False
-    return not re.match(r'[A-Za-z][A-Za-z0-9+.-]*:', inside) and '@' not in inside
+    if re.match(r'[A-Za-z][A-Za-z0-9+.-]*:', inside) or '@' in inside:
+        return False
+    return inside.strip() in (template_placeholders() if blanks is None else blanks)
 
 
 def lint_body(body):
@@ -2907,9 +2930,10 @@ def lint_body(body):
         if ' '.join(phrase.split()) in flat_body:
             line = next((n for n, text in enumerate(re.split(r'\r\n|\r|\n', body), 1) if phrase[:30] in text), None)
             findings.append({'line': line, 'kind': 'instruction', 'text': phrase[:80]})
+    blanks = template_placeholders()
     for number, text in closeout.visible_lines(body):
         for match in PLACEHOLDER.finditer(INLINE_CODE.sub('', text)):
-            if placeholder(match.group(1)):
+            if placeholder(match.group(1), blanks):
                 findings.append({'line': number, 'kind': 'placeholder', 'text': match.group(0)[:80]})
     return findings
 
