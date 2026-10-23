@@ -1320,7 +1320,7 @@ def inspect(config, root, config_path=None, summary=False, offline=False, issue=
     validate_preview_ports(config)
     validate_homolog_block(config)
     repo = config['repository']
-    result = {'repository': repo, 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+    result = {'repository': repo, 'fetched_at': _cli.sao_paulo_now().isoformat(timespec='seconds'),
               'sources': {}, 'verification_commands': {},
               'verification_candidates': verification_candidates(root),
               'path_risk': path_risk(Path(root).absolute(), os.path.realpath(root))}
@@ -1445,13 +1445,34 @@ INSPECT_REFUSALS = (
 )
 
 
+SUMMARY_LIST = 20   # past this many items, a list of the `inspect --summary` is cut (the count stays)
+
+
+def cut(value):
+    """A list or an object of the summary cut to its first SUMMARY_LIST items."""
+    if isinstance(value, list):
+        return value[:SUMMARY_LIST]
+    if isinstance(value, dict):
+        return dict(list(value.items())[:SUMMARY_LIST])
+    return value
+
+
 def summarize(result):
-    """The `inspect --summary` output: the same keys plus `summary: true`, with the GitHub issues cut to number,
-    title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section) and counted, and
-    the RoadS payload counted instead of dumped. The board (`sources.project`) and a source that is not
-    `available` keep what they say."""
+    """The `inspect --summary` output, printed whole by the command line (never cut again to `counts`): the same
+    keys plus `summary: true` and `project` (owner, number and the status of the board), with the GitHub issues cut
+    to number, title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section), counted,
+    and listed open first up to SUMMARY_LIST (`issuesShown`); the RoadS payload counted instead of dumped; the other
+    long lists cut to SUMMARY_LIST. Every source keeps its `status`, and `warnings` stays whole."""
     import closeout
     result = dict(result, summary=True, sources=dict(result['sources']))
+    board_ = result['sources'].get('project', {})
+    result['project'] = {**{k: board_[k] for k in ('owner', 'number') if k in board_},
+                         'status': board_.get('status', 'unconfigured')}
+    for key in ('verification_commands', 'verification_candidates'):
+        if key in result:
+            result[key] = cut(result[key])
+    if isinstance(result.get('family'), dict):
+        result['family'] = {k: cut(v) for k, v in result['family'].items()}
     github = result['sources'].get('github', {})
     if github.get('status') == 'available':
         issues = []
@@ -1459,8 +1480,11 @@ def summarize(result):
             boxes = closeout.criteria(issue.get('body'))
             issues.append({'number': issue['number'], 'title': issue.get('title'), 'state': issue.get('state'),
                            'boxes': None if boxes is None else {'checked': boxes[0], 'total': boxes[1]}})
+        shown = issues if len(issues) <= SUMMARY_LIST else sorted(issues, key=lambda i: i['state'] != 'open')[:SUMMARY_LIST]
         result['sources']['github'] = {'status': 'available', 'source': github.get('source'), 'count': len(issues),
-                                       'open': sum(i['state'] == 'open' for i in issues), 'issues': issues}
+                                       'open': sum(i['state'] == 'open' for i in issues), 'issues': shown}
+        if len(shown) < len(issues):
+            result['sources']['github']['issuesShown'] = len(shown)
     roads = result['sources'].get('roads', {})
     if roads.get('status') == 'available':
         data = roads.get('data')
@@ -3564,7 +3588,9 @@ def main():
         else:
             result = {'discrepancies': drift(load(args.snapshot), load(args.current))}
         if result is not None:
-            _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.command, args.full)
+            # `inspect --summary` is already the short form: printed whole, never cut again to `counts`
+            whole = args.full or (args.command == 'inspect' and getattr(args, 'summary', False))
+            _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.command, whole)
         return code
     except _cli.UsageError as error:   # an issue the charter does not give, say: what to pass is in the hint
         return _cli.print_usage_error(error, 2)

@@ -1,4 +1,6 @@
 import copy
+import contextlib
+import io
 import json
 import re
 import subprocess
@@ -1103,9 +1105,54 @@ class InspectSummaryTests(unittest.TestCase):
         full, short = summary_inspect(config, False), summary_inspect(config, True)
         self.assertTrue(short.pop('summary'))
         self.assertNotIn('summary', full)
+        self.assertEqual(short.pop('project'), {'status': 'unconfigured'})
         self.assertEqual(sorted(short), sorted(full))
         self.assertNotIn('Contexto longo', json.dumps(short, ensure_ascii=False))
         self.assertIn('Contexto longo', json.dumps(full, ensure_ascii=False))
+
+    def test_the_summary_keeps_each_source_the_board_and_every_warning_and_cuts_long_lists(self):
+        """Teste real (23/10/2026): o resumo chegava só com `counts`; o estado de cada fonte e o quadro ficavam só no
+        arquivo de out/."""
+        project = {'owner': 'example-org', 'number': 3, 'assignee': '@me', 'issue_type': 'Task',
+                   'fields': {'Status': 'Open'}}
+        pages = [[{'number': n, 'title': f'Issue {n} ' + 'x' * 60, 'state': 'open', 'body': SUMMARY_BODY}
+                  for n in range(1, 301)]]
+
+        def gh(argv, cwd=None):
+            if argv[:3] == ['gh', 'project', 'view']:
+                return json.dumps({'title': 'Quadro', 'url': 'https://github.com/orgs/example-org/projects/3'}).encode()
+            if argv[:3] == ['gh', 'api', '--paginate']:
+                return json.dumps(pages).encode()
+            return b'[]'
+        with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=gh):
+            short = frontlights.inspect({'repository': 'example/project', 'project': project}, root, summary=True)
+        self.assertEqual({k: v['status'] for k, v in short['sources'].items()},
+                         {'github': 'available', 'project': 'available', 'roads': 'unconfigured'})
+        self.assertEqual(short['project'], {'owner': 'example-org', 'number': 3, 'status': 'available'})
+        self.assertTrue(short['warnings'] and all(isinstance(w, str) for w in short['warnings']))
+        github = short['sources']['github']
+        self.assertEqual((github['count'], github['open']), (300, 300))
+        self.assertLessEqual(len(github['issues']), frontlights.SUMMARY_LIST)
+        self.assertEqual(github['issuesShown'], len(github['issues']))
+        self.assertRegex(short['fetched_at'], r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-03:00$')
+
+    def test_the_command_line_prints_the_summary_itself_never_the_counts(self):
+        pages = [[{'number': n, 'title': f'Issue {n} ' + 'x' * 60, 'state': 'open', 'body': SUMMARY_BODY}
+                  for n in range(1, 61)]]
+        with tempfile.TemporaryDirectory() as root:
+            config = Path(root) / 'config.json'
+            config.write_text(json.dumps({'repository': 'example/project', 'project': None}), encoding='utf-8')
+            out = io.StringIO()
+            argv = ['frontlights.py', 'inspect', '--summary', '--config', str(config), '--root', root]
+            with patch.object(frontlights, 'run', return_value=json.dumps(pages).encode()), \
+                    patch.object(sys, 'argv', argv), contextlib.redirect_stdout(out):
+                frontlights.main()
+            printed = json.loads(out.getvalue())
+            self.assertFalse((Path(root) / '.frontlights' / 'out').exists())
+        self.assertNotIn('counts', printed)
+        self.assertEqual(printed['sources']['github']['status'], 'available')
+        self.assertEqual(printed['project'], {'status': 'unconfigured'})
+        self.assertIn('warnings', printed)
 
     def test_default_output_still_carries_the_whole_issue(self):
         issues = summary_inspect({'repository': 'example/project'}, False)['sources']['github']['issues']
