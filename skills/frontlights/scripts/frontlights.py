@@ -1403,8 +1403,16 @@ def gh_json_read(argv):
 
 def board_warnings(project, repo):
     """What `inspect` (outside `--offline`) says about a configured board before any publication:
-    `issue_type_unavailable` when the repository lacks a type the config names. A read that fails says nothing."""
+    `issue_type_unavailable` when the repository lacks a type the config names, `board_field_unknown` for a field of
+    `project.fields` the board does not have and `board_option_unknown` for a default that is not one of its options.
+    A read that fails says nothing."""
     warnings = []
+    fields = board_field_options(gh_json_read(field_list_argv(project))) if project['fields'] else None
+    for field, default in (project['fields'] if fields is not None else {}).items():
+        found = board_mismatch(project, fields, field, default)
+        if found:
+            warnings.append(f'{found[0]}: {found[1]} (project.fields do config); o publish-issue recusa antes de criar '
+                            'a issue')
     wanted = [t for t in [project['issue_type'], *project['issue_type_by_label'].values()] if t]
     if wanted:
         available = issue_type_names(gh_json_read(issue_types_argv(repo)))
@@ -2703,6 +2711,13 @@ def reread_issue(read, repo, number, expected):
             problems.append('fora do quadro')
         kind = view.get('issueType') or {}
         kind = kind.get('name') if isinstance(kind, dict) else kind
+        if expected.get('fields'):
+            values = item_field_values(read, repo, number, expected['board'])
+            if values is None:
+                problems.append('sem cartão no quadro para conferir os campos')
+            else:
+                problems += [f'campo {f}: {values.get(f) or "vazio"}, esperado {v}' for f, v in expected['fields'].items()
+                             if not same_value(values.get(f), v)]
         if expected.get('issue_type') and (kind or '').casefold() != expected['issue_type'].casefold():
             problems.append(f'tipo {kind or "vazio"}, esperado {expected["issue_type"]}')
         assignee = expected.get('assignee')
@@ -2861,6 +2876,104 @@ def check_issue_types(read, repo, entries, state):
                              'mostre e aprove de novo')
 
 
+def field_list_argv(board_):
+    return ['project', 'field-list', str(board_['number']), '--owner', board_['owner'], '--format', 'json',
+            '--limit', '100']
+
+
+def board_field_options(data):
+    """{field name: [option names] for a single select, or None for a field without options} of a
+    `gh project field-list --format json` answer; None when the answer is not that shape."""
+    fields = data.get('fields') if isinstance(data, dict) else None
+    if not isinstance(fields, list):
+        return None
+    found = {}
+    for field in fields:
+        if isinstance(field, dict) and nonempty(field.get('name')):
+            options = field.get('options')
+            found[field['name']] = ([o['name'] for o in options if isinstance(o, dict) and nonempty(o.get('name'))]
+                                    if isinstance(options, list) else None)
+    return found
+
+
+def board_mismatch(board_, fields, field, value):
+    """(reason, message, extra) when the board has no field `field` or no option `value` in it; None when it has."""
+    where = f'o quadro {board_["owner"]} #{board_["number"]}'
+    if field not in fields:
+        return ('board_field_unknown', f'{where} não tem o campo {field}; os campos que existem: '
+                f'{", ".join(fields) or "nenhum"}', {'fields': list(fields)})
+    options = fields[field]
+    if options is not None and value is not None and value not in options:
+        return ('board_option_unknown', f'o campo {field} de {where} não tem a opção {value}; as opções que existem: '
+                f'{", ".join(options) or "nenhuma"}', {'field': field, 'value': value, 'options': options})
+    return None
+
+
+def check_board_fields(read, board_, entries, state):
+    """Before the first write: every board field the plan writes, and its value, exist on the board
+    (`gh project field-list`), else `board_field_unknown` or `board_option_unknown`; nothing is written."""
+    wanted = []
+    for entry in entries:
+        done = state['issues'].get(str(entry['issue']['id']), {}).get('done', [])
+        wanted += [(entry['issue']['id'], d['field'], d['value']) for key, kind, d in entry['steps']
+                   if kind == 'field' and key not in done]
+    if not wanted:
+        return
+    fields = board_field_options(read(field_list_argv(board_)))
+    if fields is None:
+        raise PublishRefusal('gh_failed', 'o gh não respondeu os campos do quadro (gh project field-list)',
+                             hint='confira o escopo project do gh (gh auth refresh -s project) e o acesso ao quadro')
+    for ident, field, value in wanted:
+        found = board_mismatch(board_, fields, field, value)
+        if found:
+            reason, message, extra = found
+            raise PublishRefusal(reason, f'{message} (issue {ident} do plano); nada foi escrito', **extra,
+                                 hint='corrija o valor em project_fields do plano (ou o campo no project do config) '
+                                      'com um que o quadro tem, mostre e aprove de novo')
+
+
+ITEM_FIELDS_QUERY = (
+    'query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number)'
+    '{projectItems(first:20){nodes{project{number owner{... on User{login} ... on Organization{login}}} '
+    'fieldValues(first:50){nodes{__typename '
+    '... on ProjectV2ItemFieldSingleSelectValue{name field{... on ProjectV2FieldCommon{name}}} '
+    '... on ProjectV2ItemFieldTextValue{text field{... on ProjectV2FieldCommon{name}}} '
+    '... on ProjectV2ItemFieldNumberValue{number field{... on ProjectV2FieldCommon{name}}} '
+    '... on ProjectV2ItemFieldDateValue{date field{... on ProjectV2FieldCommon{name}}} '
+    '... on ProjectV2ItemFieldIterationValue{title field{... on ProjectV2FieldCommon{name}}}}}}}}}}')
+
+
+def item_field_values(read, repo, number, board_):
+    """{field: value as text} of the issue's card on the board, or None when the issue has no card there."""
+    owner, name = repo.split('/', 1)
+    data = read(['api', 'graphql', '-f', f'query={ITEM_FIELDS_QUERY}', '-f', f'owner={owner}', '-f', f'name={name}',
+                 '-F', f'number={number}'])
+    issue = (((data.get('data') or {}).get('repository') or {}).get('issue') or {}) if isinstance(data, dict) else {}
+    for node in ((issue.get('projectItems') or {}).get('nodes') or []):
+        project = node.get('project') if isinstance(node, dict) else None
+        login = ((project or {}).get('owner') or {}).get('login') or ''
+        if not project or project.get('number') != board_['number'] or login.casefold() != board_['owner'].casefold():
+            continue
+        values = {}
+        for value in (node.get('fieldValues') or {}).get('nodes') or []:
+            field = ((value or {}).get('field') or {}).get('name')
+            text = next((value[k] for k in ('name', 'text', 'number', 'date', 'title') if value.get(k) is not None),
+                        None) if field else None
+            if text is not None:
+                values[field] = text
+        return values
+    return None
+
+
+def same_value(found, wanted):
+    if isinstance(found, (int, float)) and not isinstance(found, bool):
+        try:
+            return float(wanted) == float(found)
+        except ValueError:
+            return False
+    return str(found) == str(wanted)
+
+
 def publish_remote(entries, plan, config, repo, board_, root, state, state_path, approval, resume, gh, account):
     read = gh_reader(gh)
     check_account = account or (lambda data: _cli.gh_account(data, read))
@@ -2870,6 +2983,8 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
             numbers[int(key)] = saved['number']
     relative_state = state_path.relative_to(root).as_posix()
     check_issue_types(read, repo, entries, state)
+    if board_ is not None:
+        check_board_fields(read, board_, entries, state)
     published, writes = [], 0
     for entry in entries:
         issue, ident = entry['issue'], entry['issue']['id']
@@ -2915,10 +3030,11 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
                 numbers[ident] = saved['number']
             saved['done'].append(key)
             write_json_file(state_path, state)
-        expected = {'body': entry['body'], 'labels': entry['labels'], 'board': entry['resolved'] is not None,
-                    'blockers': blockers}
+        expected = {'body': entry['body'], 'labels': entry['labels'],
+                    'board': board_ if entry['resolved'] is not None else None, 'blockers': blockers}
         if entry['resolved'] is not None:
-            expected.update(issue_type=entry['resolved']['issue_type'], assignee=board_.get('assignee'))
+            expected.update(issue_type=entry['resolved']['issue_type'], assignee=board_.get('assignee'),
+                            fields=entry['resolved']['fields'])
         check = reread_issue(read, repo, saved['number'], expected)
         published.append({'id': ident, 'number': saved['number'], 'url': saved.get('url'),
                           'adopted': bool(saved.get('adopted')), 'recovered': bool(saved.get('recovered')),

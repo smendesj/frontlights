@@ -33,8 +33,11 @@ class FakeGitHub:
     """`gh` in memory: create, edit, project item-add/item-edit, view, list, api user and repo view."""
 
     def __init__(self, login='OWNER-LOGIN', repo=REPO, fail=None, lose_url=False, issue_types=('Task', 'Bug'),
-                 stderr=''):
+                 stderr='', board_fields=None, drop_field_values=False):
         self.issues, self.calls, self.next = {}, [], 101
+        # the fields of board #7 as `gh project field-list` lists them: options of a single select, or None
+        self.board_fields = board_fields or {'Title': None, 'Priority': ['High', 'Medium', 'Low']}
+        self.drop_field_values = drop_field_values   # item-edit answers 0 and changes nothing
         self.login, self.repo, self.fail, self.lose_url = login, repo, fail or set(), lose_url
         self.issue_types, self.stderr = issue_types, stderr   # issue_types None: a personal account's repository
         self.now = dt.datetime.now(dt.timezone.utc)
@@ -52,6 +55,20 @@ class FakeGitHub:
         if head == ('api', 'graphql') and any('issueTypes' in part for part in argv):
             types = None if self.issue_types is None else {'nodes': [{'name': n} for n in self.issue_types]}
             return 0, json.dumps({'data': {'repository': {'issueTypes': types}}})
+        if head == ('api', 'graphql') and any('fieldValues' in part for part in argv):
+            number = int(next(a for a in argv if a.startswith('number=')).split('=', 1)[1])
+            issue = self.issues[number]
+            values = [{'__typename': 'ProjectV2ItemFieldSingleSelectValue', 'name': v, 'field': {'name': k}}
+                      for k, v in issue['fields'].items()]
+            nodes = [{'project': {'number': 7, 'owner': {'login': 'OWNER'}}, 'fieldValues': {'nodes': values}}
+                     ] if issue['projectItems'] else []
+            return 0, json.dumps({'data': {'repository': {'issue': {'projectItems': {'nodes': nodes}}}}})
+        if head == ('project', 'field-list'):
+            fields = [{'id': f'F{i}', 'name': name, 'type': 'ProjectV2Field'} if options is None else
+                      {'id': f'F{i}', 'name': name, 'type': 'ProjectV2SingleSelectField',
+                       'options': [{'id': f'O{j}', 'name': o} for j, o in enumerate(options)]}
+                      for i, (name, options) in enumerate(self.board_fields.items())]
+            return 0, json.dumps({'fields': fields, 'totalCount': len(fields)})
         if head == ('api', 'user'):
             return 0, json.dumps({'login': self.login})
         if head == ('repo', 'view'):
@@ -85,7 +102,8 @@ class FakeGitHub:
         if head == ('project', 'item-edit'):
             options = self.options(argv[3:])
             number = int(options['--url'][0].rsplit('/', 1)[1])
-            self.issues[number]['fields'][options['--field'][0]] = options['--value'][0]
+            if not self.drop_field_values:
+                self.issues[number]['fields'][options['--field'][0]] = options['--value'][0]
             return 0, ''
         if head == ('issue', 'view'):
             issue = self.issues[int(argv[2])]
@@ -442,6 +460,55 @@ class IssueTypeTests(PublishCase):
         with tempfile.TemporaryDirectory() as root, mock.patch.object(frontlights, 'run', side_effect=fake):
             result = frontlights.inspect({'repository': REPO, 'project': BOARD}, root)
         self.assertFalse([w for w in result.get('warnings', []) if w.startswith('issue_type_unavailable')])
+
+
+class BoardFieldTests(PublishCase):
+    """Teste real do quadro (23/10/2026): um valor que o quadro não tem passava no validate-plan e só falhava no
+    `item-edit`, depois de criar a issue. Agora os campos e as opções reais do quadro são lidos antes da primeira
+    escrita, o inspect avisa campo do config que o quadro não tem, e a releitura confere os valores do item."""
+
+    def test_an_option_the_board_lacks_is_refused_before_any_write(self):
+        plan, approved = self.standard()
+        gh = FakeGitHub(board_fields={'Priority': ['High', 'Low']})
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['reason'], 'board_option_unknown', result)
+        self.assertEqual(gh.writes(), [])
+        for word in ('Priority', 'Medium', 'High, Low'):
+            self.assertIn(word, result['message'])
+        self.assertEqual(result['options'], ['High', 'Low'])
+
+    def test_a_field_the_board_lacks_is_refused_before_any_write(self):
+        plan, approved = self.standard()
+        gh = FakeGitHub(board_fields={'Status': ['Open', 'Done']})
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['reason'], 'board_field_unknown', result)
+        self.assertEqual(gh.writes(), [])
+        self.assertIn('Priority', result['message'])
+        self.assertIn('Status', result['message'])
+
+    def test_the_reread_checks_the_values_of_the_item(self):
+        plan, approved = self.standard()
+        gh = FakeGitHub(drop_field_values=True)
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['exitCode'], 2, result)
+        self.assertTrue(any('Priority' in p for p in result['published'][0]['problems']), result['published'][0])
+
+    def test_inspect_warns_a_field_of_the_config_the_board_lacks(self):
+        def fake(argv, cwd=None):
+            if argv[:3] == ['gh', 'project', 'field-list']:
+                return json.dumps({'fields': [{'id': 'F1', 'name': 'Status', 'type': 'ProjectV2SingleSelectField',
+                                               'options': [{'id': 'O1', 'name': 'Open'}]}]}).encode()
+            if argv[:3] == ['gh', 'api', 'graphql']:
+                return json.dumps({'data': {'repository': {'issueTypes': {'nodes': [{'name': 'Task'}]}}}}).encode()
+            if argv[:3] == ['gh', 'project', 'view']:
+                return json.dumps({'title': 'Board', 'url': 'https://github.com/users/OWNER/projects/7'}).encode()
+            return b'[]'
+        config = {'repository': REPO, 'project': dict(BOARD, fields={'Priority': None, 'Status': 'Closed'})}
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(frontlights, 'run', side_effect=fake):
+            result = frontlights.inspect(config, root)
+        warnings = result.get('warnings', [])
+        self.assertTrue(any(w.startswith('board_field_unknown') and 'Priority' in w for w in warnings), warnings)
+        self.assertTrue(any(w.startswith('board_option_unknown') and 'Closed' in w for w in warnings), warnings)
 
 
 class LocalTests(PublishCase):

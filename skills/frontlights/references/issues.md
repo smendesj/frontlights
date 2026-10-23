@@ -102,9 +102,11 @@ below.
   assignee, the type and each field; an adopted issue gets labels, `--add-blocked-by` and the board, never a body edit.
   Before the first write it reads the repository's issue types and refuses `issue_type_unavailable`, naming the ones
   that exist (a personal account's repository has none: drop `issue_type` and `issue_type_by_label` from the config's
-  `project`); `inspect` warns the same. A `write_failed` carries gh's stderr, masked.
-  The reread checks `projectItems`, `issueType`, `labels` and `--json blockedBy`; a failed write is resumed, never
-  recreated.
+  `project`); `inspect` warns the same. It reads the board's fields too (`gh project field-list`) and refuses
+  `board_field_unknown` or `board_option_unknown`, naming the field, the value and the options that exist; `inspect`
+  warns a config field the board lacks. A `write_failed` carries gh's stderr, masked.
+  The reread checks `projectItems`, the card's field values, `issueType`, `labels` and `--json blockedBy`; a failed
+  write is resumed, never recreated.
 - A value with `$`, a backtick, a quote or a backslash is refused: reword it. Never invent a label. A field with no
   options goes as a `body_fields` line. `sources.project` `unavailable`: report the fix (`gh auth refresh -s project`).
 
