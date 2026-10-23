@@ -16,11 +16,11 @@ Operations (each prints one JSON object on stdout):
               Paulo time): a Portuguese table in closing order, the exact commands and a machine block that apply
               rereads. Prints `path`, `stamp` (the 12-character sha256 of the file), `question`, `options` and
               `recommended`, for the approval by link and stamp. Nothing is written on GitHub.
-  apply       --expect <stamp> --answer "<literal answer>" [--only 12,13]: finds the list with that stamp, records the
-              approval (`stamp --approve`, stage 7) and runs `stamp --check`; "Não agora" writes nothing. It
-              recomputes the candidates of the list's scope and refuses (`lista mudou: ...`, nothing written) when an
-              issue left or entered, or its `order`, `state` or `parentTicks.lines` changed; refuses an --only that
-              leaves a chosen parent without its child of the list. Then, in order and with the account checked before
+  apply       --expect <stamp> --answer "<literal answer>" [--only 12,13]: finds the list with that stamp; "Não agora"
+              writes nothing. It recomputes the candidates of the list's scope and refuses (`lista mudou: ...`,
+              nothing written, not even the approval) when an issue left or entered, or its `order`, `state` or
+              `parentTicks.lines` changed; refuses an --only that leaves a chosen parent without its child of the
+              list. Only then it records the approval (`stamp --approve`, stage 7) and runs `stamp --check`. Then, in order and with the account checked before
               each write (`_cli.gh_account`), `gh issue close <n> --repo <repo> --reason completed`; after a sub-issue
               closes, its parent's lines are ticked in one write (capture, tick-check, `gh issue edit --body-file`,
               reread, tick-check), unless the answer is "Só fechar, sem marcar". A failed close holds its parent back;
@@ -1571,16 +1571,16 @@ def op_apply(config, root='.', expect=None, answer=None, only=None, gh=None, edi
     orphans = sorted({c['parent'] for c in stored['candidates'] if c['parent'] in chosen and c['number'] not in chosen})
     require(not orphans, '--only deixa sem filha o pai ' + ', '.join(f'#{n}' for n in orphans)
             + ': escolha também as filhas da lista, ou deixe o pai de fora (ele espera por elas)')
-    # the approval of the file with that stamp, recorded with the literal answer, then checked right before the writes
+    # the stamp of the question first; the list recomputed; only then the approval, recorded with the literal answer
+    # and checked right before the writes: a refused list never leaves an approval behind
+    stamp_args = lambda **given: argparse.Namespace(**{'file': str(path), 'root': str(root), 'revision': None,
+                                                       'approve': False, 'answer': None, 'stage': None,
+                                                       'check': False, 'expect': None, **given})
     try:
-        approval = stamping.run(argparse.Namespace(file=str(path), root=str(root), revision=None, approve=True,
-                                                   answer=answer, stage=7, check=False, expect=expect))
-        require(approval['exitCode'] == 0, 'o carimbo da lista não confere com o da pergunta: ' + approval['message'])
-        checked = stamping.run(argparse.Namespace(file=str(path), root=str(root), revision=None, approve=False,
-                                                  answer=None, stage=None, check=True, expect=None))
+        shown = stamping.run(stamp_args(expect=expect))
     except stamping.Refusal as error:
-        raise Refusal(f'o carimbo não pôde ser gravado ou conferido: {error}')
-    require(checked['exitCode'] == 0, 'stamp --check recusou a lista: ' + checked['message'])
+        raise Refusal(f'o carimbo não pôde ser conferido: {error}')
+    require(shown['exitCode'] == 0, 'o carimbo da lista não confere com o da pergunta: ' + shown['message'])
     fresh = op_candidates(config, root, stored['scope'] or None, False, gh, stored.get('base'), stored.get('remote'))
     changes = list_changes(stored['candidates'], fresh['candidates'])
     if changes:
@@ -1588,6 +1588,13 @@ def op_apply(config, root='.', expect=None, answer=None, only=None, gh=None, edi
                        message='lista mudou: ' + '; '.join(changes) + '. Nada foi escrito; rode closeout.py run e '
                                'pergunte de novo.')
         return record(outcome)
+    try:
+        approval = stamping.run(stamp_args(approve=True, answer=answer, stage=7, expect=expect))
+        require(approval['exitCode'] == 0, 'o carimbo da lista não confere com o da pergunta: ' + approval['message'])
+        checked = stamping.run(stamp_args(check=True))
+    except stamping.Refusal as error:
+        raise Refusal(f'o carimbo não pôde ser gravado ou conferido: {error}')
+    require(checked['exitCode'] == 0, 'stamp --check recusou a lista: ' + checked['message'])
     def mismatch():
         """The account check before each write through gh (never cached): None, or the result that stops here."""
         if account is None:

@@ -61,8 +61,9 @@ later session while the list stands, where the stage 1 question also takes "Não
 python "${CLAUDE_SKILL_DIR}/scripts/closeout.py" apply --expect <stamp> --answer "<literal answer>" [--only 12,13]
 ```
 
-`apply` records the approval of the list with that stamp and checks it, recomputes, and writes nothing when the list
-changed (`lista mudou: …`: ask again after a new `run`) or when `--only` leaves a chosen parent without its child.
+`apply` checks the stamp of the question, recomputes, and writes nothing, not even the approval, when the list
+changed (`lista mudou: …`: ask again after a new `run`) or when `--only` leaves a chosen parent without its child; then
+it records the approval of the list with that stamp and checks it.
 Then, with the `gh` account checked before each write, it runs in order `gh issue close <n> --repo <repo> --reason
 completed`, adding no comment; Never close a parent before every one of its children is closed: a child that fails
 holds its parent back. Large batches pause between closes, with no new question.

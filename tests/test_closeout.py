@@ -2260,6 +2260,9 @@ class RunApplyTests(CloseoutCase):
         self.assertTrue(result['message'].startswith('lista mudou: '), result['message'])
         self.assertIn('#12 linhas do pai [3] → []', result['message'])
         self.assertEqual(gh.edits, [])
+        approvals = self.root / '.frontlights' / 'approvals.json'   # refused: the approval is not recorded either
+        self.assertFalse(approvals.exists() and json.loads(approvals.read_text(encoding='utf-8')),
+                         'a lista mudada não grava aprovação')
 
     def test_apply_refuses_only_that_leaves_a_parent_without_its_child(self):
         gh = ApplyGh(self.family())

@@ -204,9 +204,9 @@ marcados cuja branch já está em `origin/<base>` (senão `awaiting_release`; as
 e `merge-base`); uma seção legada fora dos critérios só vira o aviso `pending_outside_criteria` (`pendingOutside`).
 Nunca lê nem move um cartão. Fechar é aprovação própria; a exceção é a linha `Closes #n` da PR da release.
 
-O `apply` (`--expect <carimbo> --answer "<resposta literal>" [--only n…]`) grava a aprovação e roda o `stamp
---check`; recalcula e recusa (`lista mudou: …`, nada escrito), recusa um `--only` que deixe um pai escolhido sem a
-filha da lista, fecha filhas antes do pai, marca no pai o item da filha (um item que cita outras issues junto nunca é
+O `apply` (`--expect <carimbo> --answer "<resposta literal>" [--only n…]`) confere o carimbo da pergunta; recalcula e
+recusa (`lista mudou: …`, nada escrito), sem gravar nem a aprovação; recusa um `--only` que deixe um pai escolhido sem a filha da
+lista; só então grava a aprovação e roda o `stamp --check`; fecha filhas antes do pai, marca no pai o item da filha (um item que cita outras issues junto nunca é
 marcado) e grava `.frontlights/closeout-<data>.result.json`. O `tick` troca um `[ ]` da seção de critérios, recusa a
 caixa com `- Bloqueada:` e nunca regrava. O GitHub não tem compare-and-swap: uma edição de outra pessoa entre captura
 e gravação é sobrescrita.
