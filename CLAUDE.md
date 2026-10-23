@@ -38,8 +38,11 @@ GuardianS e os dados do usuário. Cada regra da skill vive num lugar só, e os o
 para ela: as da etapa 6 (autorização permanente, merges cobertos, negadas, três portões, release) em
 `skills/frontlights/references/development.md`; os formatos dos registros e a retomada em
 `skills/frontlights/docs/protocol.md`; os limites de aplicação das permissões em
-`skills/frontlights/docs/security.md`. Cada referência de etapa que
-precisa deles abre com as seções desses dois docs que a etapa lê.
+`skills/frontlights/docs/security.md`. O `SKILL.md` é roteiro (regras de uma linha, etapas e a
+tabela Pointers, com teto em `tests/test_skill_md.py`); cada referência de etapa abre com uma linha `Read when:` e,
+quando precisa deles, com as seções desses dois docs que lê (o development.md, por um índice "Section | Read when").
+Todo ponteiro `arquivo, "seção"` nomeia um título `##`/`###` real (`tests/test_pointers.py`), e o tamanho de cada
+texto da skill só desce (`tests/test_budget.py`).
 Execute `python -m unittest discover -s tests -v` e
 `python -m compileall -q skills/frontlights/scripts tests`.
 Antes de cada commit, rode `python tests/pre_commit.py` (segundos: `compileall` e os módulos de

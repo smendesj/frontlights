@@ -33,8 +33,8 @@ Requer Claude Code com suporte a skills e `AskUserQuestion`, Python 3.11+, Git e
 consultar o GitHub, GitHub CLI autenticado. Não exige pacotes Python adicionais.
 
 A skill é a pasta `skills/frontlights` deste repositório, com tudo o que uma sessão usa:
-`SKILL.md`, `references/`, `scripts/`, `templates/`, `examples/` e `docs/` (protocolo e
-segurança). Instale-a apontando a pasta de skills do usuário para o clone, por uma junção:
+`SKILL.md` (o roteiro: as regras de toda etapa, as etapas e a tabela de ponteiros que diz quando
+ler cada referência), `references/`, `scripts/`, `templates/`, `examples/` e `docs/` (protocolo e segurança). Instale-a apontando a pasta de skills do usuário para o clone, por uma junção:
 
 ```powershell
 git clone https://github.com/smendesj/frontlights.git <pasta-do-clone>
