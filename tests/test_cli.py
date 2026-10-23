@@ -276,7 +276,7 @@ def plan_issue(n, **extra):
 
 def a_slice(sid, **extra):
     item = {'id': sid, 'title': 't', 'delivers': 'd', 'seams': ['s'], 'layers': ['Tela'], 'depends_on': [],
-            'walkthrough': {'persona': 'conta 1', 'steps': 'passos', 'before': 'antes', 'after': 'depois'}}
+            'files': [f'src/{sid.lower()}.py'], 'walkthrough': {'persona': 'conta 1', 'steps': 'passos', 'before': 'antes', 'after': 'depois'}}
     item.update(extra)
     return item
 

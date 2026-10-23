@@ -104,7 +104,7 @@ class RenderTests(unittest.TestCase):
                                      '  - Camadas: Tela, API, Banco e migração, Testes', '  - Depende de: nenhuma',
                                      '  - Roteiro: conta 1 · abrir uma observação salva, mudar o texto, salvar e recarregar'])
         self.assertTrue(lines[6].startswith('    → antes: a observação salva não tem como ser editada; depois: '))
-        self.assertIn('  - Depende de: S1', lines)
+        self.assertIn('  - Depende de: S1 (detecta o conflito na edição que a S1 entrega)', lines)
         self.assertEqual(frontlights.lint_body(result['markdown']), [])
 
     def test_an_issue_without_slices_renders_its_acceptance(self):

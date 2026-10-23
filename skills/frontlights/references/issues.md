@@ -35,19 +35,34 @@ The persona is a label (`conta 1`, `conta 2`, a test user the run creates, `sem 
 recorded by the reconnaissance (`references/grilling.md`, "Reconnaissance"). Every criterion fails at the base commit.
 **A short issue holds at most five slices**: the sixth goes into top-level issues linked by `--blocked-by`, never a
 sub-issue. Leftover boxes do not count. In `plan.json`, `slices` carry `id`, `title`, `delivers`, `seams`, `layers`,
-`depends_on` and `walkthrough` (`persona`, `steps`, `before` and `after`); `validate-plan` refuses the sixth slice, a
-missing field, a later dependency, and a slice without `walkthrough` or with an empty `before`. `frontlights.py
+`depends_on`, `depends_why`, `files` and `walkthrough` (`persona`, `steps`, `before` and `after`); `validate-plan`
+refuses the sixth slice, a missing field, a later dependency, a dependency without its fact, and a slice without
+`files`, without `walkthrough` or with an empty `before`; it prints the `waves` ("Waves"). `frontlights.py
 render-criteria --plan <plan.json> --issue <id>` prints the boxes. An old issue gets its walkthrough when it enters
 the grilling or stage 6: its open boxes gain the two lines by `closeout.py append --walkthrough <plan>` (append only,
 under the approval of the plan). Ticked boxes stay as they are.
+
+### Waves
+
+Cut for parallelism: the most in the first wave, a wait only where a fact forces it.
+
+- **Files.** `files` lists what the slice touches (reconnaissance); two slices sharing a file never run together:
+  split or merge them.
+- **Facts.** `depends_why` says what the slice uses from the other; a dependency
+  without one is removed.
+- **Waves.** `validate-plan` prints them; the quiz shows them and questions a lone first wave.
+- **Other issues.** Each slice's files meet `git diff --name-only` of the open issues' branches and of the local main
+  ahead of `origin/<base>`; a shared file is asked before code: wait, build on that branch, or cut the overlap.
+- **Verticality.** Each slice crosses every layer its behavior needs and is demonstrable alone; a one-layer slice is
+  merged into the one that demos it.
 
 **The quiz comes before the body.** Show the numbered list of the slices with "Depende de", what each delivers and, for
 each slice, the section of the artifact that shows what it delivers (`references/grilling.md`, "The artifact"): the
 same URL as the grilling, sections numbered after the grilling's sections and titled by the slice, the same rule for
 code and data as the grilling, the same model (`templates/grilling-section.html`); each opens with what can be demoed
 when the slice is done, and the drawing of the slice is its Visual (with a screen, the same before print with the
-markings of what that slice changes). Without the tool, say "artefato indisponível" once. Ask whether the granularity
-is right, each dependency real, and any slice should merge or split; the quiz itself stays the same, the drawing of
+markings of what that slice changes). Without the tool, say "artefato indisponível" once. Ask whether the waves and the granularity
+are right, each dependency real, and any slice should merge or split; the quiz itself stays the same, the drawing of
 each slice only makes the answers visible; a slice whose drawing shows nothing demonstrable is horizontal: fix it
 first. Then ask approval by link and stamp (`SKILL.md`, "Show before approval").
 

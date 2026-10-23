@@ -101,7 +101,7 @@ stamp, the artifact nor the ANTES. Before the first slice is cut, in this order:
 
 1. **Facts.** Each slice fails today at the base, with evidence: a triage's `fatos/<n>.md` serves when written on the
    same `origin/<base>` commit; otherwise the probes of `references/grilling.md`, "Reconnaissance", run in subagents.
-   A fact that contradicts the issue becomes a question before any code.
+   A contradicting fact, or a wave failing `references/issues.md`, "Waves", is asked before code.
 2. **Base.** With a screen, the ANTES window opens after its "Pronto para assistir?" (`references/browser-testing.md`,
    "Watched run"), takes the base print and stays open.
 3. **Artifact.** `frontlights.py artifact init`, then one section per decision the issue records: the approach (and

@@ -133,7 +133,7 @@ class IssueAlreadyDecidedTests(unittest.TestCase):
     def test_skipping_the_interview_keeps_facts_stamp_artifact_and_antes(self):
         for phrase in ('never the facts, the stamp, the artifact nor the ANTES', 'Before the first slice is cut',
                        'Each slice fails today at the base, with evidence', 'same `origin/<base>` commit',
-                       'A fact that contradicts the issue becomes a question before any code',
+                       'A contradicting fact, or a wave failing `references/issues.md`, "Waves", is asked before code',
                        'takes the base print and stays open', 'one section per decision the issue records',
                        'where the approval came from (a stamp, an applied triage, or none recorded)',
                        'approved by link and stamp', 'No slice is cut before that "Aprova"',

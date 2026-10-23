@@ -44,7 +44,8 @@ def section(text, heading):
 def slice_(number, depends_on=(), **extra):
     value = dict(id=f'S{number}', title=f'Slice {number}', delivers=f'Demo of behaviour {number} end to end',
                  seams=['POST /observations'], layers=['Tela', 'API', 'Testes'], depends_on=list(depends_on),
-                 walkthrough=walkthrough())
+                 depends_why={dep: f'usa o que {dep} entrega' for dep in depends_on},
+                 files=[f'src/slice{number}.py'], walkthrough=walkthrough())
     value.update(extra)
     return value
 
@@ -175,7 +176,8 @@ class SlicesInThePlanTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(SCRIPT), 'validate-plan', '--plan',
                                  str(SKILL / 'examples' / 'plan.json')], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {'valid': True, 'semantic_review_required': True})
+        self.assertEqual(json.loads(result.stdout), {'valid': True, 'semantic_review_required': True,
+                          'waves': {'1': [['S1'], ['S2']], '3': [['S1'], ['S2']]}})
         self.assertEqual(frontlights.schedule(copy.deepcopy(example), 2), [1, 2])
 
 
@@ -290,6 +292,45 @@ class SlicesTextTests(unittest.TestCase):
         for phrase in ('numbered list', 'base commit', 'what can be demoed'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, evals)
+
+
+class WavesTests(unittest.TestCase):
+    """23/10/2026: fatias desenhadas para o paralelismo; arquivos por fatia, dependência com fato, ondas."""
+
+    def test_a_slice_without_files_is_refused(self):
+        bare = slice_(1)
+        del bare['files']
+        with self.assertRaisesRegex(ValueError, r'slice S1: falta files'):
+            frontlights.validate_plan(plan(issue(1, [bare])))
+
+    def test_a_dependency_without_its_fact_is_refused(self):
+        second = slice_(2, depends_on=['S1'])
+        second['depends_why'] = {}
+        with self.assertRaisesRegex(ValueError, r'slice S2 depende de S1 sem fato'):
+            frontlights.validate_plan(plan(issue(1, [slice_(1), second])))
+
+    def test_waves_follow_dependencies_and_shared_files(self):
+        slices = [slice_(1), slice_(2), slice_(3, files=['src/slice1.py/parte']), slice_(4, depends_on=['S2'])]
+        self.assertEqual(frontlights.slice_waves(slices), [['S1', 'S2'], ['S3', 'S4']])
+
+    def test_independent_slices_on_their_own_files_share_the_first_wave(self):
+        self.assertEqual(frontlights.slice_waves([slice_(1), slice_(2), slice_(3)]), [['S1', 'S2', 'S3']])
+
+    def test_the_box_names_the_fact_of_each_dependency(self):
+        text = frontlights.depends_text(slice_(2, depends_on=['S1']))
+        self.assertEqual(text, 'S1 (usa o que S1 entrega)')
+        self.assertEqual(frontlights.depends_text(slice_(1)), 'nenhuma')
+
+    def test_the_rule_lives_in_issues_md(self):
+        rule = flat(section(read('skills', 'frontlights', 'references', 'issues.md'), 'Waves'))
+        for phrase in ('Cut for parallelism: the most in the first wave, a wait only where a fact forces it',
+                       'two slices sharing a file never run together', 'a dependency without one is removed',
+                       '`validate-plan` prints them', 'a shared file is asked before code',
+                       'Each slice crosses every layer its behavior needs and is demonstrable alone'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+        self.assertIn('quiz (waves, granularity, real dependencies, merge or split)',
+                      flat(read('skills', 'frontlights', 'SKILL.md')))
 
 
 if __name__ == '__main__':

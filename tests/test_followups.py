@@ -136,7 +136,8 @@ class WithoutParentNothingChangesTests(unittest.TestCase):
         result = subprocess.run([sys.executable, str(SCRIPT), 'validate-plan', '--plan',
                                  str(ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json')], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {'valid': True, 'semantic_review_required': True})
+        self.assertEqual(json.loads(result.stdout), {'valid': True, 'semantic_review_required': True,
+                          'waves': {'1': [['S1'], ['S2']], '3': [['S1'], ['S2']]}})
         result = subprocess.run([sys.executable, str(SCRIPT), 'schedule', '--plan',
                                  str(ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json'), '--limit', '2'],
                                 capture_output=True, text=True)

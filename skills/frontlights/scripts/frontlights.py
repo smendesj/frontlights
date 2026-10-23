@@ -438,6 +438,13 @@ def slices_of(issue):
                 need(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)', f'.{field}')
             with at('.walkthrough'):
                 walkthrough_of(label, sid, item.get('walkthrough'))
+            # the files the slice will touch, from the reconnaissance: they decide the waves (issues.md, "Waves")
+            need(strings(item.get('files')),
+                 f'{label}: slice {sid}: falta files (os arquivos que ela vai tocar, do reconhecimento; decidem as ondas)',
+                 '.files')
+            for position, path in enumerate(item['files']):
+                with at(f'.files[{position}]'):
+                    relative(path)
             deps = item.get('depends_on', [])   # absent means none ("Depende de: nenhuma")
             require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
                     f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')
@@ -445,8 +452,32 @@ def slices_of(issue):
                 require(dep != sid, f'{label}: slice {sid} depende de {sid}, ela mesma')
                 require(dep in seen,
                         f'{label}: slice {sid} depende de {dep}, que não existe ou vem depois dela: bloqueadoras primeiro')
+            why = item.get('depends_why', {})
+            require(isinstance(why, dict) and set(why) <= set(deps),
+                    f'{label}: slice {sid}: depends_why é um objeto com uma chave por slice de depends_on')
+            for dep in deps:
+                require(nonempty(why.get(dep)),
+                        f'{label}: slice {sid} depende de {dep} sem fato: diga em depends_why.{dep} o fato que obriga '
+                        'a espera (o que ela usa da outra), ou tire a dependência')
             seen.append(sid)
     return slices
+
+
+def slice_waves(slices):
+    """The waves of an issue's slices (issues.md, "Waves"): each wave holds the slices whose dependencies are all in
+    earlier waves and whose files overlap no other slice of the same wave; a slice that shares a file goes to the
+    next wave even without a dependency."""
+    done, waves, pending = set(), [], list(slices)
+    while pending:
+        wave = []
+        for item in pending:
+            if set(item.get('depends_on') or []) <= done and not any(
+                    overlap(x, y) for other in wave for x in item['files'] for y in other['files']):
+                wave.append(item)
+        waves.append([item['id'] for item in wave])
+        done |= {item['id'] for item in wave}
+        pending = [item for item in pending if item['id'] not in done]
+    return waves
 
 
 def validate_plan(plan, project=None):
@@ -2509,6 +2540,12 @@ def slice_cli(action, root, config_path, issue, slices=(), stacked_on=None, owne
 # exploration notes of `.frontlights/notes/` move to `issues/<n>/notes/` of the first issue published (redesign,
 # issue 10; `move_notes`, which never overwrites).
 
+def depends_text(item):
+    """`Depende de` of a slice box: each dependency with the fact that makes it wait (issues.md, "Waves")."""
+    why = item.get('depends_why') or {}
+    return ', '.join(f'{dep} ({why[dep]})' if why.get(dep) else dep for dep in item.get('depends_on') or []) or 'nenhuma'
+
+
 def walkthrough_lines(item):
     """The two walkthrough lines of a slice box (references/issues.md, "Slices as acceptance criteria")."""
     walk = item['walkthrough']
@@ -2525,7 +2562,7 @@ def criteria_lines(issue):
     for item in issue['slices']:
         lines += [f'- [ ] {item["id"]}. {item["title"]}', f'  - Entrega: {item["delivers"]}',
                   f'  - Seams: {"; ".join(item["seams"])}', f'  - Camadas: {", ".join(item["layers"])}',
-                  f'  - Depende de: {", ".join(item.get("depends_on") or []) or "nenhuma"}',
+                  f'  - Depende de: {depends_text(item)}',
                   *walkthrough_lines(item)]
     return lines
 
@@ -3504,6 +3541,9 @@ def main():
             project = load(args.config).get('project') if args.config else None
             plan_ = validate_plan(load(args.plan), project)
             result = {'valid': True, 'semantic_review_required': True}
+            waves = {str(i['id']): slice_waves(i['slices']) for i in plan_['issues'] if i.get('slices')}
+            if waves:
+                result['waves'] = waves
             resolved = board_resolution(plan_, project)
             if resolved is not None:
                 result['resolved'] = resolved

@@ -189,9 +189,11 @@ def plan(slices=True):
     if slices:
         walk = {'persona': 'conta 1', 'steps': 'abrir e salvar', 'before': 'nada salva', 'after': 'salva'}
         issue['slices'] = [{'id': 'S1', 'title': 'Salvar', 'delivers': 'salvar', 'seams': ['POST /x'],
-                            'layers': ['Tela', 'API'], 'depends_on': [], 'walkthrough': walk},
+                            'layers': ['Tela', 'API'], 'depends_on': [], 'files': ['src/x'], 'walkthrough': walk},
                            {'id': 'S2', 'title': 'Editar', 'delivers': 'editar', 'seams': ['PUT /x'],
-                            'layers': ['Tela'], 'depends_on': ['S1'], 'walkthrough': dict(walk, after='editada')}]
+                            'layers': ['Tela'], 'depends_on': ['S1'], 'files': ['src/x/edit'],
+                            'depends_why': {'S1': 'edita a observação que a S1 salva'},
+                            'walkthrough': dict(walk, after='editada')}]
     return json.dumps({'repository': REPO, 'issues': [issue]}, ensure_ascii=False)
 
 
@@ -202,7 +204,8 @@ class SpecAndWalkthroughTests(AppendCase):
         self.assertTrue(result['ok'], result)
         self.assertTrue(gh.body.startswith('# Uma issue\n\nTexto que já estava.\n\n## Critérios de aceitação\n\n'))
         self.assertIn('- [ ] S2. Editar\n  - Entrega: editar\n  - Seams: PUT /x\n  - Camadas: Tela\n'
-                      '  - Depende de: S1\n  - Roteiro: conta 1 · abrir e salvar\n    → antes: nada salva; depois: editada',
+                      '  - Depende de: S1 (edita a observação que a S1 salva)\n  - Roteiro: conta 1 · abrir e salvar\n'
+                      '    → antes: nada salva; depois: editada',
                       gh.body)
         self.assertEqual(result['criteria']['after']['total'], 2)
 

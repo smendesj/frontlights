@@ -12,6 +12,7 @@
          "delivers": "Digitar um texto, salvar, recarregar a tela e ver o mesmo texto",
          "seams": ["POST /observations", "GET /observations/{id}", "o formulário de observação"],
          "layers": ["Tela", "API", "Banco e migração", "Testes"], "depends_on": [],
+         "files": ["src/observations/save", "tests/observations/save"],
          "walkthrough": {"persona": "conta 1", "steps": "abrir o projeto de teste, digitar um texto, salvar e recarregar",
                          "before": "o formulário não tem botão de salvar e nada fica depois de recarregar",
                          "after": "o mesmo texto aparece depois de recarregar"}},
@@ -19,6 +20,8 @@
          "delivers": "Salvar um texto vazio e ler o erro que diz o que corrigir",
          "seams": ["POST /observations", "o formulário de observação"],
          "layers": ["Tela", "API", "Testes"], "depends_on": ["S1"],
+         "depends_why": {"S1": "valida o texto no formulário que a S1 cria"},
+         "files": ["src/observations/validation", "tests/observations/validation"],
          "walkthrough": {"persona": "conta 1", "steps": "abrir o formulário, apagar o texto e salvar",
                          "before": "o texto vazio é salvo sem aviso",
                          "after": "o erro diz que o texto não pode ficar vazio e nada é salvo"}}
@@ -60,6 +63,7 @@
          "delivers": "Editar o texto salvo, recarregar e ver o texto novo",
          "seams": ["PUT /observations/{id}", "o formulário de observação"],
          "layers": ["Tela", "API", "Banco e migração", "Testes"], "depends_on": [],
+         "files": ["src/observations/edit", "tests/observations/edit"],
          "walkthrough": {"persona": "conta 1", "steps": "abrir uma observação salva, mudar o texto, salvar e recarregar",
                          "before": "a observação salva não tem como ser editada",
                          "after": "o texto novo aparece depois de recarregar"}},
@@ -67,6 +71,8 @@
          "delivers": "Editar a mesma observação numa segunda aba desatualizada e ler o conflito",
          "seams": ["PUT /observations/{id}", "o formulário de observação"],
          "layers": ["Tela", "API", "Testes"], "depends_on": ["S1"],
+         "depends_why": {"S1": "detecta o conflito na edição que a S1 entrega"},
+         "files": ["src/observations/conflict", "tests/observations/conflict"],
          "walkthrough": {"persona": "conta 1", "steps": "abrir a mesma observação em duas abas, salvar na primeira e depois na segunda",
                          "before": "a segunda aba sobrescreve em silêncio o texto da primeira",
                          "after": "a segunda aba mostra o conflito e o texto da primeira fica salvo"}}
