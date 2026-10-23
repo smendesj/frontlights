@@ -481,29 +481,16 @@ while a screen slice is still in its loop it is not (the handoff lists the open 
 
 ## Review, checkpoints and renewal
 
+### Review (on request)
+
 The independent review runs only when the user asks for one: it is not dispatched by default and is not a gate of
-the merge into the local main nor of the release. When the user asks for it on an issue that changes the screen, it
-waits for the issue's watched run: `browser-gate` has to say `answered` (exit code 0) before the reviewer is
-dispatched (the points where the question comes out are listed in browser-testing.md); exit code 2 at those points
-is a question to the user, never a skip. `references/review.md` stays its standard.
-
-When a review runs, the reviewer inspects the current diff and the test evidence and must not author the changes
-under review. Bind review to `frontlights.py evidence --root <worktree>` hashes/HEAD and save that output with the
-review result (`.frontlights/issues/<n>/review.json`). Run `frontlights.py review-gate --root <worktree> --review
-<review.json>` before reporting an issue as reviewed: exit code 0 means the review still covers the code, exit code
-2 means it is stale. Any commit, edit or new file after the review makes it stale (bringing a base into the branch
-included), whatever its size; a stale review is never reported as reviewed, and whether to review again is the
-user's call. A review the user asked for that no independent reviewer can do is reported as "implementado,
-aguardando revisão independente", never as reviewed. Do not manufacture reviewer identities or approvals.
-Classify the findings that do come up (of the watched run, of a review the user asked for, of tests and live checks
-that ran) by the destination ladder of the Follow-ups section in `issues.md` (same PR, a new acceptance criterion in
-the source issue, top-level issue only for new scope; never a new sub-issue), decided as one batch (the baixos of a
-finished review take the default of "When the review is done", below).
-
-**The reviewer's brief.** The brief that dispatches the independent reviewer names `references/review.md`, the
-reviewer's standard (what a finding is, its severity, what is only style, the rounds and the report), the issue,
-its base and, from the second round on, the tip of the previous round, the base it had and its findings. The standard belongs to
-the reviewer: the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out.
+the merge into the local main nor of the release. On a screen issue it waits for `browser-gate` `answered`. Two
+reviewers go out in one message, one per axis (`references/review.md`, "Two axes"); each brief names `review.md`,
+the issue, its base and, after round one, the previous tip and findings, and the implementer's brief never names it.
+Bind each round to `frontlights.py evidence` in `.frontlights/issues/<n>/review.json`; `frontlights.py review-gate`
+runs before reporting an issue as reviewed. Any commit, edit or new file after the review makes it stale, and
+whether to review again is the user's call. Each axis stops by "When the review is done"; findings take the
+destination ladder (`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.
 
 ### When the review is done
 

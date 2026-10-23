@@ -119,9 +119,9 @@ class StopCriterionTests(unittest.TestCase):
                                    'Review, checkpoints and renewal'))
 
     def test_the_reviewers_brief_names_the_standard_and_the_implementers_leaves_it_out(self):
-        for phrase in ("**The reviewer's brief.**", 'names `references/review.md`',
-                       'The standard belongs to the reviewer',
-                       "the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out"):
+        # issue 11 do redesenho: o brief do revisor vive em "Review (on request)", um por eixo.
+        for phrase in ('### Review (on request)', 'each brief names `review.md`, the issue, its base and, after round '
+                       'one, the previous tip and findings', "and the implementer's brief never names it"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.review)
 
@@ -157,8 +157,8 @@ class StopCriterionTests(unittest.TestCase):
     def test_the_ladder_names_the_default_of_the_baixos(self):
         # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
         # fechada em 0 sérios e 0 médios têm o critério novo como proposta padrão, e a correção vira opção do lote.
-        self.assertIn('(the baixos of a finished review take the default of "When the review is done", below)',
-                      self.review)
+        self.assertIn('Each axis stops by "When the review is done"; findings take the destination ladder '
+                      '(`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.', self.review)
         follow_ups = flat(section(read('skills', 'frontlights', 'references', 'issues.md'), 'Follow-ups'))
         for phrase in ('The baixos left by a review that ends at 0 sérios and 0 médios',
                        'take destination 2 as the proposed default, with destination 1 offered in the same batch as '
@@ -167,10 +167,46 @@ class StopCriterionTests(unittest.TestCase):
                 self.assertIn(phrase, follow_ups)
 
     def test_the_two_blocks_sit_before_the_gate_on_the_findings(self):
-        brief = self.review.find("**The reviewer's brief.**")
+        brief = self.review.find('### Review (on request)')
         done = self.review.find('### When the review is done')
         gate = self.review.find('**Gate on the findings.**')
         self.assertTrue(0 <= brief < done < gate, (brief, done, gate))
+
+class TwoAxesTests(unittest.TestCase):
+    """Issue 11 do redesenho, S3: revisão em dois eixos (Spec e Standards), só a pedido, nunca portão."""
+
+    def setUp(self):
+        self.text = flat(section(REVIEW.read_text(encoding='utf-8'), 'Two axes'))
+        self.development = read('skills', 'frontlights', 'references', 'development.md')
+        self.on_request = section(self.development, 'Review (on request)', '###')
+
+    def test_two_reviewers_one_per_axis_with_the_same_standard(self):
+        for phrase in ("Two reviewers, one per axis, each with this file's finding, severity, rounds and report",
+                       '**Spec:** the issue body (criteria, decisions, out of scope) against the diff',
+                       'each finding cites the criterion or decision it breaks',
+                       "**Standards:** the conventions of the issue's `## Decisões de implementação`",
+                       'The coordinator shows the two reports side by side, never reordered across axes; each axis '
+                       'keeps its own counts.'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.text)
+
+    def test_the_smells_are_twelve_lines_of_judgment(self):
+        raw = section(REVIEW.read_text(encoding='utf-8'), 'Two axes')
+        self.assertEqual(re.findall(r'(?m)^(\d+)\. ', raw), [str(n) for n in range(1, 13)])
+        self.assertIn('The smells are judgment, never a checklist: one is a finding only with a failure scenario.',
+                      self.text)
+
+    def test_development_says_it_in_about_110_words_with_the_stop_criterion(self):
+        self.assertLessEqual(len(self.on_request.split()), 150)
+        body = flat(self.on_request)
+        for phrase in ('The independent review runs only when the user asks for one: it is not dispatched by default '
+                       'and is not a gate of the merge into the local main nor of the release.',
+                       'Two reviewers go out in one message, one per axis (`references/review.md`, "Two axes")',
+                       'Each axis stops by "When the review is done"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, body)
+        done = flat(section(self.development, 'When the review is done', '###'))
+        self.assertIn('done at the first round that reports 0 sérios and 0 médios', done)
 
 
 class OnlyTheReviewerReadsItTests(unittest.TestCase):
@@ -196,7 +232,7 @@ class OnlyTheReviewerReadsItTests(unittest.TestCase):
         development = read('skills', 'frontlights', 'references', 'development.md')
         review = flat(section(development, 'Review, checkpoints and renewal'))
         for phrase in ('The independent review runs only when the user asks for one',
-                       '`references/review.md` stays its standard', '### When the review is done'):
+                       '(`references/review.md`, "Two axes")', '### When the review is done'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, review)
 

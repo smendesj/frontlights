@@ -1,7 +1,7 @@
 # The independent reviewer's standard
 
 This file is the standard of the independent reviewer of stage 6, for a review that runs only when the user asks
-for one (`development.md`, "Review, checkpoints and renewal"). The brief that dispatches the reviewer names it;
+for one (`development.md`, "Review (on request)"). The brief that dispatches the reviewer names it;
 the implementer works from the issue, its seams and its tests, so the code is written to the issue and judged by
 a standard its author did not aim at. Write the report in the user's language.
 
@@ -11,6 +11,33 @@ A finding is a defect: something in the diff that makes what is delivered differ
 criteria, the project's rules or the user's safety. Every finding carries a **failure scenario**: the input or
 state, and the wrong result, crash, leak or misleading instruction it produces. What has no failure scenario is
 not a finding.
+
+## Two axes
+
+Two reviewers, one per axis, each with this file's finding, severity, rounds and report:
+
+- **Spec:** the issue body (criteria, decisions, out of scope) against the diff; each finding cites the criterion or
+  decision it breaks, and behaviour the issue left alone that the diff changes is a finding.
+- **Standards:** the conventions of the issue's `## Decisões de implementação`, the repository's patterns (its
+  `CLAUDE.md`, the neighbouring code and tests) and the smells below; each finding cites the convention or the code
+  it departs from.
+
+The coordinator shows the two reports side by side, never reordered across axes; each axis keeps its own counts.
+
+The smells are judgment, never a checklist: one is a finding only with a failure scenario.
+
+1. A rule or constant written twice that may drift apart.
+2. A function doing two things the issue keeps apart.
+3. A name that says the opposite of what it holds.
+4. Dead code, or a flag nothing reads.
+5. An error swallowed without a message anyone reads.
+6. A test that mocks the thing it claims to test.
+7. A number with no source.
+8. A shell string where an argv fits.
+9. A secret, a machine path or a real name in a tracked file.
+10. A dependency the issue did not decide.
+11. A comment that restates the code or contradicts it.
+12. A boolean parameter that switches what a function does.
 
 ## Severity
 
