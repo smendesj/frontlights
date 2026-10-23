@@ -419,33 +419,19 @@ houver, não é esperada nem é portão. A regra está em `references/developmen
 
 ## Ponto de retomada e continuação
 
-Escreva o documento de passagem de contexto com `templates/handoff.md` e execute:
+Em cada fronteira de janela (SKILL.md, regra "Windows"), escreva `.frontlights/issues/<n>/handoff.md` na worktree
+principal por `templates/handoff.md` e rode `frontlights.py checkpoint --issue <n> --next-step "<etapa, passo>"`
+(`--slice S<k>` numa worktree de slice, `--pending teste_assistido` com o teste assistido devido). Ele lê a issue
+pelo `gh`, acha o handoff sozinho e grava `checkpoint.json` (`checkpoint-<id>.json` na slice) com HEAD, branch,
+hashes das diferenças e dos arquivos (sem `.frontlights/`, sem conteúdo), a issue, o hash do handoff e o próximo
+passo. Repositório sem commit inicial não tem evidência vinculada a um HEAD.
 
-```powershell
-python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" checkpoint --root <worktree> --issue <issue.json> --handoff <handoff.md> --next-step "Executar o teste de regressão de persistência"
-```
-
-Salve a saída padrão em `checkpoint.json` (na worktree de uma slice, em `checkpoint-<id>.json`, um por
-worktree de slice), com codificação UTF-8. O utilitário inclui
-HEAD, branch, hash das diferenças binárias, hashes dos arquivos versionados e não
-versionados, registro da issue, hash do documento de passagem de contexto, próximo
-passo e horário. Ele exclui `.frontlights/` para evitar hashes que dependam do próprio
-registro. As evidências contêm hashes e nomes de arquivos, não seus conteúdos.
-Revise nomes que possam revelar informações sensíveis antes de publicar. Repositórios
-sem commit inicial não produzem evidência vinculada a um HEAD exato; faça primeiro
-o commit inicial aprovado.
-
-Em uma sessão nova, consulte a issue novamente e execute:
-
-```powershell
-python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" resume --root <worktree> --issue <issue-atual.json> --handoff <handoff.md> --checkpoint <checkpoint.json>
-```
-
-O resultado `reconcile` indica divergências no Git, na issue ou no documento de
-passagem de contexto; relate cada divergência e, ao substituir um registro, diga qual substituiu. Mesmo com
-`unchanged`, é necessário ler a issue, o documento e as alterações atuais. A CLI
-retorna os dados na saída padrão; salvá-los é uma ação local explícita do coordenador.
-Nenhum utilitário grava registros externos ou inicia outra sessão do modelo.
+Na janela nova, `frontlights.py resume --issue <n>` acha o checkpoint mais recente (na worktree, na principal ou
+numa worktree do charter) e o handoff que ele registrou, e imprime `next_step`, `slice`, `pending` e o drift
+(`issue_drift`, `git_drift`, `handoff_changed`); com `browser/window.json`, o `serve.py window attach` da janela
+ANTES. O GitHub vence o handoff: em `reconcile`, releia a issue, diga cada divergência e siga pelo GitHub; mesmo em
+`unchanged`, leia a issue, o handoff e o diff antes de agir. Nenhum utilitário grava registro externo ou abre
+outra sessão do modelo.
 
 ## Contexto e conclusão
 

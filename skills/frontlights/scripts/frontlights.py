@@ -801,7 +801,7 @@ def checkpoint(root, issue, handoff, next_step, pending=(), slice_id=None):
         require(isinstance(slice_id, str) and SLICE_ID_RULE.fullmatch(slice_id),
                 'slice is a short label without spaces, such as S2')
     return {'version': 1, 'created_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-            'root': str(root), 'issue': issue, 'git': git_evidence(root),
+            'root': str(root), 'issue': issue, 'git': git_evidence(root), 'handoff': str(handoff),
             'handoff_sha256': hashlib.sha256(handoff.read_bytes()).hexdigest(),
             'next_step': next_step, 'pending': pending_names(pending), 'slice': slice_id}
 
@@ -818,11 +818,16 @@ def resume(root, saved, current_issue, handoff):
     changed = drift(saved['issue'], current_issue)
     git_changed = [k for k in ('head', 'branch', 'diff_sha256', 'files_sha256') if saved['git'].get(k) != live.get(k)]
     handoff_changed = hashlib.sha256(Path(handoff).read_bytes()).hexdigest() != saved['handoff_sha256']
-    return {'state': 'reconcile' if changed or git_changed or handoff_changed else 'unchanged',
-            'issue_drift': changed, 'git_drift': git_changed, 'handoff_changed': handoff_changed,
+    state = 'reconcile' if changed or git_changed or handoff_changed else 'unchanged'
+    return {'state': state, 'issue_drift': changed, 'git_drift': git_changed, 'handoff_changed': handoff_changed,
             'pending': pending_names(saved.get('pending')), 'next_step': saved['next_step'],
             'slice': saved.get('slice'),
-            'required': 'Read current GitHub issue, handoff and diff before continuing.'}
+            'required': 'Read current GitHub issue, handoff and diff before continuing.',
+            'rule': RESUME_RULE}
+
+
+RESUME_RULE = ('O GitHub vence o handoff: numa divergência, releia a issue, diga o que mudou e siga pelo que o GitHub '
+               'diz; o handoff e o checkpoint são cópias de referência.')
 
 
 def issue_snapshot(value, tree, main, gh=None):
@@ -853,10 +858,22 @@ def checkpoint_file(tree, number, slice_id=None):
     return Path(tree) / '.frontlights' / 'issues' / str(number) / name
 
 
+def handoff_file(main, number):
+    """The handoff of a window boundary: `<main worktree>/.frontlights/issues/<n>/handoff.md`, where the next window,
+    opened at the project root, finds it."""
+    return Path(main) / '.frontlights' / 'issues' / str(number) / 'handoff.md'
+
+
 def checkpoint_cli(issue, tree, handoff, next_step, pending=(), slice_id=None, gh=None, main=None):
-    """`checkpoint`: by issue number the snapshot is read and the checkpoint is also saved (`saved` names it)."""
+    """`checkpoint`: by issue number the snapshot is read and the checkpoint is also saved (`saved` names it);
+    `--handoff` defaults to the handoff of the issue in the main worktree (`handoff_file`)."""
     main = main or str(_cli.main_worktree(tree))
     snapshot, number = issue_snapshot(issue, tree, main, gh)
+    if handoff is None:
+        require(number is not None, 'checkpoint com --issue <arquivo> precisa de --handoff <arquivo>')
+        handoff = handoff_file(main, number)
+        require(handoff.is_file(), f'sem handoff em {handoff.as_posix()}: escreva-o por templates/handoff.md '
+                                   'antes do checkpoint, ou passe --handoff <arquivo>')
     record = checkpoint(tree, snapshot, handoff, next_step, pending, slice_id)
     if number is None:
         return record
@@ -868,15 +885,80 @@ def checkpoint_cli(issue, tree, handoff, next_step, pending=(), slice_id=None, g
     return {**record, 'saved': str(path)}
 
 
+def checkpoint_candidates(tree, main, number, slice_id=None):
+    """Where `resume --issue <n>` looks for the checkpoint: the worktree it runs in, the main worktree (the next
+    window opens at the project root) and every worktree the charter gives to the issue."""
+    folders = [Path(tree), Path(main)]
+    charter = _cli.read_charter(main) or {}
+    for entry in charter.get('worktrees') or []:
+        if isinstance(entry, dict) and entry.get('issue') == number and isinstance(entry.get('path'), str):
+            folders.append(Path(entry['path']))
+    seen, found = set(), []
+    for folder in folders:
+        path = checkpoint_file(folder, number, slice_id)
+        key = os.path.normcase(str(path.resolve())) if path.is_file() else None
+        if key and key not in seen:
+            seen.add(key)
+            found.append(path)
+    return found
+
+
+def latest_checkpoint(paths):
+    """The most recent of the checkpoints found (by `created_at`); a file that does not parse is skipped."""
+    best = None
+    for path in paths:
+        try:
+            record = load(path)
+        except (OSError, ValueError):
+            continue
+        if isinstance(record, dict) and (best is None or str(record.get('created_at')) > str(best[1].get('created_at'))):
+            best = (path, record)
+    return best
+
+
+def window_hint(main, number):
+    """The ANTES window crosses the boundary: with `browser/window.json` the next window runs `window attach`."""
+    path = Path(main) / '.frontlights' / 'issues' / str(number) / 'browser' / 'window.json'
+    if not path.is_file():
+        return None
+    return {'record': str(path), 'command': f'serve.py window attach --issue {number}',
+            'message': 'A janela ANTES ficou aberta: rode `serve.py window attach` antes de usá-la; se ela morreu, '
+                       'o attach reabre na mesma base e faixa, sem pergunta.'}
+
+
 def resume_cli(issue, tree, handoff, saved, gh=None, main=None, slice_id=None):
-    """`resume`: by issue number the snapshot is read and `--checkpoint` defaults to the file `checkpoint` saved."""
+    """`resume`: by issue number the snapshot is read, the checkpoint is found alone (`checkpoint_candidates`, the
+    latest wins) and the handoff is the one the checkpoint recorded (else `handoff_file`). It prints the next step,
+    the slice, the pending obligations and the drift; GitHub wins over the handoff (`rule`)."""
     main = main or str(_cli.main_worktree(tree))
     snapshot, number = issue_snapshot(issue, tree, main, gh)
+    root = tree
     if saved is None:
         require(number is not None, 'resume com --issue <arquivo> precisa de --checkpoint <arquivo>')
-        saved = checkpoint_file(tree, number, slice_id)
-        require(saved.is_file(), f'sem checkpoint em {saved.as_posix()}: passe --checkpoint <arquivo>')
-    return resume(tree, load(saved), snapshot, handoff)
+        best = latest_checkpoint(checkpoint_candidates(tree, main, number, slice_id))
+        expected = checkpoint_file(tree, number, slice_id).as_posix()
+        require(best is not None, f'sem checkpoint da issue #{number} ({expected}, na worktree principal ou nas '
+                                  'worktrees do charter): passe --checkpoint <arquivo>')
+        saved, record = best
+        root = record.get('root') or tree
+        require(Path(root).is_dir(), f'a worktree do checkpoint não existe mais: {root}')
+    else:
+        record = load(saved)
+    if handoff is None:
+        recorded = record.get('handoff')
+        if recorded and Path(recorded).is_file():
+            handoff = Path(recorded)
+        else:
+            require(number is not None, 'sem handoff: passe --handoff <arquivo>')
+            handoff = handoff_file(main, number)
+            require(handoff.is_file(), f'sem handoff em {handoff.as_posix()}: passe --handoff <arquivo>')
+    result = resume(root, record, snapshot, handoff)
+    result.update({'checkpoint': str(saved), 'handoff': str(handoff), 'worktree': str(root)})
+    if number is not None:
+        window = window_hint(main, number)
+        if window:
+            result['window'] = window
+    return result
 
 
 ROUND_SUFFIX = re.compile(r'-r([1-9][0-9]{0,3})$')
@@ -2144,13 +2226,16 @@ def build_parser():
         p.add_argument('--root', help='default: the worktree of the current directory')
         p.add_argument('--issue', help='the issue number, read with gh (default: the issue of the charter entry of '
                                        'the worktree); or a saved gh api issue JSON file, the form of before')
-        p.add_argument('--handoff', required=True)
+        p.add_argument('--handoff', help='default, with an issue number: .frontlights/issues/<n>/handoff.md of the '
+                                         'main worktree (resume: the handoff the checkpoint recorded)')
         p.add_argument('--slice', help='the slice (acceptance-criteria box) in progress, e.g. S2')
         if name == 'checkpoint':
-            p.add_argument('--next-step', required=True)
+            p.add_argument('--next-step', required=True,
+                           help='"<stage, step>", the step the next window starts with (each window boundary)')
             p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
         else:
-            p.add_argument('--checkpoint', help='default, with an issue number: the file checkpoint saved')
+            p.add_argument('--checkpoint', help='default, with an issue number: the latest checkpoint of the issue in '
+                                                'this worktree, the main worktree or a worktree of the charter')
     p = sub.add_parser('archive', help='close a round of the homologation of an issue: result.json and '
                                        'merge-local-main*.json get the suffix -r<k>')
     p.add_argument('--root', help='default: the main worktree of the current directory')
