@@ -190,7 +190,7 @@ class BrowserFlowManifestTests(unittest.TestCase):
 
     def test_cited_subcommands_and_flags_exist_in_the_scripts(self):
         serve_help = help_text('scripts/serve.py')
-        serve_ops = set(re.search(r'\{([a-z,]+)\}', serve_help).group(1).split(','))
+        serve_ops = set(re.search(r'\{([a-z,-]+)\}', serve_help).group(1).split(','))
         check_subs = set(checks.SUBCOMMANDS)
         def cited(script):  # `serve stop` in prose, or the argv form scripts/serve.py" stop
             pattern = rf'`{script} (\w+)|{script}\.py" (\w+)'
