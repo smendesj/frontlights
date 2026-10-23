@@ -30,6 +30,7 @@
       "non_goals": ["Importação em lote", "Edição de observações"],
       "risks": ["Falha de escrita no armazenamento"],
       "session_sized": true,
+      "project_fields": {"Priority": "Medium"},
       "status": "ready"
     },
     {
@@ -45,6 +46,7 @@
       "non_goals": ["Exportação de observações"],
       "risks": ["Nomes de projeto fora do ASCII"],
       "session_sized": true,
+      "project_fields": {"Priority": "Medium"},
       "status": "ready"
     },
     {
@@ -76,6 +78,7 @@
       "non_goals": ["Mesclagem automática de conflitos"],
       "risks": ["Corrida entre validação e persistência"],
       "session_sized": true,
+      "project_fields": {"Priority": "Medium"},
       "status": "ready"
     },
     {

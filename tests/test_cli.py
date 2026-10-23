@@ -141,6 +141,7 @@ class ScriptsTests(Fixture):
                 self.assertIn('inválido', text)
 
 
+
 class PrefixTests(unittest.TestCase):
     def test_the_chain_is_argument_then_config_then_authorization(self):
         record = {'branch_prefix': 'dev/'}
@@ -224,6 +225,127 @@ class AccountTests(unittest.TestCase):
         self.assertEqual((result['ok'], result['reason'], result['written']), (False, 'repository_mismatch', False))
         self.assertIn('gh auth switch', result['question'])
         self.assertEqual(len(gh.calls), 2)   # no issue read
+
+
+def plan_issue(n, **extra):
+    issue = {'id': n, 'title': 't', 'outcome': 'o', 'vertical_check': 'v', 'acceptance': ['a'], 'tests': ['t'],
+             'ownership': [f'src/m{n}'], 'non_goals': ['n'], 'risks': ['r'], 'session_sized': True,
+             'dependencies': [], 'status': 'ready'}
+    issue.update(extra)
+    return issue
+
+
+def a_slice(sid, **extra):
+    item = {'id': sid, 'title': 't', 'delivers': 'd', 'seams': ['s'], 'layers': ['Tela'], 'depends_on': [],
+            'walkthrough': {'persona': 'conta 1', 'steps': 'passos', 'before': 'antes', 'after': 'depois'}}
+    item.update(extra)
+    return item
+
+
+class PlanPathTests(unittest.TestCase):
+    def refusal(self, plan, project=None):
+        import frontlights
+        with self.assertRaises(frontlights.PlanError) as caught:
+            frontlights.validate_plan(plan, project)
+        return caught.exception.path
+
+    def test_a_missing_field_of_an_issue(self):
+        second = plan_issue(2)
+        del second['title']
+        self.assertEqual(self.refusal({'repository': None, 'issues': [plan_issue(1), second]}), 'issues[1].title')
+
+    def test_a_missing_field_of_a_slice(self):
+        slices = [a_slice('S1'), a_slice('S2'), a_slice('S3')]
+        del slices[2]['walkthrough']
+        plan = {'repository': None, 'issues': [plan_issue(1, slices=slices)]}
+        self.assertEqual(self.refusal(plan), 'issues[0].slices[2].walkthrough')
+
+    def test_a_board_field_left_open(self):
+        project = {'owner': 'OWNER', 'number': 1, 'fields': {'Priority': None, 'Effort': 'M'}}
+        plan = {'repository': 'OWNER/REPOSITORY', 'issues': [plan_issue(1)]}
+        self.assertEqual(self.refusal(plan, project), 'issues[0].project_fields.Priority')
+
+    def test_the_cli_prints_the_path(self):
+        second = plan_issue(2)
+        del second['risks']
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'plan.json'
+            path.write_text(json.dumps({'repository': None, 'issues': [plan_issue(1), second]}), encoding='utf-8')
+            done = subprocess.run([sys.executable, str(SCRIPTS / 'frontlights.py'), 'validate-plan', '--plan', str(path)],
+                                  capture_output=True, cwd=folder, timeout=60)
+        self.assertEqual(done.returncode, 1)
+        self.assertEqual(json.loads(done.stderr)['path'], 'issues[1].risks')
+
+    def test_the_example_plan_carries_project_fields(self):
+        example = json.loads((ROOT / 'skills' / 'frontlights' / 'examples' / 'plan.json').read_text(encoding='utf-8'))
+        top = [i for i in example['issues'] if i.get('parent') is None]
+        self.assertTrue(all(isinstance(i.get('project_fields'), dict) and i['project_fields'] for i in top))
+
+
+class TickBoxTests(unittest.TestCase):
+    BODY = ('## Critérios de aceitação\n\n- [ ] **S1.** primeira\n- [ ] **S2.** segunda\n'
+            '- [ ] Pendência (achado da revisão): algo. Evidência que fecha: um teste\n'
+            '- [ ] Pendência (do teste ao vivo): outra. Evidência que fecha: o print\n')
+
+    def test_the_box_is_read_in_every_form(self):
+        import closeout
+        for given, line in (('S2', 4), ('s2', 4), ('2', 4), ('P1', 5), ('p2', 6)):
+            with self.subTest(box=given):
+                kind, box = closeout.parse_box(given)
+                self.assertEqual(closeout.find_box(self.BODY, box, None, kind)[0], line)
+
+    def test_a_missing_leftover_box_is_refused(self):
+        import closeout
+        kind, box = closeout.parse_box('P3')
+        with self.assertRaises(closeout.TickRefusal):
+            closeout.find_box(self.BODY, box, None, kind)
+
+
+class CheckpointByNumberTests(Fixture):
+    def test_checkpoint_and_resume_take_the_issue_number_and_read_it_from_gh(self):
+        import frontlights
+        (self.main / '.frontlights' / 'config.json').write_text(json.dumps({'repository': 'OWNER/REPOSITORY'}),
+                                                                encoding='utf-8')
+        handoff = self.tree / 'handoff.md'
+        handoff.write_text('# handoff\n', encoding='utf-8')
+        snapshot = {'number': 7, 'title': 'Issue de teste', 'body': 'corpo', 'state': 'open', 'labels': [],
+                    'assignees': [], 'updated_at': '2000-01-01T00:00:00Z',
+                    'html_url': 'https://github.com/OWNER/REPOSITORY/issues/7'}
+        calls = []
+
+        def gh(argv):
+            calls.append(argv)
+            return snapshot
+        saved = frontlights.checkpoint_cli(None, str(self.tree), str(handoff), 'S2', [], 'S2', gh=gh,
+                                           main=str(self.main))
+        self.assertEqual(calls, [['api', 'repos/OWNER/REPOSITORY/issues/7']])
+        path = Path(saved['saved'])
+        self.assertTrue(same(path, self.tree / '.frontlights' / 'issues' / '7' / 'checkpoint-S2.json'))
+        self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['slice'], 'S2')
+        resumed = frontlights.resume_cli(None, str(self.tree), str(handoff), None, gh=gh, main=str(self.main),
+                                         slice_id='S2')
+        self.assertEqual((resumed['state'], resumed['slice']), ('unchanged', 'S2'))
+
+
+class ArchiveRoundTests(unittest.TestCase):
+    def test_archive_renames_the_records_of_the_round(self):
+        import frontlights
+        with tempfile.TemporaryDirectory() as folder:
+            issue = Path(folder) / '.frontlights' / 'issues' / '5'
+            (issue / 'browser').mkdir(parents=True)
+            (issue / 'browser' / 'result.json').write_text('{}', encoding='utf-8')
+            (issue / 'merge-local-main.json').write_text('{}', encoding='utf-8')
+            (issue / 'merge-local-main-20000101-000000.json').write_text('{}', encoding='utf-8')
+            first = frontlights.archive_round(folder, 5)
+            self.assertEqual(first['round'], 1)
+            self.assertEqual(sorted(p.name for p in issue.rglob('*.json')),
+                             ['merge-local-main-20000101-000000-r1.json', 'merge-local-main-r1.json', 'result-r1.json'])
+            (issue / 'browser' / 'result.json').write_text('{}', encoding='utf-8')
+            second = frontlights.archive_round(folder, 5)
+            self.assertEqual((second['round'], len(second['renamed'])), (2, 1))
+            self.assertTrue((issue / 'browser' / 'result-r2.json').is_file())
+            empty = frontlights.archive_round(folder, 5)
+            self.assertEqual(empty['renamed'], [])
 
 
 if __name__ == '__main__':

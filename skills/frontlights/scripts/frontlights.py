@@ -4,6 +4,7 @@ Only inspect performs network reads. No command here publishes issues, executes
 tests, grants Claude permissions, or changes a product repository.
 """
 import argparse
+import contextlib
 import datetime as dt
 import fnmatch
 import hashlib
@@ -26,6 +27,33 @@ import _cli  # noqa: E402  (defaults of --root, --tree, --config and --issue, th
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+class PlanError(ValueError):
+    """A plan refusal with the path of the field it is about, such as `issues[0].slices[2].walkthrough`."""
+
+    def __init__(self, message, path):
+        super().__init__(message)
+        self.path = path
+
+
+def need(condition, message, path):
+    """`require` for a plan: the refusal names the field, relative (`.title`) to the `at` around it."""
+    if not condition:
+        raise PlanError(message, path)
+
+
+@contextlib.contextmanager
+def at(path):
+    """Refusals inside carry `path`; a PlanError whose path starts with `.` is relative to it."""
+    try:
+        yield
+    except PlanError as error:
+        if error.path.startswith('.'):
+            raise PlanError(str(error), path + error.path) from None
+        raise
+    except ValueError as error:
+        raise PlanError(str(error), path) from None
 
 
 def nonempty(value):
@@ -244,11 +272,12 @@ def board_fields(project, issue):
     require(not unsafe,
             f'{issue["id"]}: project_fields {", ".join(unsafe)} must not contain {UNTYPEABLE_NAMES}; reword the value')
     unknown = sorted(set(chosen) - set(project['fields']))
-    require(not unknown, f'{issue["id"]}: project_fields not on the board: {", ".join(unknown)}')
+    need(not unknown, f'{issue["id"]}: project_fields not on the board: {", ".join(unknown)}', '.project_fields')
     values = {k: v for k, v in project['fields'].items() if v is not None}
     values.update(chosen)
     missing = sorted(k for k in project['fields'] if k not in values)
-    require(not missing, f'{issue["id"]}: choose board field(s) {", ".join(missing)} in the plan')
+    need(not missing, f'{issue["id"]}: choose board field(s) {", ".join(missing)} in the plan',
+         f'.project_fields.{missing[0]}' if missing else '.project_fields')
     return values
 
 
@@ -387,27 +416,29 @@ def slices_of(issue):
             f'{label}: {len(slices)} slices: uma issue tem no máximo {SLICES_MAX}; o excedente vira issues de topo '
             f'ligadas por --blocked-by (nunca uma sub-issue nova)')
     seen = []
-    for item in slices:
-        require(isinstance(item, dict),
-                f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers, depends_on e walkthrough')
-        sid = item.get('id')
-        require(isinstance(sid, str) and SLICE_ID_RULE.fullmatch(sid),
-                f'{label}: slice com id inválido {sid!r}: use um rótulo curto sem espaço, como S1')
-        require(sid not in seen, f'{label}: slice repetida {sid}')
-        require(nonempty(item.get('title')), f'{label}: slice {sid}: falta title')
-        require(nonempty(item.get('delivers')),
-                f'{label}: slice {sid}: falta delivers (o que dá para demonstrar quando ela termina)')
-        for field in ('seams', 'layers'):
-            require(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)')
-        walkthrough_of(label, sid, item.get('walkthrough'))
-        deps = item.get('depends_on', [])   # absent means none ("Depende de: nenhuma")
-        require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
-                f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')
-        for dep in deps:
-            require(dep != sid, f'{label}: slice {sid} depende de {sid}, ela mesma')
-            require(dep in seen,
-                    f'{label}: slice {sid} depende de {dep}, que não existe ou vem depois dela: bloqueadoras primeiro')
-        seen.append(sid)
+    for index, item in enumerate(slices):
+        with at(f'.slices[{index}]'):
+            require(isinstance(item, dict),
+                    f'{label}: cada slice precisa ser um objeto com id, title, delivers, seams, layers, depends_on e walkthrough')
+            sid = item.get('id')
+            require(isinstance(sid, str) and SLICE_ID_RULE.fullmatch(sid),
+                    f'{label}: slice com id inválido {sid!r}: use um rótulo curto sem espaço, como S1')
+            require(sid not in seen, f'{label}: slice repetida {sid}')
+            need(nonempty(item.get('title')), f'{label}: slice {sid}: falta title', '.title')
+            need(nonempty(item.get('delivers')),
+                 f'{label}: slice {sid}: falta delivers (o que dá para demonstrar quando ela termina)', '.delivers')
+            for field in ('seams', 'layers'):
+                need(strings(item.get(field)), f'{label}: slice {sid}: falta {field} (lista não vazia)', f'.{field}')
+            with at('.walkthrough'):
+                walkthrough_of(label, sid, item.get('walkthrough'))
+            deps = item.get('depends_on', [])   # absent means none ("Depende de: nenhuma")
+            require(isinstance(deps, list) and all(isinstance(d, str) for d in deps) and len(deps) == len(set(deps)),
+                    f'{label}: slice {sid}: depends_on precisa ser uma lista de ids de slices, sem repetição')
+            for dep in deps:
+                require(dep != sid, f'{label}: slice {sid} depende de {sid}, ela mesma')
+                require(dep in seen,
+                        f'{label}: slice {sid} depende de {dep}, que não existe ou vem depois dela: bloqueadoras primeiro')
+            seen.append(sid)
     return slices
 
 
@@ -419,47 +450,50 @@ def validate_plan(plan, project=None):
     require(isinstance(issues, list) and 0 < len(issues) <= 24,
             'plan must contain 1..24 session-sized issues; split larger batches')
     ids = set()
-    for issue in issues:
-        require(isinstance(issue, dict) and number(issue.get('id')), 'positive integer issue id required')
-        require(issue['id'] not in ids, 'duplicate issue id')
-        ids.add(issue['id'])
-        sliced = slices_of(issue) is not None   # the slices carry the acceptance and the demonstration
-        for field in ('title', 'outcome') + (() if sliced else ('vertical_check',)):
-            require(nonempty(issue.get(field)), f'{issue["id"]}: missing {field}')
-        for field in (() if sliced else ('acceptance',)) + ('tests', 'ownership', 'non_goals', 'risks'):
-            require(strings(issue.get(field)), f'{issue["id"]}: missing {field}')
-        for path in issue['ownership']:
-            relative(path)
-        require(issue.get('session_sized') is True, 'oversized issue must be decomposed')
-        deps = issue.get('dependencies')
-        require(isinstance(deps, list) and all(number(x) for x in deps) and len(deps) == len(set(deps)),
-                'dependencies must be unique integer ids')
-        require(issue.get('status') in STATUSES,
-                f'{issue["id"]}: invalid status {issue.get("status")!r}: use one of {", ".join(sorted(STATUSES))} '
-                '(an issue already published on GitHub is "ready" when its dependencies are met, "blocked" otherwise)')
-        if issue.get('parent') is not None:
-            require(number(issue['parent']),
-                    f'{issue["id"]}: parent precisa ser o id (inteiro positivo) de uma issue deste plano')
-            require(issue['parent'] != issue['id'], f'{issue["id"]}: parent não pode ser a própria issue')
-        if issue.get('parent_external') is not None:
-            require(number(issue['parent_external']) and issue['parent_external'] != issue['id'],
-                    f'{issue["id"]}: parent_external precisa ser o número (inteiro positivo, diferente da própria issue) '
-                    'de uma issue já publicada fora deste plano')
-            require(issue.get('parent') is None,
-                    f'{issue["id"]}: parent_external e parent são exclusivos: use parent para uma issue do plano')
-        if issue.get('parent') is not None or issue.get('parent_external') is not None:
-            # Only a family that already exists has children: the plan never proposes a sub-issue.
-            published = issue.get('status') != 'proposed' and (plan['repository'] is None or nonempty(issue.get('url')))
-            require(published,
-                    f'{issue["id"]}: sub-issue nova não é proposta: o plano só carrega filhas já publicadas '
-                    '(status ready, running, verified ou blocked, com o url da issue); um achado vira critério '
-                    'da issue de origem ou issue de topo')
-        if project is not None:
-            resolve_board(project, issue)
-        if issue.get('url'):
-            require(plan['repository'] is not None, 'a local plan cannot reference GitHub issue URLs')
-            require(issue['url'] == f'https://github.com/{plan["repository"]}/issues/{issue["id"]}',
-                    'issue URL does not match repository/id')
+    for index, issue in enumerate(issues):
+        with at(f'issues[{index}]'):
+            require(isinstance(issue, dict) and number(issue.get('id')), 'positive integer issue id required')
+            require(issue['id'] not in ids, 'duplicate issue id')
+            ids.add(issue['id'])
+            sliced = slices_of(issue) is not None   # the slices carry the acceptance and the demonstration
+            for field in ('title', 'outcome') + (() if sliced else ('vertical_check',)):
+                need(nonempty(issue.get(field)), f'{issue["id"]}: missing {field}', f'.{field}')
+            for field in (() if sliced else ('acceptance',)) + ('tests', 'ownership', 'non_goals', 'risks'):
+                need(strings(issue.get(field)), f'{issue["id"]}: missing {field}', f'.{field}')
+            for position, path in enumerate(issue['ownership']):
+                with at(f'.ownership[{position}]'):
+                    relative(path)
+            need(issue.get('session_sized') is True, 'oversized issue must be decomposed', '.session_sized')
+            deps = issue.get('dependencies')
+            need(isinstance(deps, list) and all(number(x) for x in deps) and len(deps) == len(set(deps)),
+                 'dependencies must be unique integer ids', '.dependencies')
+            need(issue.get('status') in STATUSES,
+                 f'{issue["id"]}: invalid status {issue.get("status")!r}: use one of {", ".join(sorted(STATUSES))} '
+                 '(an issue already published on GitHub is "ready" when its dependencies are met, "blocked" otherwise)',
+                 '.status')
+            if issue.get('parent') is not None:
+                require(number(issue['parent']),
+                        f'{issue["id"]}: parent precisa ser o id (inteiro positivo) de uma issue deste plano')
+                require(issue['parent'] != issue['id'], f'{issue["id"]}: parent não pode ser a própria issue')
+            if issue.get('parent_external') is not None:
+                require(number(issue['parent_external']) and issue['parent_external'] != issue['id'],
+                        f'{issue["id"]}: parent_external precisa ser o número (inteiro positivo, diferente da própria issue) '
+                        'de uma issue já publicada fora deste plano')
+                require(issue.get('parent') is None,
+                        f'{issue["id"]}: parent_external e parent são exclusivos: use parent para uma issue do plano')
+            if issue.get('parent') is not None or issue.get('parent_external') is not None:
+                # Only a family that already exists has children: the plan never proposes a sub-issue.
+                published = issue.get('status') != 'proposed' and (plan['repository'] is None or nonempty(issue.get('url')))
+                require(published,
+                        f'{issue["id"]}: sub-issue nova não é proposta: o plano só carrega filhas já publicadas '
+                        '(status ready, running, verified ou blocked, com o url da issue); um achado vira critério '
+                        'da issue de origem ou issue de topo')
+            if project is not None:
+                resolve_board(project, issue)
+            if issue.get('url'):
+                require(plan['repository'] is not None, 'a local plan cannot reference GitHub issue URLs')
+                require(issue['url'] == f'https://github.com/{plan["repository"]}/issues/{issue["id"]}',
+                        'issue URL does not match repository/id')
     for issue in issues:   # a parent that is in the plan is `parent`: its links, depth and limits are checked offline
         require(issue.get('parent_external') not in ids,
                 f'{issue["id"]}: parent_external {issue.get("parent_external")} é uma issue deste plano: use parent')
@@ -789,6 +823,86 @@ def resume(root, saved, current_issue, handoff):
             'pending': pending_names(saved.get('pending')), 'next_step': saved['next_step'],
             'slice': saved.get('slice'),
             'required': 'Read current GitHub issue, handoff and diff before continuing.'}
+
+
+def issue_snapshot(value, tree, main, gh=None):
+    """(snapshot, number) for `checkpoint` and `resume`. `value` a JSON file is the snapshot the session saved
+    (the form of before, kept one cycle; number None); an issue number, or nothing (the issue of the charter entry
+    of the tree, `_cli.issue_number`), is read by the script: `gh api repos/<repository>/issues/<n>` with the
+    `repository` of the config of the main worktree, or `.frontlights/issues/<n>/issue.json` (`source: local`) of
+    the main worktree in a project without a remote."""
+    if value is not None and not str(value).strip().lstrip('#').isdigit():
+        return load(value), None
+    number = _cli.issue_number(value, tree, main)
+    config = _cli.config_path(None, main, required=False)
+    repository = load(config).get('repository') if config else None
+    if repository is None:
+        local = Path(main) / '.frontlights' / 'issues' / str(number) / 'issue.json'
+        require(local.is_file(), f'sem repository no config e sem {local.as_posix()}: passe --issue <arquivo.json>')
+        return load(local), number
+    require(repository_or_local(repository), 'repository in the configuration must be owner/name')
+    answer = (gh or _cli.gh_json)(['api', f'repos/{repository}/issues/{number}'])
+    require(isinstance(answer, dict) and answer.get('number') == number,
+            f'o gh não leu a issue #{number} de {repository}: confira a conta (gh auth status) e o número')
+    return answer, number
+
+
+def checkpoint_file(tree, number, slice_id=None):
+    """`<tree>/.frontlights/issues/<n>/checkpoint.json`, or `checkpoint-<slice>.json` for a slice worktree."""
+    name = f'checkpoint-{slice_id}.json' if slice_id else 'checkpoint.json'
+    return Path(tree) / '.frontlights' / 'issues' / str(number) / name
+
+
+def checkpoint_cli(issue, tree, handoff, next_step, pending=(), slice_id=None, gh=None, main=None):
+    """`checkpoint`: by issue number the snapshot is read and the checkpoint is also saved (`saved` names it)."""
+    main = main or str(_cli.main_worktree(tree))
+    snapshot, number = issue_snapshot(issue, tree, main, gh)
+    record = checkpoint(tree, snapshot, handoff, next_step, pending, slice_id)
+    if number is None:
+        return record
+    path = checkpoint_file(tree, number, slice_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding='utf-8')
+    os.replace(temporary, path)
+    return {**record, 'saved': str(path)}
+
+
+def resume_cli(issue, tree, handoff, saved, gh=None, main=None, slice_id=None):
+    """`resume`: by issue number the snapshot is read and `--checkpoint` defaults to the file `checkpoint` saved."""
+    main = main or str(_cli.main_worktree(tree))
+    snapshot, number = issue_snapshot(issue, tree, main, gh)
+    if saved is None:
+        require(number is not None, 'resume com --issue <arquivo> precisa de --checkpoint <arquivo>')
+        saved = checkpoint_file(tree, number, slice_id)
+        require(saved.is_file(), f'sem checkpoint em {saved.as_posix()}: passe --checkpoint <arquivo>')
+    return resume(tree, load(saved), snapshot, handoff)
+
+
+ROUND_SUFFIX = re.compile(r'-r([1-9][0-9]{0,3})$')
+
+
+def archive_round(root, number):
+    """Close a round of an issue's homologation: `.frontlights/issues/<n>/browser/result.json` and every
+    `merge-local-main*.json` of `.frontlights/issues/<n>/` get the suffix `-r<k>` of the round (k = one past the
+    highest round already archived there), so the next round starts without the records of the previous one. A
+    name already taken is refused before anything is renamed; nothing is deleted."""
+    folder = Path(root) / '.frontlights' / 'issues' / str(number)
+    files = [folder / 'browser' / 'result.json'] + sorted(folder.glob('merge-local-main*.json'))
+    current = [f for f in files if f.is_file() and not ROUND_SUFFIX.search(f.stem)]
+    done = [int(m.group(1)) for f in [*folder.glob('*.json'), *folder.glob('browser/*.json')]
+            if (m := ROUND_SUFFIX.search(f.stem))]
+    round_ = max(done, default=0) + 1
+    moves = [(f, f.with_name(f'{f.stem}-r{round_}{f.suffix}')) for f in current]
+    taken = [target.name for _, target in moves if target.exists()]
+    require(not taken, f'já existe {", ".join(taken)}: nada foi renomeado')
+    for origin, target in moves:
+        os.replace(origin, target)
+    renamed = [{'from': o.relative_to(folder).as_posix(), 'to': t.relative_to(folder).as_posix()} for o, t in moves]
+    message = (f'rodada {round_} da issue #{number} arquivada: {len(renamed)} registro(s) renomeado(s)' if renamed
+               else f'nada a arquivar na issue #{number}: nenhum result.json nem merge-local-main*.json da rodada')
+    return {'ok': True, 'exitCode': 0, 'issue': number, 'round': round_ if renamed else max(done, default=0),
+            'renamed': renamed, 'message': message}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -1248,14 +1362,19 @@ def build_parser():
     for name in ('checkpoint', 'resume'):
         p = sub.add_parser(name)
         p.add_argument('--root', help='default: the worktree of the current directory')
-        p.add_argument('--issue', required=True, help='Current gh api issue JSON')
+        p.add_argument('--issue', help='the issue number, read with gh (default: the issue of the charter entry of '
+                                       'the worktree); or a saved gh api issue JSON file, the form of before')
         p.add_argument('--handoff', required=True)
+        p.add_argument('--slice', help='the slice (acceptance-criteria box) in progress, e.g. S2')
         if name == 'checkpoint':
             p.add_argument('--next-step', required=True)
             p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
-            p.add_argument('--slice', help='the slice (acceptance-criteria box) in progress, e.g. S2')
         else:
-            p.add_argument('--checkpoint', required=True)
+            p.add_argument('--checkpoint', help='default, with an issue number: the file checkpoint saved')
+    p = sub.add_parser('archive', help='close a round of the homologation of an issue: result.json and '
+                                       'merge-local-main*.json get the suffix -r<k>')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--issue', help='the issue number (default: the issue of the charter entry of the worktree)')
     p = sub.add_parser('drift')
     p.add_argument('--snapshot', required=True)
     p.add_argument('--current', required=True)
@@ -1276,6 +1395,9 @@ def resolve_defaults(args):
         args.config = _cli.config_path(args.config, args.root)
     elif args.command in ('evidence', 'review-gate', 'checkpoint', 'resume'):
         args.root = str(_cli.tree_path(args.root))
+    elif args.command == 'archive':
+        args.root = str(_cli.root_path(args.root))
+        args.issue = _cli.issue_number(args.issue, _cli.current_tree(), args.root)
     elif args.command == 'browser-gate':
         args.root = args.root or [str(_cli.current_tree())]
         args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
@@ -1329,9 +1451,11 @@ def main():
         elif args.command == 'update-check':
             result = update_check()
         elif args.command == 'checkpoint':
-            result = checkpoint(args.root, load(args.issue), args.handoff, args.next_step, args.pending, args.slice)
+            result = checkpoint_cli(args.issue, args.root, args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':
-            result = resume(args.root, load(args.checkpoint), load(args.issue), args.handoff)
+            result = resume_cli(args.issue, args.root, args.handoff, args.checkpoint, slice_id=args.slice)
+        elif args.command == 'archive':
+            result = archive_round(args.root, args.issue)
         elif args.command == 'homolog':
             import homolog
             code = homolog.main(args.homolog_args)  # prints its own JSON
@@ -1341,8 +1465,11 @@ def main():
         if result is not None:
             _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.command, args.full)
         return code
+    except _cli.UsageError as error:   # an issue the charter does not give, say: what to pass is in the hint
+        return _cli.print_usage_error(error, 2)
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
-        print(json.dumps({'error': str(exc)}), file=sys.stderr)
+        where = {'path': exc.path} if isinstance(exc, PlanError) else {}   # the field of the plan, such as issues[1].title
+        print(json.dumps({'error': str(exc), **where}), file=sys.stderr)
         return 1
 
 

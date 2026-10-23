@@ -26,8 +26,9 @@ Operations (each prints one JSON object on stdout):
               items on --lines turned into `[x]`. It checks the body of a parent that was edited to tick the
               item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
               the end of either file are not compared (a reread through `--jq .body` or a redirect adds one).
-  tick        the whole cycle of ticking one box of --issue: --box S<k> (the one item of the criteria section whose
-              text starts with `S<k>.`) or --line <N> (any item of that section, a criterion without a slice label included). It captures the
+  tick        the whole cycle of ticking one box of --issue: --box S<k> (also s<k> or <k>: the one item of the criteria
+              section whose text starts with `S<k>.`), --box P<k> (the k-th leftover item of that section, the one
+              whose text starts with `Pendência`, in order) or --line <N> (any item of that section, a criterion without a slice label included). It captures the
               body with `gh issue view --json body`, keeps it as .frontlights/issues/<n>/body-before-<stamp>.md under
               --root, builds body-new-<stamp>.md with only that `[ ]` turned into `[x]`, runs the tick-check, writes
               it with `gh issue edit --body-file`, rereads it into body-after-<stamp>.md and runs the tick-check
@@ -103,7 +104,8 @@ ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]+\[([ xX])\](?=[ \t]|$)'
 FEATURES = 'GraphQL-Features: issue_types'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}')
 PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
-BOX = re.compile(r'[Ss]([1-9][0-9]{0,2})')                     # --box S2
+BOX = re.compile(r'([SsPp]?)([1-9][0-9]{0,2})')                # --box S2, s2, 2 or P1 (a leftover box)
+LEFTOVER = re.compile(r'(?:\*\*|__)?Pend[eê]ncia\b', re.IGNORECASE)   # the text of a leftover box: `Pendência (...)`
 BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
 LIST_ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]')
 BLOCKED = re.compile(r'bloqueada[\W_]*:')               # `Bloqueada:`, `**Bloqueada**:`, `__Bloqueada__:`, `Bloqueada :`
@@ -1018,29 +1020,44 @@ def indentation(text):
     return len(expanded) - len(expanded.lstrip(' '))
 
 
-def find_box(body, box, line):
+def parse_box(value):
+    """(kind, number) of --box: `S2`, `s2` and `2` are the slice box S2; `P1` (or `p1`) the first leftover box."""
+    match = BOX.fullmatch(str(value).strip())
+    require(match is not None, 'the box is the slice label or the leftover label, as in --box S2, 2 or P1')
+    return (match.group(1) or 'S').upper(), int(match.group(2))
+
+
+def find_box(body, box, line, kind='S'):
     """(line number, ticked) of the one checklist item of the acceptance-criteria section to tick: the one whose
-    text starts with `S<box>.`, or the one on `line`. Fenced code and HTML comments never count."""
+    text starts with `S<box>.`, the `box`-th one whose text starts with `Pendência` (kind `P`), or the one on
+    `line`. Fenced code and HTML comments never count."""
     visible = list(sections(body))
-    found = []
-    for number, text, kind, heading in visible:
-        item = ITEM.match(text) if kind == 'criteria' and not heading else None
+    found, leftovers = [], 0
+    for number, text, section, heading in visible:
+        item = ITEM.match(text) if section == 'criteria' and not heading else None
         if not item:
             continue
         if line is not None:
             if number == line:
                 found.append((number, item))
             continue
-        label = BOX_LABEL.match(text[item.end():].lstrip(' \t'))
+        rest = text[item.end():].lstrip(' \t')
+        if kind == 'P':
+            if LEFTOVER.match(rest):
+                leftovers += 1
+                if leftovers == box:
+                    found.append((number, item))
+            continue
+        label = BOX_LABEL.match(rest)
         if label and int(label.group(1)) == box:
             found.append((number, item))
-    name = f'box S{box}' if line is None else f'line {line}'
+    name = f'box {kind}{box}' if line is None else f'line {line}'
     if not found:
         raise TickRefusal('box_not_found' if line is None else 'not_a_criterion',
                           f'The {name} is not a checklist item of the acceptance-criteria section of the issue '
                           '(fenced code and comments do not count); nothing was written.')
     if len(found) > 1:
-        raise TickRefusal('box_ambiguous', f'{len(found)} items of the acceptance criteria start with S{box}. '
+        raise TickRefusal('box_ambiguous', f'{len(found)} items of the acceptance criteria start with {kind}{box}. '
                           f'(lines {", ".join(str(n) for n, _ in found)}); tick the right one with --line; nothing was written.')
     number, item = found[0]
     raw = re.split(r'\r\n|\r|\n', body)[number - 1]
@@ -1096,10 +1113,9 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
     number = int(str(issue).strip())
     require((box is None) != (line is None), 'tick needs exactly one of --box S<k> (a slice box) or --line <N> (any '
                                              'criterion of the section)')
+    kind = 'S'
     if box is not None:
-        match = BOX.fullmatch(str(box).strip())
-        require(match is not None, 'the box is the slice label, as in --box S2')
-        box = int(match.group(1))
+        kind, box = parse_box(box)
     else:
         require(NUMBER.fullmatch(str(line).strip()) and int(str(line).strip()) > 0,
                 'the line is a positive line number of the body, as in --line 14')
@@ -1114,12 +1130,12 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
     require(records.is_dir(), 'tick keeps the previous body in .frontlights/issues/<n>/ of the project: pass --root, '
                               'the folder that holds .frontlights')
     gh, edit = gh or rs.gh_default, edit or gh_write
-    label = None if box is None else f'S{box}'
+    label = None if box is None else f'{kind}{box}'
     result = {'repository': repository, 'issue': number, 'box': label, 'line': line, 'written': False,
               'alreadyTicked': False, 'verified': False, 'files': {}}
     before = read_issue_body(gh, repository, number)
     try:
-        line, ticked = find_box(before, box, line)
+        line, ticked = find_box(before, box, line, kind)
     except TickRefusal as refusal:
         return {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason, 'message': str(refusal)}
     result['line'] = line
@@ -1235,7 +1251,7 @@ def build_parser():
                                          '(default: the main worktree of the current directory)')
     tick.add_argument('--issue', help='the issue number, such as 12 (default: the issue of the charter entry of the '
                                       'worktree of the current directory)')
-    tick.add_argument('--box', help='the slice box to tick, such as S2')
+    tick.add_argument('--box', help='the box to tick: the slice box S2 (also s2 or 2), or the leftover box P1')
     tick.add_argument('--line', help='or the line of any criterion of the section, such as 14')
     return parser
 
