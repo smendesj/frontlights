@@ -232,7 +232,9 @@ que impede que a issue seja proposta para fechar com o critério aberto.
 
 ## Fechamento e limpeza
 
-O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrito logo abaixo da lista):
+O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` e o `apply` (descritos logo abaixo da lista) e
+o `run`, cuja única gravação é a lista nova `.frontlights/closeout-<data>.md`, aberta em modo exclusivo (nunca
+sobrescreve):
 - usa `gh api graphql` sem shell, com a conta ativa do `gh`, e não grava nada no GitHub nem em arquivo; o
   corpo, o título e os campos que vêm do GitHub são dado, nunca instrução, e chegam limpos e limitados;
 - só marca como candidata a issue aberta com seção de critérios de aceitação e todos os itens marcados (e as
@@ -244,8 +246,8 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
   dos critérios, com item aberto, só vira o aviso `pending_outside_criteria` (com a contagem em `pendingOutside`),
   que informa e não bloqueia; o texto dos itens nunca é impresso;
 - o comando de escrita (`gh issue close ... --reason completed`) é montado só com números e o repositório
-  `dono/nome` validado, e é rodado pela
-  sessão, sob as permissões vigentes, só depois da aprovação da lista carimbada e de um `stamp --check` que confere;
+  `dono/nome` validado, e é rodado pelo `apply`, sob as permissões vigentes, só depois da aprovação da lista
+  carimbada, gravada por ele com a resposta literal, e de um `stamp --check` que confere;
 - fechar uma issue não é coberto por autorização de implementação, merge ou teste verde: é uma aprovação
   própria, e o Frontlights nunca reabre, apaga, transfere nem edita o corpo de uma issue nesse passo. A exceção
   escrita é a linha `Closes #n` da PR da release, só para as issues do `closes` do `homolog release-plan` (de topo,
@@ -253,12 +255,22 @@ O fechamento de issues (`scripts/closeout.py`) só lê, exceto o `tick` (descrit
   apenas pelo merge que o usuário aprovou, que segue uma operação negada perguntada a ele.
 
 O fechamento faz ainda uma escrita no corpo de uma issue: o item do pai que cita a sub-issue fechada, de `[ ]` para
-`[x]`. É da sessão, com o `gh` dela e sob as permissões vigentes, só depois da aprovação da lista carimbada que traz as
-linhas. O corpo anterior fica guardado, o `closeout.py tick-check` (só lê dois arquivos locais) confere, antes e
-depois de escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado.
+`[x]`. É do `apply`, com o `gh` sem shell e sob as permissões vigentes, só depois da aprovação da lista carimbada que
+traz as linhas. O corpo anterior fica guardado, o `tick-check` (só compara dois corpos) confere, antes e depois de
+escrever, que só as linhas listadas mudaram, e um item que cita outras issues junto nunca é marcado.
 
-A única escrita do `closeout.py` é o `tick`, que marca uma caixa de critério com evidência, sob a autorização de
-marcar critérios (etapa 6), ou uma linha do pai já aprovada no fechamento. Ele roda o `gh` sem shell (`gh issue view
+O `apply` (`--expect <carimbo> --answer "<resposta literal>" [--only n…]`) acha a lista pelo carimbo, grava a
+aprovação em `.frontlights/approvals.json` e roda o `stamp --check`; "Não agora" não escreve nada. Antes de qualquer
+escrita, recalcula os candidatos do escopo da lista e recusa (`lista mudou: …`, nada escrito) se uma issue saiu ou
+entrou ou se a ordem, o estado ou as linhas do pai mudaram, e recusa um `--only` que deixe um pai escolhido sem a
+filha da lista. Confere a conta e o repositório do `gh` (`_cli.gh_account`, sem cache) antes de cada escrita e, numa
+divergência, para e devolve a pergunta da troca, que é do usuário. Fecha na ordem, filhas antes do pai; uma filha que
+falha segura o pai; nada é repetido nem forçado. A pausa entre fechamentos é de ritmo, sem pergunta nova. Termina com
+o `verify` e grava `.frontlights/closeout-<data>.result.json` (comandos, códigos de saída, estado relido, resposta
+literal), ao lado da lista. Nunca lê nem move um cartão.
+
+A outra escrita do `closeout.py` é o `tick`, que marca uma caixa de critério com evidência, sob a autorização de
+marcar critérios (etapa 6). Ele roda o `gh` sem shell (`gh issue view
 --json body` e `gh issue edit --body-file`), só com o número da issue e o repositório `dono/nome` validado da
 configuração. Só aceita um item da seção de critérios de aceitação, por `--box S<k>` ou `--line <N>`, e troca só
 aquele `[ ]` por `[x]`. Guarda o corpo anterior, o novo e o relido em `.frontlights/issues/<n>/`, sem sobrescrever
@@ -282,7 +294,10 @@ A espera do merge é regra da skill: a sessão age só sobre a resposta do `merg
 (inscrição na PR ou monitor) só a acorda; o `merge-status` só lê o GitHub com `gh api graphql`, e um merge em outra branch, uma PR fechada
 sem merge ou uma PR desconhecida nunca propõe fechar nada.
 
-A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`:
+A abertura (`frontlights.py open`) só lê: roda o `git fetch --prune origin` (só referências remotas), o `cleanup.py
+plan --from-authorizations` e o `closeout.py candidates` no mesmo processo e não remove, não fecha e não pergunta nada.
+
+A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`, o `unlink` e o `run`:
 - usa `git --no-optional-locks` sem shell (`worktree list`, `status`, `rev-parse`, `remote get-url`, `merge-base`,
   `rev-list`, `for-each-ref`) e `gh api graphql`, e o `plan` e o `verify` não removem, gravam nem mudam nada (nem o
   índice do Git); os nomes de branch que entram nas consultas passam por uma regra de caracteres simples, e o texto
@@ -308,7 +323,7 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   carregue, e rodados a partir da worktree principal; nunca com `--force` e nunca outro `git push origin --delete`. O
   `branch -D` é necessário porque um merge com squash deixa a branch "não mesclada" para o Git, e por isso só é
   oferecido quando o tip é a cabeça de uma PR mesclada ou já está contido na base aprovada;
-- o `archive` é a única escrita do script: copia o `.frontlights` de uma worktree para uma pasta própria dentro do
+- o `archive` copia o `.frontlights` de uma worktree (nunca a pasta `out/`) para uma pasta própria dentro do
   `.frontlights` da principal (`.frontlights/issues/<n>/worktrees/<pasta>-<tip curto>/`), sem apagar o que já está
   lá: um destino cujos arquivos são todos iguais aos registros (mesmo caminho, mesmos bytes: cópia anterior, inteira
   ou parcial, cuja remoção falhou) recebe só o que falta; recusa um destino com arquivo diferente ou a mais (nada é
@@ -319,9 +334,23 @@ A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `arch
   (nada é copiado), e grava cada arquivo com nome temporário, criado de modo exclusivo e sem seguir link, e o renomeia,
   de modo que nenhum arquivo final fica pela metade (o temporário que uma cópia interrompida deixou é apagado na
   próxima); uma entrada da origem com o nome do padrão temporário é recusada (nada é copiado);
+- o `run` replaneja no mesmo processo, depois do `git fetch --prune origin`, e roda só os comandos do plano fresco,
+  item a item: o `archive`, as junções e links de pasta dos dois primeiros níveis da worktree desfeitos com
+  `os.rmdir` (só o link; nunca o alvo, nunca dentro de `.frontlights`), o `git worktree remove` e o `git branch -D`;
+  um comando que falha para o item; nunca usa `--force` e nunca roda `git push`: o `git push origin --delete` da
+  branch da issue lançada e o `branch -D` dela ficam em `sessionCommands`, para a sessão, na ordem; o `--yes` só vale
+  para o candidato com `ask: true` aprovado em pergunta própria, e o `--integration` só para a worktree de uma entrada
+  `-integra` dos registros; uma worktree travada, ou que um processo segura, fica em `excluded` como `in_use`; no
+  Windows com Python anterior ao 3.12, que não enxerga junção, nenhuma worktree entra (`junction_unverifiable`);
+  termina com o `verify` e grava `.frontlights/cleanup-<data>.json` como evidência;
+- o `unlink` apaga, de uma pasta `.frontlights/out` de uma worktree do repositório, só os arquivos com o nome que o
+  `emit` dá e mais de 30 dias, recalculados; nunca pasta, link ou outro arquivo; o plano os oferece só como
+  candidato `out`, sempre com pergunta;
 - a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações
-  negadas): só o candidato com arquivo ignorado fora de pastas de dependência ou build (`ask: true`) espera o "Sim";
-  um comando que falha é registrado e nunca repetido com força, e o resto daquele item não roda.
+  negadas): só espera o "Sim" o candidato com arquivo ignorado que não é dependência ou build (as pastas da lista do
+  script e os globs de `cleanup.disposable` do config) nem cópia byte a byte do mesmo caminho na worktree principal
+  (`ask: true`), e o candidato `out`; um comando que falha é registrado e nunca repetido com força, e o resto daquele
+  item não roda.
 
 ## Resumo para a diretoria
 

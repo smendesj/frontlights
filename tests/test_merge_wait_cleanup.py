@@ -138,98 +138,62 @@ class FreeTestHandoffTests(unittest.TestCase):
 
 
 class CloseoutReferenceTests(unittest.TestCase):
+    """Issue 2 do redesenho: a mecânica da limpeza e do fechamento foi para `cleanup.py run` e `closeout.py
+    run`/`apply` (e as razões para o `--help`); a referência guarda as regras que a sessão decide."""
+
     def setUp(self):
         self.text = read('skills', 'frontlights', 'references', 'closeout.md')
         self.flat = ' '.join(self.text.split())
 
     def test_a_merge_is_one_of_the_ways_into_the_closeout(self):
         for phrase in ('when the release of stage 6', 'finds its pull request merged into the approved base',
-                       'Pass `--issues` with the other issues `release-plan` listed for that release',
-                       'they skip the question, and the verify confirms them',
-                       'the merge of an issue into the local main, or of a child into its parent\'s branch, closes nothing',
-                       'comes back in `excluded` as `unchecked_criteria`: say which criteria are left'):
+                       'pass `--issues` with the rest of what `release-plan` listed',
+                       'they skip the question', 'A merge into the local main closes nothing',
+                       '`unchecked_criteria` and `no_criteria` with the counts (say which criteria are left'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
     def test_parent_ticks_are_line_numbers_only_and_shared_items_are_never_ticked(self):
-        for phrase in ('A sub-issue candidate also carries `parentTicks`', '`lines`', '`shared`',
-                       'never ticked for one of them', 'Only line numbers come from the helper',
-                       'no item of the parent cites it, or the parent is closed, in another repository or unknown) is only closed'):
+        for phrase in ('A sub-issue carries `parentTicks`', '`lines` of its open parent that cite it alone',
+                       '`shared`, never ticked', 'Without `parentTicks` it is only closed'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
     def test_the_table_and_the_question_carry_the_ticks(self):
         for phrase in ('"marcar no corpo de #P as linhas L"', '"não marcadas: citam outras issues"',
                        '"Fechar estas <N> issues e marcar os itens dos pais?"',
-                       '"Só fechar, sem marcar" comes before "Não agora" and writes only the closes (no tick)'):
+                       '"Só fechar, sem marcar" (only with ticks)', '"Só fechar, sem marcar" skips it'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
-    def test_the_tick_is_written_checked_before_and_after_and_only_after_the_close(self):
+    def test_the_tick_is_written_by_apply_checked_before_and_after_and_only_after_the_close(self):
         step3 = ' '.join(section(self.text, '3. Write what was approved').split())
-        for phrase in ('**The tick in a parent.**', 'After a sub-issue is closed', 'the Capture command of the recipe in `issues.md`',
-                       'and before that parent is closed when it is in the same list',
-                       'that cites the sub-issue and no other issue, and is the line the user was shown',
-                       'only the `[ ]` of those lines became `[x]`, by an exact-replace edit',
-                       'closeout.py" tick-check --before <saved> --after <new> --lines <lines>',
-                       'it must answer `ok` before anything is written', 'compare it with the saved copy',
-                       'gh issue edit <parent> --repo <repo> --body-file <file>', '`ok` is the verification',
-                       'A sub-issue whose close failed leaves its parent alone', 'only the tick is retried',
-                       'run `candidates` again for the parents'):
+        for phrase in ('**The tick in a parent.**', 'After a sub-issue closes, and before its parent does',
+                       "`apply` ticks the parent's `lines` in one write",
+                       'capture, check, `tick-check`, `gh issue edit --body-file`, reread, `tick-check`',
+                       '`.frontlights/issues/<parent>/`', 'a child that fails holds its parent back',
+                       'Retry only what is in `failed`', 'Then `run` again: a parent now complete gets the same question'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, step3)
         self.assertIn('with the `tick-check` result of each parent', ' '.join(section(self.text, '4. Verify').split()))
 
     def test_the_cleanup_of_merged_work_runs_first_without_a_question(self):
         step5 = ' '.join(section(self.text, '5. Clean up the merged work (first, without a question)').split())
-        for phrase in ('This step runs first, before the closing question of step 1',
-                       'right after `git pull --ff-only origin <base>`',
-                       'at stage 1 of every session whose authorization records list issue ids, after '
-                       '`git fetch --prune origin` and whatever `candidates` finds (the plan alone judges what is merged',
+        for phrase in ('right after `git pull --ff-only origin <base>`, with `--issues` from `release-plan`',
+                       'at stage 1, right after `frontlights.py open`, when the authorization records list issue ids',
                        'It is the written exception to "deleting anything" of the denied operations',
-                       'the session removes them **without a question**',
-                       'A remote branch is GitHub\'s job, with one written exception', '"Automatically delete head branches"',
-                       'the plan brings `git push origin --delete <branch>` (`delete_remote_branch`) for the branch of an issue, and only for it',
-                       'once `origin/<base>` contains its tip on GitHub',
-                       'never for a slice, the integration branch (never pushed), the release, a protected branch',
-                       'no other command of the cleanup ever runs `git push origin --delete`',
-                       'no `git branch -D` after a failed removal or a failed remote delete',
-                       '`--remote-branch` names the branch of each `delete_remote_branch` that ran',
-                       '`git fetch --prune origin` first (`fetch_prune`',
-                       'gets `copy_records` before `git worktree remove`',
-                       'cleanup.py archive --from <worktree>/.frontlights --to <recordsTo>',
-                       "`.frontlights/issues/<n>/worktrees/<worktree folder>-<short tip>/` (a folder of its own per archive",
-                       'A destination with any differing or extra file is refused (exit 1, nothing copied)',
-                       '`archive` copies what it lacks and is ok, so the removal runs again',
-                       'report it and leave that item, naming the folder for the user to compare; never overwrite it',
-                       'so no earlier archive is ever overwritten',
-                       "under the main worktree's `.frontlights` (the main worktree read from Git for the worktree of `--from`)",
-                       'Each command carries `item` (the branch of its candidate; null for the fetch)',
-                       'the session runs them item by item', 'when any command of an item fails, it runs nothing more of that item',
-                       '(no `git worktree remove` after a failed `copy_records`',
-                       'A failed copy stops that item, so the worktree keeps its records',
-                       'A local release branch (`<branch_prefix>release-<date>[-N]`',
-                       'exists only when the release took the old path',
-                       'with the refspec push there is no local release branch to remove',
-                       '`merged_release_branch` and only `git branch -D`', 'one not merged yet is left alone and not listed',
-                       'carries `ask: true`, `askReason` `ignored_files_besides_dependencies` and `askIgnored`',
-                       'it is the only candidate asked about',
-                       'Run `commands` in order, without a question',
-                       '"Remover a worktree <pasta> com os arquivos ignorados <nomes>?"',
-                       'The `excluded` stay where they are: say them in one line',
-                       '--records <recordsTo>', '`copied: false`',
-                       'cleanup.py" plan --config <config> --root <project> --issues 12,13 --base <approved base>',
-                       '--integration <integration worktree>',
-                       "Run it from the folder the session stands in, with `--root` pointing at the project's main worktree",
-                       'the helper never offers the folder it runs in', '`--integration` names the local-only worktree of a family',
-                       'it goes only when its branch holds no commit of its own that is not already in a pull request that reached the base',
-                       '`contained_in_base_without_pull_request`', 'the branch of an issue that reached GitHub through a release',
-                       '`ignored_files` comes with `ignoredCount` and `ignored`', 'those files go away with it',
-                       "the rest of that item's commands are not run",
-                       'a stacked child through its parent',
-                       'A merge counts as a commit of its own when it carries content (a conflict resolved by hand, a file added to it)',
-                       'Never add `--force` or `-f`', 'never retried with force', 'cleanup.py" verify',
-                       'list every `gone: false`'):
+                       '**without a question**, whatever the closing answer',
+                       'cleanup.py" run --from-authorizations [--issues 12,13] [--integration <worktree>]',
+                       '`run` fetches, plans again and runs only that fresh plan, item by item',
+                       "archive of the worktree's `.frontlights`, its junctions undone, `git worktree remove`, `git branch -D`",
+                       'A failed command stops its item, never retried and never with `--force`',
+                       'GitHub deletes merged head branches; the released issue branch is the exception',
+                       "`run` leaves its `git push origin --delete` and the local delete after it in `sessionCommands`, for the session, in order",
+                       '`contained_in_base_without_pull_request`', '`slice_merged_into_issue_branch`',
+                       'saved outputs older than 30 days', 'on "Sim", `run` again with `--yes <key>`',
+                       '`excluded` (`in_use` included) is said in one line',
+                       'reasons and cautions are in `cleanup.py --help`',
+                       'The `verify` and `.frontlights/cleanup-<…>.json` go to the handoff'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, step5)
 
@@ -237,52 +201,32 @@ class CloseoutReferenceTests(unittest.TestCase):
         """Review r1 of issue 63 (R1-5): an issue of `closes` that the verify still shows open after the merge is
         read once more and, still open, joins the closing question of step 2 with the reason in one line."""
         step1 = ' '.join(section(self.text, '1. Find the candidates (read only)').split())
-        for phrase in ('first run `closeout.py verify --issues <closes>`',
-                       'an issue it reports still open is read once more (the same verify, a few seconds later)',
-                       'one still open then joins the closing question of step 2',
-                       'with the reason said in one line (the `Closes #n` of the merged pull request did not close it)'):
+        for phrase in ('First run `closeout.py verify --issues <closes>`',
+                       'one still open is read once more a few seconds later',
+                       'joins the question of step 2 with the reason in one line'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, step1)
-        self.assertNotIn('stays out of this list too', step1)
         step4 = ' '.join(section(self.text, '4. Verify').split())
-        self.assertIn('an issue of `closes` still open there was already read twice and asked in step 2', step4)
+        self.assertIn("at a release's merge verify the `closes` too", step4)
 
     def test_the_question_of_a_candidate_that_asks_fits_the_five_word_limit(self):
         step5 = ' '.join(section(self.text, '5. Clean up the merged work (first, without a question)').split())
-        asking = step5.split('For each candidate with `ask: true`, ask with `AskUserQuestion`', 1)[1].split(', naming the files')[0]
-        labels = list(dict.fromkeys(x for x in re.findall(r'"([^"]+)"', asking) if not x.startswith('Remover a worktree')))
+        asking = step5.split('ignorados <nomes>?"', 1)[1].split('; on "Sim"')[0]
+        labels = list(dict.fromkeys(x for x in __import__('re').findall(r'"([^"]+)"', asking)))
         self.assertEqual(labels, ['Sim, remover', 'Não, manter'])
         self.assertTrue(all(len(label.split()) <= 5 for label in labels))
 
-    def test_the_sync_offer_moved_to_step_six_and_the_never_list_names_the_new_limits(self):
+    def test_the_sync_offer_is_step_six_and_the_never_list_names_the_limits(self):
         self.assertTrue(section(self.text, '6. Let RoadS see it'))
         never = ' '.join(section(self.text, 'Never').split())
-        self.assertIn('step 5 (the cleanup of the merged work, without a question) runs first, before the closing question of step 1',
-                      self.flat)
+        self.assertIn('Step 5 (the cleanup, without a question) runs first', self.flat)
         for phrase in ('the one body edit is the approved tick of the item of a parent that cites a sub-issue closed in the same list',
-                       'Close an issue on the strength of the merge alone',
-                       'Remove a worktree or a branch that `cleanup.py plan` did not offer (or, with `ask: true`, that the user did not approve)',
-                       'delete a remote branch the plan did not offer (`git push origin --delete` other than its '
-                       '`delete_remote_branch`: GitHub deletes the merged head branch), use `--force`',
+                       'on the strength of the merge alone', 'from a list not approved with its stamp',
+                       'Remove what `cleanup.py run` did not offer, an `ask: true` without its yes, a remote branch other '
+                       "than the released issue's; use `--force`",
                        'Merge a pull request, deploy or release: the closeout never does'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, never)
-
-    def test_every_reason_the_cleanup_script_produces_is_documented(self):
-        source = read('skills', 'frontlights', 'scripts', 'cleanup.py')
-        for code in ('main_worktree', 'current_directory', 'detached_head', 'not_a_worktree', 'path_missing', 'unsafe_path',
-                     'unsafe_branch', 'protected_branch', 'uncommitted_changes', 'unreadable_status', 'open_pr',
-                     'no_merged_pr', 'newer_than_merged_pr', 'merged_into_other_branch', 'ancestry_unverifiable',
-                     'open_dependents', 'pull_requests_unreadable', 'merged_release_branch', 'ignored_files_besides_dependencies',
-                     'fetch_prune', 'copy_records', 'delete_remote_branch', 'remote_branch',
-                     'frontlights_records', 'branch_differs_from_authorization', 'locked_worktree', 'checked_out_elsewhere',
-                     'not_found', 'integration_has_pull_request', 'integration_pushed', 'integration_has_unique_commits',
-                     'ignored_files', 'local_only_integration',
-                     'slice_not_in_issue_branch', 'slice_has_pull_request', 'slice_pushed', 'slice_issue_branch_unknown',
-                     'slice_is_issue_branch', 'slice_merged_into_issue_branch', 'contained_in_base_without_pull_request'):
-            with self.subTest(code=code):
-                self.assertIn(f"'{code}'", source, 'the script no longer produces it')
-                self.assertIn(code, self.flat, 'the reference does not explain it')
 
     def test_every_status_merge_status_produces_is_documented_where_the_wait_reads_it(self):
         source = read('skills', 'frontlights', 'scripts', 'closeout.py')
@@ -303,7 +247,7 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = ' '.join(read('skills', 'frontlights', 'references', 'closeout.md').split())
-        for phrase in ('**The tick in a parent.**', 'scripts/cleanup.py', 'with **its own approval**'):
+        for phrase in ('**The tick in a parent.**', 'scripts/cleanup.py" run', 'with **its own approval**'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
 
@@ -348,15 +292,25 @@ class DocsAndEvalsTests(unittest.TestCase):
                                       'worktrees/<pasta>-<tip curto>/ cópia do `.frontlights` de cada worktree da issue'),
             ('skills', 'frontlights', 'templates', 'handoff.md'): ('Aguardando o merge',),
             ('skills', 'frontlights', 'references', 'closeout.md'): ('`contained_in_base_without_pull_request`',
-                                                                    'parentTicks', 'line numbers'),
-            ('skills', 'frontlights', 'docs', 'security.md'): ('A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`:',
+                                                                    'parentTicks', 'Only line numbers'),
+            ('skills', 'frontlights', 'docs', 'security.md'): ('A limpeza de worktrees e branches (`scripts/cleanup.py`) só lê, exceto o `archive`, o `unlink` e o `run`:',
+                                      'A abertura (`frontlights.py open`) só lê',
+                                      'nunca roda `git push`: o `git push origin --delete` da branch da issue lançada e o `branch -D` dela ficam em `sessionCommands`',
+                                      'desfeitos com `os.rmdir` (só o link; nunca o alvo, nunca dentro de `.frontlights`)',
+                                      'fica em `excluded` como `in_use`', '(`junction_unverifiable`)',
+                                      'grava `.frontlights/cleanup-<data>.json` como evidência',
+                                      'o `unlink` apaga', 'cópia byte a byte do mesmo caminho na worktree principal',
+                                      'O `apply` (`--expect <carimbo> --answer "<resposta literal>" [--only n…]`)',
+                                      'recusa (`lista mudou: …`, nada escrito)',
+                                      'recusa um `--only` que deixe um pai escolhido sem a filha da lista',
+                                      'grava `.frontlights/closeout-<data>.result.json`',
                                       'a sessão age só sobre a resposta do `merge-status`, e o gatilho do ambiente (inscrição na PR ou monitor) só a acorda',
                                       'um item que cita outras issues junto nunca é marcado', 'nunca com `--force`',
                                       'cujo tip é a cabeça de uma PR mesclada que chegou à base aprovada',
                                       'ou, sem PR nenhuma, cujo tip já está contido em `origin/<base>`',
                                       'das branches remotas, só a da issue (a entrada da issue sem `slice`, nunca a `-integra`, a da release ou uma protegida) entra',
                                       'nenhuma outra branch remota entra: o GitHub apaga a branch de cabeça da PR mesclada',
-                                      'o `archive` é a única escrita do script',
+                                      'o `archive` copia o `.frontlights` de uma worktree (nunca a pasta `out/`)',
                                       'recusa um destino com arquivo diferente ou a mais (nada é copiado, nada é sobrescrito)',
                                       'e destino fora do `.frontlights` da worktree principal daquele repositório (lida do Git)',
                                       'a limpeza do trabalho mesclado roda sem pergunta (a exceção escrita a "apagar qualquer coisa" das operações negadas)',
