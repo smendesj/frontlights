@@ -255,5 +255,121 @@ class TickGuardTests(unittest.TestCase):
         self.assertIn('- [x] S2.', gh.body)
 
 
+BODY = '## Critérios de aceitação\n\n- [x] S1. Entrega\n  - Roteiro: sem tela · rodar o comando\n'
+WALK = TickGuardTests.WALK.replace('S2', 'S1')
+
+
+class HomologMergeTests(Stage6Case):
+    """S3: `homolog merge --issue n` corta a integração, traz a main local, roda o portão, confere os roteiros sem
+    tela, o `authorize`, faz o merge --no-ff na main local e o bundle, e grava `merge-local-main-<ts>.json`."""
+
+    def setUp(self):
+        super().setUp()
+        self.open('S1')
+        entries = self.charter()['worktrees']
+        self.issue_wt, self.s1 = entries[0]['path'], entries[1]['path']
+        self.commit(self.s1)
+        self.assertTrue(self.merge()['ok'])
+        self.records = self.root / '.frontlights' / 'issues' / '12'
+
+    def homolog_merge(self, body=BODY, **options):
+        try:
+            return homolog.op_merge(str(self.root), str(self.config), '12', gh=FakeIssueGh(body=body),
+                                    update_check=lambda: {'status': 'current'}, **options)
+        except homolog.Refusal as error:
+            return {'exitCode': 1, 'message': str(error)}
+
+    def walk(self, label='S1'):
+        (self.records / 'walkthroughs').mkdir(parents=True, exist_ok=True)
+        (self.records / 'walkthroughs' / f'{label}.md').write_text(WALK, encoding='utf-8')
+
+    def test_without_the_walkthrough_of_a_box_without_a_screen_nothing_merges(self):
+        before = git(self.root, 'rev-parse', 'main')
+        result = self.homolog_merge()
+        self.assertEqual((result['exitCode'], result['reason'], result['missing']), (1, 'walkthroughs', ['S1']))
+        self.assertEqual(git(self.root, 'rev-parse', 'main'), before)
+
+    def test_the_issue_enters_the_local_main_through_its_integration_branch(self):
+        self.walk()
+        result = self.homolog_merge()
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['gate']['status'], 'not_needed')
+        self.assertEqual(result['authorize']['scope_check'], 'pass')
+        parents = git(self.root, 'rev-list', '--parents', '-n', '1', 'main').split()
+        self.assertEqual(len(parents), 3)
+        self.assertEqual(git(self.root, 'rev-parse', 'main^2'), git(self.root, 'rev-parse', 'PREFIX/issue-12-integra'))
+        entry = self.charter()['worktrees'][-1]
+        self.assertEqual((entry['branch'], entry.get('slice')), ('PREFIX/issue-12-integra', None))
+        saved = json.loads(Path(result['record']).read_text(encoding='utf-8'))
+        self.assertRegex(Path(result['record']).name, r'^merge-local-main-\d{8}-\d{6}\.json$')
+        self.assertEqual((saved['kind'], saved['gates'], saved['bundle']['configured']),
+                         ('merge_into_local_main', {'browser_gate': 'not_needed'}, False))
+        self.assertEqual(saved['skillUpdate'], {'status': 'current'})
+        self.assertEqual(git(self.root, 'ls-remote', 'origin', 'PREFIX/issue-12-integra'), '')
+
+    def test_dry_run_writes_nothing(self):
+        self.walk()
+        before = git(self.root, 'rev-parse', 'main')
+        result = self.homolog_merge(dry_run=True)
+        self.assertEqual((result['exitCode'], result['dryRun'], result['written']), (0, True, False))
+        self.assertEqual(git(self.root, 'rev-parse', 'main'), before)
+        self.assertEqual(git(self.root, 'branch', '--list', 'PREFIX/issue-12-integra'), '')
+        self.assertEqual(list(self.records.glob('merge-local-main*.json')), [])
+
+    def test_a_slice_outside_the_branch_of_the_issue_is_refused(self):
+        self.open('S2')
+        self.commit(self.charter()['worktrees'][-1]['path'], 'src/other.py')
+        result = self.homolog_merge()
+        self.assertEqual((result['exitCode'], result['reason'], result['slices']), (1, 'slice_outside', ['S2']))
+
+    def test_an_open_box_is_refused(self):
+        result = self.homolog_merge(body=BODY.replace('[x]', '[ ]'))
+        self.assertEqual((result['exitCode'], result['reason'], result['open']), (1, 'open_boxes', ['S1']))
+
+    def test_a_dirty_main_worktree_is_refused(self):
+        (self.root / 'src' / 'app.py').write_text('print(2)\n', encoding='utf-8')
+        result = self.homolog_merge()
+        self.assertEqual(result['exitCode'], 1)
+        self.assertIn('limpa', result['message'])
+
+    def test_a_pending_watched_run_is_exit_2_with_the_question(self):
+        self.config.write_text(json.dumps({'repository': REPO, 'branchPrefix': 'PREFIX/', 'browserTest': {}}),
+                               encoding='utf-8')
+        self.open('S2')
+        s2 = self.charter()['worktrees'][-1]['path']
+        self.commit(s2, 'src/page.html', '<p>nova</p>\n')
+        self.assertTrue(self.merge('S2')['ok'])
+        result = self.homolog_merge(body=BODY + '- [x] S2. Tela\n')
+        self.assertEqual((result['exitCode'], result['gate']['status']), (2, 'contradiction'))   # no --toca
+        result = self.homolog_merge(body=BODY + '- [x] S2. Tela\n', toca='sim')
+        self.assertEqual((result['exitCode'], result['reason'], result['gate']['status']), (2, 'gate', 'pending'))
+        self.assertIn('#12', result['question'])
+        self.assertEqual(len(result['options']), 2)
+
+    def test_a_conflict_with_the_local_main_is_exit_2_in_the_integration_worktree(self):
+        self.walk()
+        self.commit(self.root, 'src/feature.py', 'x = 9\n', 'outra issue na main local')
+        result = self.homolog_merge()
+        self.assertEqual((result['exitCode'], result['conflict'], result['files']), (2, True, ['src/feature.py']))
+        integra = result['worktree']
+        (Path(integra) / 'src' / 'feature.py').write_text('x = 10\n', encoding='utf-8')
+        git(integra, 'commit', '-q', '-am', 'conflito resolvido na integração')
+        again = self.homolog_merge()
+        self.assertEqual(again['exitCode'], 0, again)
+
+    def test_a_fix_of_the_free_test_merges_again_without_the_gate(self):
+        self.walk()
+        self.assertEqual(self.homolog_merge(free_test_fix=True)['exitCode'], 1)   # no answered record, no merge yet
+        (self.records / 'browser').mkdir(parents=True)
+        (self.records / 'browser' / 'result.json').write_text(json.dumps({'situacao': 'aprovado'}), encoding='utf-8')
+        self.assertEqual(self.homolog_merge()['exitCode'], 0)
+        self.commit(self.issue_wt, 'src/fix.py', 'y = 1\n', 'correção do teste livre')
+        result = self.homolog_merge(free_test_fix=True)
+        self.assertEqual(result['exitCode'], 0, result)
+        saved = json.loads(Path(result['record']).read_text(encoding='utf-8'))
+        self.assertEqual((saved['gates'], saved['evidence']), ({'browser_gate': 'answered'}, 'teste livre'))
+        self.assertEqual(git(self.root, 'show', 'main:src/fix.py'), 'y = 1')
+
+
 if __name__ == '__main__':
     unittest.main()

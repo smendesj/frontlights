@@ -1147,6 +1147,28 @@ def walkthrough_problems(text):
     return problems
 
 
+ROTEIRO_SEM_TELA = re.compile(r'roteiro\s*:\s*sem tela\b')
+
+
+def slice_boxes(body):
+    """[{'label': 'S<k>', 'line', 'ticked', 'semTela'}] for the slice boxes of the acceptance-criteria section, in
+    order: `semTela` when a sub-item of the box says `Roteiro: sem tela` (the persona of a box without a screen)."""
+    boxes = []
+    for number, text, section, heading in sections(body):
+        if heading or section != 'criteria':
+            continue
+        item = ITEM.match(text)
+        label = BOX_LABEL.match(text[item.end():].lstrip(' \t')) if item else None
+        if label:
+            boxes.append({'label': f'S{int(label.group(1))}', 'line': number, 'ticked': item.group(1) != ' ',
+                          'semTela': False})
+        elif item:
+            boxes.append({'label': None, 'line': number, 'ticked': item.group(1) != ' ', 'semTela': False})
+        elif boxes and ROTEIRO_SEM_TELA.search(plain(text)):
+            boxes[-1]['semTela'] = True
+    return [box for box in boxes if box['label']]
+
+
 def slice_evidence(root, number, label, record=None):
     """The evidence that lets slice box `label` (S<k>) be ticked, or a TickRefusal: the watched run approved, or the
     walkthrough of the box without a screen in its format."""

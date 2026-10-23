@@ -3,8 +3,8 @@
 never pushed to the remote base; the release pushes its tip to a branch name of its own (`git push origin
 main:refs/heads/<release branch>`) and opens one pull request. This module keeps the bench
 current with the remote and plans the release. Every Git call is a list argv run without a shell, with a timeout and
-GIT_TERMINAL_PROMPT=0. `run` knows five operations, `sync`, `bundle`, `release-plan`, `suite` and `suite-gate`;
-an unknown one is a refusal.
+GIT_TERMINAL_PROMPT=0. `run` knows seven operations, `sync`, `bundle`, `release-plan`, `suite`, `suite-gate`,
+`merge` and `release` (redesign, issue 4); an unknown one is a refusal.
 
 Operations (each prints one JSON object on stdout):
   sync   bring `<remote>/<base>` into the local base: the worktree must have the base checked out, be clean
@@ -52,6 +52,19 @@ Operations (each prints one JSON object on stdout):
          (`nothing_to_release`, `no_config`, `no_repository`, `github_unavailable`, `base_not_default`), with
          `closesMessage`; it never changes `ready` or the exit code. It only reads Git, the records and GitHub:
          it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
+  merge  the issue into the local base in one command (references/development.md, "Into the local main"; only the
+         coordinating session runs it): refuses (exit 1) a main worktree off the base, dirty or mid-merge, a slice of
+         the charter that is not an ancestor of the branch of the issue, an open box of the criteria (GitHub, read
+         only, or the local record), and a box without a screen without its walkthrough in format; runs
+         `browser-gate` on the worktree of the issue (not green: exit 2 with the `question` and `options`); cuts
+         `<prefix>issue-<n>-integra` from the branch of the issue (its own charter entry, local, never pushed) and
+         merges the branch of the issue and the local base into it (a conflict stays there for the session: exit 2
+         with `files`); writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
+         runs `authorize`, `git merge --no-ff` of the integration branch into the local base (a conflict is
+         aborted), `bundle` and the `update-check` of the skill, all kept in that record. `--free-test-fix` skips the
+         gate only with the result.json answered and a previous merge record with `scope_check: pass`, and records
+         `browser_gate: answered` with `evidence: "teste livre"`; `--dry-run` checks and lists the steps, writing
+         nothing. Never pushes, never --force, reset or rebase.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
          whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
@@ -1380,11 +1393,230 @@ def op_suite_gate(root, config_path, issue, required, release=False, base='main'
     return skipping(result, read_suite_record(path) or {}) if release else result
 
 
+# ---------------------------------------------------------------- merge into the local main (redesign, issue 4)
+
+GATE_QUESTIONS = {
+    'pending': ('O teste assistido da issue #{n} ainda não foi respondido. Rodar agora?',
+                ['Rodar o teste assistido agora', 'Parar']),
+    'stale': ('O código da issue #{n} mudou depois do teste assistido. Assistir de novo?',
+              ['Assistir de novo', 'Parar']),
+    'contradiction': ('O diff da issue #{n} muda a tela, e o plano diz que não toca o frontend. Rodar o teste '
+                      'assistido?', ['Rodar o teste assistido', 'Parar']),
+    'unconfigured': ('A issue #{n} muda a tela e o projeto não tem browserTest. Como verificar?',
+                     ['Configurar o browserTest agora', 'Dispensar o teste assistido desta issue', 'Parar']),
+}
+
+
+def charter_of(root):
+    path = Path(root) / '.frontlights' / 'authorization.json'
+    data = read_record(path) if path.is_file() else None
+    require(isinstance(data, dict), 'não há charter legível em .frontlights/authorization.json; rode `frontlights.py '
+                                    'charter new` antes')
+    return path, data
+
+
+def issue_body(root, repository, number, gh=None):
+    """The body of the issue: GitHub (read only) with a repository, the local record without one."""
+    import closeout   # noqa: PLC0415
+    if repository:
+        return closeout.read_issue_body(gh or closeout.rs.gh_default, repository, number)
+    local = read_record(Path(root) / '.frontlights' / 'issues' / str(number) / 'issue.json')
+    require(isinstance(local, dict) and isinstance(local.get('body'), str),
+            f'sem repositório e sem .frontlights/issues/{number}/issue.json com o corpo da issue')
+    return local['body']
+
+
+def merge_preconditions(root, base):
+    code, out, _ = git(root, 'symbolic-ref', '--short', '--quiet', 'HEAD')
+    head = out.strip() if code == 0 else None
+    require(head == base, f'a worktree principal está em `{head or "HEAD solta"}`, não em `{base}`; o merge na main '
+                          'local roda na worktree principal')
+    dirty = status_lines(root)
+    require(not dirty, f'a worktree principal tem {len(dirty)} arquivo(s) com alterações não commitadas; o merge na '
+                       'main local precisa dela limpa')
+    require(rev(root, 'MERGE_HEAD') is None, 'há um merge em andamento na worktree principal; conclua-o ou aborte-o')
+
+
+def unmerged_files(tree):
+    _, out, _ = git(tree, 'diff', '--name-only', '--diff-filter=U')
+    return sorted(line.strip() for line in out.splitlines() if line.strip())
+
+
+def previous_merge_passed(folder):
+    for path in sorted(folder.glob('merge-local-main*.json')):
+        data = read_record(path)
+        answer = data.get('authorize') if isinstance(data, dict) else None
+        if isinstance(answer, dict) and answer.get('scope_check') == 'pass':
+            return path
+    return None
+
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    os.replace(temporary, path)
+
+
+def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=None, gh=None, update_check=None):
+    """`homolog merge --issue n`: the steps of "Into the local main" in one command (see the module's docstring)."""
+    import closeout      # noqa: PLC0415
+    import frontlights   # noqa: PLC0415
+    worktree(root)
+    root = Path(root)
+    number = issue_number(str(issue))
+    charter_path, record = charter_of(root)
+    require(number in record.get('issue_ids', []), f'a issue #{number} não está no charter')
+    prefix = _cli.branch_prefix(record=record)[0]
+    require(is_prefix(prefix), 'o charter não tem branch_prefix válido')
+    base = plain_name((record.get('base') or {}).get('branch') or 'main', 'a branch base')
+    merge_preconditions(root, base)
+    issue_branch, integra = f'{prefix}issue-{number}', f'{prefix}issue-{number}-integra'
+    tip = rev(root, f'refs/heads/{issue_branch}')
+    require(tip, f'a branch da issue `{issue_branch}` não existe')
+    entries = [e for e in record.get('worktrees', []) if isinstance(e, dict) and e.get('issue') == number]
+    own = next((e for e in entries if e.get('branch') == issue_branch and not e.get('slice')), None)
+    require(own and Path(own.get('path', '')).is_dir(), f'o charter não tem a worktree da branch {issue_branch}')
+    outside = []
+    for entry in entries:
+        if entry.get('slice'):
+            slice_tip = rev(root, f'refs/heads/{entry.get("branch")}')
+            if slice_tip is None or ancestry(root, slice_tip, f'refs/heads/{issue_branch}') is not True:
+                outside.append(entry['slice'])
+    if outside:
+        return {'exitCode': 1, 'reason': 'slice_outside', 'slices': outside,
+                'message': f'a(s) slice(s) {", ".join(outside)} do charter não está(ão) na branch da issue: rode '
+                           '`slice merge` de cada uma antes do merge na main local'}
+    body = issue_body(root, record.get('repository'), number, gh)
+    counted = closeout.criteria(body) or (0, 0)
+    boxes = closeout.slice_boxes(body)
+    if counted[1] == 0 or counted[0] != counted[1]:
+        opened = [b['label'] for b in boxes if not b['ticked']]
+        return {'exitCode': 1, 'reason': 'open_boxes', 'criteria': {'checked': counted[0], 'total': counted[1]},
+                'open': opened, 'message': f'a issue #{number} tem {counted[1] - counted[0]} caixa(s) aberta(s) nos '
+                                           f'critérios{" (" + ", ".join(opened) + ")" if opened else ""}: marque-as '
+                                           'com a evidência antes do merge na main local'}
+    folder = root / '.frontlights' / 'issues' / str(number)
+    record_path = folder / 'browser' / 'result.json'
+    result = {'issue': number, 'issueBranch': issue_branch, 'integration': integra, 'base': base}
+    if free_test_fix:
+        import browser_gate   # noqa: PLC0415
+        answered = read_record(record_path) if record_path.is_file() else None
+        situation = browser_gate.situation(answered) if answered else None
+        require(situation in browser_gate.ANSWERED, f'--free-test-fix exige o result.json da issue respondido (está '
+                                                    f'{situation or "sem registro"})')
+        previous = previous_merge_passed(folder)
+        require(previous, '--free-test-fix exige um merge anterior desta issue na main local com o authorize em pass')
+        gate = {'status': 'answered', 'evidence': 'teste livre', 'previous': str(previous)}
+    else:
+        import browser_gate   # noqa: PLC0415
+        try:
+            gate, code = browser_gate.run_cli([own['path']], base, config_path, toca,
+                                              str(record_path) if record_path.is_file() else None)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            raise Refusal(f'o browser-gate não respondeu: {str(error)[:200]}')
+        if code != 0:
+            text, options = GATE_QUESTIONS.get(gate.get('status'), GATE_QUESTIONS['pending'])
+            return {'exitCode': 2, 'reason': 'gate', 'gate': gate, 'question': text.format(n=number),
+                    'options': options, 'message': f'o portão da issue #{number} não está verde '
+                                                   f'({gate.get("status")}): pergunte antes do merge'}
+    result['gate'] = gate
+    need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
+    walks, missing = {}, []
+    for label in need:
+        path = folder / 'walkthroughs' / f'{label}.md'
+        problems = closeout.walkthrough_problems(path.read_text(encoding='utf-8-sig')) if path.is_file() else ['ausente']
+        walks[label] = {'path': str(path), 'problems': problems}
+        if problems:
+            missing.append(label)
+    result['walkthroughs'] = walks
+    if missing:
+        return dict(result, exitCode=1, reason='walkthroughs', missing=missing,
+                    message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e '
+                            'grave walkthroughs/S<k>.md antes do merge na main local')
+    present = rev(root, f'refs/heads/{integra}')
+    entry = next((e for e in entries if e.get('branch') == integra), None)
+    path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'
+    if dry_run:
+        steps = ([f'git worktree add -b {integra} {path} {issue_branch}'] if present is None else
+                 [f'git merge {issue_branch} (em {path})']) + [f'git merge {base} (em {path})', 'authorize',
+                                                                 f'git merge --no-ff {integra} (na principal)', 'bundle']
+        return dict(result, exitCode=0, dryRun=True, steps=steps, written=False,
+                    message=f'Dry-run: a issue #{number} entra na main local por {integra}; nada foi gravado.')
+    if present is None:
+        require(not path.exists(), f'a pasta {path} já existe; a worktree de integração não é criada por cima')
+        code, _, err = git(root, 'worktree', 'add', '-b', integra, str(path), issue_branch)
+        require(code == 0, f'`git worktree add` da integração falhou: {trimmed(err)}')
+        entry = {'issue': number, 'path': str(path), 'branch': integra, 'ownership': list(own.get('ownership', []))}
+        record.setdefault('worktrees', []).append(entry)
+        write_json(charter_path, record)
+    else:
+        require(entry is not None and path.is_dir(), f'a branch {integra} existe, mas o charter não tem a worktree '
+                                                     'dela; registre-a ou remova a branch')
+        require(not status_lines(path) and rev(path, 'MERGE_HEAD') is None,
+                f'a worktree {path.name} tem alterações ou um merge em andamento: conclua a resolução e repita')
+        code, _, err = git(path, 'merge', '--no-edit', issue_branch)
+        if code != 0:
+            files = unmerged_files(path)
+            require(files, f'`git merge {issue_branch}` na integração falhou: {trimmed(err)}')
+            return dict(result, exitCode=2, conflict=True, files=files, worktree=str(path),
+                        message=f'conflito ao trazer a branch da issue para {integra} em: {", ".join(files)}; '
+                                'resolva e commite na worktree de integração e repita `homolog merge`')
+    code, _, err = git(path, 'merge', '--no-edit', base)
+    if code != 0:
+        files = unmerged_files(path)
+        require(files, f'`git merge {base}` na integração falhou: {trimmed(err)}')
+        return dict(result, exitCode=2, conflict=True, files=files, worktree=str(path),
+                    message=f'conflito ao trazer a {base} local para {integra} em: {", ".join(files)}; resolva e '
+                            'commite na worktree de integração e repita `homolog merge`')
+    stamp = zoned_now().strftime('%Y%m%d-%H%M%S')
+    operation = {'repository': record.get('repository'), 'issue': number, 'kind': 'merge_into_local_main',
+                 'worktree': str(path), 'branch': integra, 'target': base,
+                 'gates': {'browser_gate': gate['status']}}
+    if free_test_fix:
+        operation['evidence'] = 'teste livre'
+    record_file = folder / f'merge-local-main-{stamp}.json'
+    saved = dict(operation, at=zoned_now().isoformat(timespec='seconds'), gate=gate, walkthroughs=walks)
+    try:
+        saved['authorize'] = frontlights.authorize(record, operation)
+    except (ValueError, OSError) as error:
+        saved['authorize'] = {'scope_check': 'fail', 'error': str(error)[:300]}
+        write_json(record_file, saved)
+        return dict(result, exitCode=1, reason='authorize', record=str(record_file),
+                    message=f'o authorize recusou o merge na main local: {str(error)[:200]}; pergunte ao usuário, '
+                            'nunca edite os portões')
+    before = rev(root, 'HEAD')
+    code, _, err = git(root, 'merge', '--no-ff', '--no-edit', '-m', f'Merge na main local: issue #{number}', integra)
+    if code != 0:
+        files = unmerged_files(root)
+        abort_merge(root, before)
+        saved['merge'] = {'conflict': files}
+        write_json(record_file, saved)
+        return dict(result, exitCode=2, conflict=True, files=files, record=str(record_file),
+                    message=f'o merge de {integra} na {base} local teve conflito em {", ".join(files)} e foi '
+                            'abortado; traga a main local de novo para a integração e repita')
+    saved['merge'] = {'before': before, 'after': rev(root, 'HEAD')}
+    if config_path:
+        try:
+            saved['bundle'] = op_bundle(root, config_path, base, None)
+        except Refusal as error:
+            saved['bundle'] = {'written': False, 'exitCode': 1, 'message': str(error)}
+    else:
+        saved['bundle'] = {'written': False, 'configured': False, 'message': 'sem config: sem backup configurado'}
+    saved['skillUpdate'] = (update_check or frontlights.update_check)()
+    write_json(record_file, saved)
+    bundled = saved['bundle'].get('path') or 'sem backup configurado'
+    return dict(result, exitCode=0, record=str(record_file), merge=saved['merge'], authorize=saved['authorize'],
+                bundle=saved['bundle'], skillUpdate=saved['skillUpdate'], integrationWorktree=str(path),
+                message=f'A issue #{number} entrou na {base} local ({saved["merge"]["after"][:7]}) por {integra}, com '
+                        f'o portão {gate["status"]}; backup: {bundled}. Registro em {record_file.name}.')
+
+
 # ---------------------------------------------------------------- command line
 
 def run(operation, root, base='main', remote='origin', config=None, prefix=None, records=None,
         issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None,
-        head=None, source=None):
+        head=None, source=None, free_test_fix=False, dry_run=False, toca=None):
     try:
         if operation == 'suite':
             result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds, source,
@@ -1397,6 +1629,8 @@ def run(operation, root, base='main', remote='origin', config=None, prefix=None,
             result = op_bundle(root, config, base, prefix, records)
         elif operation == 'release-plan':
             result = op_release_plan(root, base, remote, prefix, records, config)
+        elif operation == 'merge':
+            result = op_merge(root, config, issue, free_test_fix, dry_run, toca)
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -1412,6 +1646,17 @@ def build_parser():
     parser = _cli.JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
+    merge = sub.add_parser('merge', allow_abbrev=False,
+                           help='the issue into the local main: integration branch, gate, walkthroughs, authorize, '
+                                'merge --no-ff and bundle (redesign, issue 4)')
+    merge.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
+    merge.add_argument('--config', help='.frontlights/config.json (default: the one of the main worktree)')
+    merge.add_argument('--issue', help='the issue number (default: the issue of the charter entry of the worktree)')
+    merge.add_argument('--free-test-fix', action='store_true',
+                       help='a fix of the free test: no gate, the watched run already answered and a previous merge '
+                            'that passed authorize')
+    merge.add_argument('--dry-run', action='store_true', help='check and say what would run; writes nothing')
+    merge.add_argument('--toca', choices=('sim', 'nao', 'não', 'ausente'), help="the plan's `Toca o frontend:`")
     for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current "
@@ -1463,6 +1708,11 @@ def build_parser():
 def resolve_defaults(args):
     """--root, --config and --issue the command line left out, by the rules of `_cli`."""
     main = _cli.main_worktree()
+    if args.operation == 'merge':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
+        args.issue = str(_cli.issue_number(args.issue, _cli.current_tree(), args.root))
+        return args
     if args.operation in ('suite', 'suite-gate'):
         args.root = str(_cli.tree_path(args.root))
         args.config = _cli.config_path(args.config, main)
@@ -1489,7 +1739,8 @@ def main(argv=None):
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
                      getattr(args, 'release', False), getattr(args, 'timeout_seconds', None),
-                     getattr(args, 'head', None), getattr(args, 'source', None))
+                     getattr(args, 'head', None), getattr(args, 'source', None),
+                     getattr(args, 'free_test_fix', False), getattr(args, 'dry_run', False), getattr(args, 'toca', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
