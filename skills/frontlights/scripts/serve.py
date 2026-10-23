@@ -94,7 +94,7 @@ the same way but without `build`: the process itself did not fail. Git runs from
 without prompts, with a deadline; the refresh never pushes, rebases or forces a merge, and writes no branch but
 `preview.branch` (the local main and the issue branches never move). The preview branch is never pushed.
 
-Window (issue 8): `window open|attach|hold|shot|close` is the visible Chrome window of the watched run, with
+Window (issue 8): `window open|attach|hold|shot|close|brief` is the visible Chrome window of the watched run, with
 its own parser and help (`serve.py window --help`, the code in `_window.py`).
 
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and

@@ -17,6 +17,9 @@
   shot    `--pass antes|depois --criterion S<n>` (or `--name <label>` for the screens of the artifact): one print in
           the folder `progress_report.py evidence-dir` gives (the sprint folder), `antes-<cover>-S<n>.png`.
   close   stops only the Chrome this helper started (same pid and start time) and removes its profile.
+  brief   `--pass antes|depois --criteria S1,S2`: fills the placeholders of `references/browser-conductor.md` (the
+          window, the strip, the criteria, the folders, the commands) and writes it as `brief-<pass>.md` beside the
+          record; prints its path, so whoever conducts reads it there.
 
 Before the issue has a number (a grilling that starts from a request), leave `--issue` out: the window record and the
 prints go to `.frontlights/evidencias-pendentes/` (`antes-pendente-<label>.png`), and the first window command with
@@ -55,7 +58,7 @@ STRIP_MAX = 100
 CRITERION = re.compile(r'S[1-9][0-9]?')
 LABEL = re.compile(r'[a-z0-9][a-z0-9-]{0,39}')
 PASSES = ('antes', 'depois')
-OPERATIONS = ('open', 'attach', 'hold', 'shot', 'close')
+OPERATIONS = ('open', 'attach', 'hold', 'shot', 'close', 'brief')
 PLAYWRIGHT_PACKAGES = ('playwright', 'playwright-core', os.path.join('@playwright', 'test'))
 CHROME_CANDIDATES_NT = (
     ('PROGRAMFILES', 'Google', 'Chrome', 'Application', 'chrome.exe'),
@@ -507,7 +510,56 @@ def run(args, root, tree, config_file):
         return op_hold(root, issue, args.minutes)
     if args.window_op == 'shot':
         return op_shot(root, issue, args.pass_, args.criterion, args.name, args.cover)
+    if args.window_op == 'brief':
+        return op_brief(config_file, root, issue, args.pass_, args.criteria, args.strip, args.base_url, args.account)
     return op_close(root, issue)
+
+
+ENDINGS = {
+    'antes': ('The ANTES window stays open while the slices are worked; its holder has no time limit. After the last '
+              'ANTES evidence of every criterion, close it with `window close`; a window closed before that (by the '
+              'user, a crash or the end of a session) reopens on the base with `window attach`, with no question, when '
+              'the next capture is due. Tell the session which criteria still lack their ANTES, so it stops the ANTES '
+              'server once none is due.'),
+    'depois': ('After the last step leave the window open: the holder closes it after about 5 minutes, or the user '
+               'closes it sooner. Do not return your report before the holder exits; its exit is what wakes the '
+               'session waiting for you.'),
+}
+
+
+def op_brief(config_file, root, issue, pass_, criteria, strip, base_url, account):
+    """Fill references/browser-conductor.md for one pass and write it beside the record; print its path."""
+    require(pass_ in PASSES, 'window brief precisa de --pass antes ou --pass depois.', category=USAGE)
+    names = [name.strip() for name in (criteria or '').split(',') if name.strip()]
+    require(names and all(CRITERION.fullmatch(name) for name in names),
+            'window brief precisa de --criteria com as caixas da passada, como S1,S2,S3.', category=USAGE)
+    config = read_config(config_file)
+    block = config.get('browserTest') if isinstance(config.get('browserTest'), dict) else {}
+    state = read_state(root, issue) or {}
+    strip = check_strip(strip or state.get('strip') or ('ANTES: origin/main' if pass_ == 'antes' else ''))
+    base_url = local_base_url(base_url or state.get('baseUrl') or block.get('baseUrl'))
+    live = ours_alive(state) and cdp_alive(state.get('cdpUrl', ''))
+    folder = evidence_dir(root, issue)
+    record = issue_folder(root, issue) / 'result.json' if issue else Path(root) / PENDING / 'result.json'
+    values = {
+        'PASS_NAME': pass_.upper(), 'PASS': pass_, 'ISSUE': str(issue) if issue else '(sem número: omita --issue)',
+        'STRIP': strip, 'BASE_URL': base_url, 'ACCOUNT': f'conta {account}', 'ACCOUNT_NUMBER': str(account),
+        'CRITERIA': ', '.join(names), 'EVIDENCE_DIR': folder, 'RECORD': str(record),
+        'WINDOW': (f'open, cdpUrl {state["cdpUrl"]}' if live else 'not open: step 1 opens it'),
+        'SCRIPTS': str(HERE), 'HOLD': 'none' if pass_ == 'antes' else '5',
+        'PLAYWRIGHT': state.get('playwright') or 'the one `window open` reports in `playwright`',
+        'ENDING': ENDINGS[pass_],
+    }
+    text = (HERE.parent / 'references' / 'browser-conductor.md').read_text(encoding='utf-8')
+    for key, value in values.items():
+        text = text.replace('{{' + key + '}}', value)
+    left = sorted(set(re.findall(r'\{\{([A-Z_]+)\}\}', text)))
+    require(not left, f'O brief ficou com marcadores sem valor: {", ".join(left)}.')
+    target = (issue_folder(root, issue) if issue else Path(root) / PENDING) / f'brief-{pass_}.md'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(serve.protect(text), encoding='utf-8')
+    return {'ok': True, 'brief': str(target), 'pass': pass_, 'criteria': names, 'window': 'aberta' if live else 'fechada',
+            'message': f'Despache quem conduz com "leia {target} e siga"; o texto não precisa entrar no seu contexto.'}
 
 
 def minutes_value(text):
@@ -534,10 +586,11 @@ def parser():
     p.add_argument('--base-url', help='open: endereço local servido (padrão: browserTest.baseUrl)')
     p.add_argument('--account', type=int, choices=(1, 2), default=1, help='open: conta de browserTest.users')
     p.add_argument('--minutes', type=minutes_value, default=5, help='hold: 5 (DEPOIS) ou none (ANTES, teste livre)')
-    p.add_argument('--pass', dest='pass_', choices=PASSES, help='shot: antes ou depois')
+    p.add_argument('--pass', dest='pass_', choices=PASSES, help='shot e brief: antes ou depois')
     p.add_argument('--criterion', help='shot: S<n>, o critério cujo Fluxo a passada percorre')
     p.add_argument('--name', help='shot: rótulo de uma tela do artefato (no grilling), em vez de --criterion')
     p.add_argument('--cover', type=int, help='shot: a issue de topo da família (padrão: --issue)')
+    p.add_argument('--criteria', help='brief: as caixas da passada, como S1,S2,S3')
     return _cli.output_flags(p)
 
 

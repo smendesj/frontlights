@@ -268,7 +268,7 @@ rodou: no teste assistido, quem diz se ela ainda vale é o `browser-gate`; os re
 antigos depois de qualquer commit.
 
 Três comandos gravam o registro, e nenhum julga: passou ou falhou é da sessão e do usuário olhando a tela. `serve.py
-window open|attach|hold|shot|close` abre a janela, a segura e tira os prints (`shot` grava o `print` do critério);
+window open|attach|hold|shot|close|brief` abre a janela, a segura, tira os prints e preenche o brief de quem conduz (`shot` grava o `print` do critério);
 `frontlights.py browser-gate ... --answer "<literal>"` grava a resposta do usuário na mesma chamada do gate
 (`situacao` pela opção que o literal nomeia, `lote.roots` desta rodada do gate, `pergunta.resposta` literal, e
 `aprovacao` quando a opção é `aprovado`, `prosseguir` ou `alteracao`); `frontlights.py browser-gate record --pass

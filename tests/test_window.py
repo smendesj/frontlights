@@ -324,6 +324,50 @@ class HoldTests(WindowCase):
         self.assertLess(time.monotonic() - started, 30)
 
 
+class BriefTests(WindowCase):
+    """Issue 8, S3: `window brief` preenche references/browser-conductor.md; o coordenador não o lê."""
+
+    REFERENCE = ROOT / 'skills' / 'frontlights' / 'references' / 'browser-conductor.md'
+
+    def test_every_placeholder_is_filled_and_the_brief_is_written_beside_the_record(self):
+        _, opened = self.window('open', '--issue', '12', '--strip', 'DEPOIS: branch PREFIX/issue-12')
+        code, out = self.window('brief', '--issue', '12', '--pass', 'depois', '--criteria', 'S1,S2')
+        self.assertEqual(code, 0, out)
+        brief = Path(out['brief'])
+        self.assertEqual(brief, self.root / '.frontlights/issues/12/browser/brief-depois.md')
+        text = brief.read_text(encoding='utf-8')
+        self.assertNotIn('{{', text)
+        self.assertIn('DEPOIS: branch PREFIX/issue-12', text)
+        self.assertIn('S1, S2', text)
+        self.assertIn(opened['cdpUrl'], text)
+        self.assertIn('--minutes 5', text)
+        self.assertIn('Do not return your report before the holder exits', text)
+        self.assertNotIn('senha-ficticia', text)
+        self.assertEqual(out['window'], 'aberta')
+
+    def test_the_antes_brief_holds_without_a_time_limit_and_works_before_the_window_opens(self):
+        code, out = self.window('brief', '--issue', '12', '--pass', 'antes', '--criteria', 'S1')
+        self.assertEqual(code, 0, out)
+        text = Path(out['brief']).read_text(encoding='utf-8')
+        self.assertIn('--minutes none', text)
+        self.assertIn('ANTES: origin/main', text)
+        self.assertIn('not open: step 1 opens it', text)
+        self.assertEqual(out['window'], 'fechada')
+
+    def test_criteria_are_required(self):
+        code, out = self.window('brief', '--issue', '12', '--pass', 'antes')
+        self.assertEqual((code, out['category']), (1, 'uso'))
+
+    def test_the_reference_is_english_with_the_portuguese_anchor_and_no_verdict(self):
+        text = ' '.join(self.REFERENCE.read_text(encoding='utf-8').split())
+        self.assertIn('**Portuguese.** Everything the user reads', text)
+        self.assertIn('You never decide whether the pass passed', text)
+        self.assertIn("Chrome driven by Playwright, visible, disposable profile, never Claude's built-in browser nor "
+                      'Claude in Chrome', text)
+        self.assertIn('Closing the window or the 5 minutes ending is never an answer', text)
+        self.assertLessEqual(len(text.split()), 990)
+
+
 class PlaywrightResolutionTests(unittest.TestCase):
     """The order: browserTest.playwright, PLAYWRIGHT_PATH, node_modules, the npx cache; nothing without Node."""
 
