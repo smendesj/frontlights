@@ -1,34 +1,20 @@
-# Handoff — <canonical issue URL>
+# Passagem da issue #<n>
 
-- Approved acceptance criteria and GitHub fetched-at timestamp:
-- Authorization reference, expiration, concurrency and permitted operations:
-- Monitoring arrangement, confirmation and phone-connection evidence:
-- Repository path, branch, base and HEAD:
-- Merge na main local (a branch da issue criada no GitHub por `gh issue develop` e enviada a cada fatia mesclada; a main local trazida para a branch local de integração `<prefixo>issue-<n>-integra`, nunca para a branch da issue; o portão, o `browser-gate` respondido ou `not_needed`, com a evidência; os testes e a revisão só quando rodaram; a saída do `authorize` para `merge_into_local_main`; o commit do merge na main local):
-- Teste livre na main local (numa issue com tela: a janela aberta sem pergunta depois do merge na main local e do bundle, o `serve start` na worktree principal, o horário em que a janela fechada acordou a sessão, o `serve stop`; "pulado" quando o usuário fechou a janela logo que ela abriu; sem tela, no terminal: os comandos dados e a resposta literal da pergunta de fim do teste, com o horário do "Sim, terminei"; cada correção pedida, o commit dela e o merge de novo na main local; o lote `.frontlights/issues/<n>/teste-livre-cas.md` com o carimbo, a resposta literal da aprovação e a escrita só por acréscimo no corpo da issue, ou "sem correções"; só depois dele vem a oferta da release):
-- Repository map and approved decisions:
-- Files changed / diff hash / files hash:
-- Slice em andamento (id da caixa, também em `checkpoint --slice`, com a worktree e a branch dela) e slices já marcadas com evidência (id, commit, worktree e comandos de cada uma):
+Escrita em `.frontlights/issues/<n>/handoff.md` da worktree principal a cada fronteira de janela, antes de
+`frontlights.py checkpoint`. Só ponteiros: o que já está na issue, num commit ou num registro vai pelo caminho. Segredos mascarados. O GitHub vence esta passagem.
 
-| Command (actual argv and cwd) | Phase | Exit code / measured result | Evidence path |
-| --- | --- | --- | --- |
-| | red / green / broader / typecheck | | |
-
-- TDD exception, if any, and rationale ("só com teste assistido" when the user asked for it: no test written or run):
-- Independent review, only when the user asked for one: evidence tied to exact HEAD/diff, the `review-gate` result (current or stale) for it, and each round (its HEAD and its counts `sérios/médios/baixos`):
-- Roteiros rodados sem tela (o `browser-gate` em `not_needed`, ou a caixa com persona `sem tela`): uma linha por caixa, com o arquivo `.frontlights/issues/<n>/walkthroughs/S<k>.md`; caixa sem arquivo segura o merge na main local:
-
-| Caixa | Antes | Depois | Arquivo |
-| --- | --- | --- | --- |
-| | | | |
-
-- Teste assistido da issue (o `browser-gate`: status, `situacao`, as `roots` e o caminho do `result.json`). Fatias que mudam a tela e ainda estão no ciclo (ou ainda não começaram): liste aqui, e nada é perguntado. Só quando a pergunta está devida (a última fatia de tela fechou o ciclo e não há resposta, ou foi "Ainda não") ela vai em `checkpoint --pending teste_assistido`, e a próxima sessão começa por ela:
-- Achados sem correção e destino de cada um (critério de aceitação novo na issue de origem ou issue de topo, nunca sub-issue nova, com o número e o texto escrito; texto no PR nunca é destino; só ficam sem destino o ruído que não é defeito, com a evidência, e o que o usuário descartou, com a resposta literal e "descartado pelo usuário"):
-- Release (a saída do `release-plan`: issues acumuladas e branch de release; a suíte inteira na ponta da main local só quando o usuário a pediu, com o comando, a contagem e a saída; a resposta literal à oferta; Aguardando o merge da PR única, com as issues, a branch de cabeça, a base aprovada e desde quando, ou "não aguardar" com a resposta literal do usuário; o `merge-status` e o `git pull --ff-only` depois do merge):
-- Fechamento e limpeza (a lista aprovada do fechamento e a resposta literal; da limpeza, que roda antes e sem pergunta, o plano, os comandos rodados e a resposta de cada candidato com `ask`; os comandos rodados e o resultado de `closeout.py verify`, `tick-check` e `cleanup.py verify`):
-- Session identity, accumulated token measurement and next-step reserve:
-- Open risks/blockers and exact pending user question:
-- Next concrete step:
-
-Resume in a fresh context: reread the current GitHub issue, this file, authorization
-and actual working diff. Compare machine checkpoint; surface drift before acting.
+- Issue: <URL>
+- Charter: `.frontlights/authorization.json` (validade, operações, `branch_prefix`)
+- Checkpoints: `.frontlights/issues/<n>/checkpoint*.json`; a janela nova roda `frontlights.py resume --issue <n>`
+- Branch, worktree e HEAD: <branch da issue>, <pasta>, <sha curto>
+- Janela ANTES: `.frontlights/issues/<n>/browser/window.json` aberta (`serve.py window attach`) ou "fechada"
+- Plano resumido: uma linha por slice (S<k>, entrega, estado)
+- Slice em andamento: S<k> (o `--slice` do checkpoint), a worktree e a branch dela
+- Slices fechadas: S<k>, commit, evidência (`browser-gate`, o roteiro sem tela `.frontlights/issues/<n>/walkthroughs/S<k>.md`; `review-gate` só com revisão, cada rodada com o HEAD e `sérios/médios/baixos`)
+- Merge na main local (`merge-local-main-<data-hora>.json`, com o `authorize` de `merge_into_local_main` e o bundle) ou "ainda não"
+- Teste livre na main local: janela fechada ou pulado, `serve stop`; sem tela, no terminal: os comandos dados e a resposta literal; o lote `.frontlights/issues/<n>/teste-livre-cas.md` ou "sem correções"
+- Release: `release/pending.json` ou `release/current.json`; Aguardando o merge da PR #<n>, ou "não aguardar" com a resposta literal do usuário
+- Fechamento e limpeza: `.frontlights/closeout-<data>.md` e `.frontlights/cleanup-<data>.json`
+- Achados sem correção e destino de cada um: critério novo da issue de origem ou issue de topo, com o número; "descartado pelo usuário" com a resposta literal
+- Pergunta pendente e resposta literal: <a pergunta exata, ou a resposta do usuário palavra por palavra>
+- Próximo passo: <o mesmo `--next-step` do checkpoint>

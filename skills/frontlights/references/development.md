@@ -200,7 +200,11 @@ is open the issue is not in the `closes` of `release-plan`, so the PR cites it w
 and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
-watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Renew near 100k; stop before 150k.
+watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Thresholds: `docs/protocol.md`, "Contexto e conclusão".
+
+Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home;
+while a watched run is due and unanswered, pass `--pending teste_assistido`. If the host cannot enforce renewal,
+explicitly report that hard-cap AFK acceptance is unproven.
 
 The session may tick an acceptance criterion in the issue body only with evidence for it, because the closeout trusts the ticks; a
 criterion born from a finding is ticked the same way. Closing an issue is never part of this: it has its own approval.

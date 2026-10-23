@@ -587,13 +587,62 @@ def publish_order(plan):
     return order
 
 
+# The thresholds of a window (docs/protocol.md, "Contexto e conclusão", their only home in the text).
+CONTEXT_HANDOFF, CONTEXT_STOP, CONTEXT_CUT = 100000, 150000, 200000
+CONTEXT_EVERY = 50        # turns between two `context --used` reports
+HOST_BASE_LIMIT = 80000   # first-turn context above which the host's connectors are named
+
+
+def next_report(turn):
+    """The turn of the next `context --used` report: the next multiple of `CONTEXT_EVERY`."""
+    require(type(turn) is int and turn >= 0, 'turn is a whole number of turns')
+    return (turn // CONTEXT_EVERY + 1) * CONTEXT_EVERY
+
+
+def host_base(tokens, connectors, project=()):
+    """The host-base warning of `update-check` and `open`: above 80k on the first turn, the connectors of the host
+    that are not the project's (`connectors` of `.frontlights/config.json`). None when nothing was measured."""
+    if tokens is None:
+        return None
+    require(type(tokens) is int and tokens >= 0, 'base is the context of the first turn, in tokens')
+    own = {str(c).strip().lower() for c in project or () if str(c).strip()}
+    names = []
+    for name in connectors or ():
+        name = str(name).strip()
+        if name and name.lower() not in own and name not in names:
+            names.append(name)
+    over = tokens > HOST_BASE_LIMIT
+    result = {'tokens': tokens, 'limit': HOST_BASE_LIMIT, 'over': over, 'notProject': names if over else []}
+    if over:
+        listed = ', '.join(names) if names else 'nenhum informado'
+        result['message'] = (f'A base do host abre com {round(tokens / 1000)} mil tokens, acima de 80 mil, e pesa em '
+                             f'todo turno. Conectores que não são deste projeto: {listed}. Desligá-los nesta sessão '
+                             'baixa esse custo.')
+    return result
+
+
+def project_connectors(config_path):
+    """`connectors` of the config (names of the host connectors the project uses); [] without config or key."""
+    if not config_path:
+        return []
+    try:
+        names = load(config_path).get('connectors')
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
+
+
 def context_action(used, reserve):
+    """`continue` below 100k; `handoff` (close at the next safe point), `stop` (no new step) and `cut` (the hard
+    cut: end the window now) from 100k, 150k and 200k, the reserve included; unknown usage is `stop`."""
     if used is None:
         return 'stop'
     require(type(used) is int and used >= 0 and number(reserve), 'invalid context accounting')
-    if used + reserve >= 150000:
+    if used + reserve >= CONTEXT_CUT:
+        return 'cut'
+    if used + reserve >= CONTEXT_STOP:
         return 'stop'
-    if used + reserve >= 100000:
+    if used + reserve >= CONTEXT_HANDOFF:
         return 'handoff'
     return 'continue'
 
@@ -804,7 +853,7 @@ def checkpoint(root, issue, handoff, next_step, pending=(), slice_id=None):
         require(isinstance(slice_id, str) and SLICE_ID_RULE.fullmatch(slice_id),
                 'slice is a short label without spaces, such as S2')
     return {'version': 1, 'created_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-            'root': str(root), 'issue': issue, 'git': git_evidence(root),
+            'root': str(root), 'issue': issue, 'git': git_evidence(root), 'handoff': str(handoff),
             'handoff_sha256': hashlib.sha256(handoff.read_bytes()).hexdigest(),
             'next_step': next_step, 'pending': pending_names(pending), 'slice': slice_id}
 
@@ -821,11 +870,16 @@ def resume(root, saved, current_issue, handoff):
     changed = drift(saved['issue'], current_issue)
     git_changed = [k for k in ('head', 'branch', 'diff_sha256', 'files_sha256') if saved['git'].get(k) != live.get(k)]
     handoff_changed = hashlib.sha256(Path(handoff).read_bytes()).hexdigest() != saved['handoff_sha256']
-    return {'state': 'reconcile' if changed or git_changed or handoff_changed else 'unchanged',
-            'issue_drift': changed, 'git_drift': git_changed, 'handoff_changed': handoff_changed,
+    state = 'reconcile' if changed or git_changed or handoff_changed else 'unchanged'
+    return {'state': state, 'issue_drift': changed, 'git_drift': git_changed, 'handoff_changed': handoff_changed,
             'pending': pending_names(saved.get('pending')), 'next_step': saved['next_step'],
             'slice': saved.get('slice'),
-            'required': 'Read current GitHub issue, handoff and diff before continuing.'}
+            'required': 'Read current GitHub issue, handoff and diff before continuing.',
+            'rule': RESUME_RULE}
+
+
+RESUME_RULE = ('O GitHub vence o handoff: numa divergência, releia a issue, diga o que mudou e siga pelo que o GitHub '
+               'diz; o handoff e o checkpoint são cópias de referência.')
 
 
 def issue_snapshot(value, tree, main, gh=None):
@@ -856,10 +910,22 @@ def checkpoint_file(tree, number, slice_id=None):
     return Path(tree) / '.frontlights' / 'issues' / str(number) / name
 
 
+def handoff_file(main, number):
+    """The handoff of a window boundary: `<main worktree>/.frontlights/issues/<n>/handoff.md`, where the next window,
+    opened at the project root, finds it."""
+    return Path(main) / '.frontlights' / 'issues' / str(number) / 'handoff.md'
+
+
 def checkpoint_cli(issue, tree, handoff, next_step, pending=(), slice_id=None, gh=None, main=None):
-    """`checkpoint`: by issue number the snapshot is read and the checkpoint is also saved (`saved` names it)."""
+    """`checkpoint`: by issue number the snapshot is read and the checkpoint is also saved (`saved` names it);
+    `--handoff` defaults to the handoff of the issue in the main worktree (`handoff_file`)."""
     main = main or str(_cli.main_worktree(tree))
     snapshot, number = issue_snapshot(issue, tree, main, gh)
+    if handoff is None:
+        require(number is not None, 'checkpoint com --issue <arquivo> precisa de --handoff <arquivo>')
+        handoff = handoff_file(main, number)
+        require(handoff.is_file(), f'sem handoff em {handoff.as_posix()}: escreva-o por templates/handoff.md '
+                                   'antes do checkpoint, ou passe --handoff <arquivo>')
     record = checkpoint(tree, snapshot, handoff, next_step, pending, slice_id)
     if number is None:
         return record
@@ -871,15 +937,80 @@ def checkpoint_cli(issue, tree, handoff, next_step, pending=(), slice_id=None, g
     return {**record, 'saved': str(path)}
 
 
+def checkpoint_candidates(tree, main, number, slice_id=None):
+    """Where `resume --issue <n>` looks for the checkpoint: the worktree it runs in, the main worktree (the next
+    window opens at the project root) and every worktree the charter gives to the issue."""
+    folders = [Path(tree), Path(main)]
+    charter = _cli.read_charter(main) or {}
+    for entry in charter.get('worktrees') or []:
+        if isinstance(entry, dict) and entry.get('issue') == number and isinstance(entry.get('path'), str):
+            folders.append(Path(entry['path']))
+    seen, found = set(), []
+    for folder in folders:
+        path = checkpoint_file(folder, number, slice_id)
+        key = os.path.normcase(str(path.resolve())) if path.is_file() else None
+        if key and key not in seen:
+            seen.add(key)
+            found.append(path)
+    return found
+
+
+def latest_checkpoint(paths):
+    """The most recent of the checkpoints found (by `created_at`); a file that does not parse is skipped."""
+    best = None
+    for path in paths:
+        try:
+            record = load(path)
+        except (OSError, ValueError):
+            continue
+        if isinstance(record, dict) and (best is None or str(record.get('created_at')) > str(best[1].get('created_at'))):
+            best = (path, record)
+    return best
+
+
+def window_hint(main, number):
+    """The ANTES window crosses the boundary: with `browser/window.json` the next window runs `window attach`."""
+    path = Path(main) / '.frontlights' / 'issues' / str(number) / 'browser' / 'window.json'
+    if not path.is_file():
+        return None
+    return {'record': str(path), 'command': f'serve.py window attach --issue {number}',
+            'message': 'A janela ANTES ficou aberta: rode `serve.py window attach` antes de usá-la; se ela morreu, '
+                       'o attach reabre na mesma base e faixa, sem pergunta.'}
+
+
 def resume_cli(issue, tree, handoff, saved, gh=None, main=None, slice_id=None):
-    """`resume`: by issue number the snapshot is read and `--checkpoint` defaults to the file `checkpoint` saved."""
+    """`resume`: by issue number the snapshot is read, the checkpoint is found alone (`checkpoint_candidates`, the
+    latest wins) and the handoff is the one the checkpoint recorded (else `handoff_file`). It prints the next step,
+    the slice, the pending obligations and the drift; GitHub wins over the handoff (`rule`)."""
     main = main or str(_cli.main_worktree(tree))
     snapshot, number = issue_snapshot(issue, tree, main, gh)
+    root = tree
     if saved is None:
         require(number is not None, 'resume com --issue <arquivo> precisa de --checkpoint <arquivo>')
-        saved = checkpoint_file(tree, number, slice_id)
-        require(saved.is_file(), f'sem checkpoint em {saved.as_posix()}: passe --checkpoint <arquivo>')
-    return resume(tree, load(saved), snapshot, handoff)
+        best = latest_checkpoint(checkpoint_candidates(tree, main, number, slice_id))
+        expected = checkpoint_file(tree, number, slice_id).as_posix()
+        require(best is not None, f'sem checkpoint da issue #{number} ({expected}, na worktree principal ou nas '
+                                  'worktrees do charter): passe --checkpoint <arquivo>')
+        saved, record = best
+        root = record.get('root') or tree
+        require(Path(root).is_dir(), f'a worktree do checkpoint não existe mais: {root}')
+    else:
+        record = load(saved)
+    if handoff is None:
+        recorded = record.get('handoff')
+        if recorded and Path(recorded).is_file():
+            handoff = Path(recorded)
+        else:
+            require(number is not None, 'sem handoff: passe --handoff <arquivo>')
+            handoff = handoff_file(main, number)
+            require(handoff.is_file(), f'sem handoff em {handoff.as_posix()}: passe --handoff <arquivo>')
+    result = resume(root, record, snapshot, handoff)
+    result.update({'checkpoint': str(saved), 'handoff': str(handoff), 'worktree': str(root)})
+    if number is not None:
+        window = window_hint(main, number)
+        if window:
+            result['window'] = window
+    return result
 
 
 ROUND_SUFFIX = re.compile(r'-r([1-9][0-9]{0,3})$')
@@ -2777,6 +2908,13 @@ def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
 
+def host_flags(p):
+    p.add_argument('--base', type=int, help='context of the first turn, in tokens; above 80k the host connectors '
+                                            'that are not the project\'s are named (hostBase)')
+    p.add_argument('--connector', action='append', default=[],
+                   help='a connector (MCP server) of the host in this session; repeatable')
+
+
 def build_parser():
     parser = _cli.JsonParser(prog='frontlights.py', description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -2794,6 +2932,7 @@ def build_parser():
     p.add_argument('--used', type=int)
     p.add_argument('--reserve', type=int, required=True)
     p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
+    p.add_argument('--turn', type=int, help='the turn of this report; prints next_report_turn (every 50 turns)')
     p = sub.add_parser('inspect')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
@@ -2813,6 +2952,7 @@ def build_parser():
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--no-fetch', action='store_true', dest='no_fetch', help='skip git fetch --prune origin')
+    host_flags(p)
     p = sub.add_parser('evidence')
     p.add_argument('--root', help='default: the worktree of the current directory')
     p = sub.add_parser('review-gate')
@@ -2829,7 +2969,8 @@ def build_parser():
     p.add_argument('--record', help='the batch result.json, which may not exist yet')
     p.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
                    help='the branch of a stacked issue and the branch its PR targets (its base in the stacking authorization); repeatable')
-    sub.add_parser('update-check')
+    p = sub.add_parser('update-check')
+    host_flags(p)
     p = sub.add_parser('publish-order')
     p.add_argument('--plan', required=True, help='the plan; prints its issue ids blockers first, for --blocked-by')
     for name in ('checkpoint', 'resume'):
@@ -2837,13 +2978,16 @@ def build_parser():
         p.add_argument('--root', help='default: the worktree of the current directory')
         p.add_argument('--issue', help='the issue number, read with gh (default: the issue of the charter entry of '
                                        'the worktree); or a saved gh api issue JSON file, the form of before')
-        p.add_argument('--handoff', required=True)
+        p.add_argument('--handoff', help='default, with an issue number: .frontlights/issues/<n>/handoff.md of the '
+                                         'main worktree (resume: the handoff the checkpoint recorded)')
         p.add_argument('--slice', help='the slice (acceptance-criteria box) in progress, e.g. S2')
         if name == 'checkpoint':
-            p.add_argument('--next-step', required=True)
+            p.add_argument('--next-step', required=True,
+                           help='"<stage, step>", the step the next window starts with (each window boundary)')
             p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
         else:
-            p.add_argument('--checkpoint', help='default, with an issue number: the file checkpoint saved')
+            p.add_argument('--checkpoint', help='default, with an issue number: the latest checkpoint of the issue in '
+                                                'this worktree, the main worktree or a worktree of the charter')
     p = sub.add_parser('archive', help='close a round of the homologation of an issue: result.json and '
                                        'merge-local-main*.json get the suffix -r<k>')
     p.add_argument('--root', help='default: the main worktree of the current directory')
@@ -2989,9 +3133,11 @@ def main():
             result = {'action': context_action(args.used, args.reserve)}
             if args.pending:
                 result['pending'] = pending_names(args.pending)
-                if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop'):
+                if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop', 'cut'):
                     # The watched run must not be the last thing a window pays for: ask it before spending more.
                     result['ask_before_continuing'] = ['teste_assistido']
+            if args.turn is not None:
+                result['next_report_turn'] = next_report(args.turn)
         elif args.command == 'inspect' and args.config is None:
             # No config: the setup is the next step, not a usage error (references/setup.md).
             result = {'ok': True, 'status': 'config_missing',
@@ -3010,6 +3156,9 @@ def main():
             code = result['exitCode']
         elif args.command == 'open':
             result = open_session(args.config, args.root, fetch=not args.no_fetch)
+            warning = host_base(args.base, args.connector, project_connectors(args.config))
+            if warning:
+                result['hostBase'] = warning
         elif args.command == 'evidence':
             result = git_evidence(args.root)
         elif args.command == 'review-gate':
@@ -3022,6 +3171,10 @@ def main():
             result = {'order': publish_order(load(args.plan))}
         elif args.command == 'update-check':
             result = update_check()
+            warning = host_base(args.base, args.connector,
+                                project_connectors(_cli.config_path(None, _cli.main_worktree(), required=False)))
+            if warning:
+                result['hostBase'] = warning
         elif args.command == 'checkpoint':
             result = checkpoint_cli(args.issue, args.root, args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':

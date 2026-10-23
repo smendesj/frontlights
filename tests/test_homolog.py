@@ -232,7 +232,8 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn('só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue', security)
         self.assertNotIn('a main local é trazida para a branch da issue', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         handoff = read('skills', 'frontlights', 'templates', 'handoff.md')
-        self.assertIn('a main local trazida para a branch local de integração', handoff)
+        # redesenho, issue 9: o handoff só aponta; o registro do merge na main local guarda a integração
+        self.assertIn('`merge-local-main-<data-hora>.json`', handoff)
         self.assertNotIn('a main local trazida para a branch da issue;', handoff)
         op = json.loads(read('skills', 'frontlights', 'examples', 'operation-merge-local-main.json'))
         self.assertEqual((op['branch'], op['worktree']), ('claude/issue-1-integra', 'REPLACE_WITH_ABSOLUTE_INTEGRATION_WORKTREE_PATH'))
@@ -548,9 +549,9 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
         self.assertIn('`homolog.py release`', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
-        self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
-        self.assertIn('a suíte inteira na ponta da main local só quando o usuário a pediu',
-                      flat('skills', 'frontlights', 'templates', 'handoff.md'))
+        # redesenho, issue 9: a linha Release do handoff aponta os registros da release
+        self.assertIn('- Release: `release/pending.json` ou `release/current.json`',
+                      read('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('S4: `homolog release-plan` (só leitura)', flat('docs', 'acceptance.md'))
         self.assertIn('# Release from the local main, closing, parent tick and cleanup', read('evals', 'merge-wait-and-cleanup.md'))
 

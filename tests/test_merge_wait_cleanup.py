@@ -131,8 +131,8 @@ class FreeTestHandoffTests(unittest.TestCase):
         resposta literal."""
         line = [line for line in read('skills', 'frontlights', 'templates', 'handoff.md').splitlines()
                 if line.startswith('- Teste livre na main local')][0]
-        for phrase in ('cada correção pedida', 'o commit dela', '`.frontlights/issues/<n>/teste-livre-cas.md`',
-                       'o carimbo', 'a resposta literal', 'a escrita só por acréscimo'):
+        # redesenho, issue 9: o handoff só aponta o lote (o carimbo e a resposta vivem nele)
+        for phrase in ('`.frontlights/issues/<n>/teste-livre-cas.md`', '"sem correções"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, line)
 
@@ -140,8 +140,7 @@ class FreeTestHandoffTests(unittest.TestCase):
         """Issue 69, S5: sem tela, a linha do teste livre registra os comandos dados e a resposta literal."""
         line = [line for line in read('skills', 'frontlights', 'templates', 'handoff.md').splitlines()
                 if line.startswith('- Teste livre na main local')][0]
-        self.assertIn('sem tela, no terminal: os comandos dados e a resposta literal da pergunta de fim do teste',
-                      line)
+        self.assertIn('sem tela, no terminal: os comandos dados e a resposta literal', line)
 
     def test_the_release_is_offered_once_the_free_test_window_is_closed(self):
         self.assertIn('once the window of its free test is closed', ' '.join(read(
@@ -272,9 +271,9 @@ class StageSevenAndTemplatesTests(unittest.TestCase):
 
     def test_the_handoff_template_has_the_wait_and_the_closing_and_cleanup_lines(self):
         text = flat('skills', 'frontlights', 'templates', 'handoff.md')
-        for phrase in ('Release (a saída do `release-plan`', 'Aguardando o merge da PR única', 'ou "não aguardar" com a resposta literal do usuário',
-                       'Fechamento e limpeza (a lista aprovada do fechamento e a resposta literal; da limpeza, que roda antes e sem pergunta',
-                       '`closeout.py verify`, `tick-check` e `cleanup.py verify`'):
+        # redesenho, issue 9: o handoff aponta os registros da release, do fechamento e da limpeza
+        for phrase in ('Release: `release/pending.json`', 'Aguardando o merge da PR', 'ou "não aguardar" com a resposta literal do usuário',
+                       'Fechamento e limpeza: `.frontlights/closeout-<data>.md` e `.frontlights/cleanup-<data>.json`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 

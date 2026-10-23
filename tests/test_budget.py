@@ -19,7 +19,7 @@ SLACK = 1.10
 # contagem de 23/10/2026 (integração do redesenho, issue 3; development.md, tdd.md, worker.md e family.md pela
 # issue 5); só desce
 BUDGET = {
-    'SKILL.md': 1800,
+    'SKILL.md': 1820,  # teto de 2.000 durante o redesenho (test_skill_md); a issue 10 volta à contagem do dia
     'docs/protocol.md': 6289,   # issue 7: "Quadro e publicação" vira registros e ponteiro
     'docs/security.md': 8112,   # issue 7: "Revisão e sobras"
     'references/browser-conductor.md': 821,
@@ -41,7 +41,7 @@ BUDGET = {
     'templates/artifact-page.html': 444,   # redesenho, issue 6
     'templates/discovery.md': 292,
     'templates/grilling-section.html': 244,
-    'templates/handoff.md': 729,
+    'templates/handoff.md': 259,  # redesenho, issue 9: português, só ponteiros
     'templates/issue.md': 775,
     'templates/pr.md': 373,
 }

@@ -456,6 +456,9 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(frontlights.context_action(99000, 1000), 'handoff')
         self.assertEqual(frontlights.context_action(140000, 10000), 'stop')
         self.assertEqual(frontlights.context_action(None, 1000), 'stop')
+        # redesenho, issue 9: o corte duro em 200 mil (docs/protocol.md, "Contexto e conclusão")
+        self.assertEqual(frontlights.context_action(190000, 10000), 'cut')
+        self.assertEqual(frontlights.context_action(189000, 10000), 'stop')
         with self.assertRaises(ValueError):
             frontlights.context_action(-1, 100)
 
@@ -887,6 +890,169 @@ class UpdateCheckTests(unittest.TestCase):
             result = frontlights.update_check(ROOT / 'skills' / 'frontlights')
         self.assertEqual(result['installed'], head[:12])
         self.assertIn(result['status'], ('current', 'update_available', 'unavailable'))
+
+class WindowBoundaryTests(unittest.TestCase):
+    """Redesenho, issue 9, S1: a janela nova abre na raiz do projeto e retoma pela issue. `checkpoint --issue <n>` acha
+    o handoff na worktree principal; `resume --issue <n>` acha o checkpoint mais recente (na worktree da issue, pelo
+    charter) e imprime o próximo passo, a slice, as pendências, o drift e a regra de que o GitHub vence o handoff."""
+
+    SNAPSHOT = {'number': 7, 'title': 'Issue de teste', 'body': 'corpo', 'state': 'open', 'labels': [],
+                'assignees': [], 'updated_at': '2000-01-01T00:00:00Z',
+                'html_url': 'https://github.com/OWNER/REPOSITORY/issues/7'}
+
+    def setUp(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import gitfixture
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        self.main = gitfixture.init(base / 'main')
+        (self.main / 'README.md').write_text('fixture\n', encoding='utf-8')
+        gitfixture.git(self.main, 'add', '-A')
+        gitfixture.git(self.main, 'commit', '-q', '-m', 'base')
+        self.tree = base / 'wt-issue-7'
+        gitfixture.git(self.main, 'worktree', 'add', '-q', '-b', 'sergio/issue-7', str(self.tree))
+        records = self.main / '.frontlights'
+        (records / 'issues' / '7').mkdir(parents=True)
+        (records / 'config.json').write_text(json.dumps({'repository': 'OWNER/REPOSITORY'}), encoding='utf-8')
+        charter = {'issue_ids': [7], 'worktrees': [{'issue': 7, 'path': str(self.tree), 'branch': 'sergio/issue-7'}]}
+        (records / 'authorization.json').write_text(json.dumps(charter), encoding='utf-8')
+        self.handoff = records / 'issues' / '7' / 'handoff.md'
+        self.snapshot = dict(self.SNAPSHOT)
+
+    def gh(self, argv):
+        return self.snapshot
+
+    def test_checkpoint_finds_the_handoff_of_the_issue_in_the_main_worktree(self):
+        with self.assertRaisesRegex(ValueError, 'sem handoff'):
+            frontlights.checkpoint_cli('7', str(self.tree), None, 'etapa 6, S2', gh=self.gh, main=str(self.main))
+        self.handoff.write_text('# Passagem\n', encoding='utf-8')
+        saved = frontlights.checkpoint_cli('7', str(self.tree), None, 'etapa 6, S2', gh=self.gh, main=str(self.main))
+        self.assertTrue(Path(saved['handoff']).samefile(self.handoff))
+        self.assertTrue(Path(saved['saved']).samefile(self.tree / '.frontlights' / 'issues' / '7' / 'checkpoint.json'))
+
+    def test_resume_from_the_project_root_finds_the_checkpoint_of_the_issue_worktree(self):
+        self.handoff.write_text('# Passagem\n', encoding='utf-8')
+        frontlights.checkpoint_cli('7', str(self.tree), None, 'etapa 6, S2: slice merge', ['teste_assistido'], 'S2',
+                                   gh=self.gh, main=str(self.main))
+        # the slice checkpoint is found by --slice; the issue one (none here) by the issue alone
+        resumed = frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main),
+                                         slice_id='S2')
+        self.assertEqual((resumed['state'], resumed['next_step'], resumed['slice'], resumed['pending']),
+                         ('unchanged', 'etapa 6, S2: slice merge', 'S2', ['teste_assistido']))
+        self.assertTrue(Path(resumed['worktree']).samefile(self.tree))
+        self.assertIn('O GitHub vence o handoff', resumed['rule'])
+        self.assertNotIn('window', resumed)
+        self.snapshot = dict(self.SNAPSHOT, body='corpo novo')
+        drifted = frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main),
+                                         slice_id='S2')
+        self.assertEqual((drifted['state'], drifted['issue_drift']), ('reconcile', ['body']))
+
+    def test_the_latest_checkpoint_wins_and_the_antes_window_is_attached(self):
+        self.handoff.write_text('# Passagem\n', encoding='utf-8')
+        frontlights.checkpoint_cli('7', str(self.main), None, 'etapa 5, publicar', gh=self.gh, main=str(self.main))
+        frontlights.checkpoint_cli('7', str(self.tree), None, 'etapa 6, S1', gh=self.gh, main=str(self.main))
+        window = self.main / '.frontlights' / 'issues' / '7' / 'browser' / 'window.json'
+        window.parent.mkdir()
+        window.write_text('{"pid": 1}', encoding='utf-8')
+        resumed = frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main))
+        self.assertEqual(resumed['next_step'], 'etapa 6, S1')
+        self.assertEqual(resumed['window']['command'], 'serve.py window attach --issue 7')
+
+    def test_without_any_checkpoint_resume_names_where_it_looked(self):
+        with self.assertRaisesRegex(ValueError, 'sem checkpoint da issue #7'):
+            frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main))
+
+    def test_the_skill_says_the_boundaries_and_the_resume_sentence(self):
+        rule = skilltext.flat(skilltext.rule('Windows'))
+        for phrase in ('plan published', 'a slice merged into the issue branch, at least every second slice',
+                       'the issue in the local main with its bundle', 'the release PR open',
+                       '`frontlights.py checkpoint --issue <n> --next-step "<stage, step>"`',
+                       '`cwd` the project root, no worktree', 'never asking or stopping for it',
+                       'never the earlier conversation', 'Every 50 turns report `frontlights.py context --used`',
+                       '"Contexto e conclusão"'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, rule)
+        stage1 = skilltext.flat(skilltext.stage(1))
+        self.assertIn('`frontlights.py resume --issue <n>` prints the next step, slice, pending and drift; GitHub '
+                      'wins over the handoff', stage1)
+        protocol = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
+                            .split('## Ponto de retomada')[1].split('\n## ')[0].split())
+        self.assertIn('O GitHub vence o handoff', protocol)
+
+
+class HandoffTemplateTests(unittest.TestCase):
+    """Redesenho, issue 9, S2: o handoff em português, ~250 palavras, só ponteiros; os limiares numa casa só."""
+
+    def test_the_handoff_is_short_portuguese_and_points(self):
+        text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md').read_text(encoding='utf-8')
+        self.assertLessEqual(len(text.split()), 260)
+        flat = ' '.join(text.split())
+        for phrase in ('# Passagem da issue #<n>', 'Só ponteiros', 'O GitHub vence esta passagem', '- Issue:',
+                       '- Charter: `.frontlights/authorization.json`', '- Checkpoints:',
+                       '`frontlights.py resume --issue <n>`', '`.frontlights/issues/<n>/browser/window.json`',
+                       '`serve.py window attach`', '- Plano resumido:', '- Slices fechadas:', '- Release:',
+                       'Achados sem correção e destino de cada um', '- Pergunta pendente e resposta literal:',
+                       '- Próximo passo:'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat)
+        for english in ('Approved acceptance criteria', 'Next concrete step', 'Resume in a fresh context'):
+            with self.subTest(english=english):
+                self.assertNotIn(english, flat)
+
+    def test_the_thresholds_live_in_the_protocol(self):
+        protocol = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
+                            .split('## Contexto e conclusão')[1].split('\n## ')[0].split())
+        for phrase in ('casa única dos limiares', '100 mil, 150 mil e 200 mil', 'a cada 50 turnos', '`cut`',
+                       '`--pending teste_assistido`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, protocol)
+        development = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'development.md')
+                               .read_text(encoding='utf-8').split())
+        self.assertIn('the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home', development)
+
+
+class ContextCadenceAndHostBaseTests(unittest.TestCase):
+    """Redesenho, issue 9, S3: `context --used` a cada 50 turnos (`--turn` diz o próximo), `--pending
+    teste_assistido` mantido e o aviso da base do host acima de 80 mil no `update-check` e no `open`."""
+
+    def run_script(self, *args):
+        done = subprocess.run([sys.executable, str(SUMMARY_SCRIPT), *args], capture_output=True, text=True,
+                              encoding='utf-8', timeout=120)
+        return json.loads(done.stdout)
+
+    def test_the_next_report_is_the_next_multiple_of_fifty(self):
+        self.assertEqual([frontlights.next_report(t) for t in (0, 49, 50, 120)], [50, 50, 100, 150])
+        result = self.run_script('context', '--used', '160000', '--reserve', '5000', '--pending', 'teste_assistido',
+                                 '--turn', '100')
+        self.assertEqual(result, {'action': 'stop', 'pending': ['teste_assistido'],
+                                  'ask_before_continuing': ['teste_assistido'], 'next_report_turn': 150})
+        self.assertNotIn('next_report_turn', self.run_script('context', '--used', '1000', '--reserve', '10'))
+
+    def test_the_host_base_names_the_connectors_that_are_not_the_projects(self):
+        self.assertIsNone(frontlights.host_base(None, ['conector-a']))
+        low = frontlights.host_base(80000, ['conector-a'])
+        self.assertEqual((low['over'], low['notProject']), (False, []))
+        self.assertNotIn('message', low)
+        high = frontlights.host_base(120000, ['conector-a', 'Conector-Projeto', 'conector-a'], ['conector-projeto'])
+        self.assertEqual((high['over'], high['notProject']), (True, ['conector-a']))
+        self.assertIn('120 mil tokens, acima de 80 mil', high['message'])
+        self.assertIn('conector-a', high['message'])
+
+    def test_update_check_and_open_carry_the_warning(self):
+        result = self.run_script('update-check', '--base', '95000', '--connector', 'conector-a')
+        self.assertEqual(result['hostBase']['notProject'], ['conector-a'])
+        self.assertNotIn('hostBase', self.run_script('update-check'))
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'config.json'
+            config.write_text(json.dumps({'repository': None, 'connectors': ['conector-projeto']}), encoding='utf-8')
+            self.assertEqual(frontlights.project_connectors(config), ['conector-projeto'])
+            done = subprocess.run([sys.executable, str(SUMMARY_SCRIPT), 'open', '--config', str(config), '--root',
+                                   folder, '--no-fetch', '--base', '90000', '--connector', 'conector-projeto',
+                                   '--connector', 'conector-b'], capture_output=True, text=True, encoding='utf-8',
+                                  timeout=120)
+        self.assertEqual(json.loads(done.stdout)['hostBase']['notProject'], ['conector-b'], done.stderr)
+
 
 # Economia nos utilitários: `inspect --summary` (por issue só número, título, estado e caixas; a saída
 # padrão não muda) e um `authorize` que lê a operação da entrada padrão e não exige que as outras

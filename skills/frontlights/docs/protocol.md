@@ -406,43 +406,32 @@ houver, não é esperada nem é portão. A regra está em `references/developmen
 
 ## Ponto de retomada e continuação
 
-Escreva o documento de passagem de contexto com `templates/handoff.md` e execute:
+Em cada fronteira de janela (SKILL.md, regra "Windows"), escreva `.frontlights/issues/<n>/handoff.md` na worktree
+principal por `templates/handoff.md` e rode `frontlights.py checkpoint --issue <n> --next-step "<etapa, passo>"`
+(`--slice S<k>` numa worktree de slice, `--pending teste_assistido` com o teste assistido devido). Ele lê a issue
+pelo `gh`, acha o handoff sozinho e grava `checkpoint.json` (`checkpoint-<id>.json` na slice) com HEAD, branch,
+hashes das diferenças e dos arquivos (sem `.frontlights/`, sem conteúdo), a issue, o hash do handoff e o próximo
+passo. Repositório sem commit inicial não tem evidência vinculada a um HEAD.
 
-```powershell
-python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" checkpoint --root <worktree> --issue <issue.json> --handoff <handoff.md> --next-step "Executar o teste de regressão de persistência"
-```
-
-Salve a saída padrão em `checkpoint.json` (na worktree de uma slice, em `checkpoint-<id>.json`, um por
-worktree de slice), com codificação UTF-8. O utilitário inclui
-HEAD, branch, hash das diferenças binárias, hashes dos arquivos versionados e não
-versionados, registro da issue, hash do documento de passagem de contexto, próximo
-passo e horário. Ele exclui `.frontlights/` para evitar hashes que dependam do próprio
-registro. As evidências contêm hashes e nomes de arquivos, não seus conteúdos.
-Revise nomes que possam revelar informações sensíveis antes de publicar. Repositórios
-sem commit inicial não produzem evidência vinculada a um HEAD exato; faça primeiro
-o commit inicial aprovado.
-
-Em uma sessão nova, consulte a issue novamente e execute:
-
-```powershell
-python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" resume --root <worktree> --issue <issue-atual.json> --handoff <handoff.md> --checkpoint <checkpoint.json>
-```
-
-O resultado `reconcile` indica divergências no Git, na issue ou no documento de
-passagem de contexto; relate cada divergência e, ao substituir um registro, diga qual substituiu. Mesmo com
-`unchanged`, é necessário ler a issue, o documento e as alterações atuais. A CLI
-retorna os dados na saída padrão; salvá-los é uma ação local explícita do coordenador.
-Nenhum utilitário grava registros externos ou inicia outra sessão do modelo.
+Na janela nova, `frontlights.py resume --issue <n>` acha o checkpoint mais recente (na worktree, na principal ou
+numa worktree do charter) e o handoff que ele registrou, e imprime `next_step`, `slice`, `pending` e o drift
+(`issue_drift`, `git_drift`, `handoff_changed`); com `browser/window.json`, o `serve.py window attach` da janela
+ANTES. O GitHub vence o handoff: em `reconcile`, releia a issue, diga cada divergência e siga pelo GitHub; mesmo em
+`unchanged`, leia a issue, o handoff e o diff antes de agir. Nenhum utilitário grava registro externo ou abre
+outra sessão do modelo.
 
 ## Contexto e conclusão
 
-Use o consumo acumulado medido da sessão e uma reserva conservadora para o próximo
-passo. O comando `context` retorna `handoff` ao atingir 100 mil tokens com a reserva,
-`stop` ao atingir 150 mil com a reserva e `stop` quando o consumo é desconhecido.
-Ele não mede nem intercepta os tokens do modelo. Se não for possível aplicar medição
-e renovação de sessão, não garanta o teto de 150 mil nem inicie uma fase sem supervisão
-que dependa dele. Crie o contexto novo com os controles suportados pelo ambiente;
-renomear uma sessão compactada não a torna nova.
+Esta seção é a casa única dos limiares de contexto; os outros textos apontam para ela. Some ao consumo acumulado
+medido da sessão uma reserva conservadora para o próximo passo e rode
+`frontlights.py context --used <tokens> --reserve <tokens>` a cada 50 turnos. Os limiares são 100 mil, 150 mil e
+200 mil tokens: abaixo de 100 mil, `continue`; de 100 mil, `handoff` (a passagem e o checkpoint fecham a janela no
+próximo ponto seguro: uma slice fechada, uma pergunta respondida); de 150 mil, `stop` (nenhum passo novo começa:
+passagem e checkpoint agora); de 200 mil, `cut` (o corte duro: a janela termina já). Consumo desconhecido é `stop`.
+Com o teste assistido devido, `--pending teste_assistido` faz `handoff`, `stop` e `cut` responderem também
+`ask_before_continuing`, e a pergunta sai antes de gastar mais. Um fechamento que começa acima de ~300 mil abre em
+janela nova. Com `--turn <n>`, o `context` diz o turno do próximo relato (`next_report_turn`). A base do host conta em todo turno: `update-check` e `open` com `--base <tokens do primeiro turno>` e um `--connector <nome>` por conector da sessão devolvem `hostBase`; acima de 80 mil, `message` nomeia os conectores que não estão em `connectors` do `.frontlights/config.json` (a lista de conectores do projeto) e a sessão a diz numa linha. O `context` confere os números informados, não o medidor do host; se o host não renova a sessão, não
+garanta o teto nem inicie fase sem supervisão que dependa dele. Renomear uma sessão compactada não a torna nova.
 
 A conclusão exige cobertura dos critérios de aceitação, alterações completas e
 atuais, o teste assistido respondido (ou dispensável, sem mudança na tela), verificação de tipos quando aplicável,
