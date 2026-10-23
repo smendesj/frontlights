@@ -475,3 +475,12 @@ Refutadas pelos números ou por regressão, sem ajuste que as salvasse:
 | `wayfinder.md` | Fora agora: mapa de decisões em tickets para trabalho maior que uma sessão; o Frontlights cobre isso com janelas por fronteira e o teto de 5 slices |
 | `codebase-design.md` | Fora agora: vocabulário de módulos profundos; caberia como leitura opcional do implementer, sem evidência nas 13 sessões |
 | `domain-modeling.md` | Fora agora: GLOSSARY.md e ADR inline não têm casa no fluxo (§10) |
+
+## 11. Adendo de 22/10/2026 (conferência pedida pelo mantenedor)
+
+Conferido contra a skill atual: a janela ANTES do grilling (issue #74), os prints do DEPOIS e do teste livre e o contrato com o RoadS estão cobertos pela proposta (serve.py window/shot, browser-gate --answer, free-test, progress_report.py keep, roads-contract.md dentro da skill). Duas lacunas encontradas, ambas para a issue 8:
+
+- **A janela ANTES atravessa a fronteira de janelas.** Ela abre na janela 1 (grilling) e precisa estar aberta na janela 2 (etapa 6). `serve.py window open` grava `cdpUrl`, `pid` e `profileDir` em `.frontlights/issues/<n>/browser/window.json`; a sessão nova faz `window attach` e, se a janela morreu, reabre na base sem pergunta (o checkout destacado da base continua lá).
+- **Prints antes de a issue ter número.** Num grilling que começa de um pedido, `shot` grava em `.frontlights/evidencias-pendentes/` e `publish-issue` move para a pasta da issue na sprint, como faz com `notes/`.
+
+RoadS: nada obrigatório muda (caixas `S<n>`, `Bloqueada:`, `before` do resumo e `candidates.json` ficam iguais). Opcional, mais tarde: a retro pós-release enviar ao RoadS as lacunas de desenho que viraram critério depois da aprovação.
