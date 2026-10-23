@@ -713,7 +713,7 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': base,
                     'baseSource': 'authorization' if recorded else None, 'issues': [], 'commands': [], 'candidates': [],
                     'excluded': [], 'alreadyClean': 0, 'ask': False,
-                    'message': 'No authorization record lists issue ids: nothing to clean.'}
+                    'message': 'Nenhum registro de autorização lista ids de issue: nada a limpar.'}
         numbers = numbers or [0]   # only named worktrees: no issue of the records takes part
     else:
         require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
@@ -770,10 +770,10 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
               'baseSource': source, 'issues': [n for n in numbers if n], 'commands': [], 'candidates': [], 'excluded': [],
               'alreadyClean': gone, 'ask': False, 'page': page, 'pages': pages}
     if not items and not releases and outputs is None:
-        result['message'] = (f'{gone} recorded worktree(s) of these issues are already gone, with their branches: nothing to clean.'
+        result['message'] = (f'{gone} worktree(s) registrada(s) destas issues já saíram, com as branches: nada a limpar.'
                               if gone else
-                              'No worktree is recorded for these issues in an authorization and none was named: nothing to clean. '
-                              'Name one with --worktree PATH.')
+                              'Nenhuma worktree destas issues está registrada numa autorização e nenhuma foi nomeada: nada '
+                              'a limpar. Nomeie uma com --worktree PASTA.')
         return result
     resolved = []
     for item in items:
@@ -825,19 +825,20 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             result['commands'] += candidate['commands']
     asking = [c for c in result['candidates'] if c['ask']]
     result['ask'] = bool(asking)
-    parts = [f'{len(result["candidates"])} worktree(s) or branch(es) can be removed.' if result['candidates']
-             else 'Nothing can be removed now.']
+    parts = [f'{len(result["candidates"])} worktree(s) ou branch(es) podem ser removidas.' if result['candidates']
+             else 'Nada pode ser removido agora.']
     if result['excluded']:
-        parts.append(f'{len(result["excluded"])} stay (see excluded for the reason of each).')
+        parts.append(f'{len(result["excluded"])} ficam (o motivo de cada uma em excluded).')
     if result['alreadyClean']:
-        parts.append(f'{result["alreadyClean"]} already gone.')
-    parts.append('Nothing was removed. Run `commands` in order, with no question; verify afterwards.')
+        parts.append(f'{result["alreadyClean"]} já saíram.')
+    parts.append('Nada foi removido. Rode `commands` na ordem, sem pergunta, e confira depois.')
     if asking:
-        parts.append(f'{len(asking)} candidate(s) hold ignored files besides dependency or build folders, or saved '
-                     'outputs (`ask`): their commands are not in `commands` and run only after the user said yes.')
+        parts.append(f'{len(asking)} candidata(s) guardam arquivos ignorados além de pastas de dependência ou build, '
+                     'ou saídas salvas (`ask`): os comandos delas não estão em `commands` e só rodam depois do sim do '
+                     'usuário.')
     if pages > 1:
-        parts.append(f'Page {page} of {pages} of worktrees (at most {MAX_ITEMS} each): pass --page for the next one; '
-                     '`run` reads them all.')
+        parts.append(f'Página {page} de {pages} das worktrees (até {MAX_ITEMS} cada): passe --page para a próxima; '
+                     'o `run` lê todas.')
     result['message'] = ' '.join(parts)
     return result
 
@@ -896,8 +897,8 @@ def op_unlink(folder):
         except OSError:
             failed.append(entry.name)
     return {'ok': not failed, 'exitCode': 0 if not failed else 1, 'out': target.as_posix(), 'removed': len(removed),
-            'failed': failed, 'message': f'{len(removed)} saved output(s) removed from {target.as_posix()}.'
-            + (f' {len(failed)} could not be removed.' if failed else '')}
+            'failed': failed, 'message': f'{len(removed)} saída(s) salva(s) removida(s) de {target.as_posix()}.'
+            + (f' {len(failed)} não puderam ser removidas.' if failed else '')}
 
 
 ARCHIVE_TEMP = re.compile(r'^\..+\.frontlights-archive-tmp$')
@@ -1040,10 +1041,10 @@ def op_archive(source, destination):
         raise Refusal('the records could not be copied; nothing was removed, so the worktree keeps them')
     copied = sum(1 for p in target.rglob('*') if p.is_file())
     where = target.as_posix()
-    message = (f'{copied} file(s) of records are in {where}.' if not present else
-               f'{where} already held {len(present)} of these file(s), the same; {copied - len(present)} missing '
-               f'file(s) copied, {copied} in all.' if copied > len(present) else
-               f'{where} already holds these {copied} file(s), the same: the records were already archived; nothing copied.')
+    message = (f'{copied} arquivo(s) de registros estão em {where}.' if not present else
+               f'{where} já tinha {len(present)} destes arquivo(s), iguais; {copied - len(present)} arquivo(s) que '
+               f'faltavam copiado(s), {copied} ao todo.' if copied > len(present) else
+               f'{where} já tem estes {copied} arquivo(s), iguais: os registros já estavam arquivados; nada copiado.')
     return {'ok': True, 'exitCode': 0, 'to': rs.clean(where, 300), 'files': copied,
             'alreadyArchived': len(present), 'message': message}
 
@@ -1084,8 +1085,9 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=(), 
     waiting = [e['name'] for e in entries if not e.get('gone', e.get('copied'))]
     result = {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
               'entries': entries}
-    result['message'] = (f'All {len(entries)} item(s) are done.' if not waiting else
-                         f'{len(waiting)} of {len(entries)} item(s) are not gone or not copied yet: ' + ', '.join(waiting) + '.')
+    result['message'] = (f'Todos os {len(entries)} item(ns) estão feitos.' if not waiting else
+                         f'{len(waiting)} de {len(entries)} item(ns) ainda não saíram ou não foram copiados: '
+                         + ', '.join(waiting) + '.')
     return result
 
 
@@ -1251,18 +1253,18 @@ def op_run(config, root='.', issues=None, base=None, integrations=(), yes=(), gh
               'alreadyClean': sum(plan['alreadyClean'] for plan in plans), 'ask': asked, 'yesUnused': unused,
               'sessionCommands': session, 'verify': verify, 'warnings': warnings}
     result['exitCode'] = 0 if result['ok'] else 1
-    parts = [f'{len(removed)} worktree(s) and {len(deleted)} branch(es) removed.']
+    parts = [f'{len(removed)} worktree(s) e {len(deleted)} branch(es) removida(s).']
     if failed:
-        parts.append(f'{len(failed)} item(s) stopped at a failed command (failed); never retried with force.')
+        parts.append(f'{len(failed)} item(ns) pararam num comando que falhou (failed); nunca repetido com força.')
     if session:
-        parts.append(f'{len(session)} command(s) left for the session, in order (sessionCommands: the push that deletes '
-                     'a released issue branch on origin, then its local delete).')
+        parts.append(f'{len(session)} comando(s) ficam para a sessão, na ordem (sessionCommands: o push que apaga '
+                     'na origin a branch de uma issue lançada, depois a remoção local).')
     if asked:
-        parts.append(f'{len(asked)} candidate(s) wait for their own question (ask); run again with --yes <key> after a yes.')
+        parts.append(f'{len(asked)} candidata(s) esperam a própria pergunta (ask); rode de novo com --yes <chave> depois do sim.')
     if unused:
-        parts.append('--yes named no asking candidate: ' + ', '.join(unused) + '.')
+        parts.append('--yes nomeou o que não é candidata com pergunta: ' + ', '.join(unused) + '.')
     if excluded:
-        parts.append(f'{len(excluded)} stay (excluded).')
+        parts.append(f'{len(excluded)} ficam (excluded).')
     result['message'] = ' '.join(parts)
     try:
         path = evidence_path(main)

@@ -119,14 +119,14 @@ class RegistrationTests(HomeTestCase):
         cleared = pr.run('home', str(self.other), home_clear=True)
         self.assertEqual((cleared['ok'], cleared['homeState']), (True, 'none'))
         self.assertFalse(self.status_from_other()['ask'])
-        self.assertIn('no registration', pr.run('home', str(self.other), home_clear=True)['message'])
+        self.assertIn('Não havia registro', pr.run('home', str(self.other), home_clear=True)['message'])
 
     def test_the_block_losing_its_declaration_is_said_plainly(self):
         self.register()
         self.write_config(progress=None)
         result = self.status_from_other()
         self.assertEqual((result['ask'], result['source']), (False, 'home'))
-        self.assertIn('no longer declares one', result['message'])
+        self.assertIn('não o declara mais', result['message'])
 
 
 class TrustTests(HomeTestCase):
@@ -186,7 +186,7 @@ class TrustTests(HomeTestCase):
         (self.other / '.frontlights' / 'config.json').write_text('{not json', encoding='utf-8')
         result = self.status_from_other()
         self.assertEqual((result['ok'], result['ask'], result['source'], result['homeState']), (True, False, 'project', 'own'))
-        self.assertIn('could not be read', result['message'])
+        self.assertIn('não pôde ser lido', result['message'])
 
     def test_a_lone_surrogate_in_a_record_is_invalid_or_unapproved_not_a_crash(self):
         self.register()

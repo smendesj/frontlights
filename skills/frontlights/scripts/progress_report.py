@@ -397,7 +397,7 @@ def op_home(set_to=None, clear=False):
         if existed:
             path.unlink()
         return {'ok': True, 'exitCode': 0, 'homeState': 'none',
-                'message': 'The registration was removed.' if existed else 'There was no registration.'}
+                'message': 'O registro foi removido.' if existed else 'Não havia registro.'}
     state, home = registered_home()
     result = {'ok': True, 'exitCode': 0, 'homeState': state}
     if home is not None:
@@ -508,15 +508,15 @@ def project_status(root):
         sync = config.get('roadmapSync') if isinstance(config, dict) else None
         block = sync.get('progress') if isinstance(sync, dict) else None
     except (OSError, ValueError):
-        result.update(ok=True, exitCode=0, message='The project config could not be read as JSON; fix it (while the project has '
-                                                  'a config of its own, the registered home is not used).')
+        result.update(ok=True, exitCode=0, message='O config do projeto não pôde ser lido como JSON; corrija-o (enquanto o projeto '
+                                                  'tem config próprio, a casa registrada não é usada).')
         return result
     if not isinstance(block, dict):
-        result.update(ok=True, exitCode=0, message='This project has no roadmapSync.progress block; the progress step is not offered.')
+        result.update(ok=True, exitCode=0, message='Este projeto não tem o bloco roadmapSync.progress; a etapa de resumo não é oferecida.')
         return result
     result.update(configured=True, enabled=block.get('enabled') is True)
     if not result['enabled']:
-        result.update(ok=True, exitCode=0, message='The roadmapSync.progress block is disabled; the progress step is not offered.')
+        result.update(ok=True, exitCode=0, message='O bloco roadmapSync.progress está desligado; a etapa de resumo não é oferecida.')
         return result
     result['ask'] = True
     try:
@@ -536,7 +536,7 @@ def project_status(root):
                   scrumRoot=progress.scrum_root, weekFolderPattern=progress.week_pattern)
     result['ready'] = secret == 'present' and approval == 'approved'
     result.update(ok=True, exitCode=0,
-                  message='The progress step is ready.' if result['ready'] else 'The progress step is not ready; see the fields above.')
+                  message='A etapa de resumo está pronta.' if result['ready'] else 'A etapa de resumo não está pronta; veja os campos acima.')
     return result
 
 
@@ -555,7 +555,7 @@ def op_status(root):
     if source == 'home':
         result['home'] = {'root': str(Path(target).resolve())}
         if not result['configured']:
-            result['message'] = 'The registered home of the progress block no longer declares one; register it again.'
+            result['message'] = 'A casa registrada do bloco de resumo não o declara mais; registre de novo.'
     elif source is None and home_state in HOME_HINTS:
         result['hint'] = HOME_HINTS[home_state]
     return result
@@ -960,15 +960,15 @@ def op_evidence_dir(root, issue, at=None):
         os.makedirs(folder, exist_ok=True)
         return {'ok': True, 'exitCode': 0, 'inSprint': False, 'sprint': None, 'evidenceDir': folder,
                 'summaryDir': os.path.join(str(main), '.frontlights', 'issues', str(issue), 'browser', 'resumo'),
-                'message': 'This project names no roadmapSync.scrumRoot and weekFolderPattern: the prints stay in '
-                           '.frontlights (the summary ones in the main worktree).'}
+                'message': 'Este projeto não nomeia roadmapSync.scrumRoot e weekFolderPattern: os prints ficam em '
+                           '.frontlights (os do resumo na worktree principal).'}
     scrum_root, pattern, name = layout
     day = instant.astimezone(SAO_PAULO).date()
     monday = day - dt.timedelta(days=day.weekday())
     folder = rs.safe_folder(scrum_root, sprint_relative(pattern, monday, name, issue), create=True)
     return {'ok': True, 'exitCode': 0, 'inSprint': True, 'sprint': monday.isoformat(), 'evidenceDir': folder,
             'summaryDir': os.path.join(folder, 'resumo'),
-            'message': f'Save the prints of the run in {folder} and record it as pastaDosPrints in result.json.'}
+            'message': f'Grave os prints da execução em {folder} e registre a pasta como pastaDosPrints no result.json.'}
 
 
 def op_keep(root, issue, file, caption, slice_, cover=None, head=None, visible=(), new=False):
@@ -1011,7 +1011,7 @@ def op_keep(root, issue, file, caption, slice_, cover=None, head=None, visible=(
         json.dump(items, handle, ensure_ascii=False, indent=2)
     os.replace(temporary, listing)
     return {'ok': True, 'exitCode': 0, 'candidates': listing, 'count': len(items), 'file': name, 'summaryDir': folder,
-            'message': 'Kept for the summary; it reaches the summary folder only when the user chooses it there.'}
+            'message': 'Guardado para o resumo; só chega à pasta do resumo quando o usuário o escolhe lá.'}
 
 
 def by_number(names):
@@ -1113,7 +1113,7 @@ def op_shots(root, date_to, date_from=None, meeting=None):
     monday, _, relative = progress.week_folder(date_to, week_arguments(date_from, meeting))
     folder = rs.safe_folder(progress.scrum_root, relative, create=True)
     return {'ok': True, 'exitCode': 0, 'shotsDir': folder, 'presentedOn': monday.isoformat(),
-            'message': f'Save the prints and captions.json in {folder}.'}
+            'message': f'Grave os prints e o captions.json em {folder}.'}
 
 
 def prints_folder(progress, parent, day):
@@ -1172,13 +1172,13 @@ def op_push(root, draft, shots, captions, date_to=None, date_from=None, meeting=
     if folder_warnings:
         result['warnings'] = folder_warnings
     if outcome['exitCode'] == 0:
-        return {'ok': True, 'exitCode': 0, **result, 'message': 'The push command finished; its output has the review link.'}
+        return {'ok': True, 'exitCode': 0, **result, 'message': 'O comando de envio terminou; a saída dele traz o link de revisão.'}
     if outcome['timedOut']:
         return {'ok': False, 'exitCode': 2, **result,
-                'message': f'The push command timed out after {progress.push_timeout} s and may have sent part of the draft; '
-                           'check in RoadS before trying again.'}
-    why = f"could not start ({outcome['startError']})" if 'startError' in outcome else f"exited with {outcome['exitCode']}"
-    return {'ok': False, 'exitCode': 1, **result, 'message': f'The push command {why}; nothing was sent.'}
+                'message': f'O comando de envio passou do prazo de {progress.push_timeout} s e pode ter enviado parte do rascunho; '
+                           'confira no RoadS antes de tentar de novo.'}
+    why = f"não começou ({outcome['startError']})" if 'startError' in outcome else f"saiu com {outcome['exitCode']}"
+    return {'ok': False, 'exitCode': 1, **result, 'message': f'O comando de envio {why}; nada foi enviado.'}
 
 
 def run(operation, root='.', transport=None, date_from=None, date_to=None, draft=None, shots=(), captions=(), meeting=None,

@@ -873,7 +873,7 @@ class EligibilityTests(CloseoutCase):
         result, gh = self.candidates(issues=None, all_flag=True, open_numbers=[])
         self.assertTrue(result['ok'])
         self.assertEqual((result['scope']['mode'], result['candidates'], result['ask']), ('all', [], False))
-        self.assertIn('no open issue', result['message'])
+        self.assertIn('não tem issue aberta', result['message'])
         self.assertEqual(len(gh.calls), 1)
 
     def test_all_reads_every_open_issue(self):
@@ -966,7 +966,11 @@ class VerifyTests(CloseoutCase):
         self.assertEqual((by[12]['closed'], by[12]['ok']), (True, True))
         self.assertEqual((by[13]['closed'], by[13]['ok'], by[13]['state']), (False, False, 'OPEN'))
         self.assertEqual((by[14]['closed'], by[14]['ok'], by[14]['stateReason']), (True, True, 'NOT_PLANNED'))
-        self.assertEqual(result['message'], '1 of 3 issue(s) are not closed yet: #13.')
+        self.assertEqual(result['message'], '1 de 3 issue(s) ainda não estão fechadas: #13.')
+
+    def test_the_message_of_verify_is_in_portuguese(self):
+        result, _ = self.verify({12: node(12, state='CLOSED')})
+        self.assertEqual(result['message'], 'Todas as 1 issue(s) estão fechadas.')
 
     def test_an_issue_that_does_not_exist_is_not_ok_with_a_reason(self):
         result, _ = self.verify({12: node(12, state='CLOSED')}, issues='12,13')
@@ -1336,7 +1340,7 @@ class MergeStatusTests(CloseoutCase):
         self.assertEqual((result['ready'], result['waiting'], result['settled']), ([11], [12], False))
         self.assertEqual({e['number']: e['status'] for e in result['pullRequests']}, {11: 'merged_into_base', 12: 'open'})
         self.assertEqual((result['expectedBase'], result['baseSource']), ('main', 'default_branch'))
-        self.assertIn('Still open: #12', result['message'])
+        self.assertIn('Ainda abertas: #12', result['message'])
 
     def test_everything_settled_is_reported_as_such(self):
         result, _ = self.status({11: pr(11, state='MERGED'), 12: pr(12, state='MERGED')})
@@ -1347,7 +1351,7 @@ class MergeStatusTests(CloseoutCase):
         self.assertEqual({e['number']: e['status'] for e in result['pullRequests']},
                          {11: 'merged_elsewhere', 12: 'closed_unmerged'})
         self.assertEqual((result['ready'], result['waiting'], result['settled']), ([], [], True))
-        self.assertIn('not proposed for closing', result['message'])
+        self.assertIn('não são propostas para fechar', result['message'])
 
     def test_the_approved_base_overrides_the_default_branch(self):
         pulls = {11: pr(11, state='MERGED', base='release/1.2'), 12: pr(12, state='MERGED', base='main')}
@@ -1587,6 +1591,12 @@ class TickTests(CloseoutCase):
         self.assertEqual(len(gh.edits), 1)
         self.assertEqual(len(gh.reads), 2)
 
+    def test_the_message_of_tick_is_in_portuguese(self):
+        result, _ = self.tick()
+        self.assertEqual(result['message'], 'A caixa S2 (linha 7) da issue #12 foi marcada, e a releitura confere.')
+        again, _ = self.tick(FakeIssueGh(body=TICK_BODY.replace('- [ ] S2.', '- [x] S2.')))
+        self.assertEqual(again['message'], 'A caixa S2 (linha 7) da issue #12 já estava marcada; nada foi escrito.')
+
     def test_a_reread_with_crlf_and_one_more_line_still_verifies(self):
         result, _ = self.tick(FakeIssueGh(stored=lambda text: text.replace('\n', '\r\n') + '\r\n'))
         self.assertEqual((result['ok'], result['written'], result['verified']), (True, True, True), result['message'])
@@ -1679,7 +1689,7 @@ class TickTests(CloseoutCase):
         result, _ = self.tick(FakeIssueGh(stored=lambda text: text.replace('Intro', 'Intro editada')))
         self.assertEqual((result['ok'], result['exitCode'], result['written'], result['verified']), (False, 1, True, False))
         self.assertEqual(result['problems'], [{'line': 1, 'reason': 'changed_outside_the_ticks'}])
-        self.assertIn('ask', result['message'])
+        self.assertIn('pergunte', result['message'])
 
     def test_the_body_is_never_printed(self):
         for gh in (FakeIssueGh(), FakeIssueGh(stored=lambda text: text + 'x\n')):
@@ -1748,7 +1758,7 @@ class TickTests(CloseoutCase):
         self.assertEqual((result['ok'], result['written'], result['verified'], result['files']['after']),
                          (True, True, True, None))
         self.assertEqual(len(gh.edits), 1)
-        self.assertIn('could not be kept', result['message'])
+        self.assertIn('não pôde ser guardada', result['message'])
 
     def test_the_cli_wires_the_operation(self):
         gh = FakeIssueGh()

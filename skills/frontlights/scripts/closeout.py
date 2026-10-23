@@ -837,10 +837,10 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
               'candidates': [], 'excluded': [], 'alreadyDone': 0,
               'releaseCheck': 'skipped', 'ask': False}
     if not scope['numbers']:
-        result['message'] = ('The repository has no open issue, so there is nothing to close.' if scope['mode'] == 'all' else
-                             'No issue was worked on in this project (no folder in .frontlights/issues, no id in an '
-                             'authorization or plan record), so there is nothing to close. Name issues with '
-                             '--issues 12,13 or read every open issue with --all.')
+        result['message'] = ('O repositório não tem issue aberta: nada a fechar.' if scope['mode'] == 'all' else
+                             'Nenhuma issue foi trabalhada neste projeto (sem pasta em .frontlights/issues, sem id em '
+                             'registro de autorização ou de plano): nada a fechar. Nomeie as issues com --issues 12,13 '
+                             'ou leia todas as abertas com --all.')
         return result
     views = read_views(gh, repository, scope['numbers'])
     open_numbers = [n for n, view in sorted(views.items()) if view is not None and view['state'] == 'OPEN']
@@ -848,27 +848,27 @@ def op_candidates(config, root='.', explicit=None, all_flag=False, gh=None, base
     ordered, excluded, already = assess(views, repository, unreleased)
     add_parent_ticks(gh, repository, ordered, views)
     result.update(candidates=ordered, excluded=excluded, alreadyDone=already, ask=bool(ordered), releaseCheck=release_status)
-    parts = [f'{len(ordered)} issue(s) can be closed.' if ordered else 'No issue is ready to close.']
+    parts = [f'{len(ordered)} issue(s) podem ser fechadas.' if ordered else 'Nenhuma issue pronta para fechar.']
     pending = [c['number'] for c in ordered if c['pendingOutside']]
     if pending:
-        parts.append('Open leftovers outside the acceptance criteria in ' + ', '.join(f'#{n}' for n in pending)
-                     + ' (pendingOutside): tell the user before closing them.')
+        parts.append('Pendências abertas fora dos critérios de aceitação em ' + ', '.join(f'#{n}' for n in pending)
+                     + ' (pendingOutside): avise o usuário antes de fechá-las.')
     ticks = [c['number'] for c in ordered if c['parentTicks'] and c['parentTicks']['lines']]
     if ticks:
         parts.append('Sub-issue(s) ' + ', '.join(f'#{n}' for n in ticks)
-                     + ' have an item to tick in their parent (parentTicks): show the lines and ask.')
+                     + ' têm item a marcar no pai (parentTicks): mostre as linhas e pergunte.')
     waiting = [e['number'] for e in excluded if e['reason'] == 'awaiting_release']
     if waiting:
-        parts.append('Issue(s) ' + ', '.join(f'#{n}' for n in waiting) + ' wait for the release (awaiting_release): '
-                     'their branch is not yet in the remote base; offer the release, do not close them.')
+        parts.append('Issue(s) ' + ', '.join(f'#{n}' for n in waiting) + ' esperam a release (awaiting_release): '
+                     'a branch ainda não está na base remota; ofereça a release, não as feche.')
     if excluded:
-        parts.append(f'{len(excluded)} excluded (see excluded for the reason of each).')
+        parts.append(f'{len(excluded)} de fora (o motivo de cada uma em excluded).')
     if already:
-        parts.append(f'{already} closed issue(s) need nothing.')
+        parts.append(f'{already} issue(s) já fechada(s), nada a fazer.')
     if scope['truncated']:
-        parts.append('The scope was cut (scope.truncated); name issues with --issues to see the rest.')
+        parts.append('O escopo foi cortado (scope.truncated); nomeie as issues com --issues para ver o resto.')
     if ordered:
-        parts.append('Nothing was written. Ask the user, then run the commands in order; verify afterwards.')
+        parts.append('Nada foi escrito. Pergunte ao usuário, rode os comandos na ordem e confira depois.')
     result['message'] = ' '.join(part for part in parts if part)
     return result
 
@@ -894,8 +894,8 @@ def op_verify(config, root='.', explicit=None, gh=None):
         entries.append({'number': number, 'state': view['state'], 'stateReason': view['stateReason'],
                         'closed': closed, 'ok': closed})
     waiting = [e['number'] for e in entries if not e['ok']]
-    message = (f'All {len(entries)} issue(s) are closed.' if not waiting else
-               f'{len(waiting)} of {len(entries)} issue(s) are not closed yet: ' + ', '.join(f'#{n}' for n in waiting) + '.')
+    message = (f'Todas as {len(entries)} issue(s) estão fechadas.' if not waiting else
+               f'{len(waiting)} de {len(entries)} issue(s) ainda não estão fechadas: ' + ', '.join(f'#{n}' for n in waiting) + '.')
     return {'ok': not waiting, 'exitCode': 0 if not waiting else 1, 'project': repository, 'repository': repository,
             'issues': entries, 'message': message}
 
@@ -968,16 +968,16 @@ def op_merge_status(config, prs, base=None, gh=None):
     by = lambda status: [e['number'] for e in entries if e['status'] == status]
     ready, waiting = by('merged_into_base'), by('open')
     others = [e['number'] for e in entries if e['status'] not in ('merged_into_base', 'open')]
-    parts = [f'{len(ready)} of {len(entries)} pull request(s) merged into {rs.clean(expected, 200)}.']
+    parts = [f'{len(ready)} de {len(entries)} PR(s) mesclada(s) em {rs.clean(expected, 200)}.']
     if waiting:
-        parts.append('Still open: ' + ', '.join(f'#{n}' for n in waiting) + '.')
+        parts.append('Ainda abertas: ' + ', '.join(f'#{n}' for n in waiting) + '.')
     if others:
-        parts.append('Merged into another branch, closed unmerged or unknown: ' + ', '.join(f'#{n}' for n in others)
-                     + '; their issues are not proposed for closing.')
+        parts.append('Mescladas noutra branch, fechadas sem merge ou desconhecidas: ' + ', '.join(f'#{n}' for n in others)
+                     + '; as issues delas não são propostas para fechar.')
     blocked = [e['number'] for e in entries if e.get('blocked')]
     if blocked:
-        parts.append('Blocked (review or merge state): ' + ', '.join(f'#{n}' for n in blocked)
-                     + '; a blocked pull request is never offered for merging.')
+        parts.append('Bloqueadas (revisão ou estado de merge): ' + ', '.join(f'#{n}' for n in blocked)
+                     + '; uma PR bloqueada nunca é oferecida para mesclar.')
     return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
             'baseSource': 'argument' if base else 'default_branch', 'pullRequests': entries, 'ready': ready,
             'waiting': waiting, 'blocked': blocked, 'settled': not waiting, 'message': ' '.join(parts)}
@@ -1034,9 +1034,9 @@ def compare_ticks(before, after, wanted):
     total = len(problems)
     ok = not problems
     return {'ok': ok, 'exitCode': 0 if ok else 1, 'lines': wanted, 'problems': problems[:20], 'problemCount': total,
-            'message': (f'Only the {len(wanted)} listed item(s) were ticked.' if ok else
-                        f'{total} problem(s): the new body is not the saved one with just those items ticked; '
-                        'do not write it (or, if it was written, show the difference and ask).')}
+            'message': (f'Só os {len(wanted)} item(ns) listado(s) foram marcados.' if ok else
+                        f'{total} problema(s): o corpo novo não é o guardado com só esses itens marcados; '
+                        'não o escreva (ou, se já foi escrito, mostre a diferença e pergunte).')}
 
 
 # ---------------------------------------------------------------- tick: the one write
@@ -1294,12 +1294,12 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
             failure['hint'] = refusal.hint
         return failure
     result['line'] = line
-    name = f'box {label} (line {line})' if label else f'line {line}'
+    name = f'caixa {label} (linha {line})' if label else f'linha {line}'
     if ticked:
         counts = criteria(before)
         return {**result, 'ok': True, 'exitCode': 0, 'alreadyTicked': True,
                 'criteria': {'checked': counts[0], 'total': counts[1]},
-                'message': f'The {name} of issue #{number} is already ticked; nothing was written.'}
+                'message': f'A {name} da issue #{number} já estava marcada; nada foi escrito.'}
     parts = re.split(r'(\r\n|\r|\n)', before)
     raw = parts[2 * (line - 1)]
     item = ITEM.match(raw)
@@ -1322,8 +1322,8 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
         after = read_issue_body(gh, repository, number)
     except Refusal as error:
         return {**result, 'ok': False, 'exitCode': 1, 'written': None if failure else True,
-                'message': f'{failure + "; " if failure else ""}the reread failed ({error}): capture the body again and '
-                           f'run tick-check against {files["before"]} with --lines {line} before anything else.'}
+                'message': f'{failure + "; " if failure else ""}a releitura falhou ({error}): capture o corpo de novo e '
+                           f'rode o tick-check contra {files["before"]} com --lines {line} antes de qualquer outra coisa.'}
     check = compare_ticks(before, after, [line])
     counts = criteria(after) or (0, 0)
     result['criteria'] = {'checked': counts[0], 'total': counts[1]}
@@ -1332,9 +1332,9 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
         kept = ''
     except (OSError, Refusal):
         files['after'] = None
-        kept = ' The reread could not be kept in the records folder; capture it again before showing a difference.'
+        kept = ' A releitura não pôde ser guardada na pasta dos registros; capture-a de novo antes de mostrar uma diferença.'
     if check['ok']:
-        note = ' gh reported a failure, yet the reread shows the tick.' if failure else ''
+        note = ' O gh relatou falha, mas a releitura mostra a marcação.' if failure else ''
         result['commented'] = None
         if comment_file is not None:   # the comment goes with the tick (covered: commenting on the issue)
             try:
@@ -1342,23 +1342,23 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
                 result['commented'] = True
             except Refusal as error:
                 result['commented'] = False
-                note += f' The comment was not posted ({error}); post it again with gh issue comment.'
+                note += f' O comentário não foi publicado ({error}); publique-o de novo com gh issue comment.'
         return {**result, 'ok': True, 'exitCode': 0, 'written': True, 'verified': True,
-                'message': f'The {name} of issue #{number} was ticked, and the reread checks.{note}{kept}'}
+                'message': f'A {name} da issue #{number} foi marcada, e a releitura confere.{note}{kept}'}
     if failure and body_lines(after) == body_lines(before):
         return {**result, 'ok': False, 'exitCode': 1,
-                'message': f'{failure}. GitHub still holds the saved body, so nothing changed; try again.{kept}'}
+                'message': f'{failure}. O GitHub ainda tem o corpo guardado, nada mudou; tente de novo.{kept}'}
     if failure:
         return {**result, 'ok': False, 'exitCode': 1, 'written': None, 'problems': check['problems'],
                 'problemCount': check['problemCount'],
-                'message': f'{failure}, and GitHub now holds a body of issue #{number} that is neither the saved one nor '
-                           f'the ticked one: someone else may have edited it. Show the difference ({files["before"]} and '
-                           f'the reread) and ask; nothing is written back.{kept}'}
+                'message': f'{failure}, e o GitHub tem agora um corpo da issue #{number} que não é o guardado nem '
+                           f'o marcado: alguém pode tê-lo editado. Mostre a diferença ({files["before"]} e a releitura) '
+                           f'e pergunte; nada é reescrito.{kept}'}
     return {**result, 'ok': False, 'exitCode': 1, 'written': True, 'problems': check['problems'],
             'problemCount': check['problemCount'],
-            'message': f'The reread of issue #{number} is not the saved body with just the {name} ticked: show the '
-                       f'difference ({files["before"]} and {files["after"] or "the reread"}) and ask; restoring the saved '
-                       f'body is a write of its own, with its own approval.{kept}'}
+            'message': f'A releitura da issue #{number} não é o corpo guardado com só a {name} marcada: mostre a '
+                       f'diferença ({files["before"]} e {files["after"] or "a releitura"}) e pergunte; restaurar o corpo '
+                       f'guardado é uma escrita própria, com aprovação própria.{kept}'}
 
 
 # ---------------------------------------------------------------- run and apply: the closing by a stamped list

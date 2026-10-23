@@ -362,7 +362,7 @@ class RemovableTests(CleanupCase):
         self.git('branch', '-D', branch)
         result, _ = self.plan({})
         self.assertEqual((result['alreadyClean'], result['candidates'], result['excluded'], result['ask']), (1, [], [], False))
-        self.assertIn('already gone', result['message'])
+        self.assertIn('já saíram', result['message'])
 
     def test_several_issues_are_ordered_by_number_and_a_hand_named_worktree_comes_last(self):
         a, branch_a, tip_a = self.worktree('wt-a', issue=13)
@@ -378,7 +378,7 @@ class RemovableTests(CleanupCase):
         path, branch, tip = self.worktree('wt12', issue=12)
         result, _ = self.plan({branch: merged(tip)}, issues='99')
         self.assertEqual((result['candidates'], result['excluded'], result['ask']), ([], [], False))
-        self.assertIn('nothing to clean', result['message'])
+        self.assertIn('nada a limpar', result['message'])
 
 
 class IgnoredAndOriginTests(CleanupCase):
@@ -621,7 +621,7 @@ class StaleAuthorizationTests(CleanupCase):
         self.assertTrue(result['ok'], result['message'])
         self.assertEqual((result['page'], result['pages'], len(result['candidates']) + len(result['excluded'])),
                          (1, 2, cleanup.MAX_ITEMS))
-        self.assertIn('Page 1 of 2', result['message'])
+        self.assertIn('Página 1 de 2', result['message'])
         gh = FakeGh({})
         second = cleanup.run('plan', self.config, self.root, '12', None, (), (), gh, page=2)
         self.assertEqual((second['page'], len(second['candidates']) + len(second['excluded'])), (2, 1))
@@ -974,7 +974,7 @@ class CliTests(CleanupCase):
         self.assertEqual((code, first['ok'], first['files']), (0, True, 2))
         code, second = self.archive(source, target)
         self.assertEqual((code, second['ok'], second['exitCode'], second['files']), (0, True, 0, 2))
-        self.assertIn('already', second['message'])
+        self.assertIn('já tem', second['message'])
         self.assertEqual(self.records(target), self.records(source))
         (target / 'sub' / 'a.txt').unlink()   # a copy that failed half-way
         code, third = self.archive(source, target)
