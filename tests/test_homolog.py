@@ -1122,7 +1122,7 @@ class HomologBundleTests(HomologCli, unittest.TestCase):
                 result = self.inspect(config)
                 self.assertEqual(sorted(result), sorted(plain))
                 self.assertNotIn('homolog', result)
-                self.assertNotIn('warnings', result)
+                self.assertEqual(result.get('warnings'), plain.get('warnings'))  # só os avisos de configuração (issue 11)
         self.assertFalse((self.base / 'missing').exists())
 
     def test_inspect_refuses_an_invalid_key_and_never_echoes_the_value(self):

@@ -158,7 +158,7 @@ class PullRequestTemplateTests(unittest.TestCase):
         self.assertIn('com o vocabulário do domínio do projeto', self.flat)
 
     def test_the_template_credits_the_source_and_points_to_its_license(self):
-        for phrase in ('`references/LICENSE-pr.md`', 'adaptada', 'show-me'):
+        for phrase in ('`references/LICENSE-pr.md`', 'adaptado', 'show-me', 'as formas da skill `pr`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 

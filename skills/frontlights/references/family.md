@@ -19,7 +19,7 @@ never goes alone unless the user chose that, and only an explicit choice of the 
 
 Before acting on a family, the session offers its conversion into one issue with slices, and a batch request ("arrume
 as issues …") converts a set of families: the question, its options and the procedure are in
-`references/issues.md`, "Converting a family". A converted family has no sub-issues left: its boxes are the slices of
+"Converting a family", below. A converted family has no sub-issues left: its boxes are the slices of
 one issue, and nothing below applies.
 
 ## Grilling the children
@@ -118,6 +118,49 @@ HEADs and the results in the handoff. The integration branch is evidence, never 
 
 ## Converting a family
 
-The procedure, its single approval per family, the replaced parent body and the denied closes and board writes that
-follow it live in `references/issues.md`, "Converting a family"; until the conversion lands, the family is worked as
-a family.
+A family that already exists (a parent with sub-issues published before the no-new-sub-issue rule) is
+the old shape of a delivery. The short shape is one issue whose slices are its boxes, each slice its own
+worktree (`development.md`, "Slices in order"). The conversion turns the first into the second. It runs
+in two situations, with the same procedure:
+
+- **Offered.** Whenever the session is about to act on a family (stage 2 read it: the issue has open
+  sub-issues), before the grilling, ask with `AskUserQuestion`: "Converter a família #<n> em uma issue
+  com CAs antes de seguir?", options "Sim, converter" (first, recommended) and "Não, trabalhar como
+  família". On no, the family is grilled, planned and worked as a family (`grilling.md`, "Sub-issues of
+  the issue"). On yes, convert it, then go on from the converted issue.
+- **In batch.** When the user asks for a set of issues to be tidied into the short model ("arrume as
+  issues do MVP", a milestone, a label, a list of numbers), list the families of that scope (`gh issue
+  list` with the filter the user named, then `subIssuesSummary` of each), say how many there are and
+  which, and convert them one at a time, in the order the user names or by number; no grilling.
+
+**The procedure, per family.** Read the parent and its open sub-issues (closed sub-issues are history
+and stay out). Write the new body of the parent from `templates/issue.md`: the spec sections carry what
+the old body and the children's bodies already say (never a decision the user did not make), and each
+open child becomes one box `S<k>` with its Entrega (the child's outcome), Seams, Camadas and Depende de
+(from its `blockedBy` or `Depends on`), in dependency order; a child already partly done says what it
+already delivered as plain text in its Entrega (never as nested boxes: the closeout counts every box,
+indented or not), and its box stays open until the rest is done. A child with an open pull request is
+not converted while that pull request is open (say so, leave it out of that family's approval, and let the
+user merge or close it first); a child whose work is only on a branch keeps that branch as the branch of
+its slice, renamed to the slice's name. When the family
+has more than five open children, one body is too big: cut them into two or more top-level issues of
+up to five slices each, published blockers first and linked by `--blocked-by`; the parent becomes the
+first of them, or closes as "dividida em #a, #b" when nothing of it is left. Write the before and the
+after whole to the file of the approval (`SKILL.md`, "Show before approval"): the current body of the parent
+and the list of its children, then the new body (or bodies) and the commands. Ask one approval per family, with
+`AskUserQuestion`; a family the user declines stays as it is.
+
+**The writes, after the approval.** The body of the parent is replaced: this is the only exception to
+the append-only rule of the leftover, allowed only here, only after the approval of that exact text. Capture
+the old body to `.frontlights/issues/<n>/body-before-<ts>.md`, write the new one with `gh issue edit <n>
+--repo <repo> --body-file <file>`, reread it and check the difference against the approved text. A new
+top-level issue of a cut family is created as stage 5 creates any issue (board, labels, `--blocked-by`),
+never with a parent. Then the converted children: close each one with `gh issue close <c> --repo <repo>
+--reason "not planned" --comment "Convertida em CA S<k> da #<n>"`, and take its card off the board with
+`gh project item-archive <number> --owner <owner> --id <item-id>`. Closing an issue (the converted
+children, and the parent closed as "dividida em #a, #b") and changing the board are denied operations:
+ask them with their own questions, one per family (one for the closes, one for the board), each listing
+every exact command, and run them only after "Sim". A converted child is history for the closeout
+(`closeout.md`): it is no candidate and needs no tick in the parent. Record the conversion in
+`.frontlights/issues/<n>/handoff.md` (the children, the boxes they became, the commands and the literal
+answers). Until the conversion lands, a session that acts on the family works it as a family.

@@ -1169,7 +1169,9 @@ def validate_preview_ports(config):
             raise ValueError(checks.redact(serve.protect(message)))
 
 
-def inspect(config, root, config_path=None, summary=False):
+def inspect(config, root, config_path=None, summary=False, offline=False, issue=None, gh=None):
+    """`offline` reads no source over the network (`offline_sources`); `issue` adds its `family`
+    (`issue_family`); `warnings` carries the block warnings and the setup gaps (`setup_warnings`)."""
     # A missing key is a typo, not a local project: only an explicit null disables GitHub.
     require('repository' in config and repository_or_local(config['repository']),
             'repository must be owner/name, or null for a local project')
@@ -1182,7 +1184,9 @@ def inspect(config, root, config_path=None, summary=False):
               'sources': {}, 'verification_commands': {},
               'verification_candidates': verification_candidates(root),
               'path_risk': path_risk(Path(root).absolute(), os.path.realpath(root))}
-    if repo is None:
+    if offline:
+        result['sources'] = offline_sources(config)
+    elif repo is None:
         result['sources']['github'] = {'status': 'unconfigured'}
     else:
         try:
@@ -1196,7 +1200,9 @@ def inspect(config, root, config_path=None, summary=False):
         except (ValueError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
             result['sources']['github'] = {'status': 'unavailable', 'reason': 'GitHub read failed; check gh authentication and repository access'}
     project = board(config.get('project'), repo)
-    if project is None:
+    if offline:
+        pass
+    elif project is None:
         result['sources']['project'] = {'status': 'unconfigured'}
     else:
         board_summary = {'owner': project['owner'], 'number': project['number'],
@@ -1215,7 +1221,9 @@ def inspect(config, root, config_path=None, summary=False):
             result['sources']['project'] = {'status': 'unavailable', **board_summary,
                                             'reason': 'project board read failed; check gh "project" scope and board access'}
     roads = config.get('roads')
-    if not roads:
+    if offline:
+        pass
+    elif not roads:
         result['sources']['roads'] = {'status': 'unconfigured'}
     else:
         try:
@@ -1236,6 +1244,9 @@ def inspect(config, root, config_path=None, summary=False):
     package = Path(root) / 'package.json'
     if package.exists():
         result['verification_commands'] = json.loads(package.read_text(encoding='utf-8')).get('scripts', {})
+    if issue is not None:
+        result['family'] = issue_family(repo, issue, gh, offline)
+    warnings = warnings + setup_warnings(config, root)
     if warnings:
         result['warnings'] = warnings
     return summarize(result) if summary else result
@@ -1265,6 +1276,166 @@ def summarize(result):
         if isinstance(data, dict):
             short['keys'] = sorted(data)[:50]
         result['sources']['roads'] = short
+    return result
+
+
+# ---------------------------------------------------------------- setup (redesign, issue 11)
+# `inspect` names what is missing in `warnings` (one code each; `references/setup.md` reads them), `--offline`
+# reads nothing over the network, `--issue <n>` adds the family; `init-config` writes the first config.
+
+SETUP = 'references/setup.md'
+GITHUB_REMOTE = re.compile(r'^(?:https://(?:[^@/]+@)?github\.com/|ssh://git@github\.com/|git@github\.com:)'
+                           r'([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/?$')
+BRANCH_PREFIX = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,40}/')
+REMOTE_HINT = 'passe --repository OWNER/REPOSITORY (ou --repository null para um projeto local)'
+
+
+def in_work_tree(root):
+    return _cli.git_line(root, 'rev-parse', '--is-inside-work-tree') == 'true'
+
+
+def setup_warnings(config, root):
+    """The setup gaps of a project, one `code: text` line each: `legacy_workflows_dir`, `browser_test_missing`
+    (no key at all; `null` declares a project without a screen), `project_unresolved` (a repository and no `project`
+    key; `null` declares no board) and, inside a Git work tree, `frontlights_not_ignored` and `branch_prefix_missing`
+    (neither `branchPrefix` in the config nor `branch_prefix` in the charter). Reads files and local Git only."""
+    warnings, base = [], Path(root)
+    if (base / '.workflows').is_dir():
+        warnings.append('legacy_workflows_dir: ' + (
+            '.workflows/ convive com .frontlights/; use .frontlights/ e diga isso numa linha'
+            if (base / '.frontlights').is_dir() else
+            'o projeto tem .workflows/ e não .frontlights/: renomeie a pasta no lugar e diga isso numa linha'))
+    if 'browserTest' not in config:
+        warnings.append(f'browser_test_missing: o config não tem o bloco browserTest (null declara um projeto sem '
+                        f'tela); {SETUP}')
+    if config.get('repository') is not None and 'project' not in config:
+        warnings.append(f'project_unresolved: o config não diz o quadro (um quadro, ou project: null sem quadro); '
+                        f'pergunte antes de publicar qualquer issue; {SETUP}')
+    if in_work_tree(root):
+        if not git_ok(root, 'check-ignore', '-q', '.frontlights/'):
+            warnings.append('frontlights_not_ignored: o Git não ignora .frontlights/; acrescente a linha '
+                            '/.frontlights/ em .git/info/exclude')
+        record = _cli.read_charter(root)
+        if _cli.config_prefix(config) is None and not (isinstance(record, dict) and record.get('branch_prefix')):
+            warnings.append(f'branch_prefix_missing: nem branchPrefix no config nem branch_prefix na autorização; o '
+                            f'charter recusa sem prefixo; {SETUP}')
+    return warnings
+
+
+def offline_sources(config):
+    """`--offline`: every source the config names is `offline` (nothing read); one it does not name stays
+    `unconfigured`."""
+    named = {'github': config.get('repository') is not None, 'project': bool(config.get('project')),
+             'roads': bool(config.get('roads'))}
+    return {name: {'status': 'offline' if on else 'unconfigured'} for name, on in named.items()}
+
+
+def issue_family(repository, issue, gh=None, offline=False):
+    """The family of an issue for `inspect --issue`: the issue and its sub-issues down to `closeout.MAX_DEPTH`
+    levels (`closeout.expand`), with `open` (number, title, parent), `open_count`, `history` (the closed ones),
+    `excluded` (a sub-issue of another repository) and `truncated` (a level or a list that did not fit)."""
+    if offline:
+        return {'status': 'offline', 'issue': issue}
+    if repository is None:
+        return {'status': 'unconfigured', 'issue': issue}
+    import closeout  # noqa: PLC0415  (lazy: it imports this module)
+    gh = gh or closeout.rs.gh_default
+    try:
+        numbers, truncated = closeout.expand(gh, repository, [issue])
+        views = closeout.read_views(gh, repository, numbers)
+    except (closeout.Refusal, ValueError, OSError, subprocess.TimeoutExpired):
+        return {'status': 'unavailable', 'issue': issue,
+                'reason': 'GitHub read failed; check gh authentication and repository access'}
+    top = views.get(issue)
+    if top is None:
+        return {'status': 'unavailable', 'issue': issue, 'reason': f'GitHub does not know issue #{issue}'}
+    opened, history, excluded = [], [], []
+    for n in numbers:
+        view = views.get(n)
+        if view is None:
+            continue
+        excluded += [f"{c['external']}#{c['number']}" for c in view['children']['nodes'] if c['external']]
+        truncated = truncated or bool(view['truncated'])
+        if n == issue:
+            continue
+        if view['state'] == 'CLOSED':
+            history.append(n)
+        else:
+            opened.append({'number': n, 'title': view['title'], 'parent': view['parent']})
+    return {'status': 'available', 'issue': issue, 'title': top['title'], 'state': top['state'],
+            'parent': top['parent'], 'open_count': len(opened), 'open': opened, 'history': history,
+            'excluded': sorted(set(excluded)), 'truncated': truncated}
+
+
+def remote_repository(root):
+    """`owner/name` of the GitHub remote: `origin`, else the only remote; None without any remote. A remote that is
+    not a GitHub URL, or several remotes and no `origin`, refuse (`ambiguous_remote`)."""
+    names = (_cli.git_line(root, 'remote') or '').split()
+    if not names:
+        return None
+    if 'origin' in names:
+        name = 'origin'
+    elif len(names) == 1:
+        name = names[0]
+    else:
+        raise Stage6Refusal('ambiguous_remote', f'o projeto tem os remotos {", ".join(names)} e nenhum origin',
+                            hint=REMOTE_HINT)
+    found = GITHUB_REMOTE.match(_cli.git_line(root, 'remote', 'get-url', name) or '')
+    if not found:
+        raise Stage6Refusal('ambiguous_remote', f'o remoto {name} não é um repositório do GitHub', hint=REMOTE_HINT)
+    return f'{found.group(1)}/{found.group(2)}'
+
+
+def list_boards(repository, gh=None):
+    """The project boards of the repository's owner, for the board question: [{number, title, url}], or None when
+    gh cannot read them (the `project` scope, say)."""
+    if repository is None:
+        return []
+    answer = (gh or _cli.gh_json)(['project', 'list', '--owner', repository.split('/')[0], '--format', 'json',
+                                   '--limit', '50'])
+    projects = answer.get('projects') if isinstance(answer, dict) else None
+    if not isinstance(projects, list):
+        return None
+    return [{'number': p['number'], 'title': p.get('title'), 'url': p.get('url')}
+            for p in projects if isinstance(p, dict) and number(p.get('number'))]
+
+
+def init_config(root, repository=..., prefix=None, gh=None):
+    """`init-config`: the first `.frontlights/config.json`, in the main worktree only, refused when one exists
+    (`config_exists`). `repository` comes from the remote (`remote_repository`) unless given; the `project` key is
+    never written (the board is a question: `references/issues.md`, "Project board"); `branchPrefix` only when
+    `prefix` is given. Returns the boards of the owner for that question and the setup warnings left."""
+    root = Path(root)
+    if not in_work_tree(root):
+        raise Stage6Refusal('not_a_repository', f'{root.name} não é um repositório Git',
+                            hint='rode dentro do projeto de destino')
+    main = _cli.main_worktree(root)
+    if not _cli.same_path(root, main):
+        raise Stage6Refusal('not_main_worktree', 'o config vive só na worktree principal',
+                            hint=f'rode na worktree principal ({main.name}) ou passe --root com ela')
+    path = root / _cli.CONFIG
+    if path.exists():
+        raise Stage6Refusal('config_exists', f'{_cli.CONFIG.as_posix()} já existe; nada foi gravado',
+                            hint='frontlights.py inspect --summary relata o que falta nele')
+    if repository is ...:
+        repository = remote_repository(root)
+    require(repository_or_local(repository), 'repository must be owner/name, or null for a local project')
+    config = {'repository': repository}
+    if prefix:
+        require(BRANCH_PREFIX.fullmatch(prefix), 'branchPrefix must look like name/ (letters, digits, ., -, _)')
+        config['branchPrefix'] = prefix
+    write_json_file(path, config)
+    boards = list_boards(repository, gh)
+    result = {'ok': True, 'exitCode': 0, 'operation': 'init-config', 'written': True, 'config_path': str(path),
+              'config': config, 'boards': boards, 'warnings': setup_warnings(config, root)}
+    if repository is None:
+        result['message'] = 'Config gravado para um projeto local (sem remoto): não há quadro a escolher.'
+    elif boards is None:
+        result['message'] = ('Config gravado; os quadros não puderam ser lidos (escopo "project" do gh). Pergunte o '
+                             'quadro, ou project: null, antes de publicar qualquer issue.')
+    else:
+        result['message'] = (f'Config gravado com {repository}; pergunte o quadro entre os {len(boards)} listados '
+                             f'(ou project: null) antes de publicar qualquer issue ({SETUP}).')
     return result
 
 
@@ -2628,6 +2799,15 @@ def build_parser():
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--summary', action='store_true',
                    help='per source the status and the count; per issue only number, title, state and boxes')
+    p.add_argument('--offline', action='store_true', help='read nothing over the network: each source the config '
+                                                          'names comes back offline (a rehearsal)')
+    p.add_argument('--issue', type=int, help='add the family of the issue: its sub-issues down to 8 levels, open_count, '
+                                             'open, history (closed) and excluded (another repository)')
+    p = sub.add_parser('init-config', help='write the first .frontlights/config.json in the main worktree: repository '
+                                           'from the remote, never the project key; returns the boards to ask about')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--repository', help='OWNER/REPOSITORY, or null for a local project (default: the remote origin)')
+    p.add_argument('--prefix', help='also write branchPrefix, e.g. name/')
     p = sub.add_parser('open', help='the opening reads in one command: git fetch --prune, cleanup plan '
                                     '--from-authorizations and closeout candidates; removes and closes nothing')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
@@ -2742,7 +2922,9 @@ def resolve_defaults(args):
     """--root and --config the command line left out, by the rules of `_cli`."""
     if args.command == 'inspect':
         args.root = str(_cli.root_path(args.root))
-        args.config = _cli.config_path(args.config, args.root)
+        args.config = _cli.config_path(args.config, args.root, required=False)
+    elif args.command == 'init-config':
+        args.root = str(_cli.root_path(args.root))
     elif args.command == 'open':
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root)
@@ -2810,8 +2992,22 @@ def main():
                 if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop'):
                     # The watched run must not be the last thing a window pays for: ask it before spending more.
                     result['ask_before_continuing'] = ['teste_assistido']
+        elif args.command == 'inspect' and args.config is None:
+            # No config: the setup is the next step, not a usage error (references/setup.md).
+            result = {'ok': True, 'status': 'config_missing',
+                      'config_path': str(Path(args.root) / _cli.CONFIG),
+                      'warnings': [w for w in setup_warnings({'browserTest': None}, args.root)
+                                   if not w.startswith('branch_prefix_missing')],
+                      'hint': f'frontlights.py init-config grava o config na worktree principal; {SETUP}'}
         elif args.command == 'inspect':
-            result = inspect(load(args.config), args.root, args.config, args.summary)
+            result = inspect(load(args.config), args.root, args.config, args.summary, args.offline, args.issue)
+        elif args.command == 'init-config':
+            repository = ... if args.repository is None else (None if args.repository == 'null' else args.repository)
+            try:
+                result = init_config(args.root, repository, args.prefix)
+            except Stage6Refusal as refusal:
+                result = refusal.result()
+            code = result['exitCode']
         elif args.command == 'open':
             result = open_session(args.config, args.root, fetch=not args.no_fetch)
         elif args.command == 'evidence':

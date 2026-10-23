@@ -242,7 +242,7 @@ blocked-by e quadro, nunca o corpo); `closeout.py append` só acrescenta linhas 
 guardado, uma captura de novo logo antes da escrita (outra edição no meio: para e mostra, nada escrito) e a releitura;
 `closeout.py tick` marca uma caixa. Uma pendência que não é corrigida no PR vira um critério de aceitação novo na issue
 de origem ou uma issue de topo, nunca uma sub-issue nova (`references/issues.md`, "Follow-ups"). A conversão de uma
-família (`references/issues.md`, "Converting a family") é a única exceção ao só acréscimo: uma aprovação por família, o
+família (`references/family.md`, "Converting a family") é a única exceção ao só acréscimo: uma aprovação por família, o
 corpo anterior fica guardado, e fechar as filhas e mexer no quadro seguem operações negadas, cada uma com a própria
 pergunta. O Frontlights não impede a sessão de encerrar com o achado só no texto do PR: o portão é uma regra da skill,
 não uma barreira, e o `closeout.py` é o que impede que a issue seja proposta para fechar com o critério aberto.

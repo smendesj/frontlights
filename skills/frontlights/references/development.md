@@ -171,19 +171,16 @@ run is answered or not needed: `references/family.md`, "Stacking" and "Integrati
 
 ## Review, checkpoints and renewal
 
-The independent review runs only when the user asks for one: it is not dispatched by default and is not a gate of
-the merge into the local main nor of the release. With a screen it waits until `browser-gate` says `answered`.
-`references/review.md` stays its standard; the reviewer never authored the changes. Bind it to `frontlights.py
-evidence` in `.frontlights/issues/<n>/review.json` and run `frontlights.py review-gate` before reporting an issue as
-reviewed. Any commit, edit or new file after the review makes it stale, and whether to review again is the user's
-call. Findings (the watched run, a requested review, tests and checks that ran) take the destination ladder of the
-Follow-ups section in `issues.md` (same PR, a new acceptance criterion in the source issue, a top-level issue only for
-new scope), decided as one batch (the baixos of a finished review take the default of "When the review is done",
-below).
+### Review (on request)
 
-**The reviewer's brief.** It names `references/review.md`, the issue, its base and, from the second round on, the
-previous tip and its findings. The standard belongs to the reviewer: the implementer's brief names the issue, its
-seams and its tests, and leaves `review.md` out.
+The independent review runs only when the user asks for one: it is not dispatched by default and is not a gate of
+the merge into the local main nor of the release. On a screen issue it waits for `browser-gate` `answered`. Two
+reviewers go out in one message, one per axis (`references/review.md`, "Two axes"); each brief names `review.md`,
+the issue, its base and, after round one, the previous tip and findings, and the implementer's brief never names it.
+Bind each round to `frontlights.py evidence` in `.frontlights/issues/<n>/review.json`; `frontlights.py review-gate`
+runs before reporting an issue as reviewed. Any commit, edit or new file after the review makes it stale, and
+whether to review again is the user's call. Each axis stops by "When the review is done"; findings take the
+destination ladder (`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.
 
 ### When the review is done
 

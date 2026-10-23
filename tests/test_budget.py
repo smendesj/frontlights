@@ -26,14 +26,16 @@ BUDGET = {
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
     'references/development.md': 4128,
-    'references/family.md': 1442,
+    'references/family.md': 2136,   # o procedimento da conversão veio de issues.md (issues 5 e 7)
     'references/grilling.md': 1893,
     'references/issue.md': 360,
     'references/issues.md': 2609,   # issue 7: etapa 5 por comando
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
-    'references/progress-report.md': 3797,
-    'references/review.md': 753,
+    'references/progress-report.md': 2317,
+    'references/retro.md': 417,
+    'references/review.md': 991,
+    'references/setup.md': 181,
     'references/tdd.md': 1271,
     'references/worker.md': 526,
     'templates/artifact-page.html': 444,   # redesenho, issue 6
@@ -41,7 +43,7 @@ BUDGET = {
     'templates/grilling-section.html': 244,
     'templates/handoff.md': 729,
     'templates/issue.md': 775,
-    'templates/pr.md': 753,
+    'templates/pr.md': 373,
 }
 
 

@@ -120,7 +120,7 @@ toda issue de topo entra no quadro; sub-issue entra só pelo pai; o `validate-pl
 `issue_type_by_label`, e o `publish-issue` publica só esses valores, com as dependências nativas por `--blocked-by`,
 bloqueadoras primeiro, na ordem de `publish-order`, e relê o GitHub (`blockedBy` incluído). "Follow-ups": corrigir no PR, critério de aceitação novo na issue de origem (nunca numa seção à parte, escrito
 por `closeout.py append`) ou issue de topo, nunca uma sub-issue nova; "citado no corpo do PR" nunca é destino. A
-conversão de família que já existe (`references/issues.md`, "Converting a family") é uma aprovação por família.
+conversão de família que já existe (`references/family.md`, "Converting a family") é uma aprovação por família.
 
 ## Registros
 

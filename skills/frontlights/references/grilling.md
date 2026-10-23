@@ -141,7 +141,7 @@ change the approach), citing its section.
 ## Sub-issues of the issue (same session)
 
 When the issue has open sub-issues (`SKILL.md`, "The issue is the unit") and the user declined the conversion
-(`references/issues.md`, "Converting a family"), they are grilled in this session, after the parent's problem and
+(`references/family.md`, "Converting a family"), they are grilled in this session, after the parent's problem and
 solution rounds, none left for later.
 
 - **Decided:** the body names an approach that fits the parent's. **Pending:** `needs-decision`, no approach, or one

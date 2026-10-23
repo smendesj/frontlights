@@ -676,7 +676,7 @@ class PluginContractTests(unittest.TestCase):
         reference = ' '.join(self.read('skills', 'frontlights', 'references', 'progress-report.md').split())
         self.assertIn('/frontlights pode criar/atualizar o resumo', reference)
         self.assertIn('the opening of a session never asks about it (`SKILL.md`, stage 1)', reference)
-        self.assertIn('| references/progress-report.md | the "Resumo para a diretoria" |', skilltext.pointers())
+        self.assertIn('| references/progress-report.md | the "Resumo para a diretoria", after `progress_report.py status` |', skilltext.pointers())
 
     def test_reference_exists_and_covers_every_step(self):
         text = self.read('skills', 'frontlights', 'references', 'progress-report.md')
@@ -699,6 +699,18 @@ class PluginContractTests(unittest.TestCase):
             self.assertIn(needle, text)
         self.assertLess(text.index('**Draft.**'), text.index('**Prints.**'))
         self.assertLess(text.index('**Prints.**'), text.index('**Show the draft by link.**'))
+
+    def test_a_closed_epic_enters_by_its_childrens_boxes(self):
+        # redesenho, item 11: um epic fechado ficou fora do resumo pelo rótulo; a regra é de escrita
+        text = ' '.join(self.read('skills', 'frontlights', 'references', 'progress-report.md').split())
+        families = text.split('**Families and boxes.**', 1)[1].split('6. **Prints.**', 1)[0]
+        self.assertIn("A closed epic enters the summary by its children's boxes, never by its label.", families)
+
+    def test_reference_stays_within_its_word_budget(self):
+        # redesenho, item 11: 3.797 palavras viraram cerca de 2.400; os detalhes das operações ficam no `--help`
+        text = self.read('skills', 'frontlights', 'references', 'progress-report.md')
+        self.assertLessEqual(len(text.split()), 2500)
+        self.assertIn('`progress_report.py --help`', text)
 
     def test_example_config_has_only_the_generic_disabled_block(self):
         config = json.loads(self.read('skills', 'frontlights', 'examples', 'config.json'))

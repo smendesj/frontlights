@@ -293,7 +293,7 @@ class FamilyConversionTextTests(unittest.TestCase):
         if not family.is_file():
             self.skipTest('references/family.md chega com a issue 5 do redesenho')
         text = family.read_text(encoding='utf-8')
-        body = section(text, 'Converting a family into one issue with slices') or ''
+        body = section(text, 'Converting a family') or ''
         self.assertNotEqual(body, '')
         flat_body = flat(body)
         for phrase in ('one approval per family', 'the only exception to the append-only rule', 'body-before-<ts>.md',

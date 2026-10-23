@@ -1,36 +1,25 @@
 # Modelo do corpo da PR
 
-Este é o modelo do corpo da PR que o Frontlights abre: a PR única da release, que leva da main local ao
-GitHub as issues homologadas (etapa 6, `references/development.md`). Escreva na língua do usuário (em
-português para quem fala português, como este modelo), curto, sem preâmbulo e com o vocabulário do domínio do
-projeto. Preencha cada seção, apague estas orientações e os marcadores `<...>`. A guia do Resumo é adaptada,
-em palavras nossas, da skill show-me, sob a licença MIT (`references/LICENSE-pr.md`).
+Corpo da PR única da release (`references/development.md`, "The release"), na língua do usuário, com o vocabulário
+do domínio do projeto; apague estas orientações e os `<...>`. O Resumo é adaptado da skill show-me
+(`references/LICENSE-pr.md`).
 
-Cada issue do `closes` do `release-plan` (de topo, com todas as caixas marcadas, nenhuma filha aberta e
-nenhuma pendência fora dos critérios) ganha uma linha como a linha-modelo logo antes de `## Resumo`, com o número
-dela, copiada da lista, nunca contada à mão, uma linha simples por issue, fora de bloco de código: só o merge
-aprovado da PR a fecha. Essas linhas são do corpo e ficam quando estas orientações são apagadas; com `closes` vazio,
-apague a linha-modelo. As outras (sub-issue, caixa aberta, filha aberta, pendência
-fora dos critérios, ou todas quando `closes` vem vazio) a PR cita pelo número, sem palavra de fechamento
-(`Closes`, `Fixes`, `Resolves` ou variante), no corpo e nos commits, e elas seguem a pergunta de fechamento da
-etapa 7. E o corpo da PR nunca é destino de um achado:
-um achado sem correção sai antes, como critério de aceitação novo da issue de origem ou como issue de topo, e
-o corpo só cita esse destino.
+Cada issue do `closes` do `release-plan` ganha uma linha como a linha-modelo logo antes de `## Resumo`, copiada da
+lista, nunca contada à mão, uma linha simples por issue, fora de bloco de código; essas linhas ficam quando estas
+orientações são apagadas (com `closes` vazio, apague a linha-modelo), e só o merge aprovado da PR a fecha. As outras
+a PR cita pelo número, sem palavra de fechamento (`Closes`, `Fixes`, `Resolves`), e elas seguem a pergunta de
+fechamento da etapa 7; e o corpo da PR nunca é destino de um achado.
 
 Closes #<n>
 
 ## Resumo
 
-Um bloco por issue: uma frase com o que ela entrega e o menor visual que deixa o ponto claro. Escolha a forma
-pelo ponto: pseudocódigo para uma lógica, árvore de chamadas para o fluxo em execução, árvore de componentes
-para uma tela, árvore de arquivos para a responsabilidade dos arquivos ou uma refatoração ampla, Mermaid para
-a interação entre partes, e um `diff` sobre uma dessas formas quando o ponto é o que muda. Um ou dois visuais
-por issue, cada um ao lado da frase que sustenta, só com o que responde à pergunta de quem revisa. O trabalho
-sem issue da release (o `releaseDirect` do `release-plan`) leva um bloco igual, com o título `### Melhoria <slug>`.
+Um bloco por issue: uma frase e o menor visual que deixa o ponto claro (pseudocódigo, árvore de chamadas, árvore de
+arquivos, Mermaid, `diff`: as formas da skill `pr`); sem issue, `### Melhoria <slug>`.
 
 ### Issue #<a>: <título>
 
-<uma frase: o que a issue entrega>
+<uma frase>
 
 ```text
 <o menor visual>
@@ -38,32 +27,23 @@ sem issue da release (o `releaseDirect` do `release-plan`) leva um bloco igual, 
 
 ## Evidência
 
-Por issue, o antes e o depois concretos. Os prints do teste assistido valem mais, quando a mudança aparece na
-tela; depois vem o teste que falhava e passou a passar (o nome dele ou um pseudocódigo do caso), com o comando
-e o resultado medidos. A evidência só aponta registros que já existem: os prints do teste assistido, o
-checkpoint e os comandos de cada CA quando houve testes, a revisão independente quando o usuário a pediu, e o
-portão do merge na main local, o teste assistido. A sessão nunca inventa evidência nem descreve um teste ou uma
-revisão que não rodou. Um print é citado pelo nome do arquivo e
-pela pasta `.frontlights/issues/<n>/browser/` da worktree da issue (a da issue líder, numa família), com uma
-frase do que ele mostra, e quem revisa o abre no projeto local: nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
-O trabalho sem issue leva o bloco `### Melhoria <slug>`, com os registros em `.frontlights/direct/<branch>/`
-(barras como hífens) no lugar da pasta da issue.
+A evidência só aponta registros que já existem. A sessão nunca inventa evidência; vale: os prints do teste assistido, o teste que
+falhava e passou a passar, o checkpoint, a revisão independente pedida e o portão do merge na main local, o teste
+assistido. Um print é citado pelo nome do arquivo e pela pasta `.frontlights/issues/<n>/browser/` da worktree da
+issue (a da issue líder, numa família), com uma frase do que ele mostra; quem revisa o abre no projeto local: nunca
+caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa.
 
 ### Issue #<a>
 
-- **Antes:** <print `antes-<cover>-S<n>.png` do teste assistido, um por critério, ou o teste vermelho: comando e falha>
-  **Depois:** <print `depois-<cover>-S<n>.png` do teste assistido, um por critério, ou o mesmo teste verde: comando e resultado>
+- **Antes:** <print `antes-<cover>-S<n>.png`, ou o teste vermelho>
+  **Depois:** <print `depois-<cover>-S<n>.png`, ou o teste verde>
 - **Portões:** teste assistido <resposta do usuário, ou `not_needed`>.
-- **Testes e revisão:** só quando rodaram: <comando, contagem, saída>; revisão independente <rodadas, `review-gate`
-  atual>. Apague a linha quando nenhum rodou (por exemplo, numa issue feita "só com teste assistido").
+- **Testes e revisão:** só quando rodaram: <comando, contagem, `review-gate`>. Apague a linha quando nenhum rodou.
 
 ## Risco do merge
 
-Um só, consolidado para a release inteira. A porta é de mão única quando há migration ou dado apagado: diga
-qual e o que um retorno exigiria. Nos outros casos é de mão dupla: o merge se desfaz barato, revertendo o
-commit de merge. O raio de impacto é uma palavra e, se preciso, o que o merge pode atingir; considere todas as
-possibilidades: quem consome o que mudou, telas e layout, as outras issues da mesma release, configuração,
-scripts e documentação.
+Um só, consolidado. A porta é de mão única quando há migration ou dado apagado (diga qual). Nos outros casos é de
+mão dupla. O raio de impacto é uma palavra.
 
 **Porta:** <mão única ou mão dupla>
 
