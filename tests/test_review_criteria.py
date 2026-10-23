@@ -177,7 +177,7 @@ class OnlyTheReviewerReadsItTests(unittest.TestCase):
     """Dentro da skill, o padrão do revisor só é citado onde o coordenador monta o brief e nos registros."""
 
     def test_the_implementers_material_never_names_the_standard(self):
-        for name in ('tdd-tests.md', 'tdd-mocking.md', 'browser-testing.md', 'issue.md', 'issues.md', 'grilling.md'):
+        for name in ('tdd.md', 'worker.md', 'browser-testing.md', 'issue.md', 'issues.md', 'grilling.md'):
             with self.subTest(reference=name):
                 self.assertNotIn('review.md', read('skills', 'frontlights', 'references', name))
 

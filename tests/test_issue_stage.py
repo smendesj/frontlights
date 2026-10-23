@@ -118,7 +118,8 @@ class IssueStageTests(unittest.TestCase):
         issues = flat(read('skills', 'frontlights', 'references', 'issues.md'))
         self.assertIn('Read the approved issue body (stage 4)', issues)
         self.assertIn('The issue body (stage 4) and the plan (stage 5) carry the complete trace table', issues)
-        development = read('skills', 'frontlights', 'references', 'development.md')
+        # redesenho, issue 5: o laço do implementador saiu de development.md para references/tdd.md
+        development = flat(read('skills', 'frontlights', 'references', 'tdd.md'))
         self.assertIn("Follow the conventions recorded in the issue's `## Decisões de implementação`", development)
         self.assertIn('`## Decisões de teste` in `templates/issue.md`', development)
 

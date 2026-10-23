@@ -17,10 +17,9 @@ and `message` (a refusal adds `reason` and `hint`); its flags are in its `--help
 | The start of stage 6 | the sync of the local main and the preview, before the first slice |
 | Slices in order | opening, merging and ticking each slice |
 | Which tests run when | choosing what a slice's loop runs |
-| Dispatch and ownership | briefing an implementer or a helper |
+| Dispatch and ownership | dispatching implementers and helpers (their brief: `references/worker.md`) |
 | Stacked branches: parent and children without waiting for the merge | a family that already exists |
 | Integrating a family before the local main | a family that already exists, before the local main |
-| Test-driven development | the implementer's loop; a hotfix of the free test |
 | Review, checkpoints and renewal | findings, the review the user asks for, a checkpoint, the final report |
 | When the review is done | a review round ends |
 | Into the local main | the issue's slices are merged and the watched run is answered or not needed |
@@ -139,15 +138,25 @@ it as the reason of a blocked part. When the slice is released, remove exactly t
 the only removal allowed in a body besides the move of a legacy section. The closeout counts the box as open
 meanwhile: a sub-item without a box is never a criterion.
 
+### After the loop
+
+Run the type checks the repository really has (never assume npm scripts; without a type checker, say so and record the
+syntax or build checks), and inspect the vertical behavior, the diff and the acceptance coverage; an unexpected effect
+stops the issue. When anything the issue changes is visible on the screen (its `## Navegador e testes ligados` says so,
+or `browser-gate` finds it in the diff), the watched run belongs to the issue as a whole: its ANTES ran from the
+grilling, and its DEPOIS ("pronto para assistir?", `references/browser-testing.md`) comes once the last slice that
+changes the screen has closed its loop and every closed slice is merged into the branch of the issue, and before an
+independent review of any of them. Once that question is due and until it is answered, it is the `teste_assistido`
+pending of the checkpoint.
+
 ## Dispatch and ownership
 
 For a family that already exists, the scope of a dispatch is the issue and all its open sub-issues; the parent never
 goes alone unless the user chose that. `frontlights.py schedule --plan <file> --limit <approved-limit>` recommends;
-start all eligible non-conflicting issues up to the ceiling, all launched in one message, each with a bounded outcome,
-owned paths, tests and the rules of its stage. A worker never calls `AskUserQuestion`, writes GitHub, merges or runs a
-denied operation: it reports what it needs. Without concurrent agents, report the capacity limitation. Do not
-silently serialize for convenience. Isolate ports, databases and test data as well as Git; with a `path_risk` of `inspect` other than `ok`, give
-`slice open` a short `--dir`. A worker's report is a claim: read the diff and rerun the commands it names.
+start all eligible non-conflicting issues up to the ceiling, all launched in one message, each with a brief by
+`references/worker.md`. Without concurrent agents, report the capacity limitation. Do not silently serialize for
+convenience. With a `path_risk` of `inspect` other than `ok`, give `slice open` a short `--dir`. A worker's report is a
+claim: read the diff and rerun the commands it names.
 
 **Fan out inside an issue.** The independent slices go at once, one implementer per open slice, in its own worktree, and the agents around them do not
 wait: dispatch in the same message read-only workers that prepare the next slice, and the checks that share no
@@ -235,109 +244,6 @@ integration worktree, cut from the local main; the stage 6 authorization names t
 when no stacking question is asked. The family enters the local main only after that integration, with its watched
 run answered or not needed for the integrated code. Record the integration worktree, the merged
 HEADs and the results in the handoff. The integration branch is evidence, never delivered.
-
-## Test-driven development
-
-TDD is the red → green loop, the default practice of every slice and never a gate ("Which tests
-run when"; a run "só com teste assistido" skips it). This section is the reference that makes that loop
-produce tests worth keeping: what a good test is, where tests go, the
-anti-patterns and the rules of the loop. Every subsection applies on every cycle:
-consult them before and during the loop, not after.
-
-When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and
-interface vocabulary match the project's domain language, and respect ADRs in the
-area you're touching.
-
-Follow the conventions recorded in the issue's `## Decisões de implementação` (`## Abordagem e
-convenções` in issues published before this section existed, `## Approach and conventions`
-before 0.28.1) and
-in the discovery log: structure, naming, error handling, libraries and test
-style of the surrounding code. Break a convention only where that section names
-the approved break. Finding mid-work that the pattern is concretely worse, or
-that the approved approach does not fit, parks the issue and returns the
-question to the coordinator's `AskUserQuestion`; never switch approach or
-pattern silently.
-
-### What a good test is
-
-Tests verify behavior through public interfaces, not implementation details. Code
-can change entirely; tests shouldn't. A good test reads like a specification:
-"user can checkout with valid cart" tells you exactly what capability exists, and
-it survives refactors because it doesn't care about internal structure. See
-[tdd-tests.md](tdd-tests.md) for examples and [tdd-mocking.md](tdd-mocking.md) for mocking
-guidelines.
-
-### Seams: where tests go
-
-A **seam** is the public boundary you test at: the interface where you observe
-behavior without reaching inside. Tests live at seams, never against internals.
-
-**Test only at pre-agreed seams.** The seams under test are part of each issue
-(`## Decisões de teste` in `templates/issue.md`, `## Seams sob teste` or `## Seams under test` in
-older issues) and
-were approved when the issues
-were published. You can't test everything; agreeing the seams up front is how
-testing effort lands on the critical paths and complex logic instead of every
-edge case. Before the first test, restate the issue's seams in the handoff. No
-test is written at an unconfirmed seam. If the issue lists none, a listed seam
-does not exist or cannot observe the acceptance behavior, or the shape of the
-interface is itself in question (how deep the module is, where the seam belongs,
-what it should expose), park the issue and return the question "What's the public
-interface, and which seams should we test?" to the coordinator's
-`AskUserQuestion`. Continue independent issues meanwhile.
-
-### Anti-patterns
-
-- **Implementation-coupled**: mocks internal collaborators, tests private
-  methods, or verifies through a side channel (querying the database instead of
-  using the interface). The tell: the test breaks when you refactor but behavior
-  hasn't changed.
-- **Tautological**: the assertion recomputes the expected value the way the code
-  does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way,
-  a constant asserted equal to itself), so it passes by construction and can
-  never disagree with the code. Expected values must come from an independent
-  source of truth: a known-good literal, a worked example, the spec.
-- **Horizontal slicing**: writing all tests first, then all implementation. Bulk
-  tests verify _imagined_ behavior: you test the _shape_ of things rather than
-  user-facing behavior, the tests go insensitive to real changes, and you commit
-  to test structure before understanding the implementation. Work in **vertical
-  slices** instead: one test → one implementation → repeat, each test a **tracer
-  bullet** that responds to what the last cycle taught you.
-
-### Rules of the loop
-
-- **Red before green.** Write the failing test first, run it and capture the
-  actual expected failure, then write only enough code to pass it and rerun the
-  focused tests. Don't anticipate future tests or add speculative features.
-- **The red must be behavioral.** An import error or broken harness is not the
-  intended red. Fix the harness and obtain a meaningful failing assertion.
-- **One slice at a time.** One seam, one test, one minimal implementation per
-  cycle, each tied to one acceptance behavior.
-- **Refactoring is not part of the loop.** It comes after it ("Review, checkpoints and
-  renewal", below), not in the red → green implementation cycle.
-- **Evidence is real.** Preserve commands, exit codes, counts and output paths.
-  Never invent failure evidence for a nontestable documentation change; state the
-  exception and verify the relevant behavior another way.
-
-### After the loop
-
-Run the actual type checks discovered from repository/CI, and the relevant broader tests by default
-(outside a run "só com teste assistido"; a whole suite only when the user asks);
-do not assume npm scripts. If no type checker exists, say so and record applicable
-syntax/build checks. Inspect the full vertical behavior, diff, regressions and
-acceptance coverage. Tests may execute arbitrary code; native permission and
-sandbox controls still apply. Unexpected effects stop the affected issue.
-
-When anything the issue changes is visible on the screen (its `## Navegador e testes ligados`
-says so, or `frontlights.py browser-gate` finds it in the diff), the watched run belongs to the
-issue as a whole, not to this slice alone: its ANTES ran from the grilling, and [browser-testing.md](browser-testing.md) asks "pronto
-para assistir?" for its DEPOIS once the last slice of the issue that changes the screen has closed its loop and every closed slice is merged into the branch of the issue,
-and before an independent review of any of them, when the user asked for one, and ends with the user's choice of watching
-again, approving, asking for a change or going on; its records join the evidence below. Any brief that hands the
-run to a subagent carries that reference's rule on test data: create what the flow needs, or use a test account that
-exists, and keep it for reuse.
-Once the question is due and until the user has answered, the run is the `teste_assistido` pending of the checkpoint;
-while a screen slice is still in its loop it is not (the handoff lists the open slice).
 
 ## Review, checkpoints and renewal
 

@@ -1,6 +1,6 @@
-`tdd-tests.md` and `tdd-mocking.md` in this directory are copied from
-https://github.com/mattpocock/skills (`skills/engineering/tdd/`), and the TDD
-section of `development.md` adapts that skill, under the license below. Only the file names changed.
+`tdd.md` in this directory adapts https://github.com/mattpocock/skills (`skills/engineering/tdd/`): its examples of
+good and bad tests and its guide on when to mock are copied from that skill's `tests.md` and `mocking.md`, merged into
+one file, under the license below.
 
 MIT License
 
