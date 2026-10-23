@@ -293,5 +293,6 @@ offers the release again with everything accumulated.
   question per PR, with the argv of `gh pr ready <n>` and `gh pr merge <n> --merge` (never `--admin`, `--auto` or `--delete-branch`: the remote
   branch goes by GitHub's automatic deletion of merged head branches). On "Não", the wait goes on unchanged.
 - **At the merge.** `release landed` pulls the local main (if it does not fast-forward, stop and ask instead of
-  merging or resetting) and lists the cleanup of `references/closeout.md`, step 5, run without a question. A PR merged
+  merging or resetting) and lists the cleanup of `references/closeout.md`, step 5, run without a question, plus the
+  `git push origin --delete` of the release branch when GitHub kept it (covered cleanup). A PR merged
   into another branch, closed without a merge, or not found is never ready.

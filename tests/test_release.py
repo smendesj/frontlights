@@ -204,6 +204,16 @@ class LandedTests(ReleaseCase):
         self.assertFalse((release / 'current.json').exists())
         self.assertEqual(len(list(release.glob('landed-*.json'))), 1)
 
+    def test_landed_lists_the_delete_of_the_remote_release_branch_when_github_kept_it(self):
+        recorded = self.go_and_record()
+        name = recorded['release']['branch']
+        git(self.root, 'push', '-q', 'origin', f'main:refs/heads/{name}')   # the release push; GitHub keeps the branch
+        git(self.root, 'push', '-q', 'origin', 'main')
+        self.gh.pull_requests = {77: pr(77, state='MERGED')}
+        result = self.land()
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['commands'][-1], ['git', '-C', str(self.root), 'push', 'origin', '--delete', name])
+
     def test_a_pull_that_does_not_fast_forward_stops_and_asks(self):
         self.go_and_record()
         other = self.tmp / 'outro'
