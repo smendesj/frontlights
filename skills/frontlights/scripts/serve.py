@@ -10,6 +10,13 @@ Operations (each prints one JSON object on stdout):
   status  read that record and check whether each pid is still alive.
   stop    kill the whole process tree of each recorded process, remove the record and release the issue's
           port reservations (`reservas_liberadas`; also when there is no record, which still reports a refusal).
+  free-test start|stop|commands --issue <n>  (redesign, issue 4) the free test on the local main, from the main
+          worktree: `start` runs `start` there (or, without browserTest.processes, says the environment is the
+          user's: `ambiente_do_usuario` with the question), creates .frontlights/issues/<n>/teste-livre-cas.md (the
+          draft of the new criteria) and gives the argv of `serve.py window open|hold` with the strip
+          "MAIN LOCAL: teste livre" and a holder without a time limit; `stop` stops only what `start` started and
+          counts the boxes of the draft (the batch before the release); `commands`, for an issue without a screen,
+          gives the verification commands of the charter and the question "Terminou de testar a main local?".
 
 Automatic ports: a process declares `"port": "auto"` (the only rule: omitting `port` keeps the #9 behaviour,
 where the port is read from the health URL). Its `argv` elements and `health` may use `{port}`; with "auto" the
@@ -1842,8 +1849,140 @@ def resolve_defaults(args):
     return args
 
 
+# ---------------------------------------------------------------- the free test (redesign, issue 4)
+# `free-test start|stop|commands --issue n`, on the main worktree: the product served from the local main for the
+# user's free test, the draft of the new acceptance criteria, and the commands of the terminal free test of an
+# issue without a screen. The window itself (Chrome by Playwright, the strip, the holder without a time limit) is
+# `serve.py window` (issue 8): its argv comes back in `window.commands`, run by whoever opens the window.
+
+FREE_TEST_STRIP = 'MAIN LOCAL: teste livre'
+FREE_TEST_QUESTION = {'text': 'Terminou de testar a main local?', 'options': ['Sim, terminei', 'Ainda testando']}
+DRAFT_BOX = re.compile(r'^\s*[-*+]\s+\[([ xX])\]')
+
+
+def free_test_files(root, issue):
+    folder = Path(root) / '.frontlights' / 'issues' / str(issue)
+    return folder / 'teste-livre.json', folder / 'teste-livre-cas.md'
+
+
+def draft_boxes(draft):
+    try:
+        lines = draft.read_text(encoding='utf-8').splitlines()
+    except OSError:
+        return {'total': 0, 'ticked': 0, 'open': 0}
+    marks = [m.group(1) for m in (DRAFT_BOX.match(line) for line in lines) if m]
+    ticked = sum(1 for mark in marks if mark != ' ')
+    return {'total': len(marks), 'ticked': ticked, 'open': len(marks) - ticked}
+
+
+def free_test_start(config_file, root, issue):
+    config = read_config(config_file)
+    block = config.get('browserTest') if isinstance(config, dict) else None
+    require(isinstance(block, dict), 'Sem browserTest, o teste livre não tem janela: numa issue sem tela, use '
+                                     '`free-test commands` (o teste livre no terminal).', category=USAGE)
+    record_file, draft = free_test_files(root, issue)
+    if 'processes' in block:
+        served = start(config_file, root, issue)
+        started = True
+    else:
+        served = {'status': 'ambiente_do_usuario',
+                  'question': 'O ambiente do projeto está de pé na main local, no banco local de desenvolvimento?',
+                  'options': ['Sim, está de pé na main local', 'Vou subir agora']}
+        started = False
+    with io_guard('gravar o rascunho dos CAs do teste livre'):
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        if not draft.exists():
+            draft.write_text(f'# CAs do teste livre da issue #{issue}\n\nUma caixa por correção pedida no teste livre, '
+                             'na língua do usuário (references/development.md, "The free test on the local main").\n\n',
+                             encoding='utf-8')
+    base_url = block.get('baseUrl') if isinstance(block.get('baseUrl'), str) else None
+    here = Path(__file__).resolve()
+    window = {'strip': FREE_TEST_STRIP, 'baseUrl': base_url, 'holder': 'sem prazo: sai quando o usuário fecha a janela',
+              'commands': [[sys.executable, str(here), 'window', 'open', '--issue', str(issue), '--base-url',
+                            base_url or '<browserTest.baseUrl>', '--strip', FREE_TEST_STRIP, '--account', '1'],
+                           [sys.executable, str(here), 'window', 'hold', '--minutes', 'none']]}
+    record = {'issue': issue, 'root': str(root), 'startedAt': now_iso(), 'started': started, 'endedAt': None}
+    write_json_atomic(record, record_file)
+    return {'ok': True, 'status': 'started', 'issue': issue, 'served': served, 'window': window, 'draft': str(draft),
+            'record': str(record_file),
+            'message': (f'Teste livre da issue #{issue} na main local: o produto da worktree principal '
+                        f'{"subiu" if started else "é do usuário (pergunte se está de pé)"}; abra a janela pelos '
+                        f'comandos de `window` (faixa "{FREE_TEST_STRIP}", holder sem prazo). Fechar a janela encerra '
+                        'o teste livre; então rode `free-test stop`.')}
+
+
+def free_test_stop(config_file, root, issue):
+    record_file, draft = free_test_files(root, issue)
+    try:
+        record = json.loads(record_file.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        record = {}
+    if record.get('started'):
+        stopped = stop(root, issue)
+    else:
+        stopped = {'skipped': 'o free-test start não subiu processo: nada a parar'}
+    boxes = draft_boxes(draft)
+    if record:
+        record['endedAt'] = now_iso()
+        write_json_atomic(record, record_file)
+    batch = ({'draft': str(draft), **boxes,
+              'next': 'o rascunho é o lote dos CAs novos: aprovado por link e carimbo (SKILL.md, "Show before '
+                      'approval") e escrito na issue só por acréscimo, antes da release'} if boxes['total'] else None)
+    return {'ok': True, 'status': 'stopped', 'issue': issue, 'stopped': stopped, 'batch': batch,
+            'message': (f'Teste livre da issue #{issue} encerrado. ' + (
+                f'{boxes["total"]} CA(s) novo(s) no rascunho: o lote vem antes da release.' if boxes['total'] else
+                'Sem correções: a release vem direto.'))}
+
+
+def free_test_commands(config_file, root, issue):
+    import shlex   # noqa: PLC0415  (only the display of the commands)
+    charter = Path(root) / '.frontlights' / 'authorization.json'
+    try:
+        data = json.loads(charter.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        data = {}
+    argvs = data.get('verification_commands') if isinstance(data, dict) else None
+    argvs = [a for a in argvs if isinstance(a, list) and a and all(isinstance(x, str) for x in a)] if isinstance(
+        argvs, list) else []
+    return {'ok': True, 'status': 'terminal', 'issue': issue, 'cwd': str(root),
+            'commands': [shlex.join(argv) for argv in argvs], 'question': dict(FREE_TEST_QUESTION),
+            'message': (f'A main local está pronta para o teste livre da issue #{issue}, no terminal da worktree '
+                        'principal: um bloco de código por comando, depois a pergunta. "Ainda testando" deixa a '
+                        'pergunta pendente; só "Sim, terminei" leva à release.'
+                        + ('' if argvs else ' O charter não tem verification_commands: use os comandos que o '
+                                            '`inspect` relata.'))}
+
+
+def free_test_main(argv):
+    parser = _cli.JsonParser(prog='serve.py free-test', description='o teste livre na main local (issue 4)')
+    parser.add_argument('action', choices=('start', 'stop', 'commands'))
+    parser.add_argument('--issue', type=int, help='a issue homologada (padrão: a do charter para a worktree)')
+    parser.add_argument('--config', help='padrão: o .frontlights/config.json da worktree principal')
+    parser.add_argument('--root', help='padrão: a worktree principal (a main local)')
+    try:
+        args = _cli.output_flags(parser).parse_args(argv)
+        main_tree = _cli.main_worktree()
+        args.root = args.root or str(main_tree)
+        args.config = _cli.config_path(args.config, args.root, required=args.action != 'commands')
+        if args.issue is None:
+            args.issue = _cli.issue_number(None, _cli.current_tree(), args.root)
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 1, error=str(error), category='uso')
+    try:
+        action = {'start': free_test_start, 'stop': free_test_stop, 'commands': free_test_commands}[args.action]
+        result, code = action(args.config, args.root, args.issue), 0
+    except (Refusal, OSError) as failure:
+        refusal = failure if isinstance(failure, Refusal) else io_failure('executar o teste livre', failure)
+        result, code = {'ok': False, 'error': str(refusal), 'category': refusal.category}, 1
+    _cli.emit(json.dumps(scrub(result), ensure_ascii=False), f'free-test-{args.action}', args.full)
+    return code
+
+
 def main(argv=None):
     _cli.utf8_streams()
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ['free-test']:   # its own parser: `free-test start|stop|commands`
+        return free_test_main(argv[1:])
     parser = _cli.JsonParser(description=__doc__.split('\n')[0])
     parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
     parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),

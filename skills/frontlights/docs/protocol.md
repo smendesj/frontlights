@@ -33,6 +33,20 @@ sincronização da main local e a prévia, em "The start of stage 6"; as slices 
 numa branch por issue, criada no GitHub a partir da `origin/<base>`, e com uma worktree por slice, em "Slices in order"; o portão do
 merge na main local (o teste assistido) e o bundle depois dele, em "Into the local main"; o teste livre na main local, em "The free test on the local main"; a release, em "The release".
 
+**O registro do charter** (`.frontlights/authorization.json`) é gravado por `frontlights.py charter new|renew|add`,
+nunca à mão, e traz todo campo que o `authorize` lê: `repository` (do config; `null` sem remoto), `issue_ids` e
+`direct_ids`, `operations` (`edit`, `test`, `checkpoint`, `merge_into_local_main`), `protected_branches` (além de
+`main` e `master`, sempre protegidas), `stop_conditions`, `base` (`branch`, a main local, alvo do merge coberto;
+`issues` {`from`: `origin/<base>`, `commit`} e `direct` {`from`: a main local, `commit`}), `issued_at` e `expires_at`
+(ISO com fuso de São Paulo, no máximo 24 horas), `approved_by`, `confirmed_by`, `approval_reference`, `monitoring`
+(`mode: local`, `confirmed_by`, `at`), `concurrency`, `branch_prefix` (pela cadeia `--prefix` > `branchPrefix` do
+config; sem os dois, recusa), `ownership` ({issue ou slug: [caminhos]}, obrigatória, nunca só `*`),
+`verification_commands` e `worktrees` (preenchida por `slice open` e `homolog merge`: `issue` ou `direct`, `path`,
+`branch`, `ownership`, e `slice` e `base` numa slice). Antes de gravar, o comando roda o `authorize` num `edit` de
+cada issue (dry-run; recusado, nada é gravado); `new` guarda o charter que existia como
+`authorization-<AAAA-MM-DD>-issue-<n>.json` (nunca sobrescrito: `-2`, `-3`), `renew` só estende `expires_at`, `add`
+acrescenta uma issue com a posse dela; a saída traz o anúncio em português (`announcement`).
+
 Uma slice estacionada ganha, logo abaixo da caixa aberta e como último sub-item dela, a
 linha `- Bloqueada: <o que falta e de quem>` (corpo capturado, só acréscimo, diferença conferida),
 apagada ao destravar, antes da marcação: a única remoção permitida no corpo de uma issue além

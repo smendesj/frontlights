@@ -35,7 +35,10 @@ Operations (each prints one JSON object on stdout):
   merge-status  for pull requests named with --prs 12,13, whether each is still open, was merged into the
               approved base (--base, else the repository's default branch), was merged into some other branch
               or was closed unmerged. This is what the session waits on after it opened its pull requests: only
-              `merged_into_base` lets an issue be proposed for closing.
+              `merged_into_base` lets an issue be proposed for closing. Each open one also carries `reviewDecision`,
+              `mergeStateStatus`, `mergeable` and `isDraft` as GitHub reports them, and `blocked` (with `blockedBy`)
+              when the review asks for changes or a review, the merge state is BLOCKED, DIRTY or BEHIND, or it
+              conflicts; `blocked` at the top lists them: a blocked pull request is never offered for merging.
   tick-check  local files only: confirms that --after is --before with nothing changed but the `[ ]` of the
               items on --lines turned into `[x]`. It checks the body of a parent that was edited to tick the
               item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
@@ -49,6 +52,14 @@ Operations (each prints one JSON object on stdout):
               again (`verified`). A box already ticked answers ok and writes nothing; a box that still has its
               `- Bloqueada:` sub-item is refused (that line is removed first, by the session). No shell, the
               repository is the validated `owner/name` of the configuration, and only line numbers are printed.
+              A slice box (`S<k>.`, by --box or by --line) is ticked only with its evidence (redesign, issue 4):
+              the record of the watched run approved (`situacao: aprovado` in .frontlights/issues/<n>/browser/
+              result.json under --root, or --record for the lead issue of a family) or, for a box without a
+              screen, .frontlights/issues/<n>/walkthroughs/S<k>.md in its format (a header, `## Antes` and
+              `## Depois`, each with a fenced block); without either it is refused (`no_evidence`) before the
+              body is read. A leftover box and a criterion without a label keep the evidence the session cites.
+              --comment-file posts that file as a comment on the issue (`gh issue comment --body-file`) once the
+              tick checks; `evidence` and `commented` say what happened.
 
 An open issue is a candidate only when its body has an acceptance-criteria section with at least one
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
@@ -117,7 +128,10 @@ FENCE = re.compile(r'^[ \t]*(`{3,}|~{3,})(.*)$')
 ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]+\[([ xX])\](?=[ \t]|$)')
 FEATURES = 'GraphQL-Features: issue_types'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}')
-PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
+PR_VIEW = ('number state merged mergedAt url baseRefName headRefName headRefOid mergeable mergeStateStatus '
+           'reviewDecision isDraft')
+BLOCKING_REVIEW = ('CHANGES_REQUESTED', 'REVIEW_REQUIRED')   # reviewDecision that keeps a PR from merging
+BLOCKING_STATE = ('BLOCKED', 'DIRTY', 'BEHIND')                # mergeStateStatus that keeps a PR from merging
 BOX = re.compile(r'([SsPp]?)([1-9][0-9]{0,2})')                # --box S2, s2, 2 or P1 (a leftover box)
 LEFTOVER = re.compile(r'(?:\*\*|__)?Pend[eê]ncia\b', re.IGNORECASE)   # the text of a leftover box: `Pendência (...)`
 BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
@@ -908,7 +922,19 @@ def pull_request_entry(number, node, expected):
               'closed_unmerged' if state == 'CLOSED' else 'unknown')
     head = node.get('headRefOid')
     url = node.get('url')
+    word = lambda key: node[key] if isinstance(node.get(key), str) and re.fullmatch(r'[A-Z_]{1,40}', node[key]) else None
+    review, merge_state, mergeable = word('reviewDecision'), word('mergeStateStatus'), word('mergeable')
+    reasons = []
+    if status == 'open':
+        if review in BLOCKING_REVIEW:
+            reasons.append(f'reviewDecision {review}')
+        if merge_state in BLOCKING_STATE:
+            reasons.append(f'mergeStateStatus {merge_state}')
+        if mergeable == 'CONFLICTING':
+            reasons.append('mergeable CONFLICTING')
     return {'number': number, 'status': status, 'state': state, 'merged': merged,
+            'reviewDecision': review, 'mergeStateStatus': merge_state, 'mergeable': mergeable,
+            'isDraft': node.get('isDraft') is True, 'blocked': bool(reasons), 'blockedBy': reasons,
             'mergedAt': rs.clean(node['mergedAt'], 40) if isinstance(node.get('mergedAt'), str) else None,
             'base': rs.clean(base, 200) if base else None,
             'head': rs.clean(node['headRefName'], 200) if isinstance(node.get('headRefName'), str) else None,
@@ -938,9 +964,13 @@ def op_merge_status(config, prs, base=None, gh=None):
     if others:
         parts.append('Merged into another branch, closed unmerged or unknown: ' + ', '.join(f'#{n}' for n in others)
                      + '; their issues are not proposed for closing.')
+    blocked = [e['number'] for e in entries if e.get('blocked')]
+    if blocked:
+        parts.append('Blocked (review or merge state): ' + ', '.join(f'#{n}' for n in blocked)
+                     + '; a blocked pull request is never offered for merging.')
     return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
             'baseSource': 'argument' if base else 'default_branch', 'pullRequests': entries, 'ready': ready,
-            'waiting': waiting, 'settled': not waiting, 'message': ' '.join(parts)}
+            'waiting': waiting, 'blocked': blocked, 'settled': not waiting, 'message': ' '.join(parts)}
 
 
 def read_body_file(path):
@@ -1004,9 +1034,9 @@ def compare_ticks(before, after, wanted):
 class TickRefusal(Refusal):
     """A refusal of `tick` after its inputs were accepted, with the reason the session reads."""
 
-    def __init__(self, reason, message, **extra):
+    def __init__(self, reason, message, hint=None, **extra):
         super().__init__(message)
-        self.reason, self.extra = reason, extra
+        self.reason, self.hint, self.extra = reason, hint, extra
 
 
 def gh_write(argv):
@@ -1118,7 +1148,94 @@ def save_body(folder, kind, stamp, text):
     raise Refusal(f'tick could not find a free name for body-{kind}-{stamp}.md')
 
 
-def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
+WALKTHROUGH_SECTIONS = ('antes', 'depois')
+SLICE_EVIDENCE_APPROVED = ('aprovado',)   # the answer "Aprovado" of the watched run; "Pode prosseguir" does not tick
+
+
+def walkthrough_problems(text):
+    """What a walkthrough file of a box without a screen lacks (references/development.md, "Into the local main",
+    step 3): a header before `## Antes`, then `## Antes` and `## Depois` in that order, each with a fenced block."""
+    problems, current, found, header, fence = [], None, {}, False, False
+    for raw in text.splitlines():
+        heading = HEADING.match(raw) if not fence else None
+        if heading and len(heading.group(1)) == 2:
+            name = plain(heading.group(2) or '')
+            current = name if name in WALKTHROUGH_SECTIONS else None
+            if current:
+                found.setdefault(current, False)
+            continue
+        if FENCE.match(raw):
+            fence = not fence
+            if current:
+                found[current] = True
+            continue
+        if current is None and not found and raw.strip():
+            header = True
+    if not header:
+        problems.append('sem cabeçalho (issue, caixa, persona, data, passos, base e commit) antes de ## Antes')
+    for name in WALKTHROUGH_SECTIONS:
+        if name not in found:
+            problems.append(f'sem a seção ## {name.capitalize()}')
+        elif not found[name]:
+            problems.append(f'a seção ## {name.capitalize()} não tem a saída num bloco de código')
+    if list(found)[:2] == ['depois', 'antes']:
+        problems.append('## Depois vem antes de ## Antes')
+    return problems
+
+
+ROTEIRO_SEM_TELA = re.compile(r'roteiro\s*:\s*sem tela\b')
+
+
+def slice_boxes(body):
+    """[{'label': 'S<k>', 'line', 'ticked', 'semTela'}] for the slice boxes of the acceptance-criteria section, in
+    order: `semTela` when a sub-item of the box says `Roteiro: sem tela` (the persona of a box without a screen)."""
+    boxes = []
+    for number, text, section, heading in sections(body):
+        if heading or section != 'criteria':
+            continue
+        item = ITEM.match(text)
+        label = BOX_LABEL.match(text[item.end():].lstrip(' \t')) if item else None
+        if label:
+            boxes.append({'label': f'S{int(label.group(1))}', 'line': number, 'ticked': item.group(1) != ' ',
+                          'semTela': False})
+        elif item:
+            boxes.append({'label': None, 'line': number, 'ticked': item.group(1) != ' ', 'semTela': False})
+        elif boxes and ROTEIRO_SEM_TELA.search(plain(text)):
+            boxes[-1]['semTela'] = True
+    return [box for box in boxes if box['label']]
+
+
+def slice_evidence(root, number, label, record=None):
+    """The evidence that lets slice box `label` (S<k>) be ticked, or a TickRefusal: the watched run approved, or the
+    walkthrough of the box without a screen in its format."""
+    folder = Path(root) / '.frontlights' / 'issues' / str(number)
+    result_file = Path(record) if record else folder / 'browser' / 'result.json'
+    walkthrough = folder / 'walkthroughs' / f'{label}.md'
+    data = read_record(result_file) if result_file.is_file() else None
+    seen = None
+    if isinstance(data, dict):
+        seen = data.get('situacao') if data.get('situacao') is not None else data.get('aprovacao')
+        if seen in SLICE_EVIDENCE_APPROVED:
+            return {'kind': 'teste assistido', 'path': str(result_file), 'situacao': seen}
+    problems = None
+    if walkthrough.is_file():
+        try:
+            problems = walkthrough_problems(walkthrough.read_text(encoding='utf-8-sig'))
+        except (OSError, UnicodeDecodeError):
+            problems = ['ilegível']
+        if not problems:
+            return {'kind': 'roteiro sem tela', 'path': str(walkthrough)}
+    detail = f'; o roteiro {walkthrough.name} está fora do formato: {"; ".join(problems)}' if problems else ''
+    raise TickRefusal('no_evidence',
+                      f'A caixa {label} da issue #{number} só é marcada com o teste assistido aprovado '
+                      f'({result_file.name}: {seen or "sem registro"}) ou, sem tela, com '
+                      f'walkthroughs/{label}.md no formato{detail}; nada foi escrito.',
+                      hint='caixa com tela: espere o "Aprovado" do teste assistido; sem tela: rode o roteiro da caixa '
+                           'e grave walkthroughs/S<k>.md (cabeçalho, ## Antes, ## Depois, cada um com a saída num '
+                           'bloco de código)')
+
+
+def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, record=None, comment_file=None):
     """Tick one box of an issue's acceptance criteria and check the reread (see the module's docstring). `account`,
     given by the command line, checks the gh login and repository against the config before anything is read
     (`_cli.gh_account`: `account_mismatch` or `repository_mismatch`, with the question to ask)."""
@@ -1143,15 +1260,29 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
     records = Path(root) / '.frontlights'
     require(records.is_dir(), 'tick keeps the previous body in .frontlights/issues/<n>/ of the project: pass --root, '
                               'the folder that holds .frontlights')
+    if comment_file is not None:
+        require(Path(comment_file).is_file(), f'--comment-file {rs.clean(str(comment_file), 200)} is not a file')
     gh, edit = gh or rs.gh_default, edit or gh_write
     label = None if box is None else f'{kind}{box}'
     result = {'repository': repository, 'issue': number, 'box': label, 'line': line, 'written': False,
               'alreadyTicked': False, 'verified': False, 'files': {}}
-    before = read_issue_body(gh, repository, number)
     try:
+        if kind == 'S' and box is not None:   # a slice box is ticked only with its evidence, before any read
+            result['evidence'] = slice_evidence(root, number, label, record)
+        before = read_issue_body(gh, repository, number)
         line, ticked = find_box(before, box, line, kind)
+        if box is None:   # a line: the guard holds when that line is a slice box
+            raw = re.split(r'\r\n|\r|\n', before)[line - 1]
+            item = ITEM.match(raw)
+            named = BOX_LABEL.match(raw[item.end():].lstrip(' \t')) if item else None
+            if named and not ticked:
+                result['evidence'] = slice_evidence(root, number, f'S{named.group(1)}', record)
     except TickRefusal as refusal:
-        return {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason, 'message': str(refusal)}
+        failure = {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason,
+                   'message': str(refusal)}
+        if refusal.hint:
+            failure['hint'] = refusal.hint
+        return failure
     result['line'] = line
     name = f'box {label} (line {line})' if label else f'line {line}'
     if ticked:
@@ -1194,6 +1325,14 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
         kept = ' The reread could not be kept in the records folder; capture it again before showing a difference.'
     if check['ok']:
         note = ' gh reported a failure, yet the reread shows the tick.' if failure else ''
+        result['commented'] = None
+        if comment_file is not None:   # the comment goes with the tick (covered: commenting on the issue)
+            try:
+                edit(['issue', 'comment', str(number), '--repo', repository, '--body-file', str(comment_file)])
+                result['commented'] = True
+            except Refusal as error:
+                result['commented'] = False
+                note += f' The comment was not posted ({error}); post it again with gh issue comment.'
         return {**result, 'ok': True, 'exitCode': 0, 'written': True, 'verified': True,
                 'message': f'The {name} of issue #{number} was ticked, and the reread checks.{note}{kept}'}
     if failure and body_lines(after) == body_lines(before):
@@ -1517,7 +1656,8 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
             result = op_tick_check(options.get('before'), options.get('after'), options.get('lines'))
         elif operation == 'tick':
             result = op_tick(config, root, options.get('issue'), options.get('box'), options.get('line'), gh,
-                             options.get('edit'), options.get('account'))
+                             options.get('edit'), options.get('account'), options.get('record'),
+                             options.get('comment_file'))
         elif operation == 'run':
             result = op_run(config, root, issues, all_flag, gh, options.get('base'), options.get('remote'))
         elif operation == 'apply':
@@ -1578,6 +1718,9 @@ def build_parser():
                                       'worktree of the current directory)')
     tick.add_argument('--box', help='the box to tick: the slice box S2 (also s2 or 2), or the leftover box P1')
     tick.add_argument('--line', help='or the line of any criterion of the section, such as 14')
+    tick.add_argument('--record', help="the result.json of the watched run (default: .frontlights/issues/<n>/browser/"
+                                       "result.json under --root; the lead issue's for a family)")
+    tick.add_argument('--comment-file', help='a comment posted on the issue once the tick checks')
     return parser
 
 
@@ -1607,6 +1750,7 @@ def main(argv=None):
                      box=getattr(args, 'box', None), line=getattr(args, 'line', None),
                      expect=getattr(args, 'expect', None), answer=getattr(args, 'answer', None),
                      only=getattr(args, 'only', None),
+                     record=getattr(args, 'record', None), comment_file=getattr(args, 'comment_file', None),
                      # checked at every write, never cached: the login and the repository against the config
                      account=((lambda data: _cli.gh_account(data, rs.gh_default))
                               if args.operation in ('tick', 'apply') else None))

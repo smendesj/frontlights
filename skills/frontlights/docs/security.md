@@ -130,6 +130,22 @@ andamento, roda `git fetch` e `git merge --no-edit`, e um conflito é desfeito n
 `--force`, `reset` nem `rebase`, e nunca toca outra branch além da `<base>`. O `fetch` é a única chamada de
 rede do utilitário, para o remoto já configurado no repositório, com as credenciais do próprio Git do usuário.
 
+**Merge na main local (`homolog merge`).** Os passos de "Into the local main" (`references/development.md`) num
+comando, só pela sessão coordenadora, com a mesma trava da sync: lista de argumentos sem shell,
+`GIT_TERMINAL_PROMPT=0`, prazo, e nunca push, `--force`, `reset` nem `rebase`. Recusa (saída 1) a worktree principal
+fora da `<base>`, suja ou com merge em andamento, uma slice do charter que não é ancestral da branch da issue, uma
+caixa aberta nos critérios (lidos do GitHub, só leitura, ou do registro local sem remoto) e uma caixa sem tela sem
+o roteiro no formato. Corta `<prefixo>issue-<n>-integra` da branch da issue (entrada própria no charter, local e
+nunca enviada) e faz nela os merges cobertos da branch da issue e da `<base>` local; um conflito fica na worktree de
+integração para a sessão resolver ali (saída 2 com `files`). O `browser-gate` roda na worktree da issue: `pending`,
+`stale`, `contradiction` ou `unconfigured` sai 2 com a pergunta pronta, nunca o merge. Depois, o `authorize` da
+operação gravada em `.frontlights/issues/<n>/merge-local-main-<data-hora>.json` (um arquivo por merge, sem rename à
+mão), o `git merge --no-ff` da integração na `<base>` local (um conflito é abortado na hora) e o `homolog bundle`.
+`--free-test-fix` (correção do teste livre) dispensa o portão só com o `result.json` já respondido e um merge
+anterior da issue com `scope_check: pass`, e grava `browser_gate: answered` com `evidence: "teste livre"`;
+`--dry-run` só confere e diz os passos, sem gravar nada. Não prova que o teste assistido aconteceu (quem prova é o
+`browser-gate`) e não substitui as permissões do host.
+
 **Backup da main local (`homolog bundle`).** A cada merge na main local, a sessão grava um bundle Git da main
 local e das branches de trabalho de todo `branch_prefix` dos registros de autorização na pasta da chave `homolog.backupDir` do `.frontlights/config.json` do
 projeto, a única gravação da execução fora do projeto. A chave é um caminho absoluto do usuário (o `inspect`

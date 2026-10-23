@@ -1,0 +1,233 @@
+"""Etapa 6 por comando, S4 (redesenho, issue 4): `homolog release plan|body-check|go|status|landed` e o
+`closeout.py merge-status` que lê `reviewDecision`, `mergeStateStatus` e `mergeable`. Gitfixture com origin bare e
+`gh` simulado; nenhum script faz push, `gh pr create` ou `gh pr merge`: eles voltam como argv em `commands`.
+
+Seams: `homolog.op_release`, `homolog.main` (o monitor `--since --quiet`) e `closeout.op_merge_status`.
+"""
+import contextlib
+import io
+import json
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
+import closeout  # noqa: E402
+import homolog  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_closeout import FakeGh, node, pr  # noqa: E402
+from test_merge_local import HomologMergeTests, git  # noqa: E402
+
+GOOD_BODY = ('Closes #12\n\n## Resumo\n\n### Issue #12: entrega\n\nO que muda.\n\n## Evidência\n\n### Issue #12\n\n'
+             'Roteiro sem tela S1, walkthroughs/S1.md.\n\n## Risco do merge\n\nPorta de duas vias.\n')
+
+
+def blocked_pr(number, **fields):
+    data = pr(number, head='PREFIX/release-x')
+    data.update(fields)
+    return data
+
+
+class ReleaseCase(HomologMergeTests):
+    """A local main with issue #12 merged through `homolog merge` (watched run not needed, walkthrough written)."""
+
+    def setUp(self):
+        super().setUp()
+        self.walk()
+        merged = self.homolog_merge()
+        self.assertEqual(merged['exitCode'], 0, merged)
+        self.gh = FakeGh({12: node(12)})
+
+    def release(self, action, **options):
+        options.setdefault('gh', self.gh)
+        options.setdefault('update_check', lambda: {'status': 'current'})
+        try:
+            return homolog.op_release(action, str(self.root), config_path=str(self.config), **options)
+        except homolog.Refusal as error:
+            return {'exitCode': 1, 'message': str(error)}
+
+    def body(self, text=GOOD_BODY):
+        path = self.tmp / 'corpo.md'
+        path.write_text(text, encoding='utf-8')
+        return str(path)
+
+    def go_and_record(self, number=77):
+        self.assertEqual(self.release('go', body=self.body())['exitCode'], 0)
+        recorded = self.release('go', record=True, pr=number)
+        self.assertEqual(recorded['exitCode'], 0, recorded)
+        return recorded
+
+
+class ReleasePlanTests(ReleaseCase):
+    # the tests of HomologMergeTests run again here through inheritance; keep only this class's own
+    def test_the_plan_is_ready_with_the_watched_run_recorded(self):
+        result = self.release('plan')
+        self.assertEqual((result['exitCode'], result['ready'], result['closes']), (0, True, [12]), result)
+
+    def test_an_issue_of_closes_without_the_watched_run_recorded_is_exit_1(self):
+        for path in self.records.glob('merge-local-main*.json'):
+            path.unlink()
+        result = self.release('plan')
+        self.assertEqual((result['exitCode'], result['reason'], result['missing']), (1, 'watched_run_missing', [12]))
+
+
+class BodyCheckTests(ReleaseCase):
+    def test_a_body_by_the_model_with_the_closes_of_the_plan_passes(self):
+        result = self.release('body-check', body=self.body())
+        self.assertEqual((result['exitCode'], result['problems']), (0, []))
+
+    def test_each_departure_from_the_model_is_named(self):
+        cases = {
+            '(#13) não são as de `closes` (#12)': GOOD_BODY.replace('Closes #12', 'Closes #13'),
+            'palavra de fechamento': GOOD_BODY + '\nFixes #14\n',
+            'Risco do merge': GOOD_BODY.replace('## Risco do merge', '## Outro'),
+            'marcador': GOOD_BODY.replace('entrega', '<título>'),
+            'antes de ## Resumo': GOOD_BODY.replace('Closes #12\n\n', '') + '\nCloses #12\n',
+            'caminho absoluto': GOOD_BODY + '\nPrint em C:\\pasta\\x.png\n',
+        }
+        for expected, text in cases.items():
+            with self.subTest(expected=expected):
+                result = self.release('body-check', body=self.body(text), closes='12')
+                self.assertEqual(result['exitCode'], 1)
+                self.assertTrue(any(expected in p for p in result['problems']), result['problems'])
+
+
+class GoTests(ReleaseCase):
+    def test_go_prints_the_refspec_push_and_the_pull_request_and_runs_neither(self):
+        result = self.release('go', body=self.body())
+        self.assertEqual(result['exitCode'], 0, result)
+        push, create = result['commands']
+        name = result['release']['branch']
+        self.assertRegex(name, r'^PREFIX/release-\d{4}-\d{2}-\d{2}$')
+        self.assertEqual(push, ['git', '-C', str(self.root), 'push', 'origin', f'main:refs/heads/{name}'])
+        self.assertEqual(create[:9], ['gh', 'pr', 'create', '--repo', 'OWNER/REPOSITORY', '--base', 'main', '--head',
+                                      name])
+        self.assertIn('issues #12', create[create.index('--title') + 1])
+        self.assertEqual(git(self.root, 'ls-remote', 'origin', name), '')
+        self.assertTrue((self.root / '.frontlights' / 'release' / 'pending.json').is_file())
+        self.assertEqual(result['skillUpdate'], {'status': 'current'})
+
+    def test_a_body_that_fails_the_check_is_refused(self):
+        result = self.release('go', body=self.body(GOOD_BODY.replace('Closes #12', 'Closes #99')))
+        self.assertEqual((result['exitCode'], result['reason']), (1, 'body'))
+
+    def test_the_legacy_branch_only_with_the_literal_sim(self):
+        self.assertEqual(self.release('go', body=self.body(), legacy=True)['exitCode'], 1)
+        result = self.release('go', body=self.body(), legacy=True, answer='Sim')
+        name = result['release']['branch']
+        self.assertEqual(result['commands'][:2], [['git', '-C', str(self.root), 'branch', name, 'main'],
+                                                  ['git', '-C', str(self.root), 'push', '-u', 'origin', name]])
+
+    def test_record_writes_current_json(self):
+        recorded = self.go_and_record()
+        current = json.loads((self.root / '.frontlights' / 'release' / 'current.json').read_text(encoding='utf-8'))
+        self.assertEqual((current['pr'], current['issues'], current['closes']), (77, [12], [12]))
+        self.assertIn('--since pending', recorded['monitor'])
+
+
+class StatusTests(ReleaseCase):
+    def status(self, data, **options):
+        self.gh.pull_requests = {77: data}
+        return self.release('status', **options)
+
+    def test_a_blocked_pull_request_is_never_offered_for_merging(self):
+        self.go_and_record()
+        for fields in ({'reviewDecision': 'REVIEW_REQUIRED', 'mergeStateStatus': 'BLOCKED', 'mergeable': 'MERGEABLE'},
+                       {'reviewDecision': 'CHANGES_REQUESTED', 'mergeStateStatus': 'CLEAN', 'mergeable': 'MERGEABLE'},
+                       {'reviewDecision': None, 'mergeStateStatus': 'DIRTY', 'mergeable': 'CONFLICTING'}):
+            with self.subTest(fields=fields):
+                result = self.status(blocked_pr(77, **fields))
+                self.assertEqual((result['state'], result['offerMerge']), ('blocked', False))
+                self.assertNotIn('question', result)
+
+    def test_a_clean_pull_request_gets_the_merge_question_with_its_commands(self):
+        self.go_and_record()
+        result = self.status(blocked_pr(77, reviewDecision='APPROVED', mergeStateStatus='CLEAN', mergeable='MERGEABLE'))
+        self.assertEqual((result['state'], result['offerMerge']), ('ready', True))
+        self.assertEqual(result['question'], 'Mesclar a PR #77 em main?')
+        self.assertEqual(result['options'], ['Sim, mesclar', 'Não, aguardar o merge'])
+        self.assertEqual(result['commands'], [['gh', 'pr', 'ready', '77'], ['gh', 'pr', 'merge', '77', '--merge']])
+
+    def test_since_wakes_only_on_a_change(self):
+        self.go_and_record()
+        data = blocked_pr(77, reviewDecision='REVIEW_REQUIRED', mergeStateStatus='BLOCKED', mergeable='MERGEABLE')
+        self.assertEqual(self.status(data, since='blocked')['exitCode'], homolog.UNCHANGED)
+        self.assertEqual(self.status(data, since='pending')['exitCode'], 0)
+
+    def test_merge_status_carries_the_block(self):
+        self.gh.pull_requests = {77: blocked_pr(77, reviewDecision='REVIEW_REQUIRED', mergeStateStatus='BLOCKED',
+                                                mergeable='MERGEABLE')}
+        result = closeout.op_merge_status(str(self.config), '77', 'main', self.gh)
+        entry = result['pullRequests'][0]
+        self.assertEqual((entry['reviewDecision'], entry['mergeStateStatus'], entry['blocked']),
+                         ('REVIEW_REQUIRED', 'BLOCKED', True))
+        self.assertEqual(result['blocked'], [77])
+
+
+class LandedTests(ReleaseCase):
+    def land(self, **options):
+        options.setdefault('planner', lambda root, config, issues, base: {'commands': [['git', 'worktree', 'remove',
+                                                                                       'x']], 'issues': issues})
+        return self.release('landed', **options)
+
+    def test_landed_waits_for_the_merge(self):
+        self.go_and_record()
+        self.gh.pull_requests = {77: pr(77)}
+        self.assertEqual(self.land()['exitCode'], 2)
+
+    def test_landed_fast_forwards_prunes_and_prints_the_cleanup(self):
+        self.go_and_record()
+        git(self.root, 'push', '-q', 'origin', 'main')   # GitHub's merge of the release, played by the test
+        self.gh.pull_requests = {77: pr(77, state='MERGED')}
+        result = self.land()
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['commands'], [['git', 'worktree', 'remove', 'x']])
+        self.assertEqual(result['verify'][-2:], ['--issues', '12'])
+        release = self.root / '.frontlights' / 'release'
+        self.assertFalse((release / 'current.json').exists())
+        self.assertEqual(len(list(release.glob('landed-*.json'))), 1)
+
+    def test_a_pull_that_does_not_fast_forward_stops_and_asks(self):
+        self.go_and_record()
+        other = self.tmp / 'outro'
+        subprocess.run(['git', 'clone', '-q', str(self.folder / 'origin.git'), str(other)], check=True)
+        for key, value in (('user.email', 'x@example.invalid'), ('user.name', 'X')):
+            git(other, 'config', key, value)
+        (other / 'divergente.txt').write_text('x', encoding='utf-8')
+        git(other, 'add', '.')
+        git(other, 'commit', '-q', '-m', 'divergente')
+        git(other, 'push', '-q', 'origin', 'main')
+        before = git(self.root, 'rev-parse', 'main')
+        self.gh.pull_requests = {77: pr(77, state='MERGED')}
+        result = self.land()
+        self.assertEqual((result['exitCode'], result['reason']), (2, 'not_fast_forward'))
+        self.assertEqual(git(self.root, 'rev-parse', 'main'), before)
+
+
+class MonitorTests(unittest.TestCase):
+    def run_main(self, answer):
+        out = io.StringIO()
+        with mock.patch.object(homolog, 'op_release', return_value=answer), contextlib.redirect_stdout(out):
+            code = homolog.main(['release', 'status', '--root', '.', '--since', 'blocked', '--quiet'])
+        return code, out.getvalue()
+
+    def test_the_monitor_is_silent_until_the_state_changes(self):
+        code, text = self.run_main({'exitCode': homolog.UNCHANGED, 'pr': 77, 'state': 'blocked'})
+        self.assertEqual((code, text), (homolog.UNCHANGED, ''))
+        code, text = self.run_main({'exitCode': 0, 'pr': 77, 'state': 'ready', 'message': 'pronta'})
+        self.assertEqual(code, 0)
+        self.assertEqual(len(text.strip().splitlines()), 1)
+        self.assertIn('PR #77 ready', text)
+
+
+for name in [n for n in dir(HomologMergeTests) if n.startswith('test_')]:
+    for case in (ReleaseCase, ReleasePlanTests, BodyCheckTests, GoTests, StatusTests, LandedTests):
+        if name not in case.__dict__:
+            setattr(case, name, None)   # inherited only for its fixture, never run twice
+del ReleaseCase, HomologMergeTests   # loaded here only as bases
+
+
+if __name__ == '__main__':
+    unittest.main()
