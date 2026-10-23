@@ -587,8 +587,10 @@ class ProjectBoardTests(unittest.TestCase):
         for i in p['issues']:
             i['project_fields'] = {'Area': 'Backend'}
         frontlights.validate_plan(p, board())
+        # a board with no type at all (a personal account's repository has none) publishes without a type
+        frontlights.validate_plan(p, board(issue_type=None))
         with self.assertRaisesRegex(ValueError, 'issue_type'):
-            frontlights.validate_plan(p, board(issue_type=None))
+            frontlights.validate_plan(p, board(issue_type=None, issue_type_by_label={'kind:bug': 'Bug'}))
         for i in p['issues']:
             i['issue_type'] = 'Bug'
         frontlights.validate_plan(p, board(issue_type=None))

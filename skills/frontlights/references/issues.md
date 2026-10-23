@@ -100,6 +100,9 @@ below.
   prints `resolved`, the only values published. The approval table shows them all.
 - `publish-issue` creates with the labels and `--blocked-by` (the order of `publish-order --plan`), then the board, the
   assignee, the type and each field; an adopted issue gets labels, `--add-blocked-by` and the board, never a body edit.
+  Before the first write it reads the repository's issue types and refuses `issue_type_unavailable`, naming the ones
+  that exist (a personal account's repository has none: drop `issue_type` and `issue_type_by_label` from the config's
+  `project`); `inspect` warns the same. A `write_failed` carries gh's stderr, masked.
   The reread checks `projectItems`, `issueType`, `labels` and `--json blockedBy`; a failed write is resumed, never
   recreated.
 - A value with `$`, a backtick, a quote or a backslash is refused: reword it. Never invent a label. A field with no

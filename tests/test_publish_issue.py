@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'skills' / 'frontlights' / 'scripts'
@@ -31,9 +32,11 @@ BODY_B = '# Editar uma observação\n\n## Critérios de aceitação\n\n- [ ] S1.
 class FakeGitHub:
     """`gh` in memory: create, edit, project item-add/item-edit, view, list, api user and repo view."""
 
-    def __init__(self, login='OWNER-LOGIN', repo=REPO, fail=None, lose_url=False):
+    def __init__(self, login='OWNER-LOGIN', repo=REPO, fail=None, lose_url=False, issue_types=('Task', 'Bug'),
+                 stderr=''):
         self.issues, self.calls, self.next = {}, [], 101
         self.login, self.repo, self.fail, self.lose_url = login, repo, fail or set(), lose_url
+        self.issue_types, self.stderr = issue_types, stderr   # issue_types None: a personal account's repository
         self.now = dt.datetime.now(dt.timezone.utc)
 
     def add(self, number, title, body, labels=()):
@@ -45,7 +48,10 @@ class FakeGitHub:
         self.calls.append(list(argv))
         head = tuple(argv[:2])
         if head in self.fail:
-            return 1, ''
+            return 1, '', self.stderr
+        if head == ('api', 'graphql') and any('issueTypes' in part for part in argv):
+            types = None if self.issue_types is None else {'nodes': [{'name': n} for n in self.issue_types]}
+            return 0, json.dumps({'data': {'repository': {'issueTypes': types}}})
         if head == ('api', 'user'):
             return 0, json.dumps({'login': self.login})
         if head == ('repo', 'view'):
@@ -366,6 +372,76 @@ class ResumeTests(PublishCase):
         gh.lose_url = False
         done = self.publish(plan, approved, gh, resume=True)
         self.assertEqual(done['published'][0]['number'], 101)
+
+
+class IssueTypeTests(PublishCase):
+    """Teste real do quadro (23/10/2026): num repositório de conta pessoal não há tipos de issue, e a publicação
+    criava a issue para só falhar no `gh issue edit --type`, com "o gh recusou". Agora os tipos são lidos antes da
+    primeira escrita, e toda recusa `write_failed` traz o stderr do gh, mascarado."""
+
+    def test_a_repository_without_issue_types_refuses_before_any_write(self):
+        plan, approved = self.standard()
+        gh = FakeGitHub(issue_types=None)
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['reason'], 'issue_type_unavailable', result)
+        self.assertEqual(gh.writes(), [])
+        self.assertEqual(result['available'], [])
+        self.assertIn('issue_type', result['hint'])
+        self.assertIn('issue_type_by_label', result['hint'])
+        self.assertIn('config', result['hint'])
+
+    def test_a_type_the_repository_lacks_is_refused_naming_the_ones_it_has(self):
+        plan, approved = self.standard()
+        gh = FakeGitHub(issue_types=('Bug', 'Feature'))
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['reason'], 'issue_type_unavailable', result)
+        self.assertEqual(gh.writes(), [])
+        self.assertEqual(result['available'], ['Bug', 'Feature'])
+        self.assertIn('Task', result['message'])
+        self.assertIn('Bug, Feature', result['message'])
+
+    def test_a_board_without_a_type_publishes_without_type(self):
+        board = {k: v for k, v in BOARD.items() if k != 'issue_type'}
+        self.write_config(project=board)
+        plan, approved = self.standard()
+        gh = FakeGitHub(issue_types=None)
+        result = self.publish(plan, approved, gh)
+        self.assertTrue(result['ok'], result)
+        self.assertFalse(any('--type' in call for call in gh.calls))
+
+    def test_write_failed_carries_the_masked_stderr_of_gh(self):
+        plan, approved = self.standard()
+        token = 'gho_' + 'A1b2C3d4' * 5
+        gh = FakeGitHub(fail={('project', 'item-add')},
+                        stderr=f'GraphQL: Could not resolve to a ProjectV2 (token {token})')
+        result = self.publish(plan, approved, gh)
+        self.assertEqual(result['reason'], 'write_failed', result)
+        self.assertIn('Could not resolve to a ProjectV2', result['message'])
+        self.assertNotIn(token, json.dumps(result))
+
+    def test_inspect_warns_when_the_repository_lacks_the_configured_type(self):
+        def fake(argv, cwd=None):
+            if argv[:3] == ['gh', 'api', 'graphql'] and any('issueTypes' in a for a in argv):
+                return json.dumps({'data': {'repository': {'issueTypes': None}}}).encode()
+            if argv[:3] == ['gh', 'project', 'view']:
+                return json.dumps({'title': 'Board', 'url': 'https://github.com/users/OWNER/projects/7'}).encode()
+            return b'[]'
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(frontlights, 'run', side_effect=fake):
+            result = frontlights.inspect({'repository': REPO, 'project': BOARD}, root)
+        found = [w for w in result.get('warnings', []) if w.startswith('issue_type_unavailable')]
+        self.assertEqual(len(found), 1, result.get('warnings'))
+        self.assertIn('Task', found[0])
+
+    def test_inspect_says_nothing_when_the_type_exists(self):
+        def fake(argv, cwd=None):
+            if argv[:3] == ['gh', 'api', 'graphql'] and any('issueTypes' in a for a in argv):
+                return json.dumps({'data': {'repository': {'issueTypes': {'nodes': [{'name': 'Task'}]}}}}).encode()
+            if argv[:3] == ['gh', 'project', 'view']:
+                return json.dumps({'title': 'Board', 'url': 'https://github.com/users/OWNER/projects/7'}).encode()
+            return b'[]'
+        with tempfile.TemporaryDirectory() as root, mock.patch.object(frontlights, 'run', side_effect=fake):
+            result = frontlights.inspect({'repository': REPO, 'project': BOARD}, root)
+        self.assertFalse([w for w in result.get('warnings', []) if w.startswith('issue_type_unavailable')])
 
 
 class LocalTests(PublishCase):

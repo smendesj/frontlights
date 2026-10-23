@@ -357,8 +357,12 @@ def resolve_board(project, issue):
     by_label = {label.casefold(): kind for label, kind in project['issue_type_by_label'].items()}
     implied = next((by_label[label.casefold()] for label in labels if label.casefold() in by_label), None)
     issue_type = issue.get('issue_type') or implied or project['issue_type']
-    require(nonempty(issue_type), f'{issue["id"]}: issue_type required by the board (plan, labels or project default)')
-    require(typeable(issue_type), f'{issue["id"]}: issue_type must be {TYPEABLE_RULE}')
+    # A board that configures no type at all (neither issue_type nor issue_type_by_label) publishes without one: a
+    # repository of a personal account has no issue types (publish-issue refuses `issue_type_unavailable`).
+    typed = bool(project['issue_type'] or project['issue_type_by_label'])
+    require(nonempty(issue_type) or not typed,
+            f'{issue["id"]}: issue_type required by the board (plan, labels or project default)')
+    require(issue_type is None or typeable(issue_type), f'{issue["id"]}: issue_type must be {TYPEABLE_RULE}')
     return {'fields': values, 'labels': labels, 'issue_type': issue_type,
             'body_fields': board_body_fields(project, issue) if rules else {}}
 
@@ -1356,6 +1360,7 @@ def inspect(config, root, config_path=None, summary=False, offline=False, issue=
         except (ValueError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
             result['sources']['project'] = {'status': 'unavailable', **board_summary,
                                             'reason': 'project board read failed; check gh "project" scope and board access'}
+        warnings = warnings + board_warnings(project, repo)
     roads = config.get('roads')
     if offline:
         pass
@@ -1386,6 +1391,30 @@ def inspect(config, root, config_path=None, summary=False, offline=False, issue=
     if warnings:
         result['warnings'] = warnings
     return summarize(result) if summary else result
+
+
+def gh_json_read(argv):
+    """JSON of a `gh` read for the board warnings of `inspect`; None when it fails or is not JSON."""
+    try:
+        return json.loads(run(['gh', *argv]))
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def board_warnings(project, repo):
+    """What `inspect` (outside `--offline`) says about a configured board before any publication:
+    `issue_type_unavailable` when the repository lacks a type the config names. A read that fails says nothing."""
+    warnings = []
+    wanted = [t for t in [project['issue_type'], *project['issue_type_by_label'].values()] if t]
+    if wanted:
+        available = issue_type_names(gh_json_read(issue_types_argv(repo)))
+        missing = missing_types(wanted, available) if available is not None else []
+        if missing:
+            warnings.append('issue_type_unavailable: ' + types_sentence(repo, missing, available, 'o config') +
+                            '; o publish-issue recusa antes de criar a issue; ' +
+                            ('tire issue_type e issue_type_by_label do project no .frontlights/config.json deste '
+                             'projeto' if not available else 'corrija o tipo no project do config'))
+    return warnings
 
 
 # What `inspect` refuses in a config (exit 1). One line per rule, in Portuguese: the `inspect --help` epilog prints
@@ -2469,19 +2498,38 @@ class PublishRefusal(Stage6Refusal):
 
 
 def gh_text(argv):
-    """`gh <argv>` without a shell: (exit code, stdout). gh's own output is never repeated in a refusal."""
+    """`gh <argv>` without a shell: (exit code, stdout, stderr). The stderr reaches a refusal only masked
+    (`gh_error`)."""
     try:
         done = subprocess.run(['gh', *argv], capture_output=True, text=True, encoding='utf-8', errors='replace',
                               timeout=120, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.TimeoutExpired):
-        return 127, ''
-    return done.returncode, done.stdout
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return 127, '', type(error).__name__
+    return done.returncode, done.stdout, done.stderr
+
+
+def gh_call(gh, argv):
+    """(code, stdout, stderr) of a `gh` callable that answers two values (code, stdout) or three."""
+    answer = tuple(gh(argv))
+    return answer[0], answer[1], (answer[2] if len(answer) > 2 else '') or ''
+
+
+GH_TOKEN = re.compile(r'\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})')
+GH_ERROR_LIMIT = 400
+
+
+def gh_error(text):
+    """The stderr of gh for a refusal: GitHub tokens and the known secrets (`checks.redact`) masked, one line,
+    at most GH_ERROR_LIMIT characters; '' without any."""
+    import checks  # noqa: PLC0415
+    line = ' '.join(GH_TOKEN.sub(checks.MASK, checks.redact(str(text or ''))).split())
+    return line if len(line) <= GH_ERROR_LIMIT else line[:GH_ERROR_LIMIT] + '…'
 
 
 def gh_reader(gh):
     """A JSON reader over `gh` for `_cli.gh_account` and the rereads: raises on a failure, never guesses."""
     def read(argv):
-        code, out = gh(argv)
+        code, out, _ = gh_call(gh, argv)
         if code != 0:
             raise PublishRefusal('gh_failed', f'o gh recusou a leitura `gh {" ".join(argv[:2])}`',
                                  hint='confira a conta ativa (gh auth status) e o acesso ao repositório')
@@ -2578,8 +2626,9 @@ def publish_steps(issue, board_, plan_repo):
         steps.append(('create', 'create', {'labels': labels}))
     if resolved is not None:
         steps.append(('item-add', 'item-add', {}))
-        steps.append(('assignee-type', 'assignee-type', {'assignee': board_.get('assignee'),
-                                                          'issue_type': resolved['issue_type']}))
+        if board_.get('assignee') or resolved['issue_type']:
+            steps.append(('assignee-type', 'assignee-type', {'assignee': board_.get('assignee'),
+                                                              'issue_type': resolved['issue_type']}))
         for name, value in resolved['fields'].items():
             steps.append((f'field:{name}', 'field', {'field': name, 'value': value}))
     return steps, resolved, labels
@@ -2607,7 +2656,7 @@ def step_argv(kind, detail, repo, board_, number, url, title, body_file, blocker
         argv = ['issue', 'edit', str(number), '--repo', repo]
         if detail.get('assignee'):
             argv += ['--add-assignee', detail['assignee']]
-        return argv + ['--type', detail['issue_type']]
+        return argv + (['--type', detail['issue_type']] if detail.get('issue_type') else [])
     if kind == 'field':
         return ['project', 'item-edit', str(board_['number']), '--owner', board_['owner'], '--url', str(url),
                 '--field', detail['field'], '--value', detail['value']]
@@ -2754,6 +2803,64 @@ def publish_run(plan_path, approved, root, config_path, dry_run, resume, gh, acc
                           gh or gh_text, account)
 
 
+ISSUE_TYPES_QUERY = ('query($owner:String!,$name:String!){repository(owner:$owner,name:$name)'
+                     '{issueTypes(first:100){nodes{name}}}}')
+NO_TYPES_HINT = ('tire issue_type e issue_type_by_label do project no .frontlights/config.json deste projeto (e '
+                 'issue_type das issues do plano), mostre o plano e aprove de novo')
+
+
+def issue_types_argv(repo):
+    owner, name = repo.split('/', 1)
+    return ['api', 'graphql', '-f', f'query={ISSUE_TYPES_QUERY}', '-f', f'owner={owner}', '-f', f'name={name}']
+
+
+def issue_type_names(data):
+    """The issue type names of a `repository.issueTypes` answer: [] when the repository has none (`issueTypes` null,
+    a repository of a personal account); None when the answer is not that shape."""
+    repository = (data.get('data') or {}).get('repository') if isinstance(data, dict) else None
+    if not isinstance(repository, dict) or 'issueTypes' not in repository:
+        return None
+    types = repository['issueTypes']
+    nodes = types.get('nodes') if isinstance(types, dict) else []
+    return [n['name'] for n in nodes or [] if isinstance(n, dict) and nonempty(n.get('name'))]
+
+
+def missing_types(wanted, available):
+    have = {name.casefold() for name in available}
+    return [name for name in dict.fromkeys(wanted) if name.casefold() not in have]
+
+
+def types_sentence(repo, missing, available, who='o plano'):
+    if not available:
+        return (f'o repositório {repo} não tem tipos de issue (repositório de conta pessoal) e {who} pede '
+                f'{", ".join(missing)}')
+    return f'o repositório {repo} não tem o tipo de issue {", ".join(missing)}; os tipos que existem: {", ".join(available)}'
+
+
+def check_issue_types(read, repo, entries, state):
+    """Before the first write: every issue type the plan resolves for a write still to run exists in the repository
+    (`repository.issueTypes`), else `issue_type_unavailable` with the types that exist; nothing is written."""
+    wanted = []
+    for entry in entries:
+        done = state['issues'].get(str(entry['issue']['id']), {}).get('done', [])
+        for key, kind, detail in entry['steps']:
+            if kind == 'assignee-type' and key not in done and detail.get('issue_type'):
+                wanted.append(detail['issue_type'])
+    if not wanted:
+        return
+    available = issue_type_names(read(issue_types_argv(repo)))
+    if available is None:
+        raise PublishRefusal('gh_failed', 'o gh não respondeu os tipos de issue do repositório (repository.issueTypes)',
+                             hint='confira a conta ativa (gh auth status) e o acesso ao repositório')
+    missing = missing_types(wanted, available)
+    if missing:
+        raise PublishRefusal('issue_type_unavailable', types_sentence(repo, missing, available) + '; nada foi escrito',
+                             available=available,
+                             hint=NO_TYPES_HINT if not available else
+                             f'use um dos tipos que existem ({", ".join(available)}) no plano ou no project do config, '
+                             'mostre e aprove de novo')
+
+
 def publish_remote(entries, plan, config, repo, board_, root, state, state_path, approval, resume, gh, account):
     read = gh_reader(gh)
     check_account = account or (lambda data: _cli.gh_account(data, read))
@@ -2762,6 +2869,7 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
         if saved.get('number'):
             numbers[int(key)] = saved['number']
     relative_state = state_path.relative_to(root).as_posix()
+    check_issue_types(read, repo, entries, state)
     published, writes = [], 0
     for entry in entries:
         issue, ident = entry['issue'], entry['issue']['id']
@@ -2786,13 +2894,15 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
                 body_file.write_bytes(entry['body'].encode('utf-8'))
             argv = step_argv(kind, detail, repo, board_, saved.get('number'), saved.get('url'), issue['title'],
                              body_file, blockers)
-            code, out = gh(argv)
+            code, out, err = gh_call(gh, argv)
             writes += 1
             if code != 0:
                 saved.setdefault('failed', []).append(key)
                 write_json_file(state_path, state)
-                raise PublishRefusal('write_failed', f'o gh recusou `gh {" ".join(argv[:2])}` da issue {ident}; a '
-                                     'publicação parcial está no arquivo de estado', stateFile=relative_state,
+                said = gh_error(err)
+                raise PublishRefusal('write_failed', f'o gh recusou `gh {" ".join(argv[:2])}` da issue {ident}'
+                                     + (f' ({said})' if said else ' (sem mensagem no stderr)') + '; a publicação '
+                                     'parcial está no arquivo de estado', stateFile=relative_state,
                                      hint='corrija a causa e repita com --resume (só as escritas que faltam)')
             if kind == 'create':
                 match = ISSUE_URL.search(out or '')
