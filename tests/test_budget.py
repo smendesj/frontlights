@@ -32,6 +32,7 @@ BUDGET = {
     'references/LICENSE-tdd.md': 198,
     'references/progress-report.md': 3797,
     'references/review.md': 753,
+    'references/setup.md': 181,
     'references/tdd-mocking.md': 202,
     'references/tdd-tests.md': 291,
     'templates/discovery.md': 339,

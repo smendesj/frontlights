@@ -888,6 +888,39 @@ class InitConfigTests(unittest.TestCase):
         self.assertEqual(self.config(), {'repository': None})
 
 
+class SetupReferenceTests(unittest.TestCase):
+    """Issue 11, S2: `references/setup.md` (~200 palavras) só quando o inspect relata config ou bloco ausente."""
+
+    def setUp(self):
+        skill = ROOT / 'skills' / 'frontlights'
+        self.text = ' '.join((skill / 'references' / 'setup.md').read_text(encoding='utf-8').split())
+        self.skill = (skill / 'SKILL.md').read_text(encoding='utf-8')
+
+    def test_it_is_short_and_read_only_on_a_setup_report(self):
+        self.assertLessEqual(len(self.text.split()), 220)
+        self.assertTrue(self.text.startswith('# Setup Read when: `inspect` reports `config_missing` or a setup warning'))
+        self.assertIn('| references/setup.md | `inspect` reports `config_missing` or a setup warning |', self.skill)
+        for code in ('browser_test_missing', 'project_unresolved', 'branch_prefix_missing'):
+            with self.subTest(code=code):
+                self.assertIn(code, self.text)
+                self.assertIn(code, (ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py').read_text(
+                    encoding='utf-8'))
+
+    def test_init_config_never_writes_the_board_and_the_board_is_asked(self):
+        self.assertIn('`frontlights.py init-config` writes `.frontlights/config.json` in the main worktree', self.text)
+        self.assertIn('never the `project` key', self.text)
+        self.assertIn('(`references/issues.md`, "Project board")', self.text)
+
+    def test_browser_test_null_with_a_visible_file_is_one_question_never_a_skipped_gate(self):
+        self.assertIn('`browserTest: null` with a visible file in the diff (`browser-gate` says `unconfigured`) is one '
+                      'question, never a skipped gate, the closing inside its options', self.text)
+        self.assertIn('the block itself is proved by `serve.py start` and `stop` at the first opening of stage 6', self.text)
+
+    def test_the_test_password_is_masked_in_the_stamped_draft(self):
+        self.assertIn('approved by link and stamp as a draft under `.frontlights/`, every '
+                      '`browserTest.users[].password` shown as `***`', self.text)
+        self.assertIn('The real value goes only into the final config, after the approval, and is never printed', self.text)
+
 
 if __name__ == '__main__':
     unittest.main()

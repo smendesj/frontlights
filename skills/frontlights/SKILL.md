@@ -45,6 +45,7 @@ Portuguese to the user; English only in `SKILL.md` and `references/`. In the use
 | references/browser-conductor.md | filled by `serve.py window brief`; read to drive the passes |
 | references/review.md | only in a requested review's brief |
 | references/closeout.md | stage 7; the stage-1 closeout question |
+| references/setup.md | `inspect` reports `config_missing` or a setup warning |
 | references/progress-report.md | the "Resumo para a diretoria" |
 | templates/pr.md with references/LICENSE-pr.md | the release PR |
 | templates/handoff.md | every handoff |
