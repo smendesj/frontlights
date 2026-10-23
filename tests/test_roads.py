@@ -123,8 +123,9 @@ class ConfigurationTests(RoadsTestCase):
         done = subprocess.run([sys.executable, str(SCRIPT), 'gaps', '--root', str(self.project)],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 2)
-        self.assertIn("invalid choice: 'gaps'", done.stderr)
-        self.assertEqual(done.stdout, '')
+        usage = json.loads(done.stdout)   # a usage error is JSON on stdout with a hint (_cli.JsonParser)
+        self.assertEqual(usage['error'], 'usage')
+        self.assertIn("invalid choice: 'gaps'", usage['message'])
 
     def test_an_enabled_block_that_does_not_validate_is_reported_not_hidden(self):
         self.write_config(endpoint='http://roads.example.test/api')

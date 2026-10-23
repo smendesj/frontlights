@@ -397,9 +397,9 @@ def main():
                         help='the branch of a slice (or of a stacked issue) and the branch it is measured from: the branch '
                              'of its issue, or the one its PR targets; repeatable')
     try:
-        args = parser.parse_args()
+        args = _cli.output_flags(parser).parse_args()
         args.root = args.root or [str(_cli.current_tree())]
-        args.config = _cli.config_path(args.config, _cli.main_worktree(), required=False)
+        args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 2)
     try:
@@ -407,7 +407,7 @@ def main():
     except (ValueError, OSError, subprocess.TimeoutExpired) as error:
         print(json.dumps({'error': str(error)}), file=sys.stderr)
         return 1
-    print(json.dumps(result, indent=2, ensure_ascii=True))
+    _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), 'browser-gate', args.full)
     return code
 
 

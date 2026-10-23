@@ -1650,7 +1650,7 @@ class HomologReleaseClosesTests(HomologCli, unittest.TestCase):
     def routed(self, gh, *flags):
         """`frontlights.py homolog release-plan` neste processo, com o gh falso no lugar do `gh_default`."""
         out = io.StringIO()
-        argv = ['frontlights.py', 'homolog', 'release-plan', '--root', str(self.work), *flags]
+        argv = ['frontlights.py', 'homolog', 'release-plan', '--root', str(self.work), '--full', *flags]
         with mock.patch.object(rs, 'gh_default', gh), mock.patch.object(sys, 'argv', argv), \
                 mock.patch.dict(os.environ, self.env, clear=True), contextlib.redirect_stdout(out):
             code = frontlights.main()

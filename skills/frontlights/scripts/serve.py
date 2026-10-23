@@ -1837,7 +1837,7 @@ def resolve_defaults(args):
         args.root = args.root or str(main_tree)
     elif args.operation in ('start', 'stop', 'status'):
         args.root = args.root or str(_cli.current_tree())
-        if args.issue is None:
+        if args.issue is None and args.branch is None and args.base is None:   # those are refused by run first
             args.issue = _cli.issue_number(None, args.root, main_tree)
     return args
 
@@ -1858,9 +1858,9 @@ def main(argv=None):
                         'mesclar na branch da prévia (repetível, na ordem dada)')
     parser.add_argument('--base', help=f'só para preview refresh: branch base local (padrão {DEFAULT_BASE})')
     try:
-        args = resolve_defaults(parser.parse_args(argv))
+        args = resolve_defaults(_cli.output_flags(parser).parse_args(argv))
     except _cli.UsageError as error:
-        return _cli.print_usage_error(error, 2, category='uso')
+        return _cli.print_usage_error(error, 1, error=str(error), category='uso')   # serve: `error` is the text
     try:
         result = run(args.operation, args.config, args.root, args.issue, args.action, args.log, args.branch,
                      args.base)
@@ -1873,7 +1873,8 @@ def main(argv=None):
             result['failedProcess'] = refusal.process
         result.update(refusal.extra)
         code = 1
-    print(json.dumps(scrub(result), ensure_ascii=False))  # the single masking pass of the output
+    verb = args.operation if args.operation != 'preview' else f'preview-{args.action or "start"}'
+    _cli.emit(json.dumps(scrub(result), ensure_ascii=False), verb, args.full)  # the single masking pass of the output
     return code
 
 

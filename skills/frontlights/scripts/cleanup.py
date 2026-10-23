@@ -821,8 +821,9 @@ def op_archive(source, destination):
                                'worktree keeps its records')
     present, leftovers = found
 
-    def skip(folder, names):   # what an earlier copy already holds, the same (checked above)
-        return [n for n in names if (Path(folder) / n).relative_to(origin).as_posix() in present]
+    def skip(folder, names):   # what an earlier copy already holds, the same (checked above), and out/ (saved outputs)
+        return [n for n in names if (Path(folder) / n).relative_to(origin).as_posix() in present
+                or (Path(folder) == origin and n == 'out')]
     try:
         for leftover in leftovers:   # a temporary file of an interrupted run, inside the destination
             leftover.unlink()
@@ -939,7 +940,7 @@ def resolve_defaults(args):
 def main(argv=None):
     _cli.utf8_streams()
     try:
-        args = resolve_defaults(build_parser().parse_args(argv))
+        args = resolve_defaults(_cli.output_flags(build_parser()).parse_args(argv))
     except _cli.UsageError as error:
         return _cli.print_usage_error(error)
     try:
@@ -950,7 +951,7 @@ def main(argv=None):
                      source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
-    print(json.dumps(result, indent=2, ensure_ascii=True))
+    _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 
 

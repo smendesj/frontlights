@@ -455,11 +455,11 @@ def main():
     parser.add_argument('--root', help='project whose .frontlights/config.json declares roadmapSync (default: the main '
                                        'worktree of the current directory)')
     try:
-        args = parser.parse_args()
+        args = _cli.output_flags(parser).parse_args()
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 2)
     result = run(args.operation, str(_cli.root_path(args.root)))
-    print(protect(json.dumps(result, indent=2, ensure_ascii=True)))
+    _cli.emit(protect(json.dumps(result, indent=2, ensure_ascii=True)), args.operation, args.full)
     return int(result['exitCode'])
 
 

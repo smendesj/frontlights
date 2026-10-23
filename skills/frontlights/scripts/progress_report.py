@@ -1190,7 +1190,7 @@ def main():
     parser.add_argument('--shot', action='append', default=[], help='screenshot to attach; repeatable (push)')
     parser.add_argument('--caption', action='append', default=[], help="caption of the matching --shot, in order (push)")
     try:
-        args = parser.parse_args()
+        args = _cli.output_flags(parser).parse_args()
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 2)
     args.root = str(_cli.root_path(args.root))
@@ -1198,7 +1198,7 @@ def main():
                  shots=args.shot, captions=args.caption, meeting=args.meeting, home_set=args.home_set,
                  home_clear=args.home_clear, ref=args.ref, repository=args.repository, start=args.start, end=args.end,
                  issue=args.issue, at=args.at)
-    print(render(result))
+    _cli.emit(render(result), args.operation, args.full)
     return int(result['exitCode'])
 
 

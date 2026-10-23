@@ -1340,19 +1340,19 @@ def main(argv=None):
     for name, (configure, _) in SUBCOMMANDS.items():
         configure(sub.add_parser(name))
     try:
-        args = parser.parse_args(argv)
+        args = _cli.output_flags(parser).parse_args(argv)
         main_tree = _cli.main_worktree()
         args.root = str(_cli.tree_path(args.root))
         args.config = _cli.config_path(args.config, main_tree)
         args.issue = _cli.issue_number(args.issue, args.root, main_tree)
     except _cli.UsageError as error:
-        return _cli.print_usage_error(error, 2, blocking=True)
+        return _cli.print_usage_error(error, 2, error=str(error), blocking=True)   # checks: `error` is the text
     load_user_secrets(args.config)
     try:
         result, code = SUBCOMMANDS[args.command][1](args)
     except (Refused, OSError) as error:
         result, code = {'ok': False, 'blocking': True, 'error': str(error)}, 2
-    print(json.dumps(scrub(result), indent=2, ensure_ascii=True))  # a única passada de máscara da saída
+    _cli.emit(json.dumps(scrub(result), indent=2, ensure_ascii=True), args.command, args.full)  # a única passada de máscara
     return code
 
 

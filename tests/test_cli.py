@@ -127,7 +127,9 @@ class ScriptsTests(Fixture):
                 result = json.loads(done.stdout.decode('utf-8'))
                 self.assertNotEqual(done.returncode, 0)
                 self.assertFalse(result['ok'])
-                self.assertEqual(result['error'], 'usage')
+                # serve and checks keep the text in `error` (their convention); the others say `usage`
+                self.assertIn(result['error'], ('usage', result['message']))
+                self.assertIn('inválido', result['message'])
                 self.assertIn('--help', result['hint'])
 
     def test_output_is_utf8_whatever_the_console_encoding(self):

@@ -934,7 +934,7 @@ class CliTests(CleanupCase):
     def test_plan_prints_the_json_the_session_reads(self):
         path, branch, tip = self.worktree('wt12')
         code, out, _ = self.main('plan', '--config', str(self.config), '--root', str(self.root), '--issues', '12',
-                                 branches={branch: merged(tip)})
+                                 '--full', branches={branch: merged(tip)})
         result = json.loads(out)
         self.assertEqual((code, result['ok'], len(result['candidates'])), (0, True, 1))
         self.assertTrue(out.isascii())

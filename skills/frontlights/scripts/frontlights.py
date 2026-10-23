@@ -1278,7 +1278,7 @@ def resolve_defaults(args):
         args.root = str(_cli.tree_path(args.root))
     elif args.command == 'browser-gate':
         args.root = args.root or [str(_cli.current_tree())]
-        args.config = _cli.config_path(args.config, _cli.main_worktree(), required=False)
+        args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
     return args
 
 
@@ -1289,7 +1289,7 @@ def main():
         import stamp
         return stamp.main(sys.argv[2:])  # prints its own JSON
     try:
-        args = resolve_defaults(build_parser().parse_args())
+        args = resolve_defaults(_cli.output_flags(build_parser()).parse_args())
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 2)
     code = 0
@@ -1339,7 +1339,7 @@ def main():
         else:
             result = {'discrepancies': drift(load(args.snapshot), load(args.current))}
         if result is not None:
-            print(json.dumps(result, indent=2, ensure_ascii=True))
+            _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.command, args.full)
         return code
     except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         print(json.dumps({'error': str(exc)}), file=sys.stderr)
