@@ -2641,7 +2641,10 @@ def reread_issue(read, repo, number, expected):
         logins = [(x.get('login') or '').casefold() for x in view.get('assignees') or [] if isinstance(x, dict)]
         if assignee and (not logins or (assignee != '@me' and assignee.casefold() not in logins)):
             problems.append(f'responsável ausente ({assignee})')
-    blocked = {x.get('number') for x in view.get('blockedBy') or [] if isinstance(x, dict)}
+    listed = view.get('blockedBy') or []
+    if isinstance(listed, dict):   # gh 2.97 returns the connection {"nodes": [...], "totalCount": n}
+        listed = listed.get('nodes') or []
+    blocked = {x.get('number') for x in listed if isinstance(x, dict)}
     absent = [b for b in expected.get('blockers', []) if b not in blocked]
     if absent:
         problems.append('blocked-by ausente: ' + ', '.join(f'#{b}' for b in absent))

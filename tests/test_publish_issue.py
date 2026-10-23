@@ -297,6 +297,26 @@ class PublishTests(PublishCase):
         self.assertEqual(result['exitCode'], 2)
         self.assertIn('corpo diferente do aprovado', result['published'][1]['problems'])
 
+    def test_the_reread_accepts_blocked_by_as_a_connection_with_nodes(self):
+        """gh 2.97 returns blockedBy as {"nodes": [...], "totalCount": n}, not a list."""
+        plan, approved = self.standard()
+        gh = FakeGitHub()
+        original = gh.__call__
+
+        class Connection(FakeGitHub):
+            def __call__(self, argv):
+                code, out = original(argv)
+                if argv[:2] == ['issue', 'view']:
+                    data = json.loads(out)
+                    data['blockedBy'] = {'nodes': data['blockedBy'], 'totalCount': len(data['blockedBy'])}
+                    out = json.dumps(data)
+                return code, out
+        connection = Connection()
+        connection.__dict__ = gh.__dict__
+        result = self.publish(plan, approved, connection)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['exitCode'], 0)
+
     def test_dry_run_prints_the_writes_and_runs_nothing(self):
         plan, approved = self.standard(approve=False)
         gh = FakeGitHub()
