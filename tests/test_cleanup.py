@@ -1445,5 +1445,37 @@ class MergedWorkTests(CleanupCase):
         self.assertNotIn('claude/release-2026-10-21', [e['branch'] for e in result['excluded']])
 
 
+class FromAuthorizationsTests(CleanupCase):
+    """Issue 2 do redesenho: `--from-authorizations` lê as issues (`issue_ids`) e a base (`base.branch` do registro
+    mais novo) dos registros de autorização; `--issues` só estreita."""
+
+    def run_plan(self, issues=None, base=None, branches=None):
+        gh = FakeGh(branches)
+        result = cleanup.run('plan', self.config, self.root, issues, base, (), (), gh, from_authorizations=True)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def test_the_issues_and_the_base_come_from_the_records(self):
+        path, branch, tip = self.worktree('wt12')
+        data = json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8'))
+        data['base'] = {'branch': 'main'}
+        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(data), encoding='utf-8')
+        result = self.run_plan(branches={branch: merged(tip)})
+        self.assertEqual((result['issues'], result['expectedBase'], result['baseSource']), ([12], 'main', 'authorization'))
+        self.assertEqual([c['branch'] for c in result['candidates']], [branch])
+
+    def test_issues_narrow_the_records(self):
+        path, branch, tip = self.worktree('wt12')
+        other, branch13, tip13 = self.worktree('wt-a', issue=13)
+        result = self.run_plan('13', branches={branch: merged(tip), branch13: merged(tip13)})
+        self.assertEqual(result['issues'], [13])
+        self.assertEqual([c['branch'] for c in result['candidates']], [branch13])
+
+    def test_no_record_means_nothing_to_clean(self):
+        result = self.run_plan()
+        self.assertTrue(result['ok'], result)
+        self.assertEqual((result['commands'], result['issues']), ([], []))
+
+
 if __name__ == '__main__':
     unittest.main()

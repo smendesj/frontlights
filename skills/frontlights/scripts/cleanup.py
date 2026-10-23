@@ -239,6 +239,27 @@ def authorized_worktrees(root, issues):
     return found, protected, sorted(prefixes)
 
 
+def authorization_scope(root, numbers=None):
+    """(issue numbers, approved base) the authorization records of the project give, for `--from-authorizations`:
+    the `issue_ids` of every `.frontlights/authorization*.json` (or `numbers`, when the command line narrows them) and
+    the `base.branch` of the newest record that names one of them (None when no record names a plain one)."""
+    ids, base = set(), None
+    for path in closeout.authorization_records(root):
+        data = closeout.read_record(path)
+        listed = data.get('issue_ids') if isinstance(data, dict) else None
+        if isinstance(listed, list):
+            ids.update(n for n in listed if closeout.valid_number(n))
+    wanted = sorted(ids) if numbers is None else list(numbers)
+    for path in reversed(closeout.authorization_records(root)):
+        data = closeout.read_record(path)
+        listed = data.get('issue_ids') if isinstance(data, dict) else None
+        branch = data.get('base', {}).get('branch') if isinstance(data, dict) and isinstance(data.get('base'), dict) else None
+        if isinstance(listed, list) and any(n in listed for n in wanted) and isinstance(branch, str) and closeout.valid_branch(branch):
+            base = branch
+            break
+    return wanted, base
+
+
 def release_branches(root, prefixes):
     """The local branches named like a release (`<prefix>release-<YYYY-MM-DD>[-N]`) under one of `prefixes`."""
     if not prefixes:
@@ -584,16 +605,30 @@ def assess_release(ctx, branch, github):
                               'argv': ['git', '-C', ctx['main_path'], 'branch', '-D', branch]}]}
 
 
-def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None):
-    """Read only: what can be removed now, with the commands in the order to run them, and what stays."""
+def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None, from_authorizations=False):
+    """Read only: what can be removed now, with the commands in the order to run them, and what stays. With
+    `from_authorizations`, the issues (unless `issues` narrows them) and the base (unless `base` is given) come from
+    the authorization records (`authorization_scope`)."""
     gh = gh or rs.gh_default
     repository = closeout.load_project(config)
-    require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
-    numbers = closeout.parse_numbers(issues)
-    require(base is None or closeout.valid_branch(base), '--base must be a plain branch name')
     listing = list_worktrees(root)
     main_entry = listing[0]
     records_root = root if (Path(root) / '.frontlights').is_dir() else main_entry['path']
+    if from_authorizations:
+        given = None if issues is None or issues == '' or issues == [] else closeout.parse_numbers(issues)
+        numbers, recorded = authorization_scope(records_root, given)
+        base = base or recorded
+        if not numbers and not worktrees and not integrations:
+            return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': base,
+                    'baseSource': 'authorization' if recorded else None, 'issues': [], 'commands': [], 'candidates': [],
+                    'excluded': [], 'alreadyClean': 0, 'ask': False,
+                    'message': 'No authorization record lists issue ids: nothing to clean.'}
+        numbers = numbers or [0]   # only named worktrees: no issue of the records takes part
+    else:
+        require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
+        numbers = closeout.parse_numbers(issues)
+        recorded = None
+    require(base is None or closeout.valid_branch(base), '--base must be a plain branch name')
     authorized, protected, prefixes = authorized_worktrees(records_root, set(numbers))
     # the branch of the issue (`<prefix>issue-<n>`) wins over a later entry of the same issue without `slice`, such as
     # its local integration branch (`<prefix>issue-<n>-integra`, issue 70): the slices are merged into the former
@@ -633,8 +668,9 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     protected = list(protected) + ['main', 'master', expected] + ([default] if default else [])
     main = main_entry['path']
     releases = [b for b in release_branches(main, prefixes) if not is_protected(b, protected)][:MAX_ITEMS]
+    source = ('authorization' if recorded and base == recorded else 'argument') if base else 'default_branch'
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
-              'baseSource': 'argument' if base else 'default_branch', 'commands': [], 'candidates': [], 'excluded': [],
+              'baseSource': source, 'issues': [n for n in numbers if n], 'commands': [], 'candidates': [], 'excluded': [],
               'alreadyClean': gone, 'ask': False}
     if not items and not releases:
         result['message'] = (f'{gone} recorded worktree(s) of these issues are already gone, with their branches: nothing to clean.'
@@ -889,10 +925,10 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=(), 
 # ---------------------------------------------------------------- command line
 
 def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
-        records=(), source=None, destination=None, remote_branches=()):
+        records=(), source=None, destination=None, remote_branches=(), from_authorizations=False):
     try:
         if operation == 'plan':
-            result = op_plan(config, root, issues, base, worktrees, integrations, gh)
+            result = op_plan(config, root, issues, base, worktrees, integrations, gh, from_authorizations)
         elif operation == 'verify':
             result = op_verify(config, root, worktrees, branches, gh, records, remote_branches)
         elif operation == 'archive':
@@ -918,7 +954,11 @@ def build_parser():
         command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
         command.add_argument('--worktree', action='append', default=[], dest='worktrees', help='a worktree path, as many times as needed')
         if name == 'plan':
-            command.add_argument('--issues', help='issue numbers whose work is done, such as 12,13 (required)')
+            command.add_argument('--issues', help='issue numbers whose work is done, such as 12,13 (required without '
+                                                  '--from-authorizations, which it then narrows)')
+            command.add_argument('--from-authorizations', action='store_true', dest='from_authorizations',
+                                 help='the issues (the issue_ids) and the base (base.branch of the newest record) from '
+                                      '.frontlights/authorization*.json')
             command.add_argument('--base', help="the approved base branch; without it, the repository's default branch")
             command.add_argument('--integration', action='append', default=[], dest='integrations',
                                  help="the local-only integration worktree of a family, as many times as needed")
@@ -953,6 +993,7 @@ def main(argv=None):
                      getattr(args, 'base', None), getattr(args, 'worktrees', []), getattr(args, 'branches', []),
                      integrations=getattr(args, 'integrations', []), records=getattr(args, 'records', []),
                      remote_branches=getattr(args, 'remote_branches', []),
+                     from_authorizations=getattr(args, 'from_authorizations', False),
                      source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
