@@ -24,7 +24,7 @@ import skilltext  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / 'skills' / 'frontlights' / 'scripts'
 
-CEILING = 1800  # catraca: a contagem do dia (23/10/2026); só desce
+CEILING = 2000  # folga para a onda 4 (regra Windows da issue 9 e as linhas das etapas 3, 5 e 7); a issue 10 desce à contagem do dia
 GOAL = 1700     # meta da proposta do redesenho, seção 3
 
 # verbos soltos que o texto liga a um script: palavra -> o comando do script que a recebe
