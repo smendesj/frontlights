@@ -60,6 +60,7 @@ Nenhum script roda shell. Os limites longos estão nas seções abaixo.
 | `serve.py window` | config (`browserTest.baseUrl`, `users`, `login`, `playwright`), `window.json` | `window.json`, prints (antes do número, `evidencias-pendentes/`), `print` no `result.json` | Chrome e o Playwright do projeto; nunca instala nada, para só o Chrome que abriu e não julga a passada | a passada |
 | `serve.py free-test start\|stop\|commands` | config, registros | `teste-livre-cas.md`; processos | os `argv` | o fim do teste |
 | `progress_report.py` (`keep` incluído), `roads.py` | config, fatos | aprovações, rascunhos; `resumo/` | RoadS | o print limpo |
+| `skill_lint.py --shingles` | os textos da skill | nada | nada | que um trecho repetido é erro: só relata |
 
 ## Regras da sessão (nenhum script confere)
 
