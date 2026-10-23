@@ -1314,6 +1314,336 @@ def update_check(skill_root=SKILL_ROOT):
         result['commands'] = [f'git -C "{root}" pull --ff-only']
     return result
 
+# ---------------------------------------------------------------- stage 6 by command (redesign, issue 4)
+# `charter` writes the record `authorize` reads; `slice open` cuts the branches and worktrees of the slices of an
+# issue; `slice merge` merges a slice into the branch of its issue. Local Git only: the remote writes (`gh issue
+# develop`, the push of the branch of the issue) come back as argv in `commands`, for the session to run.
+
+CHARTER_HOURS = 24
+CHARTER_OPERATIONS = ['edit', 'test', 'checkpoint', 'merge_into_local_main']
+APPROVAL_REFERENCE = 'autorização permanente (docs/security.md)'
+STOP_CONDITIONS = ['decisão nova de produto', 'teste vermelho que a slice não explica',
+                   'conflito de merge que a sessão não resolve', 'operação negada sem o "Sim" da pergunta própria',
+                   'pedido do usuário']
+CHARTER_FILE = Path('.frontlights') / 'authorization.json'
+SLICE_LABEL = re.compile(r'[Ss]([1-9][0-9]{0,2})')
+TEST_TIMEOUT = 1800
+
+
+class Stage6Refusal(ValueError):
+    """A refusal of `charter` or `slice` with the reason the session reads; nothing past the check was written."""
+
+    def __init__(self, reason, message, hint=None, code=1, **extra):
+        super().__init__(message)
+        self.reason, self.hint, self.code, self.extra = reason, hint, code, extra
+
+    def result(self):
+        result = {'ok': False, 'exitCode': self.code, 'reason': self.reason, 'message': str(self)}
+        if self.hint:
+            result['hint'] = self.hint
+        result.update(self.extra)
+        return result
+
+
+def git_call(cwd, *args, timeout=120):
+    """(exit code, stdout, stderr) of `git -C cwd ...` without a shell and without prompts."""
+    environment = dict(os.environ, GIT_TERMINAL_PROMPT='0')
+    try:
+        done = subprocess.run(['git', '-C', str(cwd), *args], capture_output=True, text=True, encoding='utf-8',
+                              errors='replace', timeout=timeout, stdin=subprocess.DEVNULL, env=environment)
+    except (OSError, subprocess.TimeoutExpired):
+        raise Stage6Refusal('git_failed', f'o git não respondeu a `git {args[0]}`')
+    return done.returncode, done.stdout, done.stderr
+
+
+def git_rev(cwd, ref):
+    code, out, _ = git_call(cwd, 'rev-parse', '--verify', '--quiet', f'{ref}^{{commit}}')
+    return out.strip() if code == 0 and re.fullmatch(r'[0-9a-f]{40,64}', out.strip()) else None
+
+
+def write_json_file(path, data):
+    """Write under a temporary name and rename into place, so a reader never sees half a record."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    os.replace(temporary, path)
+
+
+def sao_paulo_text(moment):
+    return moment.astimezone(_cli.sao_paulo_now().tzinfo).strftime('%d/%m/%Y %H:%M')
+
+
+def parse_ownership(values, ids):
+    """{id: [paths]} from `--ownership` values: `path` (every id of this command) or `<id>=path[,path]`. Every id
+    needs at least one path, and never `*` alone (authorize ignores `*`: it owns nothing)."""
+    owned = {key: [] for key in ids}
+    for value in values or ():
+        key, separator, paths = str(value).partition('=')
+        targets = [key.strip().lstrip('#')] if separator else list(ids)
+        if separator and targets[0] not in owned:
+            raise Stage6Refusal('ownership_unknown_id', f'--ownership {value!r} nomeia {key!r}, que não está entre as '
+                                f'issues ou trabalhos deste comando ({", ".join(ids)})',
+                                hint='use <issue>=<caminho> com uma issue de --issue (ou um slug de --direct)')
+        for path in (paths if separator else value).split(','):
+            path = path.strip().replace('\\', '/').rstrip('/')
+            if not path:
+                continue
+            try:
+                relative(path)
+            except ValueError as error:
+                raise Stage6Refusal('ownership_invalid', f'--ownership {path!r}: {error}',
+                                    hint='caminhos relativos à raiz do projeto, sem glob, como src/feature') from None
+            for target in targets:
+                if path not in owned[target]:
+                    owned[target].append(path)
+    missing = [key for key, paths in owned.items() if not paths or all(p == '*' for p in paths)]
+    if missing:
+        raise Stage6Refusal('ownership_required', 'a posse (ownership) é obrigatória e nunca só `*`: falta para '
+                            + ', '.join(f'#{m}' if m.isdigit() else m for m in missing),
+                            hint='passe --ownership <caminho> (ou <issue>=<caminho> num lote), as pastas e arquivos '
+                                 'que a issue edita, da seção "## Propriedade" do corpo')
+    return owned
+
+
+def charter_ids(issues, directs):
+    ids = []
+    for value in issues or ():
+        text = str(value).strip().lstrip('#')
+        if not text.isdigit() or int(text) < 1:
+            raise Stage6Refusal('issue_invalid', f'--issue precisa ser um número de issue, não {str(value)[:40]!r}',
+                                hint='passe --issue <n>, como --issue 12')
+        ids.append(str(int(text)))
+    for value in directs or ():
+        if not DIRECT_RULE.fullmatch(str(value)):
+            raise Stage6Refusal('direct_invalid', f'--direct {str(value)[:70]!r} não é um slug (minúsculas, dígitos e '
+                                'hífens, até 64)', hint='como --direct melhoria-x')
+        ids.append(str(value))
+    return ids
+
+
+def homolog_module():
+    import homolog  # noqa: PLC0415  (homolog imports closeout, which imports this module)
+    return homolog
+
+
+def charter_base(root, base, has_issues, has_directs):
+    """The base of the charter: `branch` is the local main (the target of `merge_into_local_main`); an issue starts
+    from `origin/<base>`, work without an issue from the local main."""
+    if not homolog_module().is_plain(base):
+        raise Stage6Refusal('base_invalid', f'--base {str(base)[:40]!r} não é um nome de branch simples',
+                            hint='como --base main')
+    result = {'branch': base}
+    if has_issues:
+        commit = git_rev(root, f'refs/remotes/origin/{base}')
+        result['issues'] = {'from': f'origin/{base}' if commit else base,
+                            'commit': commit or git_rev(root, f'refs/heads/{base}')}
+    if has_directs:
+        result['direct'] = {'from': base, 'commit': git_rev(root, f'refs/heads/{base}')}
+    return result
+
+
+def approver(root, given):
+    if nonempty(given):
+        return given.strip()
+    code, out, _ = git_call(root, 'config', 'user.name')
+    if code == 0 and out.strip():
+        return out.strip()
+    raise Stage6Refusal('approved_by_required', 'sem --approved-by e sem `git config user.name`: o charter registra '
+                        'o usuário em approved_by e confirmed_by', hint='passe --approved-by <nome do usuário>')
+
+
+def dry_run(record, root, ids):
+    """`authorize` on an `edit` of the first owned path of each id, from a phantom entry on the main worktree: the
+    charter must pass before it is written."""
+    answers = []
+    for key in ids:
+        name = 'direct' if not key.isdigit() else 'issue'
+        value = int(key) if name == 'issue' else key
+        branch = f'{record["branch_prefix"]}issue-{key}' if name == 'issue' else f'{record["branch_prefix"]}{key}'
+        owned = [p for p in record['ownership'][key] if p != '*']
+        phantom = dict(record, worktrees=[{name: value, 'path': str(root), 'branch': branch, 'ownership': owned}])
+        operation = {'repository': record['repository'], name: value, 'kind': 'edit', 'worktree': str(root),
+                     'branch': branch, 'path': owned[0]}
+        try:
+            answer = authorize(phantom, operation)
+        except (ValueError, OSError) as error:
+            raise Stage6Refusal('authorize_refused', f'o charter não passaria no authorize ({name} {key}): {error}; '
+                                'nada foi gravado', hint='corrija --prefix, --protect ou --ownership e repita') from None
+        answers.append({name: value, 'scope_check': answer['scope_check'], 'path': owned[0]})
+    return answers
+
+
+def keep_previous(root):
+    """Copy the current charter to `authorization-<YYYY-MM-DD>-issue-<n>.json` (never overwritten: `-2`, `-3`), the
+    records release-plan, bundle, closeout and cleanup still read. None when there is no charter."""
+    current = Path(root) / CHARTER_FILE
+    if not current.is_file():
+        return None
+    data = current.read_bytes()
+    try:
+        old = json.loads(data.decode('utf-8-sig'))
+    except ValueError:
+        old = {}
+    old = old if isinstance(old, dict) else {}
+    issued = old.get('issued_at')
+    try:
+        day = dt.datetime.fromisoformat(issued).strftime('%Y-%m-%d') if isinstance(issued, str) else None
+    except ValueError:
+        day = None
+    day = day or _cli.sao_paulo_now().strftime('%Y-%m-%d')
+    ids = old.get('issue_ids') if isinstance(old.get('issue_ids'), list) else []
+    directs = old.get('direct_ids') if isinstance(old.get('direct_ids'), list) else []
+    tag = f'issue-{ids[0]}' if ids else f'direct-{directs[0]}' if directs else 'sem-issue'
+    for attempt in range(1, 100):
+        path = current.with_name(f'authorization-{day}-{tag}' + ('' if attempt == 1 else f'-{attempt}') + '.json')
+        if path.is_file() and path.read_bytes() == data:
+            return path
+        try:
+            with open(path, 'xb') as handle:
+                handle.write(data)
+            return path
+        except FileExistsError:
+            continue
+    raise Stage6Refusal('keep_failed', 'sem nome livre para guardar o charter anterior; nada foi gravado')
+
+
+def announcement(record, prefix_source):
+    ids = [f'#{n}' for n in record.get('issue_ids', [])] + list(record.get('direct_ids', []))
+    base = record['base']
+    start = base.get('issues') or base.get('direct') or {}
+    commit = (start.get('commit') or '')[:7]
+    owned = '; '.join(f'{"#" + k if k.isdigit() else k} → {", ".join(v)}' for k, v in record['ownership'].items())
+    verify = ', '.join('`' + ' '.join(argv) + '`' for argv in record.get('verification_commands', [])) or 'nenhum'
+    expires = sao_paulo_text(dt.datetime.fromisoformat(record['expires_at']))
+    return (f'Etapa 6 sob a autorização permanente, sem pergunta de abertura: {", ".join(ids)} em '
+            f'{record["repository"] or "projeto sem remoto"}; concorrência {record["concurrency"]}; base '
+            f'{start.get("from", base["branch"])}{" (" + commit + ")" if commit else ""}, main local '
+            f'{base["branch"]}; prefixo {record["branch_prefix"]} ({prefix_source}); posse: {owned}; verificação: '
+            f'{verify}; para em: {"; ".join(record["stop_conditions"])}. Vale até {expires} (São Paulo). As slices, a '
+            'ordem e as worktrees vêm com `slice open`; as operações negadas seguem com pergunta própria.')
+
+
+def load_config_file(path):
+    if not path or not Path(path).is_file():
+        raise Stage6Refusal('no_config', 'sem .frontlights/config.json do projeto', hint='passe --config <caminho>')
+    data = load(path)
+    if not isinstance(data, dict):
+        raise Stage6Refusal('no_config', 'o config não é um objeto JSON', hint='confira o .frontlights/config.json')
+    return data
+
+
+def verification_argv(values):
+    argvs = []
+    for value in values or ():
+        try:
+            argv = json.loads(value) if isinstance(value, str) else value
+        except ValueError:
+            argv = None
+        if not strings(argv):
+            raise Stage6Refusal('verify_invalid', f'{str(value)[:80]!r} não é uma lista JSON de textos',
+                                hint='como \'["python", "-m", "unittest"]\'')
+        argvs.append(argv)
+    return argvs
+
+
+def charter_cli(action, root, config_path, issues=(), directs=(), ownership=(), prefix=None, concurrency=None,
+                protect=(), base=None, approved_by=None, verify=(), hours=CHARTER_HOURS):
+    """`charter new|renew|add`; the result dict, `ok: false` with `reason` on a refusal (nothing written)."""
+    try:
+        return charter_action(action, Path(root), config_path, issues, directs, ownership, prefix, concurrency,
+                              protect, base, approved_by, verify, hours)
+    except Stage6Refusal as refusal:
+        return refusal.result()
+
+
+def charter_action(action, root, config_path, issues, directs, ownership, prefix, concurrency, protect, base,
+                   approved_by, verify, hours):
+    if type(hours) is not int or not 1 <= hours <= CHARTER_HOURS:
+        raise Stage6Refusal('hours', f'--hours {hours!r}: o charter vale no máximo {CHARTER_HOURS} horas',
+                            hint=f'passe --hours entre 1 e {CHARTER_HOURS}')
+    config = load_config_file(config_path)
+    path = root / CHARTER_FILE
+    now = _cli.sao_paulo_now().replace(microsecond=0)
+    expires = (now + dt.timedelta(hours=hours)).isoformat()
+    existing = None
+    if action in ('renew', 'add'):
+        if not path.is_file():
+            raise Stage6Refusal('no_charter', f'não há charter em {CHARTER_FILE.as_posix()} para {action}',
+                                hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
+        existing = load(path)
+        if not isinstance(existing, dict):
+            raise Stage6Refusal('no_charter', 'o charter atual não é um objeto JSON', hint='rode `charter new`')
+    if action == 'renew':
+        record = dict(existing, expires_at=expires, renewed_at=now.isoformat())
+        ids = [str(n) for n in record.get('issue_ids', [])] + list(record.get('direct_ids', []))
+        checked = dry_run(record, root, [k for k in ids if record.get('ownership', {}).get(k)])
+        write_json_file(path, record)
+        return {'ok': True, 'exitCode': 0, 'action': 'renew', 'charter': str(path), 'expires_at': expires,
+                'dryRun': checked,
+                'message': f'Charter renovado: vale até {sao_paulo_text(dt.datetime.fromisoformat(expires))} '
+                           '(São Paulo).'}
+    ids = charter_ids(issues, directs)
+    if not ids:
+        raise Stage6Refusal('no_issue', 'o charter precisa de ao menos uma issue ou um trabalho sem issue',
+                            hint='passe --issue <n> (repetível) ou --direct <slug>')
+    owned = parse_ownership(ownership, ids)
+    if action == 'add':
+        present = {str(n) for n in existing.get('issue_ids', [])} | set(existing.get('direct_ids', []))
+        repeated = [k for k in ids if k in present]
+        if repeated:
+            raise Stage6Refusal('already_in_charter', f'já está no charter: {", ".join(repeated)}',
+                                hint='use `charter renew` para estender o prazo; a posse muda com `charter new`')
+        record = dict(existing)
+        record['issue_ids'] = list(existing.get('issue_ids', [])) + [int(k) for k in ids if k.isdigit()]
+        new_directs = [k for k in ids if not k.isdigit()]
+        record['direct_ids'] = list(existing.get('direct_ids', [])) + new_directs
+        record['ownership'] = dict(existing.get('ownership', {}), **owned)
+        branch = record.get('base', {}).get('branch', 'main')
+        extra = charter_base(root, branch, any(k.isdigit() for k in ids), bool(new_directs))
+        record['base'] = dict(extra, **record.get('base', {}))
+        checked = dry_run(record, root, ids)
+        write_json_file(path, record)
+        return {'ok': True, 'exitCode': 0, 'action': 'add', 'charter': str(path), 'added': ids, 'dryRun': checked,
+                'announcement': announcement(record, 'authorization')}
+    chosen, source = _cli.branch_prefix(prefix, config, None)
+    if not chosen:
+        raise Stage6Refusal('no_prefix', 'sem prefixo das branches: nem --prefix, nem branchPrefix no config',
+                            hint='declare "branchPrefix" no .frontlights/config.json do projeto ou passe --prefix '
+                                 '<nome>/')
+    if concurrency is not None and (type(concurrency) is not int or concurrency < 1):
+        raise Stage6Refusal('concurrency', '--concurrency precisa ser um inteiro positivo', hint='como --concurrency 2')
+    who = approver(root, approved_by)
+    record = {
+        'repository': config.get('repository'),
+        'issue_ids': [int(k) for k in ids if k.isdigit()],
+        'direct_ids': [k for k in ids if not k.isdigit()],
+        'operations': list(CHARTER_OPERATIONS),
+        'protected_branches': [str(p) for p in protect or ()],
+        'stop_conditions': list(STOP_CONDITIONS),
+        'base': charter_base(root, base or 'main', any(k.isdigit() for k in ids), any(not k.isdigit() for k in ids)),
+        'issued_at': now.isoformat(),
+        'expires_at': expires,
+        'approved_by': who,
+        'confirmed_by': who,
+        'approval_reference': APPROVAL_REFERENCE,
+        'monitoring': {'mode': 'local', 'confirmed_by': who, 'at': now.isoformat()},
+        'concurrency': concurrency or 2,
+        'branch_prefix': chosen,
+        'ownership': owned,
+        'verification_commands': verification_argv(verify),
+        'worktrees': [],
+    }
+    if not repository_or_local(record['repository']):
+        raise Stage6Refusal('repository', 'o repository do config não é owner/name nem null',
+                            hint='confira "repository" no .frontlights/config.json')
+    checked = dry_run(record, root, ids)
+    kept = keep_previous(root)
+    write_json_file(path, record)
+    return {'ok': True, 'exitCode': 0, 'action': 'new', 'charter': str(path), 'kept': str(kept) if kept else None,
+            'prefix': chosen, 'prefixSource': source, 'dryRun': checked, 'announcement': announcement(record, source)}
+
+
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
@@ -1381,6 +1711,22 @@ def build_parser():
     p = sub.add_parser('homolog', help='homolog.py: `sync`, `bundle` and `release-plan` of the local main, '
                                        'the homologation (issue 32), and `suite` and `suite-gate` (issue 52)')
     p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. sync --root .')
+    p = sub.add_parser('charter', help='stage 6: write the charter authorize reads (new), extend it (renew) or add '
+                                       'an issue to it (add); prints the announcement in Portuguese')
+    p.add_argument('action', choices=('new', 'renew', 'add'))
+    p.add_argument('--issue', action='append', default=[], help='an issue of the run; repeatable')
+    p.add_argument('--direct', action='append', default=[], help='the slug of a work without an issue; repeatable')
+    p.add_argument('--ownership', nargs='+', action='extend', default=[],
+                   help='required for new and add: the paths the issue edits, or <issue>=<path>[,<path>] in a batch')
+    p.add_argument('--prefix', help='the branch prefix (default: branchPrefix of the config)')
+    p.add_argument('--concurrency', type=int, help='default 2')
+    p.add_argument('--protect', action='append', default=[], help='one more protected branch; repeatable')
+    p.add_argument('--base', help='the local main (default main)')
+    p.add_argument('--approved-by', help='the user (default: git config user.name)')
+    p.add_argument('--verify', action='append', default=[], help='a verification argv as a JSON list; repeatable')
+    p.add_argument('--hours', type=int, default=CHARTER_HOURS, help=f'validity, at most {CHARTER_HOURS} (default)')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
@@ -1398,6 +1744,9 @@ def resolve_defaults(args):
     elif args.command == 'archive':
         args.root = str(_cli.root_path(args.root))
         args.issue = _cli.issue_number(args.issue, _cli.current_tree(), args.root)
+    elif args.command == 'charter':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root)
     elif args.command == 'browser-gate':
         args.root = args.root or [str(_cli.current_tree())]
         args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
@@ -1456,6 +1805,11 @@ def main():
             result = resume_cli(args.issue, args.root, args.handoff, args.checkpoint, slice_id=args.slice)
         elif args.command == 'archive':
             result = archive_round(args.root, args.issue)
+        elif args.command == 'charter':
+            result = charter_cli(args.action, args.root, args.config, args.issue, args.direct, args.ownership,
+                                 args.prefix, args.concurrency, args.protect, args.base, args.approved_by,
+                                 args.verify, args.hours)
+            code = result['exitCode']
         elif args.command == 'homolog':
             import homolog
             code = homolog.main(args.homolog_args)  # prints its own JSON
