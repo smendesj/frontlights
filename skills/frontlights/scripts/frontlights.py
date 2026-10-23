@@ -1343,7 +1343,7 @@ def open_session(config, root, gh=None, fetch=True):
     if plan.get('ok'):
         result['cleanup'] = {
             'commands': plan['commands'],
-            'ask': [{'branch': c['branch'], 'path': c['path'], 'askReason': c.get('askReason'),
+            'ask': [{'key': c['key'], 'branch': c['branch'], 'path': c['path'], 'askReason': c.get('askReason'),
                      'askIgnored': c.get('askIgnored', [])} for c in plan['candidates'] if c['ask']],
             'excluded': plan['excluded'], 'alreadyClean': plan['alreadyClean'], 'candidates': len(plan['candidates']),
             'issues': plan.get('issues', []), 'expectedBase': plan.get('expectedBase')}
