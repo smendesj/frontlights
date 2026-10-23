@@ -67,18 +67,18 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         artifact = self.artifact()
         self.assertNotEqual(artifact, '')
         for phrase in ('One **artifact** per grilling',
-                       'created at the problem round with the **before**',
+                       'created at the problem round with the **base**',
                        'updated **on the same URL**', 'never one page per round',
                        'a **print of the system running at the base**',
                        'a diagram of the flow, of the layers or of the current rule',
                        '**one section per decision question**',
                        'the solution round and every branch of the decision tree, the pre-mortem included',
                        'Confirmation questions and the closing "Seguimos?" get no section',
-                       'the before first, then the decision questions', 'titled by the question',
+                       'the base first, then the decision questions', 'titled by the question',
                        "in stage 5 the slices' sections follow them",
                        'Every section follows `templates/grilling-section.html`',
                        'a field with nothing to say is omitted',
-                       'the **after** for each approach',
+                       'which for each approach carries the screen states',
                        '"artefato" is the page, "preview" is the field',
                        'Never an inline widget',
                        'say so in one line, go on in text', 'artefato indisponível'):
@@ -151,12 +151,12 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         artifact = self.artifact()
         for phrase in ('explains more than the question, never repeats it', 'what does this imply',
                        'Visual, Cenário por opção and Consequências are always present',
-                       'the before of the problem round', 'each decision question',
+                       'the base of the problem round', 'each decision question',
                        'each slice section of the stage 5 quiz', 'why it is a problem'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
         # redesenho, issue 6: a tabela de tipos virou uma frase, "The visual follows the kind of question: ..."
-        for kind, drawing in (('a screen', 'the before print and, per option, the **same print with markings**'),
+        for kind, drawing in (('a screen', 'the base print and, per option, the **same print with markings**'),
                               ('a flow', 'a timeline per option, side by side'),
                               ('a rule', 'a table of cases'),
                               ('layers', 'a layers diagram per option'),
@@ -170,7 +170,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
     def test_every_decision_question_cites_the_artifact(self):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
-        self.assertIn('Publish the artifact with the **before**', problem)
+        self.assertIn('Publish the artifact with the **base**', problem)
         self.assertIn('the confirmation question cites its section', problem)
         solution = flat(grilling.split('## 3. Solution round')[1].split('## 4. Decision tree')[0])
         self.assertIn('the section of the artifact that shows what this approach changes', solution)
@@ -211,7 +211,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         self.assertNotIn('only fictitious data', stage3)
         artifact = self.artifact()
         for phrase in ('One **artifact** per grilling', '**on the same URL**', '**print of the system running at the base**',
-                       '**same print with markings**', 'created at the problem round with the **before**',
+                       '**same print with markings**', 'created at the problem round with the **base**',
                        'one section per decision question', '`templates/grilling-section.html`',
                        '`frontlights.py artifact section', 'never by `edits`',
                        'The discovery log records the URL and the source path'):
@@ -264,7 +264,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
 
     def test_the_before_is_a_print_of_the_base_with_a_test_account(self):
         artifact = self.artifact()
-        for phrase in ('With a screen, the before is a **print of the system running at the base** (`origin/<base>`)',
+        for phrase in ('With a screen, the base is a **print of the system running at the base** (`origin/<base>`)',
                        'taken with a test account and test data',
                        'in the disposable Chrome window of the watched run (`references/browser-testing.md`)',
                        'never a screen rebuilt from the template or redrawn in the style of the page',
@@ -283,7 +283,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
         for phrase in ('as notes on its one marked print', 'never one print per state',
-                       'the evidence of the after still comes from the watched run'):
+                       'the evidence of DEPOIS still comes from the watched run'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, states)
 
@@ -309,8 +309,8 @@ class PrintOfTheBaseTests(unittest.TestCase):
         security = self.security()
         self.assertNotIn('Os prints do produto em execução são do teste assistido', security)
         self.assertNotIn('nunca do artefato', security)
-        for phrase in ('Dado nunca entra', 'o antes é um print do sistema rodando na base',
-                       'tirado com conta de teste e dados de teste', 'o depois é o mesmo print com marcações',
+        for phrase in ('Dado nunca entra', 'a base é um print do sistema rodando na base',
+                       'tirado com conta de teste e dados de teste', 'cada opção é o mesmo print com marcações',
                        'nem num print'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, security)
@@ -428,6 +428,42 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         self.assertIn('uma seção por pergunta de decisão', row)
         self.assertIn('templates/grilling-section.html', row)
         self.assertNotIn('só dados fictícios', row)
+
+
+class BaseAndOptionVocabularyTests(unittest.TestCase):
+    """Redesenho, issue 6, S5: o artefato diz "base" e "com a opção", nunca antes/depois (nem before/after no texto
+    que o descreve): ANTES e DEPOIS são as janelas do teste assistido."""
+
+    def test_the_grilling_describes_the_artifact_with_base_and_option(self):
+        grilling = read('skills', 'frontlights', 'references', 'grilling.md')
+        artifact = flat(section_containing(grilling, 'The artifact'))
+        self.assertIn('**Base and com a opção.** The page, its labels and the questions that cite it say "base" and '
+                      '"com a opção", never antes/depois nor before/after: ANTES and DEPOIS name the windows of the '
+                      'watched run.', artifact)
+        rule = artifact.replace('never antes/depois nor before/after', '')
+        self.assertNotRegex(rule, r'(?i)\b(before|after)\b')
+        problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
+        states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
+        for text in (problem, states):
+            self.assertNotRegex(text, r'\*\*(before|after)\*\*')
+
+    def test_the_templates_and_the_security_doc_say_base_and_option(self):
+        section = read('skills', 'frontlights', 'templates', 'grilling-section.html')
+        body = section.split('-->', 1)[1]
+        page = read('skills', 'frontlights', 'templates', 'artifact-page.html').split('-->', 1)[1]
+        for name, text in (('grilling-section.html', body), ('artifact-page.html', page)):
+            visible = re.sub(r'src="[^"]*"', '', text)
+            with self.subTest(template=name):
+                self.assertNotRegex(visible, r'(?i)\b(antes|depois)\b')
+        self.assertIn('<figcaption>Base</figcaption>', body)
+        self.assertIn('<figcaption>Com a opção: <opção></figcaption>', body)
+        self.assertIn('Rótulos "Base" e "Com a opção", nunca antes/depois', flat(section.split('-->')[0]))
+        security = flat(section_containing(read('skills', 'frontlights', 'docs', 'security.md'), 'Artefato do grilling'))
+        self.assertIn('na página, "base" e "com a opção", nunca antes/depois, que são as janelas do teste assistido',
+                      security)
+        for gone in ('o antes é', 'o depois é'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, security)
 
 
 SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'

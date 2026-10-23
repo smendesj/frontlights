@@ -133,7 +133,7 @@ class ReconnaissanceInTheGrillingTests(unittest.TestCase):
 
     def test_the_artifact_shows_the_screen_states(self):
         recon = self.recon()
-        self.assertIn('the **after** of each approach in the artifact shows the empty state, no image, error, '
+        self.assertIn('each approach **com a opção** in the artifact shows the empty state, no image, error, '
                       'loading, dark theme and 1366 px, plus the states the project\'s pitfalls list', recon)
         artifact = flat(section(read(GRILLING), 'The artifact'))
         self.assertIn('the screen states of "Reconnaissance"', artifact)

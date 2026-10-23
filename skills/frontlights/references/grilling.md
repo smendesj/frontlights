@@ -14,7 +14,7 @@ it never removes the solution round.
 ## The artifact: the picture of each round
 
 One **artifact** per grilling: a private page of the host's artifact tool, created at the problem round with the
-**before** and then updated **on the same URL**, never one page per round. With a screen, the before is a **print of
+**base** and then updated **on the same URL**, never one page per round. With a screen, the base is a **print of
 the system running at the base** (`origin/<base>`), taken with a test account and test data in the disposable Chrome
 window of the watched run (`references/browser-testing.md`), its ANTES window, which opens here and stays open
 (`serve.py window open --strip "ANTES: origin/main"`, then `serve.py window shot --pass antes --name base`); never a
@@ -24,23 +24,24 @@ progress summary", item "Clean", and enters as an image of the artifact: an asse
 embedded in the page when the host has nowhere to keep assets.
 
 Then **one section per decision question**: the solution round and every branch of the decision tree, the
-pre-mortem included. Confirmation questions and the closing "Seguimos?" get no section. Numbered the before first,
+pre-mortem included. Confirmation questions and the closing "Seguimos?" get no section. Numbered the base first,
 then the decision questions, titled by the question; in stage 5 the slices' sections follow them. A section explains
 more than the question, never repeats it: it answers "what does this imply". Every section follows
 `templates/grilling-section.html`; Visual, Cenário por opção and Consequências are always present, and a field with
-nothing to say is omitted. The model covers the before of the problem round (its "why" says why it is a problem),
+nothing to say is omitted. The model covers the base of the problem round (its "why" says why it is a problem),
 each decision question and each slice section of the stage 5 quiz. The visual follows the kind of question: a
-screen, the before print and, per option, the **same print with markings** overlaid in HTML (boxes, arrows and texts
-on top), never a redrawn screen, and the **after** for each approach with the screen states of "Reconnaissance"; a
+screen, the base print and, per option, the **same print with markings** overlaid in HTML (boxes, arrows and texts
+on top), never a redrawn screen, which for each approach carries the screen states of "Reconnaissance"; a
 flow, a timeline per option, side by side; a rule, a table of cases; layers, a layers diagram per option; a name or a
-text, a side-by-side comparison of where it appears. The page labels say "Base" and "Com a opção", never
-antes/depois, the names of the watched run's windows.
+text, a side-by-side comparison of where it appears. **Base and com a opção.** The page, its labels and the
+questions that cite it say "base" and "com a opção", never antes/depois nor before/after: ANTES and DEPOIS name the
+windows of the watched run.
 
 **The script builds the skeleton; the session writes, publishes and keeps the URL.** `frontlights.py artifact init`
 writes `.frontlights/artifact.html` (untracked; for a published issue `.frontlights/issues/<n>/artifact.html`) with
 the base as section 1. Each round, the fields go in a small file per section, then `frontlights.py artifact section
 --n <k> --kind tela|fluxo|regra|camadas|texto --title "<pergunta>" --option "<opção>" --content <file>` (several
-`--n` in one call; the same number replaces a section), and after the answer `frontlights.py artifact choose --n <k>
+`--n` in one call; the same number replaces a section), and once the user answers `frontlights.py artifact choose --n <k>
 --answer "<literal>"`. Publish the whole source once per round, on the same URL, never by `edits`. The discovery log
 records the URL and the source path at the first publication (`templates/discovery.md`, "Artifact URL and source
 path"). Source missing (new session, compaction): the script refuses; read the published page back with the
@@ -54,7 +55,7 @@ inline widget. Without an artifact tool, say so in one line, go on in text and r
 ## 1. Problem round
 
 1. Summarize the observation or issue, its source and date, who it hurts and how. Publish the artifact with the
-   **before** before the problem is confirmed; the confirmation question cites its section. With a screen,
+   **base** before the problem is confirmed; the confirmation question cites its section. With a screen,
    any test account that already exists (those of `browserTest.users` or any other) serves, and the session may
    create one on demand; when there is no test account or the base does not come up, the grilling stops and goes on
    only once the account exists and the base is up.
@@ -98,9 +99,9 @@ The discovery log records every trigger as "ligado" or "não se aplica, porque�
 **What the facts change.** Whenever the reconnaissance finds something that contradicts the issue, challenge the
 issue. A change of scope is a divergence from GitHub: report it and propose the update under stage 5.
 
-**Screen states in the artifact.** With a screen, the **after** of each approach in the artifact shows the empty
-state, no image, error, loading, dark theme and 1366 px, plus the states the project's pitfalls list, as notes on its one marked print, never one
-print per state; the evidence of the after still comes from the watched run.
+**Screen states in the artifact.** With a screen, each approach **com a opção** in the artifact shows the empty
+state, no image, error, loading, dark theme and 1366 px, plus the states the project's pitfalls list, as notes on its
+one marked print, never one print per state; the evidence of DEPOIS still comes from the watched run.
 
 ## 3. Solution round (mandatory)
 
