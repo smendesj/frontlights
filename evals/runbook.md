@@ -124,9 +124,9 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     `.env` (anything besides dependency or build folders) is asked about, naming the file; the issue branches that
     `origin/main` now contains go (`contained_in_base_without_pull_request`), and the local-only integration worktree
     of the family goes only when it holds no commit of its own outside what reached the base; without a wake mechanism
-    the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the
-    authorization records (an issue already closed by `Closes #n` included), runs what it offers and then asks the
-    closeout question.
+    the next `/frontlights` start runs `frontlights.py open` (`git fetch --prune origin`, the cleanup plan from the
+    authorization records, an issue already closed by `Closes #n` included), then `cleanup.py run --from-authorizations`
+    without a question, and then asks the closeout question.
 
 18. Summary on request in any project, and a start by plain words (`evals/progress-home.md`). With the project that declares
     the `roadmapSync.progress` block registered as its home (`progress_report.py home --set`, after the user's yes), ask
@@ -249,10 +249,10 @@ CLI version and skill commit, session identity, repository/issue URLs, commits a
     the release is merged the same issue is offered for closing.
 28. Visual artifact in the grilling and in the list of slices (`evals/grilling-artifact.md`, issue 33). On a
     disposable request that changes one screen, confirm the session publishes one artifact at the problem round
-    with the before as a print of the system running at the base (a test account, test data only; each after the
-    same print with markings), adds on the same URL one section per
-    decision question (the solution round with one after per approach, every branch asked and the pre-mortem),
-    each following `templates/grilling-section.html` and added by a small edit of `.frontlights/artifact.html`,
+    with the base as a print of the system running at the base (a test account, test data only; each option the
+    same print with markings, "base" and "com a opção"), adds on the same URL one section per
+    decision question (the solution round with one picture per approach, every branch asked and the pre-mortem),
+    each following `templates/grilling-section.html` and written into `.frontlights/artifact.html` by `frontlights.py artifact section` and published whole once per round,
     with real code excerpts whose secret values are masked as `***`, records the URL and the source path once in
     the discovery log, draws a flow-and-layers diagram when there is no screen, reads the published page back
     when the local source is missing, and, at the stage 5 quiz, lists for each slice the section of the artifact

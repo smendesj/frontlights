@@ -315,6 +315,11 @@ class DeadlineTest(RepositoryCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn('fica para a suíte inteira', done.stdout)
         self.assertLess(wall, 30, done.stdout)
+        # redesenho, issue 10: a linha pronta para rodar sem prazo o que ficou de fora
+        line = next(text for text in done.stdout.splitlines() if text.startswith('Para rodar sem prazo'))
+        self.assertIn('python -m unittest ', line)
+        self.assertIn('tests.test_lento', line)
+        self.assertNotIn('tests.test_guia', line)
         guia = [line for line in done.stdout.splitlines() if 'test_guia' in line]
         self.assertTrue(any('OK' in line for line in guia), done.stdout)
 
@@ -324,6 +329,36 @@ class DeadlineTest(RepositoryCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertIn('não começou', done.stdout)
         self.assertLess(wall, 30, done.stdout)
+
+
+SKILL_TEXT = ('Uma regra escrita com palavras bastantes para formar um trecho de quinze palavras seguidas que se '
+              'repete em dois arquivos da skill.\n')
+
+
+@unittest.skipUnless(os.name == 'nt', 'o comando reaproveita o runner de tests/suite.py, que só roda no Windows')
+class ShingleReportTest(RepositoryCase):
+    """Redesenho, issue 10: com um texto da skill mudado, o relatório de duplicação sai e não muda o código."""
+
+    def setUp(self):
+        super().setUp()
+        lint = self.root / 'skills' / 'frontlights' / 'scripts' / 'skill_lint.py'
+        shutil.copyfile(ROOT / 'skills' / 'frontlights' / 'scripts' / 'skill_lint.py', lint)
+        self.write('skills/frontlights/SKILL.md', '# Skill\n')
+        self.write('skills/frontlights/references/um.md', SKILL_TEXT)
+        self.git('add', '-A')
+        self.git('commit', '-q', '-m', 'lint')
+
+    def test_a_repeated_passage_is_reported_and_never_blocks(self):
+        self.write('skills/frontlights/references/dois.md', 'Outra abertura. ' + SKILL_TEXT)
+        done, _ = self.run_pre_commit()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn('Trechos repetidos de 15+ palavras: 1 (relatório, não bloqueia)', done.stdout)
+        self.assertIn('references/dois.md', done.stdout)
+
+    def test_no_skill_text_changed_no_report(self):
+        self.write('docs/guia.md', 'Uma frase conferida pelo teste, editada.\n')
+        done, _ = self.run_pre_commit()
+        self.assertNotIn('Trechos repetidos', done.stdout)
 
 
 class DocumentationTest(unittest.TestCase):

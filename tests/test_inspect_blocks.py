@@ -247,6 +247,22 @@ class InspectRefusesInvalidBlocksTests(unittest.TestCase):
         self.assertIn('error', json.loads(run.stderr))
 
 
+class RefusalListTests(unittest.TestCase):
+    """Redesenho, issue 10: as recusas do `inspect` são uma lista só no código (`frontlights.INSPECT_REFUSALS`); o
+    `inspect --help` a imprime e `docs/security.md`, "Recusas do `inspect`", traz as mesmas linhas entre marcadores."""
+
+    def test_the_code_list_the_help_and_the_security_doc_are_the_same(self):
+        expected = list(frontlights.INSPECT_REFUSALS)
+        self.assertTrue(expected)
+        done = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--help'], capture_output=True, text=True,
+                              encoding='utf-8', check=True)
+        helped = done.stdout.split('Recusa (saída 1):', 1)[1].strip().splitlines()
+        self.assertEqual([line[2:] for line in helped if line.startswith('- ')], expected)
+        doc = (ROOT / 'skills' / 'frontlights' / 'docs' / 'security.md').read_text(encoding='utf-8')
+        block = doc.split('<!-- inspect-refusals -->', 1)[1].split('<!-- /inspect-refusals -->', 1)[0]
+        self.assertEqual([line[2:] for line in block.strip().splitlines()], expected)
+
+
 class FrontPathsWarningTests(unittest.TestCase):
     def test_a_browser_test_without_front_paths_warns_that_the_gate_will_guess(self):
         result = inspect_file(with_browser(front_paths=None), ROOT)

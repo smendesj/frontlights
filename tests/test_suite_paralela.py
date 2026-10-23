@@ -31,6 +31,8 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import doctext  # noqa: E402
 SUITE = ROOT / 'tests' / 'suite.py'
 VARIABLE = 'FRONTLIGHTS_SUITE'
 SERIAL_REAL = ('test_serve_ports', 'test_checks_integration', 'test_serve', 'test_serve_preview', 'test_browser_app_example',
@@ -836,12 +838,7 @@ class ParallelSuiteReportTests(SleepersTests):
         self.assertEqual(self.still_alive(self.recorded(path, ['test_sleeps'])), [], output)
 
 
-def read(*parts):
-    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
-
-
-def flat(*parts):
-    return ' '.join(read(*parts).split())
+read, flat = doctext.read, doctext.doc  # redesenho, issue 10: o helper único
 
 
 def section(text, heading, next_heading):
@@ -866,11 +863,8 @@ class ParallelSuiteTextTests(unittest.TestCase):
 
     def test_the_protocol_says_the_same(self):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in ('neste repositório `python tests/suite.py`, com `--impact <base>` ou '
-                       '`FRONTLIGHTS_SUITE=rapida`, ou o `python -m unittest discover -s tests -v`) são ferramentas '
-                       'opcionais, rodadas só a pedido do usuário',):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+        # redesenho, issue 10: o runner do repositório vive no README; o protocolo aponta para a regra
+        doctext.assertPointsTo(self, text, 'references/development.md', 'Which tests run when')
 
     def test_the_stage_six_reference_says_the_same_inside_its_section(self):
         # redesenho, issue 5: o ferramental do repositório do Frontlights saiu da referência da etapa 6 (que vale
@@ -878,8 +872,9 @@ class ParallelSuiteTextTests(unittest.TestCase):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
         self.assertIn('`homolog suite --mode impact|full`, judged by `homolog suite-gate`', text)
-        # issue 12 do redesenho: o README virou guia curto; o runner fica no registro de aceite
-        self.assertIn('A suíte rápida roda por `python tests/suite.py`', flat('docs', 'acceptance.md'))
+        # issue 12 do redesenho: o README virou guia curto; o `--report` vive no docstring do tests/suite.py
+        self.assertIn('`python tests/suite.py` roda a rápida em paralelo', flat('README.md'))
+        self.assertIn('`--report <arquivo>` grava a rodada em JSON', flat('tests', 'suite.py'))
 
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')

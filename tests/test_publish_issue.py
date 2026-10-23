@@ -347,6 +347,49 @@ class LocalTests(PublishCase):
         self.assertEqual(gh.calls, [])
 
 
+class NotesTests(PublishCase):
+    """Redesenho, issue 10 (proposta, seção 11): as notas de antes do número vão para a pasta da primeira issue."""
+
+    def notes(self, **files):
+        folder = self.root / '.frontlights' / 'notes'
+        folder.mkdir(parents=True, exist_ok=True)
+        for name, text in files.items():
+            (folder / f'{name}.md').write_text(text, encoding='utf-8')
+        return folder
+
+    def test_the_notes_move_to_the_first_issue_published(self):
+        source = self.notes(sonda='mapa da sonda', leitor='mapa do leitor')
+        plan, approved = self.standard()
+        result = self.publish(plan, approved, FakeGitHub())
+        self.assertTrue(result['ok'], result)
+        target = self.root / '.frontlights' / 'issues' / '101' / 'notes'
+        self.assertEqual(sorted(p.name for p in target.iterdir()), ['leitor.md', 'sonda.md'])
+        self.assertEqual((target / 'sonda.md').read_text(encoding='utf-8'), 'mapa da sonda')
+        self.assertFalse(source.exists())
+        self.assertEqual(result['notes'], {'to': '.frontlights/issues/101/notes', 'moved': ['leitor.md', 'sonda.md'],
+                                           'kept': []})
+        self.assertIn('Notas de exploração movidas', result['message'])
+
+    def test_a_note_already_there_is_never_overwritten(self):
+        self.notes(sonda='nova')
+        target = self.root / '.frontlights' / 'issues' / '101' / 'notes'
+        target.mkdir(parents=True)
+        (target / 'sonda.md').write_text('antiga', encoding='utf-8')
+        plan, approved = self.standard()
+        result = self.publish(plan, approved, FakeGitHub())
+        self.assertEqual(result['notes']['kept'], ['sonda.md'])
+        self.assertEqual((target / 'sonda.md').read_text(encoding='utf-8'), 'antiga')
+        self.assertTrue((self.root / '.frontlights' / 'notes' / 'sonda.md').is_file())
+
+    def test_without_notes_nothing_changes_and_a_dry_run_never_moves(self):
+        plan, approved = self.standard()
+        self.assertIsNone(self.publish(plan, approved, FakeGitHub())['notes'])
+        source = self.notes(sonda='mapa')
+        plan, approved = self.standard()
+        self.publish(plan, approved, FakeGitHub(), dry_run=True)
+        self.assertTrue((source / 'sonda.md').is_file())
+
+
 class CommandLineTests(PublishCase):
     def test_the_entry_point_refuses_without_approval_in_json(self):
         plan, approved = self.standard(approve=False)

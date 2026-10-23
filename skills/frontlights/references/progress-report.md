@@ -2,7 +2,8 @@
 
 Read when: the user asks for the "Resumo para a diretoria", after `progress_report.py status`.
 
-On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "RoadS e resumo".
+On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "RoadS e resumo"; the
+routes and their version are in `docs/roads-contract.md`.
 
 Prepares the plain-language summary for people who follow the work from outside and sends it to RoadS
 as a draft; reviewing, editing, e-mailing and marking as sent all happen in RoadS, never here. This

@@ -13,6 +13,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import doctext  # noqa: E402
 VARIABLE = 'FRONTLIGHTS_SUITE'
 SLOW_MODULES = ('tests.test_serve_ports', 'tests.test_checks_integration', 'tests.test_serve_preview')
 # Quantos testes cada um carrega, no mínimo, sem a variável: a prova de que o pulo é só da suíte rápida.
@@ -63,12 +65,7 @@ def marked(test, module):
                                'ausente, e a rodada do módulo inteiro não é disparada')
 
 
-def read(*parts):
-    return ROOT.joinpath(*parts).read_text(encoding='utf-8')
-
-
-def flat(*parts):
-    return ' '.join(read(*parts).split())
+read, flat = doctext.read, doctext.doc  # redesenho, issue 10: o helper único
 
 
 def section(text, heading, next_heading):
@@ -178,14 +175,9 @@ class FastSuiteTextTests(unittest.TestCase):
 
     def test_the_protocol_documents_the_rule(self):
         text = flat('skills', 'frontlights', 'docs', 'protocol.md')
-        for phrase in (f'`{VARIABLE}=rapida`', 'os módulos que ela toca',
-                       'Esses testes são evidência, nunca portão: nenhuma suíte segura o merge na main local nem a '
-                       'release.',
-                       'são ferramentas opcionais, rodadas só a pedido do usuário',
-                       'nenhuma conferência inteira é exigida, e a CI de um projeto, quando houver, não é esperada nem '
-                       'é portão'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+        # redesenho, issue 10: o protocolo copiava "Which tests run when"; agora aponta para lá
+        doctext.assertPointsTo(self, text, 'references/development.md', 'Which tests run when')
+        self.assertIn('nenhuma suíte é portão', text)
         for old in ('com ou sem CI no projeto', 'A CI do GitHub'):
             with self.subTest(old=old):
                 self.assertNotIn(old, text)

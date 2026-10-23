@@ -3,8 +3,8 @@
 Skill avulsa para Claude Code, antes chamada Workflows e, até a 0.28.1, distribuída como plugin.
 Entrada: `/frontlights`, ou uma frase que cite o Frontlights. A skill inteira é a pasta
 `skills/frontlights`: `SKILL.md` define a ordem das etapas, as instruções detalhadas de cada
-etapa ficam em `references/`, e `scripts/`, `templates/`, `examples/` e `docs/` (protocolo e
-segurança) vivem dentro dela, referidos por `${CLAUDE_SKILL_DIR}`. Leia a skill antes de
+etapa ficam em `references/`, e `scripts/`, `templates/`, `examples/` e `docs/` (protocolo,
+segurança e o contrato com o RoadS) vivem dentro dela, referidos por `${CLAUDE_SKILL_DIR}`. Leia a skill antes de
 alterar o fluxo. `tests/`, `evals/` e a documentação da raiz são ferramental de quem desenvolve
 o Frontlights e ficam fora da skill.
 

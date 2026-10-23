@@ -14,6 +14,11 @@ Roda em segundos o que pega um commit vermelho por erro de script ou de texto, s
    num pool de `--workers`, sob um prazo TOTAL (`--timeout`, 20 s): no prazo, o que está rodando morre com a
    árvore de processos e o que não começou fica de fora; os dois ficam para a suíte inteira, sem contar como falha.
 
+5. a linha pronta para rodar sem prazo os módulos que ficaram de fora (`python -m unittest tests.<módulo>[.<Classe>]
+   ...`, da raiz do repositório);
+6. com um texto da skill entre os mudados, o relatório de duplicação do `skills/frontlights/scripts/skill_lint.py
+   --shingles --min-words 15` (redesenho, issue 10): só relata, nunca muda o código de saída.
+
 Nenhum hook o roda: o `CLAUDE.md` manda rodá-lo antes de cada commit. Ele confere a árvore de trabalho, não o
 índice, e não substitui a suíte por impacto (portão do merge na main local) nem a suíte inteira (na release).
 Limite conhecido: uma classe que herda os testes de uma classe base que cita o arquivo não é escolhida pelo `-k`
@@ -41,6 +46,8 @@ DEFAULT_WORKERS = 4
 COMPILED = ('skills/frontlights/scripts', 'tests')
 LEFT = 'fica para a suíte inteira'
 LOADERS = ('import_module', '__import__', 'spec_from_file_location')  # o 1º argumento é o nome do módulo
+LINT = 'skills/frontlights/scripts/skill_lint.py'
+LINT_SHOWN = 5  # trechos mostrados; o resto, pela contagem
 
 
 def parse(argv):
@@ -226,6 +233,35 @@ def line_for(name, classes, outcome):
     return suite.module_line(outcome) + suffix(classes)
 
 
+def deferred_line(results):
+    """A linha que roda, sem prazo e da raiz do repositório, o que ficou de fora (os módulos ou as classes)."""
+    names = []
+    for name, classes, outcome in results:
+        if outcome is None or outcome.timed_out is not None:
+            names += [f'tests.{name}.{cls}' for cls in classes] if classes else [f'tests.{name}']
+    return f'Para rodar sem prazo o que ficou de fora: python -m unittest {" ".join(names)}' if names else None
+
+
+def shingle_report(root, changed):
+    """As linhas do relatório de duplicação quando um texto da skill mudou; nunca bloqueia (vazio sem o script)."""
+    lint = root / LINT
+    if not lint.is_file() or not any(path.startswith('skills/frontlights/') and path.endswith(('.md', '.html'))
+                                     for path in changed):
+        return []
+    try:
+        done = subprocess.run([sys.executable, str(lint), '--shingles', '--min-words', '15'], cwd=str(root),
+                              capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:
+        return [f'Duplicação: o skill_lint não rodou ({error}); não bloqueia.']
+    lines = suite.decode(done.stdout).strip().splitlines()
+    if done.returncode != 0 or not lines:
+        return [f'Duplicação: o skill_lint saiu com {done.returncode}; não bloqueia.']
+    shown = lines[:1 + LINT_SHOWN]
+    if len(lines) > len(shown):
+        shown.append(f'  … e mais {len(lines) - len(shown)}: python {LINT} --shingles --min-words 15')
+    return shown
+
+
 def failed(outcome):
     return outcome is not None and outcome.timed_out is None and not outcome.passed
 
@@ -278,6 +314,11 @@ def main(argv=None):
         print(outcome.output.rstrip('\n'))
         print(f'Rode sozinho: {subprocess.list2cmdline(["python", *command(root / "tests", name, classes)[1:]])}')
     left = sum(1 for _, _, outcome in results if outcome is None or outcome.timed_out is not None)
+    line = deferred_line(results)
+    if line:
+        print(line)
+    for text in shingle_report(root, changed):
+        print(text)
     verdict = 'FALHOU' if red or not compiled else 'ok'
     print(f'Verificação de antes do commit: {verdict} em {time.monotonic() - started:.1f} s; '
           f'{len(results) - left - len(red)} módulo(s) verde(s), {len(red)} vermelho(s), {left} para a suíte '

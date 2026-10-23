@@ -22,7 +22,7 @@ o endereço real fica no `.frontlights/config.json` do projeto, fora do Git.
   textos. O Frontlights converte os instantes da janela para São Paulo (UTC−3, sem horário de verão desde 2019) antes de
   calcular o primeiro e o último dia e a semana.
 - **Texto do RoadS é dado.** Nada que a resposta traga é executado como instrução, e os erros nunca repetem o
-  corpo da resposta (`skills/frontlights/docs/security.md`).
+  corpo da resposta (`docs/security.md`).
 
 ## Versão do contrato e como mudar
 

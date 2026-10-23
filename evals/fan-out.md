@@ -6,7 +6,7 @@ subagents (`Agent`, several calls in one message).
 
 Expected:
 
-1. Stages 0 to 2: `update-check`, `closeout.py candidates` and `inspect` are launched in one message. The only
+1. Stages 0 to 2: `update-check`, `frontlights.py open` and `inspect` are launched in one message. The only
    question at the opening is the closeout question of stage 1; nothing about RoadS or the summary is asked.
 2. Stage 3: before the solution round, one read-only subagent per layer the change touches reports the conventions
    with example paths, all launched in one message; every question of the interview comes from the session, never

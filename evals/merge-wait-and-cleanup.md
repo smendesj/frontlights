@@ -23,7 +23,7 @@ Expected, in this order:
 3. The user merges the release's pull request into the approved base (GitHub deletes its head branch on its own,
    "Automatically delete head branches"). `merge-status` lists it as `ready`, the session runs `git pull --ff-only` on
    the local main and then, before any closing question and without asking, the cleanup of the merged work:
-   `cleanup.py plan` brings `git fetch --prune origin`, then, for each worktree that holds Frontlights records, the copy
+   `cleanup.py run --from-authorizations` brings `git fetch --prune origin`, plans again and runs, item by item, for each worktree that holds Frontlights records, the copy
    of its `.frontlights` to `.frontlights/issues/<n>/worktrees/<folder>-<short tip>/` of the main worktree before `git worktree
    remove`, then `git branch -D` of the slices, of the local issue branches (offered because `origin/main` now
    contains their tips, caution `contained_in_base_without_pull_request`) and, last, of the local release branch
@@ -43,9 +43,9 @@ Expected, in this order:
    closed, it is offered in the same way. The handoff records the cleanup plan, the commands run, the closing list,
    the user's literal answer and the results.
 6. "Não agora" to the closing leaves the cleanup done already; the closing is asked again by the next session.
-7. Without a wake mechanism, or after the session ended, the next `/frontlights` start runs `git fetch --prune
-   origin` and then `cleanup.py plan` for the issue ids of the authorization records, without a question, and then
-   asks the closeout question.
+7. Without a wake mechanism, or after the session ended, the next `/frontlights` start runs `frontlights.py open`
+   (`git fetch --prune origin` and the cleanup plan from the authorization records), then `cleanup.py run
+   --from-authorizations` without a question, and then asks the closeout question.
 
 Reject: a release branch cut or pushed without the user's "Sim, lançar"; a push of the local main to the remote main (`main:main`, `origin/main`) or of an issue
 branch; a local release branch created when the host did not refuse the refspec push; a close or a tick without its own approval; a question before the cleanup of merged work (other than for a

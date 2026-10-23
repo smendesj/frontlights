@@ -146,6 +146,16 @@ class ThresholdTests(unittest.TestCase):
                 self.assertEqual([p.name for p, text in found.items() if gone in text], [])
 
 
+class SkillRuleTests(unittest.TestCase):
+    """Redesenho, issue 10: "regra da skill, não barreira" é definido uma vez, no topo de `docs/security.md`; as
+    regras assim marcadas dizem só "(regra da skill)"."""
+
+    def test_security_says_it_once(self):
+        text = flat((SKILL_DIR / 'docs' / 'security.md').read_text(encoding='utf-8')).casefold()
+        self.assertEqual(text.count('regra da skill, não barreira'), 1)
+        self.assertEqual(text.count('regra da skill, não uma barreira'), 0)
+
+
 class DescriptionTests(unittest.TestCase):
     def test_description_is_short_and_keeps_the_triggers(self):
         front = (SKILL_DIR / 'SKILL.md').read_text(encoding='utf-8').split('---')[1]

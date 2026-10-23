@@ -1383,6 +1383,26 @@ def inspect(config, root, config_path=None, summary=False, offline=False, issue=
     return summarize(result) if summary else result
 
 
+# What `inspect` refuses in a config (exit 1). One line per rule, in Portuguese: the `inspect --help` epilog prints
+# these lines and `docs/security.md`, "Recusas do `inspect`", carries the same lines between its markers;
+# `tests/test_inspect_blocks.py` compares the three (redesign, issue 10).
+INSPECT_REFUSALS = (
+    '`repository` ausente, ou que não é `dono/nome` nem `null`',
+    '`browserTest.users` com login ou senha de menos de 4 caracteres ou com o texto do marcador de máscara',
+    '`health` ou `baseUrl` de `browserTest` e `checks` fora de `127.0.0.1`, `localhost` ou `::1`',
+    'shell embutido nos `argv` de `checks` (cmd, sh, powershell, `.bat`, `&&`, `|`, `python -c`, `env`, `xargs`)',
+    '`{port}` sem um processo de porta `auto`',
+    '`browserTest.isolated` que ainda declara `copyDatabase` ou `dropDatabase` (mesmo `null`)',
+    '`browserTest.isolated` com host que não é local, porta fixa igual à da prévia ou do `serve`, `baseUrl` fixa '
+    'que não é a porta de um processo isolado, ou `cwd` de processo que sai da worktree',
+    '`preview` com worktree fora do `--root`, sem branch, `baseUrl` fora da porta fixa local de um processo dela, '
+    'ou processo com porta `auto` ou `{port}` no argv ou no `cwd`',
+    'porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia',
+    '`homolog` com chave além de `backupDir` e `suites`, e `homolog.suites` com chave além de `impact` e `full`',
+    '`homolog.backupDir` relativo, com `..`, `~` ou marcador `{}`',
+)
+
+
 def summarize(result):
     """The `inspect --summary` output: the same keys plus `summary: true`, with the GitHub issues cut to number,
     title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section) and counted, and
@@ -2398,7 +2418,9 @@ def slice_cli(action, root, config_path, issue, slices=(), stacked_on=None, owne
 # `publish-issue` publishes the approved plan: the stamp of the approved file checked first, the issues created
 # blockers first (`publish-order`) with their labels and `--blocked-by`, then the board; an issue that already exists
 # (an adopted one) takes only labels, blocked-by and the board, never a body write. Every write checks the gh account
-# and the repository first; a state file under `.frontlights/publish/` makes `--resume` idempotent.
+# and the repository first; a state file under `.frontlights/publish/` makes `--resume` idempotent. At the end, the
+# exploration notes of `.frontlights/notes/` move to `issues/<n>/notes/` of the first issue published (redesign,
+# issue 10; `move_notes`, which never overwrites).
 
 def walkthrough_lines(item):
     """The two walkthrough lines of a slice box (references/issues.md, "Slices as acceptance criteria")."""
@@ -2751,13 +2773,14 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
     write_json_file(state_path, state)
     bad = [p for p in published if not p['verified']]
     shown = ', '.join(f'#{p["number"]}' for p in published)
+    notes = move_notes(root, published[0]['number']) if published else None  # the notes follow the first issue
     return {'ok': not bad, 'exitCode': 0 if not bad else 2, 'operation': 'publish-issue', 'repository': repo,
             'approved': approval, 'order': [e['issue']['id'] for e in entries], 'writes': writes,
-            'published': published, 'stateFile': relative_state,
+            'published': published, 'stateFile': relative_state, 'notes': notes,
             'message': (f'Publicadas e relidas: {shown}; corpo, caixas e quadro conferem.' if not bad else
                         f'Publicadas: {shown}; a releitura não confere em ' +
                         ', '.join(f'#{p["number"]} ({"; ".join(p["problems"])})' for p in bad) +
-                        '. Mostre a diferença e pergunte; nada é reescrito sozinho.')}
+                        '. Mostre a diferença e pergunte; nada é reescrito sozinho.') + notes_sentence(notes)}
 
 
 def publish_dry_run(entries, repo, board_, approval):
@@ -2780,6 +2803,35 @@ def publish_dry_run(entries, repo, board_, approval):
                                      f' {approval["path"]} ainda não tem aprovação que confira.')}
 
 
+def move_notes(root, number):
+    """The exploration notes written before the issue had a number (`.frontlights/notes/`, in the main worktree) go to
+    `.frontlights/issues/<number>/notes/` (docs/protocol.md, "Registros"). A file already there is never overwritten:
+    the note stays where it was and is named in `kept`. None when there is no note to move."""
+    source = root / '.frontlights' / 'notes'
+    files = sorted(path for path in source.iterdir() if path.is_file()) if source.is_dir() else []
+    if not files:
+        return None
+    target = root / '.frontlights' / 'issues' / str(number) / 'notes'
+    target.mkdir(parents=True, exist_ok=True)
+    moved, kept = [], []
+    for path in files:
+        if (target / path.name).exists():
+            kept.append(path.name)
+            continue
+        os.replace(path, target / path.name)
+        moved.append(path.name)
+    if not any(source.iterdir()):
+        source.rmdir()
+    return {'to': target.relative_to(root).as_posix(), 'moved': moved, 'kept': kept}
+
+
+def notes_sentence(notes):
+    if not notes:
+        return ''
+    text = f' Notas de exploração movidas para {notes["to"]}: {len(notes["moved"])}.'
+    return text + (f' Ficaram em .frontlights/notes (já existiam lá): {", ".join(notes["kept"])}.' if notes['kept'] else '')
+
+
 def publish_local(entries, root, state, state_path, approval):
     """A project without a remote: each approved body becomes `.frontlights/issues/<n>/issue.json` (`source: local`)."""
     published = []
@@ -2796,9 +2848,11 @@ def publish_local(entries, root, state, state_path, approval):
         published.append({'id': issue['id'], 'number': issue['id'], 'url': None, 'verified': True, 'problems': [],
                           'record': record.relative_to(root).as_posix()})
     write_json_file(state_path, state)
+    notes = move_notes(root, published[0]['number']) if published else None
     return {'ok': True, 'exitCode': 0, 'operation': 'publish-issue', 'repository': None, 'approved': approval,
-            'published': published, 'stateFile': state_path.relative_to(root).as_posix(),
-            'message': f'Projeto sem remoto: {len(published)} issue(s) gravadas em .frontlights/issues/<n>/issue.json.'}
+            'published': published, 'stateFile': state_path.relative_to(root).as_posix(), 'notes': notes,
+            'message': f'Projeto sem remoto: {len(published)} issue(s) gravadas em .frontlights/issues/<n>/issue.json.'
+                       + notes_sentence(notes)}
 
 
 # ---------------------------------------------------------------- render-criteria and issue-lint (redesign, issue 7)
@@ -2933,7 +2987,8 @@ def build_parser():
     p.add_argument('--reserve', type=int, required=True)
     p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
     p.add_argument('--turn', type=int, help='the turn of this report; prints next_report_turn (every 50 turns)')
-    p = sub.add_parser('inspect')
+    p = sub.add_parser('inspect', formatter_class=argparse.RawDescriptionHelpFormatter,
+                       epilog='Recusa (saída 1):\n' + '\n'.join(f'- {line}' for line in INSPECT_REFUSALS))
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--summary', action='store_true',

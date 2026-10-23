@@ -5,8 +5,8 @@ seção de outro arquivo. Antes do redesenho, 69 ponteiros apontavam para parág
 sessão lia o arquivo inteiro para achar a seção. Aqui todo ponteiro precisa resolver para um título real (`##` ou
 `###`) do arquivo citado; no `SKILL.md`, as regras de toda etapa são itens com o nome em negrito (`- **Fan out.**`), e
 o nome conta como seção; num modelo (`templates/`), um campo da lista (`- Artifact URL and source path (…)`) também. Todo `references/<x>.md`, `templates/<x>` e `docs/<x>.md` citado precisa existir; o
-`docs/roads-contract.md` (com `docs/acceptance.md` e `docs/recovery.md`) ainda vive na raiz do repositório e
-conta lá.
+`docs/roads-contract.md` vive dentro da skill desde o redesenho (issue 10); `docs/acceptance.md` e `docs/recovery.md`
+vivem na raiz do repositório e contam lá.
 
 Um título resolve o ponteiro quando é igual ao texto citado ou começa por ele seguido de `:` ou de espaço (o ponteiro
 "The artifact" resolve "## The artifact: the picture of each round"); um número de passo no começo do título
@@ -37,7 +37,7 @@ def sources():
 
 def known_files():
     files = {p.relative_to(SKILL).as_posix(): p for p in SKILL.rglob('*') if p.is_file()}
-    for path in (ROOT / 'docs').glob('*.md'):  # docs/roads-contract.md, acceptance.md, recovery.md: still at the root
+    for path in (ROOT / 'docs').glob('*.md'):  # acceptance.md and recovery.md live at the root
         files.setdefault(f'docs/{path.name}', path)
     return files
 

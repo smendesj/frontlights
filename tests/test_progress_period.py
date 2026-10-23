@@ -39,7 +39,7 @@ class PeriodTests(unittest.TestCase):
 
     def test_the_docs_tell_the_same_rule(self):
         self.assertIn('`collect --start <start> --end <end>`', flat('skills', 'frontlights', 'docs', 'protocol.md'))
-        contract = flat('docs', 'roads-contract.md')
+        contract = flat('skills', 'frontlights', 'docs', 'roads-contract.md')
         for phrase in ('**Corte por instante.**', 'nunca arredondado para a meia-noite', '`other_draft_pending`',
                        '`draftOtherPeriod`'):
             with self.subTest(phrase=phrase):
