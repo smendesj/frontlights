@@ -138,7 +138,23 @@ class GoTests(ReleaseCase):
         recorded = self.go_and_record()
         current = json.loads((self.root / '.frontlights' / 'release' / 'current.json').read_text(encoding='utf-8'))
         self.assertEqual((current['pr'], current['issues'], current['closes']), (77, [12], [12]))
-        self.assertIn('--since pending', recorded['monitor'])
+        self.assertIn('--since pending', recorded['monitor'])   # the PR GitHub does not list yet waits as pending
+
+    def test_record_prints_the_monitor_since_the_current_state_of_the_pull_request(self):
+        """Teste real do monitor (23/10/2026): com a PR já `ready`, o `--since pending` acordava o laço na hora."""
+        cases = (('ready', {'reviewDecision': 'APPROVED', 'mergeStateStatus': 'CLEAN', 'mergeable': 'MERGEABLE'}),
+                 ('pending', {'mergeStateStatus': 'UNKNOWN', 'mergeable': 'UNKNOWN'}),
+                 ('blocked', {'reviewDecision': 'REVIEW_REQUIRED', 'mergeStateStatus': 'BLOCKED',
+                              'mergeable': 'MERGEABLE'}))
+        for state, fields in cases:
+            with self.subTest(state=state):
+                current = self.root / '.frontlights' / 'release' / 'current.json'
+                if current.exists():
+                    current.unlink()
+                self.gh.pull_requests = {77: blocked_pr(77, **fields)}
+                recorded = self.go_and_record()
+                self.assertEqual(recorded['state'], state)
+                self.assertIn(f'--since {state} ', recorded['monitor'])
 
 
 class StatusTests(ReleaseCase):

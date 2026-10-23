@@ -1737,6 +1737,18 @@ def pr_state(entry):
     return 'ready'
 
 
+def recorded_state(config_path, pr, base, gh=None):
+    """The state of the pull request just recorded, as `release status` reads it, so the monitor printed by
+    `go --record` waits from where the PR stands (`--since ready` sleeps until it changes). A PR GitHub does not
+    list yet, or a read that fails, waits as `pending`."""
+    import closeout   # noqa: PLC0415
+    try:
+        state = pr_state(closeout.op_merge_status(config_path, str(pr), base, gh)['pullRequests'][0])
+    except Exception:  # noqa: BLE001  (the record is written; only the monitor's starting state is at stake)
+        return 'pending'
+    return 'pending' if state in ('not_found', 'unknown') else state
+
+
 def current_release(root):
     path = release_folder(root) / 'current.json'
     data = read_record(path) if path.is_file() else None
@@ -1782,7 +1794,8 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
                            waitingSince=zoned_now().isoformat(timespec='seconds'))
             write_json(folder / 'current.json', current)
             os.replace(pending_path, folder / f'pending-{zoned_now().strftime("%Y%m%d-%H%M%S")}.json')
-            return {'exitCode': 0, 'release': current, 'monitor': monitor_line(root, 'pending'),
+            state = recorded_state(config_path, pr, current.get('base') or base, gh)
+            return {'exitCode': 0, 'release': current, 'state': state, 'monitor': monitor_line(root, state),
                     'message': f'Release registrada: PR #{pr} de {current["branch"]} em {current["base"]}. A sessão '
                                'aguarda o merge do usuário; aja só sobre `release status`, nunca sobre uma notificação.'}
         plan = op_release_plan(root, base, remote, prefix, records, config_path, gh)
