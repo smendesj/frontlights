@@ -21,7 +21,10 @@ Operations (each prints one JSON object on stdout):
   merge-status  for pull requests named with --prs 12,13, whether each is still open, was merged into the
               approved base (--base, else the repository's default branch), was merged into some other branch
               or was closed unmerged. This is what the session waits on after it opened its pull requests: only
-              `merged_into_base` lets an issue be proposed for closing.
+              `merged_into_base` lets an issue be proposed for closing. Each open one also carries `reviewDecision`,
+              `mergeStateStatus`, `mergeable` and `isDraft` as GitHub reports them, and `blocked` (with `blockedBy`)
+              when the review asks for changes or a review, the merge state is BLOCKED, DIRTY or BEHIND, or it
+              conflicts; `blocked` at the top lists them: a blocked pull request is never offered for merging.
   tick-check  local files only: confirms that --after is --before with nothing changed but the `[ ]` of the
               items on --lines turned into `[x]`. It checks the body of a parent that was edited to tick the
               item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
@@ -111,7 +114,10 @@ FENCE = re.compile(r'^[ \t]*(`{3,}|~{3,})(.*)$')
 ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]+\[([ xX])\](?=[ \t]|$)')
 FEATURES = 'GraphQL-Features: issue_types'
 BRANCH = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}')
-PR_VIEW = 'number state merged mergedAt url baseRefName headRefName headRefOid'
+PR_VIEW = ('number state merged mergedAt url baseRefName headRefName headRefOid mergeable mergeStateStatus '
+           'reviewDecision isDraft')
+BLOCKING_REVIEW = ('CHANGES_REQUESTED', 'REVIEW_REQUIRED')   # reviewDecision that keeps a PR from merging
+BLOCKING_STATE = ('BLOCKED', 'DIRTY', 'BEHIND')                # mergeStateStatus that keeps a PR from merging
 BOX = re.compile(r'([SsPp]?)([1-9][0-9]{0,2})')                # --box S2, s2, 2 or P1 (a leftover box)
 LEFTOVER = re.compile(r'(?:\*\*|__)?Pend[eê]ncia\b', re.IGNORECASE)   # the text of a leftover box: `Pendência (...)`
 BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
@@ -902,7 +908,19 @@ def pull_request_entry(number, node, expected):
               'closed_unmerged' if state == 'CLOSED' else 'unknown')
     head = node.get('headRefOid')
     url = node.get('url')
+    word = lambda key: node[key] if isinstance(node.get(key), str) and re.fullmatch(r'[A-Z_]{1,40}', node[key]) else None
+    review, merge_state, mergeable = word('reviewDecision'), word('mergeStateStatus'), word('mergeable')
+    reasons = []
+    if status == 'open':
+        if review in BLOCKING_REVIEW:
+            reasons.append(f'reviewDecision {review}')
+        if merge_state in BLOCKING_STATE:
+            reasons.append(f'mergeStateStatus {merge_state}')
+        if mergeable == 'CONFLICTING':
+            reasons.append('mergeable CONFLICTING')
     return {'number': number, 'status': status, 'state': state, 'merged': merged,
+            'reviewDecision': review, 'mergeStateStatus': merge_state, 'mergeable': mergeable,
+            'isDraft': node.get('isDraft') is True, 'blocked': bool(reasons), 'blockedBy': reasons,
             'mergedAt': rs.clean(node['mergedAt'], 40) if isinstance(node.get('mergedAt'), str) else None,
             'base': rs.clean(base, 200) if base else None,
             'head': rs.clean(node['headRefName'], 200) if isinstance(node.get('headRefName'), str) else None,
@@ -932,9 +950,13 @@ def op_merge_status(config, prs, base=None, gh=None):
     if others:
         parts.append('Merged into another branch, closed unmerged or unknown: ' + ', '.join(f'#{n}' for n in others)
                      + '; their issues are not proposed for closing.')
+    blocked = [e['number'] for e in entries if e.get('blocked')]
+    if blocked:
+        parts.append('Blocked (review or merge state): ' + ', '.join(f'#{n}' for n in blocked)
+                     + '; a blocked pull request is never offered for merging.')
     return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
             'baseSource': 'argument' if base else 'default_branch', 'pullRequests': entries, 'ready': ready,
-            'waiting': waiting, 'settled': not waiting, 'message': ' '.join(parts)}
+            'waiting': waiting, 'blocked': blocked, 'settled': not waiting, 'message': ' '.join(parts)}
 
 
 def read_body_file(path):

@@ -65,6 +65,21 @@ Operations (each prints one JSON object on stdout):
          gate only with the result.json answered and a previous merge record with `scope_check: pass`, and records
          `browser_gate: answered` with `evidence: "teste livre"`; `--dry-run` checks and lists the steps, writing
          nothing. Never pushes, never --force, reset or rebase.
+  release  the release by command, `release plan|body-check|go|status|landed`: `plan` is release-plan, exit 1 with
+         `watched_run_missing` when an issue of `closes` has no merge record with the watched run green; `body-check
+         --body <file>` checks the body against templates/pr.md (its sections in order, no marker left, no absolute
+         path) and its `Closes #n` lines against `closes` (one per issue, before `## Resumo`, no other closing word);
+         `go --body <file>` prints the argv of `git push <remote> <base>:refs/heads/<release>` and of `gh pr create`
+         (the session runs them; `--legacy-branch` only with `--answer Sim`: a local branch and `push -u`), keeps
+         `.frontlights/release/pending.json`, and `go --record --pr <n>` turns it into `release/current.json`;
+         `status` reads the PR through closeout's `merge-status` (`reviewDecision`, `mergeStateStatus`, `mergeable`,
+         merged): `blocked` never offers the merge, `ready` (and every watched run recorded) carries the question
+         "Mesclar a PR #<n> em <base>?" with the argv of `gh pr ready` and `gh pr merge --merge`; `--since <state>`
+         exits 0 only when the state changed (4 otherwise) and `--quiet` prints one line then, nothing before: the
+         until-loop of the monitor wakes the session once. `landed`, once merged: `git pull --ff-only` (not a
+         fast-forward: exit 2, stop and ask, never reset), `git fetch --prune`, the `cleanup plan` of the issues of
+         the release, its `commands` and the `closeout verify` left to run; `current.json` is kept as
+         `current-<stamp>.json` and `landed-<stamp>.json`. It never pushes, never creates nor merges a pull request.
   suite  run the suite `homolog.suites.<mode>` of the config declares (`--mode impact|full`; each `{"argv": [...],
          "timeoutSeconds": N}`, the shape and the refusals of `checks.regression`) in `--root`, without a shell, the
          whole process tree killed at the timeout; `{base}` in the argv becomes `--base` (default main), and
@@ -1612,11 +1627,262 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
                         f'o portão {gate["status"]}; backup: {bundled}. Registro em {record_file.name}.')
 
 
+# ---------------------------------------------------------------- release by command (redesign, issue 4)
+
+RELEASE_ACTIONS = ('plan', 'body-check', 'go', 'status', 'landed')
+UNCHANGED = 4                                    # `release status --since`: the state did not change
+GREEN_GATES = ('answered', 'not_needed')
+CLOSING_WORD = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[\w.-]+/[\w.-]+)?#\d+', re.I)
+CLOSES_LINE = re.compile(r'^Closes #([0-9]{1,9})\s*$')
+ABSOLUTE_PATH = re.compile(r'(?<![\w/])(?:[A-Za-z]:\\|/home/|/Users/)')
+PLACEHOLDER = re.compile(r'<(?:n|a|b|título|titulo|data)>|#<')
+MERGE_OPTIONS = ['Sim, mesclar', 'Não, aguardar o merge']
+
+
+def release_folder(root):
+    return Path(root) / '.frontlights' / 'release'
+
+
+def watched(root, number):
+    """True when a merge record of the issue in the local main carries the watched run green and authorize in pass."""
+    for path in sorted((Path(root) / '.frontlights' / 'issues' / str(number)).glob('merge-local-main*.json')):
+        data = read_record(path)
+        gates = data.get('gates') if isinstance(data, dict) else None
+        answer = data.get('authorize') if isinstance(data, dict) else None
+        if isinstance(gates, dict) and gates.get('browser_gate') in GREEN_GATES and (
+                not isinstance(answer, dict) or answer.get('scope_check') == 'pass'):
+            return True
+    return False
+
+
+def template_headings():
+    text = (HERE.parent / 'templates' / 'pr.md').read_text(encoding='utf-8')
+    return [line[3:].strip() for line in text.splitlines() if line.startswith('## ')]
+
+
+def body_problems(text, closes):
+    """What the body of the release's pull request lacks against templates/pr.md and `closes`."""
+    problems, fence, found, close_lines, first_heading = [], False, [], [], None
+    for number, line in enumerate(text.splitlines(), 1):
+        if re.match(r'^\s*(```|~~~)', line):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        if line.startswith('## '):
+            found.append(line[3:].strip())
+            first_heading = first_heading or number
+            continue
+        match = CLOSES_LINE.match(line)
+        if match:
+            close_lines.append((number, int(match.group(1))))
+        elif CLOSING_WORD.search(line):
+            problems.append(f'linha {number}: palavra de fechamento fora das linhas `Closes #n` de `closes`')
+    wanted = [h for h in template_headings() if h in ('Resumo', 'Evidência', 'Risco do merge')]
+    positions = [found.index(h) if h in found else None for h in wanted]
+    for heading, position in zip(wanted, positions):
+        if position is None:
+            problems.append(f'sem a seção ## {heading} do modelo templates/pr.md')
+    present = [p for p in positions if p is not None]
+    if present != sorted(present):
+        problems.append(f'as seções fora da ordem do modelo ({", ".join(wanted)})')
+    numbers = [n for _, n in close_lines]
+    if sorted(set(numbers)) != sorted(set(closes)) or len(numbers) != len(set(numbers)):
+        problems.append(f'as linhas `Closes #n` ({", ".join(f"#{n}" for n in numbers) or "nenhuma"}) não são as de '
+                        f'`closes` ({", ".join(f"#{n}" for n in closes) or "nenhuma"}), uma por issue')
+    if close_lines and first_heading and any(line > first_heading for line, _ in close_lines):
+        problems.append('as linhas `Closes #n` vêm antes de ## Resumo, fora de bloco de código')
+    if PLACEHOLDER.search(text):
+        problems.append('marcador do modelo não preenchido (<n>, <título>, #<a>...)')
+    if ABSOLUTE_PATH.search(text):
+        problems.append('caminho absoluto no corpo: cite o print pelo nome e pela pasta da issue')
+    return problems
+
+
+def closes_list(value):
+    if value is None:
+        return None
+    numbers = [part.strip().lstrip('#') for part in str(value).split(',') if part.strip()]
+    require(all(n.isdigit() and int(n) > 0 for n in numbers), '--closes leva números de issue, como --closes 12,13')
+    return [int(n) for n in numbers]
+
+
+def release_title(plan):
+    issues = ', '.join(f'#{n}' for n in plan.get('release', []))
+    directs = '; '.join(plan.get('releaseDirect', []))
+    named = f'issues {issues}' if issues else ''
+    named = '; '.join(part for part in (named, directs) if part)
+    return f'Release {release_date()}: {named}'
+
+
+def monitor_line(root, state):
+    script = HERE / 'homolog.py'
+    return (f'until python "{script}" release status --root "{root}" --since {state} --quiet; do sleep 180; done')
+
+
+def pr_state(entry):
+    status = entry.get('status')
+    if status == 'merged_into_base':
+        return 'merged'
+    if status != 'open':
+        return status or 'unknown'
+    if entry.get('blocked'):
+        return 'blocked'
+    if entry.get('mergeable') in (None, 'UNKNOWN') or entry.get('mergeStateStatus') in (None, 'UNKNOWN'):
+        return 'pending'
+    return 'ready'
+
+
+def current_release(root):
+    path = release_folder(root) / 'current.json'
+    data = read_record(path) if path.is_file() else None
+    require(isinstance(data, dict) and isinstance(data.get('pr'), int), 'não há release aberta em '
+            '.frontlights/release/current.json; grave-a com `release go --record --pr <n>` depois do gh pr create')
+    return path, data
+
+
+def op_release(action, root, base='main', remote='origin', config_path=None, prefix=None, records=None, body=None,
+               closes=None, record=False, pr=None, legacy=False, answer=None, since=None, gh=None, update_check=None,
+               planner=None):
+    """`release plan|body-check|go|status|landed` (see the module's docstring)."""
+    worktree(root)
+    root = Path(root)
+    require(action in RELEASE_ACTIONS, f'release {str(action)[:20]}: a ação é {", ".join(RELEASE_ACTIONS)}')
+    if action == 'plan':
+        result = op_release_plan(root, base, remote, prefix, records, config_path, gh)
+        missing = [n for n in result.get('closes', []) if not watched(root, n)]
+        if missing:
+            result.update(exitCode=1, ready=False, reason='watched_run_missing', missing=missing,
+                          message=f'sem teste assistido registrado (merge-local-main com o portão verde) para '
+                                  f'{", ".join(f"#{n}" for n in missing)}, de `closes`: a release espera o portão '
+                                  'de cada issue')
+        return result
+    if action == 'body-check':
+        require(body and Path(body).is_file(), 'body-check precisa de --body <arquivo do corpo da PR>')
+        wanted = closes_list(closes)
+        if wanted is None:
+            wanted = op_release_plan(root, base, remote, prefix, records, config_path, gh).get('closes', [])
+        problems = body_problems(Path(body).read_text(encoding='utf-8-sig'), wanted)
+        return {'exitCode': 1 if problems else 0, 'body': str(body), 'closes': wanted, 'problems': problems,
+                'message': ('O corpo segue templates/pr.md e as linhas `Closes #n` são as de `closes`.' if not problems
+                            else f'O corpo tem {len(problems)} problema(s): ' + '; '.join(problems))}
+    if action == 'go':
+        folder = release_folder(root)
+        if record:
+            require(isinstance(pr, int) and pr > 0, '--record precisa de --pr <número da PR criada>')
+            pending_path = folder / 'pending.json'
+            pending = read_record(pending_path) if pending_path.is_file() else None
+            require(isinstance(pending, dict), 'sem .frontlights/release/pending.json: rode `release go --body <arquivo>` '
+                                               'antes e o push e o gh pr create que ele imprimir')
+            current = dict(pending, pr=pr, recordedAt=zoned_now().isoformat(timespec='seconds'),
+                           waitingSince=zoned_now().isoformat(timespec='seconds'))
+            write_json(folder / 'current.json', current)
+            os.replace(pending_path, folder / f'pending-{zoned_now().strftime("%Y%m%d-%H%M%S")}.json')
+            return {'exitCode': 0, 'release': current, 'monitor': monitor_line(root, 'pending'),
+                    'message': f'Release registrada: PR #{pr} de {current["branch"]} em {current["base"]}. A sessão '
+                               'aguarda o merge do usuário; aja só sobre `release status`, nunca sobre uma notificação.'}
+        plan = op_release_plan(root, base, remote, prefix, records, config_path, gh)
+        if plan.get('exitCode') != 0:
+            return plan
+        missing = [n for n in plan.get('closes', []) if not watched(root, n)]
+        require(not missing, f'sem teste assistido registrado para {", ".join(f"#{n}" for n in missing)}: a release '
+                             'espera o portão de cada issue')
+        require(plan.get('releaseBranch'), 'sem prefixo das branches, a release não tem nome: declare branchPrefix')
+        require(body and Path(body).is_file(), 'go precisa de --body <arquivo do corpo da PR> (templates/pr.md)')
+        problems = body_problems(Path(body).read_text(encoding='utf-8-sig'), plan.get('closes', []))
+        if problems:
+            return {'exitCode': 1, 'reason': 'body', 'problems': problems,
+                    'message': 'O corpo da PR não passa no body-check: ' + '; '.join(problems)}
+        if legacy:
+            require(answer == 'Sim', '--legacy-branch só com --answer "Sim", a resposta literal da pergunta "Lançar '
+                                     'pelo caminho antigo, com a branch local <release>?"')
+        name, title = plan['releaseBranch'], release_title(plan)
+        config = load_config(config_path) if config_path and Path(config_path).is_file() else {}
+        repository = config.get('repository')
+        create = ['gh', 'pr', 'create', '--base', base, '--head', name, '--title', title, '--body-file', str(body)]
+        if repository:
+            create[3:3] = ['--repo', repository]
+        commands = ([['git', '-C', str(root), 'branch', name, base], ['git', '-C', str(root), 'push', '-u', remote, name]]
+                    if legacy else [['git', '-C', str(root), 'push', remote, f'{base}:refs/heads/{name}']]) + [create]
+        pending = {'branch': name, 'base': base, 'remote': remote, 'issues': plan.get('release', []),
+                   'directs': plan.get('releaseDirect', []), 'closes': plan.get('closes', []), 'title': title,
+                   'body': str(body), 'legacy': bool(legacy), 'answer': answer if legacy else None,
+                   'localMain': plan.get('localMain'), 'at': zoned_now().isoformat(timespec='seconds')}
+        write_json(folder / 'pending.json', pending)
+        update = (update_check or __import__('frontlights').update_check)()
+        return {'exitCode': 0, 'commands': commands, 'release': pending, 'skillUpdate': update,
+                'next': ['python', str(HERE / 'homolog.py'), 'release', 'go', '--record', '--pr', '<n>'],
+                'message': f'Rode os comandos de `commands` (cobertos: o push da ponta da {base} local para {name} e a '
+                           'PR única), depois `release go --record --pr <n>` com o número da PR.'}
+    path, current = current_release(root)
+    import closeout   # noqa: PLC0415
+    status = closeout.op_merge_status(config_path, str(current['pr']), current.get('base') or base, gh)
+    entry = status['pullRequests'][0]
+    state = pr_state(entry)
+    missing = [n for n in current.get('closes', []) if not watched(root, n)]
+    if action == 'status':
+        result = {'exitCode': 0, 'pr': current['pr'], 'state': state, 'pullRequest': entry, 'offerMerge': False,
+                  'monitor': monitor_line(root, state)}
+        if state == 'ready' and not missing:
+            number = str(current['pr'])
+            result.update(offerMerge=True, question=f'Mesclar a PR #{number} em {current["base"]}?',
+                          options=list(MERGE_OPTIONS),
+                          commands=[['gh', 'pr', 'ready', number], ['gh', 'pr', 'merge', number, '--merge']],
+                          message=f'A PR #{number} está pronta: pergunte (operação negada, "Sim" antes de rodar).')
+        elif state == 'blocked':
+            result['message'] = (f'A PR #{current["pr"]} está bloqueada ({"; ".join(entry.get("blockedBy", []))}): '
+                                 'nunca "Mesclar?"; diga ao usuário o que a bloqueia e aguarde.')
+        elif state == 'merged':
+            result['message'] = f'A PR #{current["pr"]} foi mesclada em {current["base"]}: rode `release landed`.'
+        elif missing:
+            result['message'] = (f'Falta o teste assistido registrado de {", ".join(f"#{n}" for n in missing)}: sem '
+                                 '"Mesclar?" até lá.')
+        else:
+            result['message'] = f'A PR #{current["pr"]} está {state}: aguarde.'
+        if since is not None:
+            result['changed'] = state != since
+            result['exitCode'] = 0 if result['changed'] else UNCHANGED
+        return result
+    if state != 'merged':
+        return {'exitCode': 2, 'state': state, 'pr': current['pr'],
+                'message': f'A PR #{current["pr"]} ainda não foi mesclada na base ({state}): nada a trazer.'}
+    landing_base = current.get('base') or base
+    merge_preconditions(root, landing_base)
+    before = rev(root, 'HEAD')
+    code, _, err = git(root, 'pull', '--ff-only', remote, landing_base, timeout=FETCH_TIMEOUT)
+    if code != 0:
+        return {'exitCode': 2, 'reason': 'not_fast_forward', 'pr': current['pr'],
+                'message': f'`git pull --ff-only` não avançou a {landing_base} local ({trimmed(err)}): pare e pergunte; '
+                           'nunca merge nem reset aqui.'}
+    code, _, err = git(root, 'fetch', '--prune', remote, timeout=FETCH_TIMEOUT)
+    pruned = code == 0
+    issues = current.get('issues', [])
+    plan = None
+    if issues:
+        plan = (planner or default_cleanup_plan)(root, config_path, issues, landing_base)
+    stamp = zoned_now().strftime('%Y%m%d-%H%M%S')
+    landed = dict(current, landedAt=zoned_now().isoformat(timespec='seconds'), before=before, after=rev(root, 'HEAD'))
+    write_json(release_folder(root) / f'landed-{stamp}.json', landed)
+    os.replace(path, release_folder(root) / f'current-{stamp}.json')
+    verify = ['python', str(HERE / 'closeout.py'), 'verify', '--issues', ','.join(str(n) for n in current.get('closes', []))]
+    return {'exitCode': 0, 'pr': current['pr'], 'before': before, 'after': landed['after'], 'pruned': pruned,
+            'cleanup': plan, 'commands': (plan or {}).get('commands', []),
+            'verify': verify if current.get('closes') else None,
+            'message': f'A {landing_base} local avançou por fast-forward até o merge da PR #{current["pr"]}. Rode a '
+                       'limpeza de `commands` (sem pergunta, só o que o plano oferece) e depois o `verify`.'}
+
+
+def default_cleanup_plan(root, config_path, issues, base):
+    import cleanup   # noqa: PLC0415  (issue 2 owns it; the plan only reads)
+    return cleanup.run('plan', config_path, str(root), issues=','.join(str(n) for n in issues), base=base)
+
+
 # ---------------------------------------------------------------- command line
 
 def run(operation, root, base='main', remote='origin', config=None, prefix=None, records=None,
         issue=None, mode=None, concurrent=False, argv=None, required=None, release=False, timeout_seconds=None,
-        head=None, source=None, free_test_fix=False, dry_run=False, toca=None):
+        head=None, source=None, free_test_fix=False, dry_run=False, toca=None, release_args=None):
+    release_args = release_args or {}
     try:
         if operation == 'suite':
             result = op_suite(root, config, issue, mode, base, concurrent, argv, release, timeout_seconds, source,
@@ -1631,6 +1897,11 @@ def run(operation, root, base='main', remote='origin', config=None, prefix=None,
             result = op_release_plan(root, base, remote, prefix, records, config)
         elif operation == 'merge':
             result = op_merge(root, config, issue, free_test_fix, dry_run, toca)
+        elif operation == 'release':
+            result = op_release(release_args.get('action'), root, base, remote, config, prefix, records,
+                                release_args.get('body'), release_args.get('closes'), release_args.get('record'),
+                                release_args.get('pr'), release_args.get('legacy'), release_args.get('answer'),
+                                release_args.get('since'))
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -1657,6 +1928,25 @@ def build_parser():
                             'that passed authorize')
     merge.add_argument('--dry-run', action='store_true', help='check and say what would run; writes nothing')
     merge.add_argument('--toca', choices=('sim', 'nao', 'não', 'ausente'), help="the plan's `Toca o frontend:`")
+    release = sub.add_parser('release', allow_abbrev=False,
+                             help='the release by command: plan, body-check, go (argv of the push and of gh pr '
+                                  'create; --record --pr <n>), status (the block of the PR) and landed')
+    release.add_argument('action', choices=RELEASE_ACTIONS)
+    release.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
+    release.add_argument('--base', default='main', help='the base branch (default main)')
+    release.add_argument('--remote', default='origin', help='the remote (default origin)')
+    release.add_argument('--config', help='.frontlights/config.json (default: the one of the main worktree)')
+    release.add_argument('--prefix', help='the prefix of the release branch name (plan, go)')
+    release.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
+    release.add_argument('--body', help='body-check, go: the body file of the pull request')
+    release.add_argument('--closes', help='body-check: the issues of `closes` (default: a fresh plan)')
+    release.add_argument('--record', action='store_true', help='go: record the pull request opened (--pr)')
+    release.add_argument('--pr', type=int, help='go --record: the number of the pull request')
+    release.add_argument('--legacy-branch', dest='legacy', action='store_true',
+                         help='go: the old path with a local release branch, only with --answer "Sim"')
+    release.add_argument('--answer', help='go --legacy-branch: the literal answer of the question')
+    release.add_argument('--since', help='status: exit 0 only when the state is no longer this one (4 otherwise)')
+    release.add_argument('--quiet', action='store_true', help='status --since: one line on a change, nothing otherwise')
     for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
         command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current "
@@ -1708,6 +1998,10 @@ def build_parser():
 def resolve_defaults(args):
     """--root, --config and --issue the command line left out, by the rules of `_cli`."""
     main = _cli.main_worktree()
+    if args.operation == 'release':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
+        return args
     if args.operation == 'merge':
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root, required=False)
@@ -1740,9 +2034,17 @@ def main(argv=None):
                      getattr(args, 'concurrent', False), getattr(args, 'argv', None), getattr(args, 'require', None),
                      getattr(args, 'release', False), getattr(args, 'timeout_seconds', None),
                      getattr(args, 'head', None), getattr(args, 'source', None),
-                     getattr(args, 'free_test_fix', False), getattr(args, 'dry_run', False), getattr(args, 'toca', None))
+                     getattr(args, 'free_test_fix', False), getattr(args, 'dry_run', False), getattr(args, 'toca', None),
+                     {key: getattr(args, key, None) for key in ('action', 'body', 'closes', 'record', 'pr', 'legacy',
+                                                                 'answer', 'since')})
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
+    if getattr(args, 'quiet', False) and getattr(args, 'since', None) is not None:
+        if result['exitCode'] == 0:   # the monitor wakes the session once, on the change
+            print(f'release: PR #{result.get("pr")} {result.get("state")} ({str(result.get("message", ""))[:160]})')
+        elif result['exitCode'] != UNCHANGED:
+            print(f'release status falhou: {str(result.get("message", ""))[:200]}')
+        return int(result['exitCode'])
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 
