@@ -93,10 +93,28 @@ class IssueStageTests(unittest.TestCase):
                 self.assertNotIn(retired, template)
         self.assertIn('## Riscos e dependências', template)
         flat_template = flat(template)
-        for phrase in ('sem nova pergunta', 'alternativas rejeitadas', 'não cita arquivo nem trecho de código',
+        for phrase in ('alternativas rejeitadas', 'não cita arquivo nem trecho de código',
                        'seams sob teste', 'O que foi recusado'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat_template)
+
+    def test_the_template_is_the_short_one_and_keeps_what_roads_reads(self):
+        # redesenho, issue 6 (proposta, seção 3.2): as instruções saíram do corpo para references/issue.md e
+        # references/issues.md; ficam "## Propriedade" e as linhas que o RoadS lê (docs/roads-contract.md)
+        template = read('skills', 'frontlights', 'templates', 'issue.md')
+        flat_template = flat(template)
+        for kept in ('## Propriedade', 'Caminhos que a issue pode tocar', '- [ ] S1. <resultado observável',
+                     '`- Bloqueada: <o que falta e de quem>`', '- Fluxo: <telas e ações', 'Depends on: none',
+                     '`- [ ] Pendência (achado da revisão): <resultado observável>. Evidência que fecha:'):
+            with self.subTest(kept=kept):
+                self.assertIn(kept, flat_template)
+        for gone in ('## Pontos de evidência', '## Propriedade e contenção', 'As seções até "Fora de escopo" são a spec'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, template)
+        self.assertLessEqual(len(template.split()), 800)
+        reference = flat(read('skills', 'frontlights', 'references', 'issue.md'))
+        self.assertIn('with no new question beyond the seams', reference)
+        self.assertIn('the instructions stay here, never in the body', reference)
 
     def test_the_retired_word_is_gone_from_the_skill_the_records_and_the_tests(self):
         files = [SKILL / 'SKILL.md', ROOT / 'README.md', ROOT / 'CLAUDE.md']

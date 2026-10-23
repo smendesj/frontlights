@@ -26,7 +26,7 @@ BUDGET = {
     'references/closeout.md': 1305,
     'references/development.md': 11294,
     'references/grilling.md': 1878,
-    'references/issue.md': 596,
+    'references/issue.md': 360,
     'references/issues.md': 6063,
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
@@ -38,7 +38,7 @@ BUDGET = {
     'templates/discovery.md': 339,
     'templates/grilling-section.html': 244,
     'templates/handoff.md': 729,
-    'templates/issue.md': 1359,
+    'templates/issue.md': 756,
     'templates/pr.md': 753,
 }
 
