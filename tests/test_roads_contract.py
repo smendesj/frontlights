@@ -1,4 +1,4 @@
-"""`docs/roads-contract.md` descreve o que o Frontlights realmente faz: os conjuntos fechados e a regra de versão
+"""`docs/roads-contract.md` (dentro da skill desde o redesenho, issue 10) descreve o que o Frontlights realmente faz: os conjuntos fechados e a regra de versão
 do texto batem com o código, e o documento só traz marcadores genéricos (repositório público).
 
 Seam: o texto do contrato contra as constantes e as funções públicas de `roads` e `progress_report`.
@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
 import roads as rs
 
-DOC = (ROOT / 'docs' / 'roads-contract.md').read_text(encoding='utf-8')
+DOC = (ROOT / 'skills' / 'frontlights' / 'docs' / 'roads-contract.md').read_text(encoding='utf-8')
 
 
 def table_row(label):

@@ -313,7 +313,7 @@ class TextTests(unittest.TestCase):
         for phrase in ('do not repeat the count in the text', '`slices.closed`', '`slices.blocked`', 'Product scope'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
-        self.assertIn('ignored.cut', self.flat('docs', 'roads-contract.md'))
+        self.assertIn('ignored.cut', self.flat('skills', 'frontlights', 'docs', 'roads-contract.md'))
 
     def test_the_sprint_block_and_the_chips_are_documented_for_every_summary(self):
         text = self.flat('skills', 'frontlights', 'references', 'progress-report.md')
@@ -322,7 +322,7 @@ class TextTests(unittest.TestCase):
                        'The covers are not deliveries', 'when the facts have no `sprint`, say so plainly'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
-        contract = self.flat('docs', 'roads-contract.md')
+        contract = self.flat('skills', 'frontlights', 'docs', 'roads-contract.md')
         for phrase in ('`sprint.epics[]`', 'sem o chip "Em validação"', 'Decisão de 07/10/2026'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, contract)
@@ -335,7 +335,7 @@ class TextTests(unittest.TestCase):
                        'that reason is one line of the difficulties'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
-        contract = self.flat('docs', 'roads-contract.md')
+        contract = self.flat('skills', 'frontlights', 'docs', 'roads-contract.md')
         for phrase in ('as caixas da seção de critérios de aceitação', '`closedAt`', 'histórico de edições',
                        '`blocked[].reason`', '"Bloqueada:"', '"Concluído: N partes em M issues"',
                        'Decisão de 14/10/2026'):

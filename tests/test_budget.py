@@ -16,34 +16,34 @@ SKILL = ROOT / 'skills' / 'frontlights'
 
 SLACK = 1.10
 
-# contagem de 23/10/2026 (integração do redesenho, issue 3; development.md, tdd.md, worker.md e family.md pela
-# issue 5); só desce
+# contagem de 23/10/2026, no fim do redesenho (issue 10): cada arquivo com a sua contagem do dia; só desce
 BUDGET = {
-    'SKILL.md': 1820,  # teto de 2.000 durante o redesenho (test_skill_md); a issue 10 volta à contagem do dia
-    'docs/protocol.md': 2938,   # redesenho, issue 10: tabela curta, árvore dos registros, ponteiros
-    'docs/security.md': 3716,   # redesenho, issue 10: tabela por utilitário, regras da sessão e recusas geradas
+    'SKILL.md': 1999,  # teto sem folga em test_skill_md (CEILING)
+    'docs/protocol.md': 2943,
+    'docs/roads-contract.md': 2554,  # entrou na skill na issue 10 do redesenho
+    'docs/security.md': 3743,
+    'references/LICENSE-pr.md': 279,
+    'references/LICENSE-tdd.md': 206,
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
-    'references/development.md': 4128,
-    'references/family.md': 2136,   # o procedimento da conversão veio de issues.md (issues 5 e 7)
+    'references/development.md': 4126,
+    'references/family.md': 2126,
     'references/grilling.md': 1893,
     'references/issue.md': 360,
-    'references/issues.md': 2609,   # issue 7: etapa 5 por comando
-    'references/LICENSE-pr.md': 279,
-    'references/LICENSE-tdd.md': 198,
-    'references/progress-report.md': 2317,
+    'references/issues.md': 2616,
+    'references/progress-report.md': 2325,
     'references/retro.md': 417,
     'references/review.md': 991,
     'references/setup.md': 181,
-    'references/tdd.md': 1271,
+    'references/tdd.md': 1274,
     'references/worker.md': 526,
-    'templates/artifact-page.html': 444,   # redesenho, issue 6
+    'templates/artifact-page.html': 444,
     'templates/discovery.md': 292,
     'templates/grilling-section.html': 244,
-    'templates/handoff.md': 259,  # redesenho, issue 9: português, só ponteiros
+    'templates/handoff.md': 259,
     'templates/issue.md': 775,
-    'templates/pr.md': 373,
+    'templates/pr.md': 374,
 }
 
 

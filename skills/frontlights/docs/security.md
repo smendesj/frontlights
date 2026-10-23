@@ -43,7 +43,7 @@ Nenhum script roda shell. Os limites longos estão nas seções abaixo.
 | `frontlights.py charter new\|renew\|add` | config, charter | `authorization.json` e a cópia do anterior | nada | — |
 | `frontlights.py slice open\|merge` | charter, Git | branch e worktrees; merge `--no-ff` na worktree da issue | `git fetch`; imprime `gh issue develop` e o push | o teste certo |
 | `frontlights.py artifact init\|section\|choose` | o template | só a fonte `artifact.html` | nada | o conteúdo |
-| `frontlights.py publish-issue` | plano, aprovado (`stamp --check`) | issues e quadro; `publish/` | `gh`, conta conferida a cada escrita | a intenção |
+| `frontlights.py publish-issue` | plano, aprovado (`stamp --check`) | issues e quadro; `publish/`; move `notes/` para a issue | `gh`, conta conferida a cada escrita | a intenção |
 | `frontlights.py render-criteria`, `issue-lint` | plano, corpo | só o `--out` | `gh` | o mérito |
 | `frontlights.py browser-gate` (`--answer`, `record`) | diff, `result.json` | `result.json` | nada | que o teste aconteceu |
 | `frontlights.py checkpoint`, `resume`, `archive` | issue, handoff, registros | `checkpoint*.json`; `-r<k>` | `gh api` | o handoff |

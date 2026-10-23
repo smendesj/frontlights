@@ -114,7 +114,7 @@ ele trabalha num projeto consumidor.
 Regras que nenhum script expressa:
 
 - `notes/`: no máximo 300 palavras, cada achado com `caminho:linha` e o comando que o provou; sempre no
-  `.frontlights` da worktree principal; na publicação vai para `issues/<n>/notes/`. A nota é mapa, não evidência:
+  `.frontlights` da worktree principal; o `publish-issue` a move para `issues/<n>/notes/` da primeira issue publicada. A nota é mapa, não evidência:
   quem a lê confere cada `caminho:linha` e roda o próprio teste vermelho antes de corrigir.
 - `approvals.json` e as revisões `-r<N>`: a aprovação vale para os bytes daquele carimbo; um arquivo mudado pede
   aprovação nova.

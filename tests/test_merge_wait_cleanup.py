@@ -334,8 +334,10 @@ class DocsAndEvalsTests(unittest.TestCase):
                        'no other command is `git push origin --delete`', 'right before its local `git branch -D`',
                        'before `git worktree remove`',
                        '"Não agora" to the closing leaves the cleanup done already',
-                       'the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the issue ids of the '
-                       'authorization records, without a question, and then asks the closeout question',
+                       # redesenho, issue 10: a abertura por comando (frontlights.py open, depois cleanup.py run)
+                       'the next `/frontlights` start runs `frontlights.py open` (`git fetch --prune origin` and the cleanup '
+                       'plan from the authorization records), then `cleanup.py run --from-authorizations` without a question, '
+                       'and then asks the closeout question',
                        '`.frontlights/issues/<n>/worktrees/<folder>-<short tip>/`',
                        'Reject:', 'it is a rule of the skill', 'Cleanup details (same case)', 'Reject (cleanup):',
                        'removing a worktree without naming the ignored files that go with it'):
@@ -344,8 +346,10 @@ class DocsAndEvalsTests(unittest.TestCase):
         runbook = flat('evals', 'runbook.md')
         self.assertIn('17. Merge wait, closing, parent tick and cleanup (`evals/merge-wait-and-cleanup.md`)', runbook)
         self.assertNotIn('runs the cleanup of the merged work it finds', runbook)
-        self.assertIn('the next `/frontlights` start runs `git fetch --prune origin` and then `cleanup.py plan` for the '
-                      'issue ids of the authorization records (an issue already closed by `Closes #n` included)', runbook)
+        # redesenho, issue 10: a abertura por comando
+        self.assertIn('the next `/frontlights` start runs `frontlights.py open` (`git fetch --prune origin`, the cleanup '
+                      'plan from the authorization records, an issue already closed by `Closes #n` included), then '
+                      '`cleanup.py run --from-authorizations` without a question', runbook)
         self.assertIn('| 17. Espera do merge, marcação no pai e limpeza | Pendente |', flat('docs', 'acceptance.md'))
 
     def test_the_new_files_carry_no_machine_path_and_no_real_name(self):

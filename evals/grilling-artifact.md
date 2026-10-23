@@ -24,10 +24,11 @@ Expected, in this order:
    empty fields. Where the
    project already does this shows path:line and a real excerpt of up to 15 lines, with any secret value
    replaced by `***`. Each option's `preview` stays text (files, pattern fit, effort, seam) and every decision
-   question names its section. Each section is a small edit of the local source published on the same URL;
-   there is never one page per round: the URL never changes and the page is never rewritten whole.
+   question names its section. Each section is written into the local source by `frontlights.py artifact section` and the whole
+   source is published once per round on the same URL, never by `edits`; there is never one page per round: the URL
+   never changes.
 3. The request without a screen gets, in the same place, a diagram of the flow and of the layers (or of the
-   current rule), before and after, instead of a form, and one section per decision question as well.
+   current rule), the base and with each option, instead of a form, and one section per decision question as well.
 4. The discovery log carries the URL and the source path in its "Artifact URL and source path" line, written at
    the first publication and never changed; every section cited in the interview belongs to that one page.
    With the local file deleted mid-interview (a new session), the session reads the published page back with

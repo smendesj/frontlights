@@ -111,7 +111,8 @@ cmd /c mklink /J "$HOME\.claude\skills\frontlights" "<pasta-do-clone>\skills\fro
 sessão nova já lê a versão nova. Não há número de versão; a etapa 0 (`update-check`) avisa quando o clone
 está atrás do remoto. Para desinstalar, `rmdir "$HOME\.claude\skills\frontlights"` apaga só o atalho.
 
-No projeto de destino, crie `.frontlights/config.json` e deixe `.frontlights/` fora do Git:
+No projeto de destino, a skill grava o primeiro `.frontlights/config.json` por `frontlights.py init-config` (o
+`repository` vem do remoto; o quadro é perguntado) e deixa `.frontlights/` fora do Git. O mínimo é:
 
 ```json
 {
@@ -145,10 +146,10 @@ Os scripts ficam em `skills/frontlights/scripts/`; cada um tem `--help`.
 |---|---|---|
 | 0. Atualização | compara o clone com o remoto | `frontlights.py update-check` |
 | 1. Abertura | busca, limpa o que foi mesclado, escolhe o caminho | `frontlights.py open`, `cleanup.py run` |
-| 2. Inspeção | acha o config, lê issue, quadro e família | `frontlights.py inspect --summary` |
-| 3. Grilling | reconhecimento, perguntas, artefato, janela ANTES | `serve.py window open` |
+| 2. Inspeção | acha o config (ou o cria), lê issue, quadro e família | `frontlights.py inspect --summary`, `init-config` |
+| 3. Grilling | reconhecimento, perguntas, artefato, janela ANTES | `serve.py window open`, `frontlights.py artifact` |
 | 4. Issue | corpo da issue aprovado por link e carimbo | `frontlights.py stamp` |
-| 5. Slices | até cinco caixas, publicação aprovada | `frontlights.py validate-plan` |
+| 5. Slices | até cinco caixas, publicação aprovada | `frontlights.py validate-plan`, `publish-issue` |
 | 6. Desenvolvimento | slices, teste assistido, main local, teste livre, release | `frontlights.py charter`, `slice`, `browser-gate`; `homolog.py merge`; `serve.py free-test`; `homolog.py release` |
 | 7. Fechamento | lista carimbada; fechar tem aprovação própria | `closeout.py run`, `closeout.py apply` |
 
@@ -168,9 +169,11 @@ python -m compileall -q skills/frontlights/scripts tests
   toca; o que não cabe no prazo fica para a suíte inteira. Ele só relata, nenhum hook o roda.
 - `python -m unittest discover -s tests -v` é a suíte inteira, à mão; `python tests/suite.py` roda a
   rápida em paralelo.
+- `python skills/frontlights/scripts/skill_lint.py --shingles --min-words 15` lista os trechos repetidos entre os
+  textos da skill; só relata (o `pre_commit.py` o mostra quando um texto da skill muda).
 - O roteiro e as regras de toda etapa: [`skills/frontlights/SKILL.md`](skills/frontlights/SKILL.md).
 - As regras da etapa 6: [`references/development.md`](skills/frontlights/references/development.md).
 - Os formatos dos registros e a retomada: [`docs/protocol.md`](skills/frontlights/docs/protocol.md).
 - Os limites das permissões: [`docs/security.md`](skills/frontlights/docs/security.md).
-- O contrato com o RoadS, a integração opcional do resumo semanal: [`docs/roads-contract.md`](docs/roads-contract.md).
+- O contrato com o RoadS, a integração opcional do resumo semanal: [`docs/roads-contract.md`](skills/frontlights/docs/roads-contract.md).
 - O redesenho em andamento, com a proposta e o roteiro de issues: [`docs/redesenho/`](docs/redesenho/).
