@@ -80,7 +80,8 @@ ele trabalha num projeto consumidor.
   issue.md                 corpo aprovado na etapa 4, até a publicação
   <documento>-r<N>.md      revisão anterior (`issue-r1.md` ao lado de `issue.md`), para o diff de "Show before approval"
   approvals.json           gravado por `frontlights.py stamp --approve`: path, revision, sha256 de 12 caracteres,
-                           bytes, answer literal, stage e at (ISO-8601 em -03:00)
+                           bytes, answer literal, bodies (plano: carimbo de cada body_file), stage e at
+                           (ISO-8601 em -03:00)
   plan.json
   authorization.json
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, nunca apagados

@@ -178,6 +178,24 @@ class ApprovalTests(PublishCase):
         self.assertEqual(self.publish(plan, approved, gh)['reason'], 'body_not_approved')
         self.assertEqual(gh.calls, [])
 
+    def test_the_plan_as_the_approved_file_covers_its_body_files(self):
+        plan, _ = self.standard(approve=False)
+        self.approve(plan)
+        gh = FakeGitHub()
+        result = self.publish(plan, plan, gh)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(gh.issues[102]['body'], BODY_B)
+
+    def test_a_body_file_changed_after_the_plan_was_approved_is_refused(self):
+        plan, _ = self.standard(approve=False)
+        self.approve(plan)
+        (self.root / '.frontlights' / 'b.md').write_text(BODY_B + '- [ ] S3. Outra coisa\n', encoding='utf-8')
+        gh = FakeGitHub()
+        result = self.publish(plan, plan, gh)
+        self.assertEqual(result['reason'], 'body_not_approved', result)
+        self.assertEqual(gh.calls, [])
+        self.assertFalse((self.root / frontlights.PUBLISH_FOLDER).exists())
+
     def test_the_plan_must_pass_validate_plan(self):
         plan, approved = self.standard()
         data = json.loads(plan.read_text(encoding='utf-8'))

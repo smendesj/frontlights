@@ -55,7 +55,9 @@ first. Then ask approval by link and stamp (`SKILL.md`, "Show before approval").
 of the boxes (`closeout.py append --spec <plan>`), with its board values. `frontlights.py publish-issue --plan
 <plan.json> --approved <stamped file>` runs `stamp --check`, refuses template instructions in a body (`issue-lint`),
 publishes blockers first and rereads GitHub: body, boxes and board. `--dry-run` prints the writes for the approved
-file; `--resume` rereads GitHub by title before any creation. Stages 4 and 5 run in the same window.
+file; `--resume` rereads GitHub by title before any creation. When the plan itself is the approved file, its
+approval records the stamp of each `body_file` it cites, and a body changed after it is refused (`body_not_approved`).
+Stages 4 and 5 run in the same window.
 
 ## The issue and its layers
 

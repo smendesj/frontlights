@@ -2506,7 +2506,8 @@ def stamp_check(path, root):
         raise PublishRefusal('approvals_unreadable', str(error)) from None
     last = entries[-1] if entries else None
     return {'path': shown, 'sha256': sha, 'approved': bool(last) and last.get('sha256') == sha,
-            'revision': last.get('revision') if last else None, 'answer': last.get('answer') if last else None}
+            'revision': last.get('revision') if last else None, 'answer': last.get('answer') if last else None,
+            'bodies': (last.get('bodies') if last and isinstance(last.get('bodies'), dict) else {})}
 
 
 def issue_body(issue, plan_path):
@@ -2521,6 +2522,20 @@ def issue_body(issue, plan_path):
     if not file.is_file():
         raise PublishRefusal('body_missing', f'o body_file da issue {issue["id"]} não existe: {name}')
     return file.read_bytes().decode('utf-8-sig')
+
+
+def check_body_file_approved(issue, plan_path, approval):
+    """When the plan itself is the approved file, a `body_file` is checked against the stamp the approval of the
+    plan recorded for it (`stamp --approve` records `bodies`): a body changed after the approval, or one the approval
+    does not cover, is refused before any write."""
+    import stamp  # noqa: PLC0415
+    name = issue['body_file']
+    file = Path(name) if Path(name).is_absolute() else Path(plan_path).parent / name
+    if approval.get('bodies', {}).get(name) != stamp.file_stamp(file.read_bytes()):
+        raise PublishRefusal('body_not_approved', f'o corpo da issue {issue["id"]} ({name}) mudou depois da aprovação '
+                             f'do plano {approval["path"]}, ou a aprovação não o cobre; nada foi publicado',
+                             hint='mostre o corpo e peça a aprovação do plano por link e carimbo (stamp --approve) '
+                                  'de novo')
 
 
 def publish_steps(issue, board_, plan_repo):
@@ -2659,6 +2674,8 @@ def publish_entries(plan, plan_path, board_, approval, approved_text, same_file)
                 raise PublishRefusal('lint_failed', f'o corpo da issue {ident} ainda tem texto de instrução ou marcador '
                                      'sem preencher; nada foi publicado', findings=findings,
                                      hint='tire do corpo (issue-lint --body <arquivo>), mostre e aprove de novo')
+            if same_file and not nonempty(issue.get('body')):
+                check_body_file_approved(issue, plan_path, approval)
             if not same_file and normalized(body) not in approved_text:
                 raise PublishRefusal('body_not_approved', f'o corpo da issue {ident} não está, letra por letra, no '
                                      f'arquivo aprovado {approval["path"]}',

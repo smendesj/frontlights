@@ -9,8 +9,8 @@ Prints one JSON object: `ok`, `exitCode`, `operation` ("stamp"), `message` (Port
 null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and `bytes` (the size).
 
   --approve  appends one entry to <root>/.frontlights/approvals.json (a JSON list, created when absent, existing
-             entries kept, extra keys included): path, revision, sha256, bytes, answer (verbatim), stage (when
-             given) and at (ISO-8601 in America/Sao_Paulo, with its offset, never UTC). Requires --answer and
+             entries kept, extra keys included): path, revision, sha256, bytes, answer (verbatim), bodies (when the
+             file is a publication plan: the stamp of each body_file it cites), stage (when given) and at (ISO-8601 in America/Sao_Paulo, with its offset, never UTC). Requires --answer and
              --expect with the stamp shown in the question; when the file's stamp differs from it, nothing is
              written and it exits 1 (the file changed since the question: ask the approval again). Together with
              --check it is a usage error (exit 1, nothing written): --check runs later, right before the write.
@@ -74,6 +74,31 @@ def shown_path(file, root):
         return str(file).replace('\\', '/')
 
 
+def file_stamp(data):
+    """The 12-character stamp of raw bytes."""
+    return hashlib.sha256(data).hexdigest()[:STAMP_LENGTH]
+
+
+def plan_bodies(file, data):
+    """When the stamped file is a publication plan (JSON with `issues`), the stamp of each `body_file` it cites, by
+    the name as written (relative to the plan's folder): the approval of the plan covers those bodies too. {} for any
+    other file; a body file that does not exist is left out (publish-issue refuses it as missing)."""
+    try:
+        plan = json.loads(data.decode('utf-8-sig'))
+    except (UnicodeDecodeError, ValueError):
+        return {}
+    issues = plan.get('issues') if isinstance(plan, dict) else None
+    bodies = {}
+    for issue in issues if isinstance(issues, list) else []:
+        name = issue.get('body_file') if isinstance(issue, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            continue
+        path = Path(name) if Path(name).is_absolute() else Path(file).parent / name
+        if path.is_file():
+            bodies[name] = file_stamp(path.read_bytes())
+    return bodies
+
+
 def read_approvals(path):
     if not path.exists():
         return []
@@ -101,7 +126,7 @@ def run(args):
     except OSError as error:
         raise Refusal(f'arquivo não encontrado ou ilegível: {path}') from error
     result = {'ok': True, 'exitCode': 0, 'operation': 'stamp', 'path': path, 'revision': args.revision,
-              'sha256': hashlib.sha256(data).hexdigest()[:STAMP_LENGTH], 'bytes': len(data)}
+              'sha256': file_stamp(data), 'bytes': len(data)}
     messages = [f'carimbo de {path}: {result["sha256"]} ({len(data)} bytes)']
     if args.expect is not None:
         if args.expect.strip().lower() == result['sha256']:
@@ -132,6 +157,9 @@ def run(args):
         entries = read_approvals(target)
         entry = {'path': path, 'revision': args.revision, 'sha256': result['sha256'], 'bytes': len(data),
                  'answer': args.answer}
+        bodies = plan_bodies(args.file, data)
+        if bodies:
+            entry['bodies'] = bodies
         if args.stage is not None:
             entry['stage'] = args.stage
         entry['at'] = zoned_now().isoformat(timespec='seconds')
