@@ -191,6 +191,24 @@ class CharterRenewAddTests(CharterCase):
         self.assertEqual((again['ok'], again['reason']), (False, 'already_in_charter'))
 
 
+    def test_add_announces_the_base_origin_has_now_not_the_one_of_new(self):
+        """Teste real (23/10/2026): o `charter add` anunciou a base com um commit velho de origin/main."""
+        self.charter()
+        other = self.folder / 'outro'
+        subprocess.run(['git', 'clone', '-q', str(self.folder / 'origin.git'), str(other)], check=True)
+        for key, value in (('user.email', 'x@example.invalid'), ('user.name', 'X')):
+            gitfixture.git(other, 'config', key, value)
+        (other / 'novo.txt').write_text('x', encoding='utf-8')
+        gitfixture.git(other, 'add', '.')
+        gitfixture.git(other, 'commit', '-q', '-m', 'novo na origin')
+        gitfixture.git(other, 'push', '-q', 'origin', 'main')
+        fresh = gitfixture.git(other, 'rev-parse', 'HEAD').stdout.strip()
+        result = self.charter('add', issues=['13'], ownership=['docs'])
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(self.record()['base']['issues']['commit'], fresh)
+        self.assertIn(f'origin/main ({fresh[:7]})', result['announcement'])
+
+
 class CharterCommandLineTests(CharterCase):
     def test_the_command_line_writes_the_charter_from_the_project(self):
         done = subprocess.run([sys.executable, str(SCRIPTS / 'frontlights.py'), 'charter', 'new', '--issue', '12',

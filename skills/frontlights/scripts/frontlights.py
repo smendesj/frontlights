@@ -2057,8 +2057,12 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
         record['direct_ids'] = list(existing.get('direct_ids', [])) + new_directs
         record['ownership'] = dict(existing.get('ownership', {}), **owned)
         branch = record.get('base', {}).get('branch', 'main')
-        extra = charter_base(root, branch, any(k.isdigit() for k in ids), bool(new_directs))
-        record['base'] = dict(extra, **record.get('base', {}))
+        new_issues = any(k.isdigit() for k in ids)
+        if new_issues and has_remote(root):
+            # the announcement names the base the new issue starts from: origin/<base> as it is now, not as `new` read it
+            git_call(root, 'fetch', '--quiet', 'origin', branch)
+        extra = charter_base(root, branch, new_issues, bool(new_directs))
+        record['base'] = {**record.get('base', {}), **extra}
         checked = dry_run(record, root, ids)
         write_json_file(path, record)
         return {'ok': True, 'exitCode': 0, 'action': 'add', 'charter': str(path), 'added': ids, 'dryRun': checked,
