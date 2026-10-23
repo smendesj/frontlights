@@ -1643,6 +1643,387 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
     return {'ok': True, 'exitCode': 0, 'action': 'new', 'charter': str(path), 'kept': str(kept) if kept else None,
             'prefix': chosen, 'prefixSource': source, 'dryRun': checked, 'announcement': announcement(record, source)}
 
+def read_charter_record(root):
+    path = Path(root) / CHARTER_FILE
+    if not path.is_file():
+        raise Stage6Refusal('no_charter', f'não há charter em {CHARTER_FILE.as_posix()}',
+                            hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
+    record = load(path)
+    if not isinstance(record, dict):
+        raise Stage6Refusal('no_charter', 'o charter não é um objeto JSON', hint='rode `charter new`')
+    return path, record
+
+
+def charter_issue(record, issue):
+    text = str(issue).strip().lstrip('#') if issue is not None else ''
+    if not text.isdigit() or int(text) < 1:
+        raise Stage6Refusal('issue_invalid', '--issue precisa ser um número de issue', hint='passe --issue <n>')
+    number = int(text)
+    if number not in record.get('issue_ids', []):
+        listed = ', '.join(f'#{n}' for n in record.get('issue_ids', [])) or 'nenhuma'
+        raise Stage6Refusal('unapproved_issue', f'a issue #{number} não está no charter (issues: {listed})',
+                            hint='acrescente-a com `charter add --issue <n> --ownership <caminhos>`')
+    return number
+
+
+def slice_label(value):
+    match = SLICE_LABEL.fullmatch(str(value).strip())
+    if not match:
+        raise Stage6Refusal('slice_invalid', f'{str(value)[:20]!r} não é uma slice', hint='como --slice S2')
+    return f'S{int(match.group(1))}'
+
+
+def record_prefix(record):
+    prefix = _cli.branch_prefix(record=record)[0]
+    if not nonempty(prefix) or not prefix.endswith('/'):
+        raise Stage6Refusal('no_prefix', 'o charter não tem branch_prefix válido', hint='rode `charter new`')
+    return prefix
+
+
+def entry_of(record, issue, label=None):
+    """The `worktrees` entry of the issue's own branch (label None) or of its slice `label`."""
+    prefix = record_prefix(record)
+    for entry in record.get('worktrees', []):
+        if not isinstance(entry, dict) or entry.get('issue') != issue:
+            continue
+        if label is None and entry.get('slice') is None and entry.get('branch') == f'{prefix}issue-{issue}':
+            return entry
+        if label is not None and entry.get('slice') == label:
+            return entry
+    return None
+
+
+def changed_files(tree):
+    """Tracked changes and untracked files (ignored ones never count) of a worktree."""
+    code, out, _ = git_call(tree, 'status', '--porcelain', '--untracked-files=normal')
+    if code != 0:
+        raise Stage6Refusal('git_failed', f'o git não leu o estado de {Path(tree).name}')
+    return [line[3:] for line in out.splitlines() if line.strip()]
+
+
+def has_remote(root, name='origin'):
+    return git_call(root, 'remote', 'get-url', name)[0] == 0
+
+
+def worktree_folder(root, given):
+    return Path(given) if given else Path(root).parent / f'{Path(root).name}-worktrees'
+
+
+def add_worktree(root, path, branch, start=None):
+    if Path(path).exists():
+        raise Stage6Refusal('path_exists', f'a pasta {path} já existe; a worktree não é criada por cima',
+                            hint='passe --dir <outra pasta> ou remova a pasta')
+    args = ['worktree', 'add', str(path), branch] if start is None else ['worktree', 'add', '-b', branch, str(path), start]
+    code, _, err = git_call(root, *args)
+    if code != 0:
+        raise Stage6Refusal('worktree_failed', f'`git worktree add` falhou: {" ".join(err.split())[:200]}')
+
+
+def slice_ownership(values, labels, default):
+    owned = {label: [] for label in labels}
+    for value in values or ():
+        key, separator, paths = str(value).partition('=')
+        targets = [slice_label(key)] if separator else list(labels)
+        for path in (paths if separator else value).split(','):
+            path = path.strip().replace('\\', '/').rstrip('/')
+            if not path:
+                continue
+            try:
+                relative(path)
+            except ValueError as error:
+                raise Stage6Refusal('ownership_invalid', f'--ownership {path!r}: {error}') from None
+            for target in targets:
+                if target not in owned:
+                    raise Stage6Refusal('ownership_unknown_id', f'--ownership {value!r} nomeia uma slice que não '
+                                        'está em --slice', hint='use S<k>=<caminho> com uma slice de --slice')
+                owned[target].append(path)
+    for label in labels:
+        owned[label] = owned[label] or list(default)
+        if not [p for p in owned[label] if p != '*']:
+            raise Stage6Refusal('ownership_required', f'a slice {label} não tem posse (ownership)',
+                                hint='passe --ownership S<k>=<caminho> ou grave a posse da issue no charter')
+    return owned
+
+
+def slice_open(root, config_path, issue, slices, stacked_on=None, ownership=(), directory=None):
+    root = Path(root)
+    path, record = read_charter_record(root)
+    number = charter_issue(record, issue)
+    prefix = record_prefix(record)
+    labels = [slice_label(value) for value in slices or ()]
+    if not labels:
+        raise Stage6Refusal('slice_required', 'slice open precisa de ao menos uma slice', hint='--slice S1 [S2 ...]')
+    base = (record.get('base') or {}).get('branch') or 'main'
+    issue_branch = f'{prefix}issue-{number}'
+    folder = worktree_folder(root, directory)
+    commands, warnings, created = [], [], []
+    origin = has_remote(root)
+    if origin:
+        code, _, err = git_call(root, 'fetch', '--quiet', 'origin', timeout=180)
+        if code != 0:
+            warnings.append(f'git fetch origin falhou ({" ".join(err.split())[:120]}); seguiu com as refs locais')
+    if git_rev(root, f'refs/heads/{issue_branch}') is None:
+        remote_ref = f'refs/remotes/origin/{issue_branch}'
+        if git_rev(root, remote_ref):
+            code, _, err = git_call(root, 'branch', '--track', issue_branch, f'origin/{issue_branch}')
+        else:
+            start = f'origin/{base}' if git_rev(root, f'refs/remotes/origin/{base}') else base
+            code, _, err = git_call(root, 'branch', issue_branch, start)
+            if record.get('repository') and origin:
+                commands.append(['gh', 'issue', 'develop', str(number), '--repo', record['repository'], '--base',
+                                 base, '--name', issue_branch])
+        if code != 0:
+            raise Stage6Refusal('branch_failed', f'a branch {issue_branch} não foi criada: {" ".join(err.split())[:200]}')
+    own = entry_of(record, number)
+    issue_owned = (record.get('ownership') or {}).get(str(number)) or []
+    if own is None:
+        target = folder / f'issue-{number}'
+        add_worktree(root, target, issue_branch)
+        own = {'issue': number, 'path': str(target), 'branch': issue_branch, 'ownership': list(issue_owned)}
+        record.setdefault('worktrees', []).append(own)
+        created.append({'branch': issue_branch, 'path': str(target)})
+    owned = slice_ownership(ownership, labels, issue_owned)
+    start_branch, stacked_branch = issue_branch, None
+    if stacked_on:
+        under = entry_of(record, number, slice_label(stacked_on))
+        if under is None:
+            raise Stage6Refusal('stacked_unknown', f'a slice {slice_label(stacked_on)} não tem worktree no charter',
+                                hint='abra-a antes com `slice open`')
+        start_branch = stacked_branch = under['branch']
+    opened = []
+    for label in labels:
+        existing = entry_of(record, number, label)
+        if existing is not None:
+            opened.append(dict(existing, already=True))
+            continue
+        branch = f'{issue_branch}-s{label[1:]}'
+        target = folder / f'issue-{number}-s{label[1:]}'
+        add_worktree(root, target, branch, start_branch)
+        entry = {'issue': number, 'slice': label, 'path': str(target), 'branch': branch, 'ownership': owned[label]}
+        if stacked_branch:
+            entry['base'] = stacked_branch
+        record['worktrees'].append(entry)
+        opened.append(entry)
+    open_slices = [e for e in record['worktrees'] if isinstance(e, dict) and e.get('issue') == number and e.get('slice')]
+    for index, first in enumerate(open_slices):
+        for second in open_slices[index + 1:]:
+            if any(overlap(a, b) for a in first['ownership'] for b in second['ownership'] if '*' not in (a, b)):
+                warnings.append(f'{first["slice"]} e {second["slice"]} têm posse em comum: duas slices nunca editam '
+                                'o mesmo arquivo; empilhe a segunda (--stacked-on) ou separe a posse')
+    write_json_file(path, record)
+    return {'ok': True, 'exitCode': 0, 'issue': number, 'issueBranch': issue_branch, 'issueWorktree': own['path'],
+            'created': created, 'slices': opened, 'commands': commands, 'warnings': warnings,
+            'message': (f'Slices {", ".join(labels)} da issue #{number} abertas, cada uma na sua worktree e no charter. '
+                        + ('Rode já o `gh issue develop` de `commands` (cria a branch da issue no GitHub a partir da '
+                           f'origin/{base} e a liga à issue), antes do primeiro push. ' if commands else '')
+                        + f'Ao fechar o ciclo de uma slice: `slice merge --issue {number} --slice S<k>`.')}
+
+
+def run_tests(argvs, cwd, log_path):
+    """Run each argv in `cwd` without a shell; ([{argv, exitCode}], first failure or None). The output goes to
+    `log_path`, in the records, never to the screen."""
+    ran, failure = [], None
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, 'w', encoding='utf-8', errors='replace') as log:
+        for argv in argvs:
+            log.write(f'$ {" ".join(argv)}\n')
+            log.flush()
+            try:
+                done = subprocess.run(argv, cwd=str(cwd), stdout=log, stderr=subprocess.STDOUT,
+                                      stdin=subprocess.DEVNULL, timeout=TEST_TIMEOUT)
+                code = done.returncode
+            except (OSError, subprocess.TimeoutExpired) as error:
+                log.write(f'[não rodou: {type(error).__name__}]\n')
+                code = None
+            ran.append({'argv': argv, 'exitCode': code})
+            if code != 0:
+                failure = ran[-1]
+                break
+    return ran, failure
+
+
+def tail(path, lines=20):
+    try:
+        return Path(path).read_text(encoding='utf-8', errors='replace').splitlines()[-lines:]
+    except OSError:
+        return []
+
+
+def suite_from(source, tree):
+    """The green record of `homolog suite` run on the same commit tree as `tree`'s HEAD, or a refusal."""
+    data = load(source)
+    if not isinstance(data, dict):
+        raise Stage6Refusal('suite_invalid', f'{source} não é um registro de suíte')
+    if data.get('exitCode') != 0 or data.get('timedOut'):
+        raise Stage6Refusal('red', f'a suíte de {Path(source).name} não está verde (exitCode {data.get("exitCode")})',
+                            hint='rode os testes de novo e corrija o vermelho antes do merge')
+    head = data.get('head')
+    homolog = homolog_module()
+    mine, theirs = homolog.tree_of(tree, 'HEAD'), homolog.tree_of(tree, head) if isinstance(head, str) else None
+    if mine is None or mine != theirs:
+        raise Stage6Refusal('suite_other_tree', f'a suíte de {Path(source).name} rodou noutra árvore (head '
+                            f'{str(head)[:12]}), não na ponta da slice', hint='rode a suíte na ponta da slice ou '
+                            'passe --test com os testes dos seams')
+    return {'from': str(source), 'head': head, 'exitCode': 0}
+
+
+def local_main_only(root, issue_branch, base):
+    """The commits the push of the branch of the issue would send that are only in the local main (never pushed
+    before the release): in `<issue> ^origin/<base> ^origin/<issue>` and in `<base> ^origin/<base>`."""
+    excluded = [f'^refs/remotes/origin/{base}']
+    if git_rev(root, f'refs/remotes/origin/{issue_branch}'):
+        excluded.append(f'^refs/remotes/origin/{issue_branch}')
+    code, pushed, _ = git_call(root, 'rev-list', f'refs/heads/{issue_branch}', *excluded)
+    code2, local, _ = git_call(root, 'rev-list', f'refs/heads/{base}', f'^refs/remotes/origin/{base}')
+    if code != 0 or code2 != 0:
+        return []
+    only = set(local.split())
+    return [sha for sha in pushed.split() if sha in only]
+
+
+def preview_branches(root, base):
+    """The list of `serve preview refresh` (references/development.md, "The start of stage 6"): the branch of every
+    issue (and work without an issue) of the authorization records, plus the `merged` of the preview's record,
+    minus each one the local main already holds or `origin/<base>` already carries, and only those that exist
+    locally. It never names only the issue at hand: every issue in progress stays in the preview."""
+    homolog = homolog_module()
+    entries, _ = homolog.work_entries(root)
+    names = [e['branch'] for e in homolog.issue_entries(entries).values()]
+    names += [e['branch'] for e in entries if 'direct' in e]
+    registry = Path(root) / '.frontlights' / 'preview' / 'registry.json'
+    data = homolog.read_record(registry) if registry.is_file() else None
+    for item in (data or {}).get('merged', []) if isinstance(data, dict) else []:
+        name = item.get('branch') if isinstance(item, dict) else item
+        if isinstance(name, str):
+            names.append(name)
+    chosen = []
+    remote_base = git_rev(root, f'refs/remotes/origin/{base}')
+    for name in names:
+        tip = git_rev(root, f'refs/heads/{name}') if homolog.is_plain(name) else None
+        if tip is None or name in chosen:
+            continue
+        if git_call(root, 'merge-base', '--is-ancestor', tip, f'refs/heads/{base}')[0] == 0:
+            continue
+        if remote_base and git_call(root, 'merge-base', '--is-ancestor', tip, remote_base)[0] == 0:
+            continue
+        chosen.append(name)
+    return chosen
+
+
+def refresh_preview(root, config_path, base):
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    if not isinstance(config, dict) or not isinstance(config.get('preview'), dict):
+        return {'skipped': 'sem bloco preview no config: nada de prévia'}
+    branches = preview_branches(root, base)
+    argv = [sys.executable, str(HERE / 'serve.py'), 'preview', 'refresh', '--config', str(config_path), '--root',
+            str(root), '--base', base, '--full']
+    for name in branches:
+        argv += ['--branch', name]
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=900,
+                              stdin=subprocess.DEVNULL)
+        answer = json.loads(done.stdout) if done.stdout.strip() else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+        return {'branches': branches, 'ok': False, 'error': f'serve preview refresh não respondeu ({type(error).__name__})'}
+    return {'branches': branches, 'ok': done.returncode == 0,
+            'message': answer.get('message') or answer.get('error') if isinstance(answer, dict) else None}
+
+
+def slice_merge(root, config_path, issue, label, source=None, tests=(), watched_only=False, comment_file=None):
+    root = Path(root)
+    _, record = read_charter_record(root)
+    number = charter_issue(record, issue)
+    label = slice_label(label)
+    own, piece = entry_of(record, number), entry_of(record, number, label)
+    if own is None or piece is None:
+        raise Stage6Refusal('no_worktree', f'o charter não tem a worktree {"da issue" if own is None else label} da '
+                            f'issue #{number}', hint=f'rode `slice open --issue {number} --slice {label}`')
+    for entry in (piece, own):
+        if not Path(entry['path']).is_dir():
+            raise Stage6Refusal('no_worktree', f'a worktree {entry["path"]} não existe')
+        dirty = changed_files(entry['path'])
+        if dirty:
+            raise Stage6Refusal('dirty', f'a worktree {Path(entry["path"]).name} tem {len(dirty)} arquivo(s) sem '
+                                f'commit: {", ".join(dirty[:10])}', hint='commite (ou descarte) na worktree e repita',
+                                files=dirty[:50])
+    base = (record.get('base') or {}).get('branch') or 'main'
+    issue_branch, branch = own['branch'], piece['branch']
+    tip = git_rev(root, f'refs/heads/{branch}')
+    if tip is None:
+        raise Stage6Refusal('no_branch', f'a branch {branch} não existe')
+    already = git_call(root, 'merge-base', '--is-ancestor', tip, f'refs/heads/{issue_branch}')[0] == 0
+    result = {'issue': number, 'slice': label, 'branch': branch, 'issueBranch': issue_branch, 'alreadyMerged': already,
+              'tests': None}
+    if not already:
+        stamp = _cli.sao_paulo_now().strftime('%Y%m%d-%H%M%S')
+        log = root / '.frontlights' / 'issues' / str(number) / f'slice-merge-{label}-{stamp}.log'
+        if source:
+            result['tests'] = suite_from(source, piece['path'])
+        elif watched_only:
+            result['tests'] = {'skipped': 'só com teste assistido: nenhum teste escrito nem rodado'}
+        else:
+            argvs = verification_argv(tests) or record.get('verification_commands') or []
+            if not argvs:
+                raise Stage6Refusal('no_tests', 'sem testes para rerrodar: o coordenador rerroda os testes da slice '
+                                    'antes do merge', hint="passe --test '<argv JSON>' (os testes dos seams), --from "
+                                    '<registro da suíte na mesma árvore> ou --watched-only numa execução só com teste '
+                                    'assistido')
+            ran, failure = run_tests(argvs, piece['path'], log)
+            result['tests'] = {'ran': ran, 'log': str(log)}
+            if failure:
+                raise Stage6Refusal('red', f'teste vermelho na slice {label}: `{" ".join(failure["argv"])}` saiu '
+                                    f'{failure["exitCode"]}; nada foi mesclado', hint='corrija na worktree da slice e '
+                                    'repita', tests=result['tests'], tail=tail(log))
+        message = f'Merge da slice {label} na issue #{number}'
+        code, _, err = git_call(own['path'], 'merge', '--no-ff', '--no-edit', '-m', message, branch)
+        if code != 0:
+            _, unmerged, _ = git_call(own['path'], 'diff', '--name-only', '--diff-filter=U')
+            files = sorted(line for line in unmerged.splitlines() if line.strip())
+            git_call(own['path'], 'merge', '--abort')
+            if not files:
+                raise Stage6Refusal('merge_failed', f'`git merge {branch}` falhou: {" ".join(err.split())[:200]}')
+            raise Stage6Refusal('conflict', f'o merge da slice {label} na branch da issue tem conflito em: '
+                                f'{", ".join(files)}; o merge foi abortado e a worktree da issue está limpa',
+                                hint='resolva na worktree da issue (o merge abaixo, os arquivos, o commit) e rode '
+                                     '`slice merge` de novo, que segue do merge já feito', code=2, files=files,
+                                commands=[['git', '-C', own['path'], 'merge', '--no-ff', branch]])
+        result['merge'] = git_rev(root, f'refs/heads/{issue_branch}')
+    result['commands'] = []
+    if record.get('repository') and has_remote(root):
+        leaked = local_main_only(root, issue_branch, base)
+        if leaked:
+            raise Stage6Refusal('local_main_commit', f'o push da {issue_branch} levaria {len(leaked)} commit(s) que '
+                                f'só estão na main local ({", ".join(c[:7] for c in leaked[:5])}): a main local nunca '
+                                'entra numa branch enviada; nada foi enviado', code=3, commits=leaked[:50],
+                                hint='tire esses commits da branch da issue (a main local entra só na worktree '
+                                     '-integra) e repita')
+        result['commands'].append(['git', '-C', own['path'], 'push', 'origin', issue_branch])
+    else:
+        result['note'] = 'projeto sem remoto: a branch da issue fica local e nada é enviado'
+    result['preview'] = refresh_preview(root, config_path, base)
+    tick = ['python', str(HERE / 'closeout.py'), 'tick', '--issue', str(number), '--box', label]
+    if comment_file:
+        tick += ['--comment-file', str(comment_file)]
+    result['next'] = {'tick': tick, 'when': 'só depois do "Aprovado" do teste assistido (caixa com tela) ou com '
+                                            f'walkthroughs/{label}.md gravado (caixa sem tela)'}
+    pushed = ' Rode o push de `commands` (coberto).' if result['commands'] else ''
+    result.update(ok=True, exitCode=0,
+                  message=f'A slice {label} {"já estava" if already else "foi"} mesclada na branch da issue #{number}.'
+                          f'{pushed} A marcação da caixa vem depois, com a evidência ({result["next"]["when"]}).')
+    return result
+
+
+def slice_cli(action, root, config_path, issue, slices=(), stacked_on=None, ownership=(), directory=None, source=None,
+              tests=(), watched_only=False, comment_file=None):
+    try:
+        if action == 'open':
+            return slice_open(root, config_path, issue, slices, stacked_on, ownership, directory)
+        if len(slices or ()) != 1:
+            raise Stage6Refusal('slice_required', 'slice merge mescla uma slice por vez', hint='--slice S2')
+        return slice_merge(root, config_path, issue, slices[0], source, tests, watched_only, comment_file)
+    except Stage6Refusal as refusal:
+        return refusal.result()
+
 
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -1727,6 +2108,22 @@ def build_parser():
     p.add_argument('--hours', type=int, default=CHARTER_HOURS, help=f'validity, at most {CHARTER_HOURS} (default)')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p = sub.add_parser('slice', help='stage 6: cut the branches and worktrees of slices (open) or merge one slice into '
+                                     'the branch of its issue after rerunning its tests (merge)')
+    p.add_argument('action', choices=('open', 'merge'))
+    p.add_argument('--issue', help='the issue (default: the issue of the charter entry of the worktree)')
+    p.add_argument('--slice', nargs='+', default=[], help='open: S1 [S2 ...]; merge: one slice')
+    p.add_argument('--stacked-on', help='open: cut from that slice instead of the branch of the issue')
+    p.add_argument('--ownership', nargs='+', action='extend', default=[],
+                   help='open: S<k>=<path>[,<path>] or <path> (default: the ownership of the issue in the charter)')
+    p.add_argument('--dir', help='open: the folder of the worktrees (default: <root>-worktrees beside the project)')
+    p.add_argument('--from', dest='source', help='merge: a green record of homolog suite on the same commit tree')
+    p.add_argument('--test', action='append', default=[], help="merge: a test argv as a JSON list; repeatable "
+                                                              "(default: verification_commands of the charter)")
+    p.add_argument('--watched-only', action='store_true', help='merge: a run "só com teste assistido", no test rerun')
+    p.add_argument('--comment-file', help='merge: carried into the tick command it prints')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
@@ -1747,6 +2144,10 @@ def resolve_defaults(args):
     elif args.command == 'charter':
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root)
+    elif args.command == 'slice':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
+        args.issue = _cli.issue_number(args.issue, _cli.current_tree(), args.root)
     elif args.command == 'browser-gate':
         args.root = args.root or [str(_cli.current_tree())]
         args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
@@ -1809,6 +2210,10 @@ def main():
             result = charter_cli(args.action, args.root, args.config, args.issue, args.direct, args.ownership,
                                  args.prefix, args.concurrency, args.protect, args.base, args.approved_by,
                                  args.verify, args.hours)
+            code = result['exitCode']
+        elif args.command == 'slice':
+            result = slice_cli(args.action, args.root, args.config, args.issue, args.slice, args.stacked_on,
+                               args.ownership, args.dir, args.source, args.test, args.watched_only, args.comment_file)
             code = result['exitCode']
         elif args.command == 'homolog':
             import homolog

@@ -1554,8 +1554,10 @@ class TickTests(CloseoutCase):
 
     def tick(self, gh=None, issue='12', box='S2', line=None, root=None):
         gh = gh or FakeIssueGh()
+        approved = Path(self.tmp.name) / 'result-aprovado.json'   # a slice box ticks only with evidence (issue 4)
+        approved.write_text(json.dumps({'situacao': 'aprovado'}), encoding='utf-8')
         result = closeout.run('tick', self.config, self.root if root is None else root, gh=gh, edit=gh.edit,
-                              issue=issue, box=box, line=line)
+                              issue=issue, box=box, line=line, record=str(approved))
         self.assertEqual(gh.violations, [])
         return result, gh
 
@@ -1719,7 +1721,10 @@ class TickTests(CloseoutCase):
         def edit(argv):
             gh.body = gh.body.replace('Intro', 'Intro de outra pessoa')
             real(argv)
-        result = closeout.run('tick', self.config, self.root, gh=gh, edit=edit, issue='12', box='S2', line=None)
+        approved = Path(self.tmp.name) / 'result-aprovado.json'
+        approved.write_text(json.dumps({'situacao': 'aprovado'}), encoding='utf-8')
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=edit, issue='12', box='S2', line=None,
+                              record=str(approved))
         self.assertEqual((result['ok'], result['written'], result['verified']), (False, None, False))
         self.assertNotIn('restoring', result['message'])
 
@@ -1739,10 +1744,12 @@ class TickTests(CloseoutCase):
 
     def test_the_cli_wires_the_operation(self):
         gh = FakeIssueGh()
+        approved = Path(self.tmp.name) / 'result-aprovado.json'
+        approved.write_text(json.dumps({'situacao': 'aprovado'}), encoding='utf-8')
         out = io.StringIO()
         with patch.object(rs, 'gh_default', gh), patch.object(closeout, 'gh_write', gh.edit), contextlib.redirect_stdout(out):
             code = closeout.main(['tick', '--config', str(self.config), '--root', str(self.root), '--issue', '12',
-                                  '--box', 'S2'])
+                                  '--box', 'S2', '--record', str(approved)])
         result = json.loads(out.getvalue())
         self.assertEqual((code, result['ok'], result['operation'], result['verified']), (0, True, 'tick', True))
         self.assertTrue(out.getvalue().isascii())
