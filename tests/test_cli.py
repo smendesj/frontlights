@@ -208,6 +208,19 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(result['options'], ['Trocar para conta-2 com `gh auth switch --user conta-2` e repetir',
                                              'Parar'])
 
+    def test_a_folder_gh_cannot_read_is_a_repository_mismatch_not_an_account_one(self):
+        # Teste num clone com origin local (23/10/2026): o login respondia, mas o `gh repo view` falhava, e a
+        # recusa culpava a conta.
+        class NoRepo(FakeGh):
+            def __call__(self, argv):
+                if argv[0] == 'repo':
+                    raise RuntimeError('none of the git remotes point to a known GitHub host')
+                return super().__call__(argv)
+        with self.assertRaises(_cli.AccountMismatch) as caught:
+            _cli.gh_account(self.CONFIG, NoRepo())
+        self.assertEqual(caught.exception.reason, 'repository_mismatch')
+        self.assertIn('gh repo view', str(caught.exception))
+
     def test_a_login_without_write_is_account_mismatch(self):
         with self.assertRaises(_cli.AccountMismatch) as caught:
             _cli.gh_account(self.CONFIG, FakeGh(permission='READ'))
