@@ -1,87 +1,55 @@
 <!--
-  Modelo de seção do artefato do grilling (references/grilling.md, "The artifact").
-  Um fragmento por seção (o antes da rodada do problema, cada pergunta de decisão e cada slice
-  do quiz da etapa 5), acrescentado com uma edição pequena de .frontlights/artifact.html
-  (ou .frontlights/issues/<n>/artifact.html) e publicado na mesma URL.
-  A seção explica mais que a pergunta e nunca repete a pergunta: a pergunta e os previews das
-  opções já estão na sessão; a seção responde "o que isso implica".
-  Os campos são fixos e seguem esta ordem. Visual, Cenário por opção e Consequências estão em toda
-  seção (uma frase cada basta numa pergunta simples); os outros campos, sem nada a dizer, são omitidos.
-  O Visual segue o tipo de pergunta (references/grilling.md): tela, o print da base como antes e,
-  por opção, o mesmo print do antes com marcações por cima (caixas, setas e textos em HTML);
-  fluxo, linha do tempo por opção; regra, tabela de casos; camadas, diagrama por opção; nome ou
-  texto, comparação lado a lado de onde aparece.
-  Só classes e tokens de CSS da página, nada de estilo inline (a posição de cada marca vem de uma
-  regra de CSS da página, pelo id da marca). Troque cada marcador <...>
-  e apague este comentário. Código real do projeto entra (até 15 linhas, com o caminho),
-  com o valor de todo segredo trocado por ***; registro real, dado de pessoa, endpoint real e
-  nome de cliente ou organização nunca entram, nem no print (só conta e dados de teste); os cenários
-  usam dados inventados.
+  Modelo de seção do artefato (references/grilling.md, "The artifact"), que `frontlights.py artifact section` monta
+  dos campos ## <campo> do arquivo de conteúdo. A seção explica mais que a pergunta e nunca repete a pergunta.
+  Visual, Cenário por opção e Consequências estão em toda seção; os outros campos, vazios, são omitidos.
+  Tela: o print da base e o mesmo print da base com as marcas de cada opção (posição por regra de CSS, pelo id).
+  Rótulos "Base" e "Com a opção", nunca antes/depois. Código real até 15 linhas, com o caminho, segredos como ***;
+  dado real nunca, nem no print.
 -->
 <section class="secao" id="secao-<n>">
   <h2 class="secao-titulo">Seção <n>: <pergunta></h2>
-
   <div class="campo campo-por-que">
     <h3>Por que estamos perguntando isso</h3>
-    <p><o que depende desta resposta e por que ela importa agora, sem repetir a pergunta></p>
+    <p><o que depende desta resposta></p>
   </div>
-
   <div class="campo campo-visual">
     <h3>Visual</h3>
-    <!-- Caso de tela: o print da base como antes e, por opção, o mesmo print do antes com marcações.
-         Nos outros tipos, troque pelo desenho do tipo. -->
     <div class="comparacao">
-      <figure class="antes">
-        <figcaption>Antes</figcaption>
-        <img class="print" src="<o print da base, asset do artefato ou embutido>" alt="<o que a tela mostra>">
+      <figure class="base">
+        <figcaption>Base</figcaption>
+        <img class="print" src="antes.png" alt="<o print da base>">
       </figure>
-      <figure class="depois">
-        <figcaption>Depois: <opção></figcaption>
+      <figure class="com-opcao">
+        <figcaption>Com a opção: <opção></figcaption>
         <div class="print-marcado">
-          <img class="print" src="<o mesmo print do antes>" alt="<o que a tela mostra>">
-          <div class="marca marca-caixa" id="marca-<n>-1"></div>
-          <div class="marca marca-seta" id="marca-<n>-2"></div>
-          <p class="marca marca-texto" id="marca-<n>-3"><o que esta opção muda neste ponto da tela></p>
+          <img class="print" src="antes.png" alt="<o mesmo print da base>">
+          <p class="marca marca-texto" id="marca-<n>-1"><o que a opção muda aqui></p>
         </div>
       </figure>
     </div>
   </div>
-
   <div class="campo campo-cenario">
     <h3>Cenário por opção</h3>
-    <ul class="opcoes">
-      <li><strong><opção></strong>: <um caso concreto, com dados inventados, e o que acontece nele com esta opção></li>
-    </ul>
+    <ul class="opcoes"><li><strong><opção></strong>: <um caso com dados inventados></li></ul>
   </div>
-
   <div class="campo campo-consequencias">
     <h3>Consequências</h3>
-    <ul class="opcoes">
-      <li><strong><opção></strong>: <o custo de errar, se dá para voltar atrás e o que esta opção impede></li>
-    </ul>
+    <ul class="opcoes"><li><strong><opção></strong>: <custo de errar, volta atrás, o que impede></li></ul>
   </div>
-
   <div class="campo campo-conceitos">
     <h3>Conceitos</h3>
-    <dl>
-      <dt><termo></dt>
-      <dd><o termo em palavras simples></dd>
-    </dl>
+    <p><termo em palavras simples></p>
   </div>
-
   <div class="campo campo-projeto">
     <h3>Onde o projeto já faz</h3>
-    <p class="caminho"><code><caminho/do/arquivo>:<linha></code></p>
-    <pre class="codigo"><code><trecho real do código do projeto, até 15 linhas, segredos como ***></code></pre>
+    <pre class="codigo"><code><caminho:linha e trecho real, até 15 linhas></code></pre>
   </div>
-
   <div class="campo campo-recomendacao">
     <h3>Recomendação (opinião)</h3>
-    <p><a opção recomendada e o motivo em uma linha></p>
+    <p><a opção recomendada e o motivo></p>
   </div>
-
   <div class="campo campo-escolha">
     <h3>Escolha</h3>
-    <p><a opção escolhida, registrada depois da resposta></p>
+    <p><registrada por artifact choose></p>
   </div>
 </section>

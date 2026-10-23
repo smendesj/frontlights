@@ -2193,6 +2193,10 @@ def build_parser():
     p.add_argument('--comment-file', help='merge: carried into the tick command it prints')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p = sub.add_parser('artifact', add_help=False,
+                       help='stage 3: the skeleton of the grilling artifact, init|section|choose (_artifact.py); '
+                            'delegated before this parser runs')
+    p.add_argument('artifact_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. section --n 3')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
@@ -2232,6 +2236,10 @@ def main():
         # Delegated whole, so its options may come before the file (a REMAINDER would leave them to this parser).
         import stamp
         return stamp.main(sys.argv[2:])  # prints its own JSON
+    if sys.argv[1:2] == ['artifact']:
+        # Delegated whole (redesenho, issue 6): init, section and choose live in _artifact.py, one parser.
+        import _artifact
+        return _artifact.main(sys.argv[2:])
     if sys.argv[1:2] == ['browser-gate']:
         # Delegated whole (issue 8): `--answer` and the `record` subcommand live in browser_gate.py, one parser.
         import browser_gate

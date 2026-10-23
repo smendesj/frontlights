@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  Página do artefato do grilling (references/grilling.md, "The artifact"). `frontlights.py artifact init` a copia para
+  .frontlights/artifact.html (ou .frontlights/issues/<n>/artifact.html) e troca os marcadores {{...}};
+  `artifact section` acrescenta as seções antes de "/secoes" e `artifact choose` grava a escolha. A sessão publica a
+  fonte inteira uma vez por rodada, na mesma URL, nunca por `edits`.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITULO}}</title>
+<style>
+:root {
+  --fundo: #f7f6f2; --cartao: #ffffff; --texto: #1d1d1b; --suave: #5c5b57; --borda: #dcdad3;
+  --destaque: #1f5fbf; --marca: #d9480f; --marca-fundo: rgba(217, 72, 15, 0.12); --codigo: #f0eee8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fundo: #161614; --cartao: #22221f; --texto: #ecebe6; --suave: #a7a59e; --borda: #3a3934;
+    --destaque: #7fb0ff; --marca: #ff8a4c; --marca-fundo: rgba(255, 138, 76, 0.16); --codigo: #2c2b27;
+  }
+}
+:root[data-theme="dark"] {
+  --fundo: #161614; --cartao: #22221f; --texto: #ecebe6; --suave: #a7a59e; --borda: #3a3934;
+  --destaque: #7fb0ff; --marca: #ff8a4c; --marca-fundo: rgba(255, 138, 76, 0.16); --codigo: #2c2b27;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fundo); color: var(--texto); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.pagina { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+.pagina > header h1 { margin: 0 0 4px; font-size: 1.6rem; }
+.sub { margin: 0 0 24px; color: var(--suave); }
+.secao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 12px; padding: 20px; margin: 0 0 20px; }
+.secao-titulo { margin: 0 0 12px; font-size: 1.25rem; }
+.campo { margin: 16px 0 0; }
+.campo h3 { margin: 0 0 6px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--suave); }
+.comparacao { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.comparacao figure { margin: 0; }
+.comparacao figcaption { font-weight: 600; margin: 0 0 6px; }
+.print { display: block; max-width: 100%; height: auto; border: 1px solid var(--borda); border-radius: 6px; }
+.print-marcado { position: relative; }
+.marca { position: absolute; left: 4%; top: 4%; }
+.marca-caixa { width: 30%; height: 18%; border: 3px solid var(--marca); background: var(--marca-fundo); border-radius: 4px; }
+.marca-texto { margin: 0; max-width: 60%; padding: 4px 8px; background: var(--marca); color: #fff; border-radius: 4px; font-size: 0.85rem; }
+.opcoes { margin: 0; padding-left: 20px; }
+table.casos { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; }
+table.casos th, table.casos td { border: 1px solid var(--borda); padding: 6px 8px; text-align: left; vertical-align: top; }
+.codigo { background: var(--codigo); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; }
+code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+dt { font-weight: 600; }
+dd { margin: 0 0 8px 16px; }
+</style>
+<style id="marcas">
+</style>
+</head>
+<body>
+<main class="pagina">
+<header>
+<h1>{{TITULO}}</h1>
+<p class="sub">Artefato do grilling: a base primeiro, depois uma seção por pergunta de decisão, sempre nesta URL.</p>
+</header>
+<!-- secoes -->
+<!-- /secoes -->
+</main>
+</body>
+</html>

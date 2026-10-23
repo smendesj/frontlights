@@ -80,7 +80,9 @@ print do sistema rodando na base, tirado com conta de teste e dados de teste, li
 com marcações; os cenários usam dados inventados, e nenhum registro real, dado de pessoa, endpoint real, nome de
 cliente ou organização entra na página, nem num print nem dentro de um trecho de código. A fonte da página fica em
 `.frontlights/artifact.html`, fora do versionamento. Sem ferramenta de artefatos, a sessão segue em
-texto e registra "artefato indisponível" no log de descoberta. É regra da skill, não barreira: nenhum script monta a página.
+texto e registra "artefato indisponível" no log de descoberta. O esqueleto vem do script (`frontlights.py artifact`, que
+só grava a fonte local); conteúdo, publicação e URL são da sessão, que publica a fonte inteira uma vez por rodada,
+nunca por `edits`. É regra da skill, não barreira.
 
 ## Subagentes
 

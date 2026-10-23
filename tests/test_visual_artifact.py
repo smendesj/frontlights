@@ -11,7 +11,10 @@ Seams: o texto de `SKILL.md` (etapas 3 e 5), `references/grilling.md`, `referenc
 `docs/acceptance.md`, `evals/grilling-artifact.md` e `evals/runbook.md`. É regra da skill, não barreira: nenhum
 script monta o artefato.
 """
+import json
 import re
+import subprocess
+import tempfile
 import unittest
 import sys
 from pathlib import Path
@@ -288,7 +291,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
                                        'Slices as acceptance criteria'))
         self.assertIn('with a screen, the same before print with the markings of what that slice changes', quiz)
         template = read('skills', 'frontlights', 'templates', 'grilling-section.html')
-        for phrase in ('o print da base', 'o mesmo print do antes', 'class="marca'):
+        for phrase in ('o print da base', 'o mesmo print da base', 'class="marca'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, template)
         self.assertNotIn('montada do template real', template)
@@ -420,6 +423,148 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         self.assertIn('uma seção por pergunta de decisão', row)
         self.assertIn('templates/grilling-section.html', row)
         self.assertNotIn('só dados fictícios', row)
+
+
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
+SECTION = """## Por que
+A lista cresce e ninguém acha o pedido.
+## Visual
+- **Filtro no topo** @10,5: um campo de data acima da tabela
+- **Filtro lateral**: um painel à direita
+## Cenário por opção
+- **Filtro no topo**: Ana filtra 03/10 e vê 4 pedidos.
+- **Filtro lateral**: Ana abre o painel e escolhe 03/10.
+## Consequências
+- **Filtro no topo**: barato e reversível.
+- **Filtro lateral**: mais espaço, custo maior.
+## Onde o projeto já faz
+`src/lista.ts:12`
+```ts
+const filtro = null;
+```
+"""
+
+
+class ArtifactCommandTests(unittest.TestCase):
+    """Redesenho, issue 6, S1: `frontlights.py artifact init|section|choose` monta o esqueleto na fonte local;
+    conteúdo, publicação (uma por rodada, nunca `edits`) e URL são da sessão."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.source = self.root / '.frontlights' / 'artifact.html'
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_cli(self, *argv):
+        done = subprocess.run([sys.executable, str(SCRIPT), 'artifact', *argv, '--root', str(self.root)],
+                              capture_output=True, encoding='utf-8', timeout=60)
+        return done.returncode, json.loads(done.stdout)
+
+    def content(self, text=SECTION, name='secao.md'):
+        path = self.root / name
+        path.write_text(text, encoding='utf-8')
+        return str(path)
+
+    def section(self, *extra, content=None):
+        return self.run_cli('section', '--n', '2', '--kind', 'tela', '--title', 'Onde fica o filtro?',
+                            '--option', 'Filtro no topo', '--option', 'Filtro lateral',
+                            '--content', content or self.content(), *extra)
+
+    def test_init_writes_the_page_with_the_base_print_and_says_how_to_publish(self):
+        code, out = self.run_cli('init', '--title', 'Filtro por data', '--before', 'base.png')
+        self.assertEqual(code, 0, out)
+        page = self.source.read_text(encoding='utf-8')
+        self.assertIn('<title>Filtro por data</title>', page)
+        self.assertIn('<img class="print" src="antes.png"', page)
+        self.assertIn('id="secao-1"', page)
+        self.assertEqual(out['publish'], {'file_path': str(self.source.resolve()), 'files': {'antes.png': 'base.png'}})
+        self.assertIn('nunca por edits', out['message'])
+        self.assertIn('Artifact URL and source path', out['message'])
+        code, out = self.run_cli('init')
+        self.assertEqual((code, out['reason']), (1, 'artifact_exists'))
+
+    def test_init_of_a_published_issue_goes_to_its_records(self):
+        code, out = self.run_cli('init', '--issue', '12', '--kind', 'fluxo')
+        self.assertEqual(code, 0, out)
+        page = (self.root / '.frontlights' / 'issues' / '12' / 'artifact.html').read_text(encoding='utf-8')
+        self.assertNotIn('antes.png', page)
+
+    def test_section_fills_the_fields_of_the_model_in_order(self):
+        self.run_cli('init')
+        code, out = self.section()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out['sections'], [2])
+        page = self.source.read_text(encoding='utf-8')
+        model = (ROOT / 'skills' / 'frontlights' / 'templates' / 'grilling-section.html').read_text(encoding='utf-8')
+        block = page[page.index('id="secao-2"'):]
+        block = block[:block.index('</section>')]
+        model_fields = re.findall(r'<h3>([^<]*)</h3>', model)
+        found = re.findall(r'<h3>([^<]*)</h3>', block)
+        self.assertEqual(found, [f for f in model_fields if f not in ('Conceitos', 'Recomendação (opinião)')])
+        for phrase in ('<figcaption>Base</figcaption>', '<figcaption>Com a opção: Filtro no topo</figcaption>',
+                       'class="marca marca-texto" id="marca-2-1"', '<pre class="codigo"><code>const filtro = null;'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, block)
+        self.assertIn('#marca-2-1 { left: 10%; top: 5%; }', page)
+        self.assertNotIn('style="', page)
+        visible = re.sub(r'src="[^"]*"', '', block)
+        self.assertNotRegex(visible, r'(?i)\b(antes|depois)\b')
+
+    def test_the_same_number_replaces_the_section_and_choose_records_the_answer(self):
+        self.run_cli('init')
+        self.section()
+        self.section()
+        page = self.source.read_text(encoding='utf-8')
+        self.assertEqual(page.count('id="secao-2"'), 1)
+        code, out = self.run_cli('choose', '--n', '2', '--answer', 'Filtro no topo')
+        self.assertEqual(code, 0, out)
+        block = self.source.read_text(encoding='utf-8').split('id="secao-2"')[1]
+        self.assertIn('<h3>Escolha</h3>\n<p>Filtro no topo</p>', block)
+
+    def test_several_sections_in_one_call(self):
+        self.run_cli('init')
+        rule = self.content('## Visual\n| Caso | A | B |\n| --- | --- | --- |\n| vazio | erro | ignora |\n'
+                            '## Cenário\n- **A**: x\n- **B**: y\n## Consequências\n- **A**: x\n- **B**: y\n', 'regra.md')
+        code, out = self.run_cli('section', '--n', '4', '--n', '3', '--kind', 'regra', '--title', 'Regra?',
+                                 '--title', 'Outra?', '--option', '4:A', '--option', '4:B', '--option', '3:A',
+                                 '--option', '3:B', '--content', rule, '--content', rule)
+        self.assertEqual(code, 0, out)
+        page = self.source.read_text(encoding='utf-8')
+        self.assertLess(page.index('id="secao-3"'), page.index('id="secao-4"'))
+        self.assertIn('<table class="casos">', page)
+
+    def test_refusals(self):
+        self.run_cli('init')
+        for text, reason in (('## Visual\nx\n## Cenário\n- **Filtro no topo**: a\n- **Filtro lateral**: b\n', 'missing_field'),
+                             (SECTION.replace('- **Filtro lateral**: mais espaço, custo maior.', ''), 'option_missing'),
+                             (SECTION + '<div style="color:red">x</div>\n', 'inline_style'),
+                             (SECTION.replace('const filtro = null;', '\n'.join(['x'] * 16)), 'code_too_long')):
+            with self.subTest(reason=reason):
+                code, out = self.section(content=self.content(text))
+                self.assertEqual((code, out['reason']), (1, reason))
+
+    def test_a_missing_source_with_a_logged_url_is_read_back(self):
+        (self.root / '.frontlights').mkdir()
+        (self.root / '.frontlights' / 'discovery.md').write_text(
+            '- Artifact URL and source path (...): https://claude.ai/code/artifact/abc, .frontlights/artifact.html\n',
+            encoding='utf-8')
+        code, out = self.section()
+        self.assertEqual((code, out['reason']), (1, 'source_missing'))
+        self.assertIn('leia a página publicada de volta para', out['message'])
+        self.assertIn('https://claude.ai/code/artifact/abc', out['hint'])
+        (self.root / '.frontlights' / 'discovery.md').unlink()
+        code, out = self.section()
+        self.assertEqual(out['reason'], 'no_artifact')
+
+    def test_the_security_doc_gives_the_skeleton_to_the_script_and_the_rest_to_the_session(self):
+        security = flat(section_containing(read('skills', 'frontlights', 'docs', 'security.md'), 'Artefato do grilling'))
+        for phrase in ('O esqueleto vem do script (`frontlights.py artifact`', 'conteúdo, publicação e URL são da sessão',
+                       'uma vez por rodada', 'nunca por `edits`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertNotIn('nenhum script monta a página', security)
 
 
 if __name__ == '__main__':
