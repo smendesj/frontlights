@@ -1845,9 +1845,10 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
             number = str(current['pr'])
             config = load_config(config_path) if config_path and Path(config_path).is_file() else {}
             repo = ['--repo', config['repository']] if config.get('repository') else []
+            ready = [['gh', 'pr', 'ready', number, *repo]] if entry.get('isDraft') else []   # only for a draft
             result.update(offerMerge=True, question=f'Mesclar a PR #{number} em {current["base"]}?',
                           options=list(MERGE_OPTIONS),
-                          commands=[['gh', 'pr', 'ready', number, *repo], ['gh', 'pr', 'merge', number, '--merge', *repo]],
+                          commands=ready + [['gh', 'pr', 'merge', number, '--merge', *repo]],
                           message=f'A PR #{number} está pronta: pergunte (operação negada, "Sim" antes de rodar).')
         elif state == 'blocked':
             result['message'] = (f'A PR #{current["pr"]} está bloqueada ({"; ".join(entry.get("blockedBy", []))}): '

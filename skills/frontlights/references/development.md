@@ -290,7 +290,7 @@ offers the release again with everything accumulated.
   the wait, and the closeout question of the next session picks the work up. The wait never blocks independent issues.
 - **Offer the merge when the PR is ready.** The merge itself stays a denied operation: `blocked` never offers it;
   `ready` carries "Mesclar a PR #<n> em <base>?" with "Sim, mesclar" first and "Não, aguardar o merge" second; one
-  question per PR, with the argv of `gh pr ready <n>` and `gh pr merge <n> --merge` (never `--admin`, `--auto` or `--delete-branch`: the remote
+  question per PR, with the argv of `gh pr merge <n> --merge`, preceded by `gh pr ready <n>` only for a draft (never `--admin`, `--auto` or `--delete-branch`: the remote
   branch goes by GitHub's automatic deletion of merged head branches). On "Não", the wait goes on unchanged.
 - **At the merge.** `release landed` pulls the local main (if it does not fast-forward, stop and ask instead of
   merging or resetting) and lists the cleanup of `references/closeout.md`, step 5, run without a question, plus the

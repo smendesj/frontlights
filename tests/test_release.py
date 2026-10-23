@@ -178,6 +178,14 @@ class StatusTests(ReleaseCase):
         self.assertEqual((result['state'], result['offerMerge']), ('ready', True))
         self.assertEqual(result['question'], 'Mesclar a PR #77 em main?')
         self.assertEqual(result['options'], ['Sim, mesclar', 'Não, aguardar o merge'])
+        # not a draft (isDraft false): `gh pr ready` is not offered, only the merge (teste real, 23/10/2026)
+        self.assertEqual(result['commands'], [['gh', 'pr', 'merge', '77', '--merge', '--repo', 'OWNER/REPOSITORY']])
+
+    def test_a_draft_pull_request_gets_gh_pr_ready_before_the_merge(self):
+        self.go_and_record()
+        result = self.status(blocked_pr(77, reviewDecision='APPROVED', mergeStateStatus='DRAFT', mergeable='MERGEABLE',
+                                        isDraft=True))
+        self.assertEqual((result['state'], result['offerMerge']), ('ready', True))
         self.assertEqual(result['commands'], [['gh', 'pr', 'ready', '77', '--repo', 'OWNER/REPOSITORY'],
                                               ['gh', 'pr', 'merge', '77', '--merge', '--repo', 'OWNER/REPOSITORY']])
 
