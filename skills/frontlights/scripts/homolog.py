@@ -1803,7 +1803,8 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         name, title = plan['releaseBranch'], release_title(plan)
         config = load_config(config_path) if config_path and Path(config_path).is_file() else {}
         repository = config.get('repository')
-        create = ['gh', 'pr', 'create', '--base', base, '--head', name, '--title', title, '--body-file', str(body)]
+        body = str(Path(body).resolve())   # the printed argv must not depend on the folder it runs from
+        create = ['gh', 'pr', 'create', '--base', base, '--head', name, '--title', title, '--body-file', body]
         if repository:
             create[3:3] = ['--repo', repository]
         commands = ([['git', '-C', str(root), 'branch', name, base], ['git', '-C', str(root), 'push', '-u', remote, name]]
@@ -1829,9 +1830,11 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
                   'monitor': monitor_line(root, state)}
         if state == 'ready' and not missing:
             number = str(current['pr'])
+            config = load_config(config_path) if config_path and Path(config_path).is_file() else {}
+            repo = ['--repo', config['repository']] if config.get('repository') else []
             result.update(offerMerge=True, question=f'Mesclar a PR #{number} em {current["base"]}?',
                           options=list(MERGE_OPTIONS),
-                          commands=[['gh', 'pr', 'ready', number], ['gh', 'pr', 'merge', number, '--merge']],
+                          commands=[['gh', 'pr', 'ready', number, *repo], ['gh', 'pr', 'merge', number, '--merge', *repo]],
                           message=f'A PR #{number} está pronta: pergunte (operação negada, "Sim" antes de rodar).')
         elif state == 'blocked':
             result['message'] = (f'A PR #{current["pr"]} está bloqueada ({"; ".join(entry.get("blockedBy", []))}): '

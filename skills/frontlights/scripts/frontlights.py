@@ -2524,6 +2524,14 @@ def issue_body(issue, plan_path):
     return file.read_bytes().decode('utf-8-sig')
 
 
+def body_path(issue, plan_path):
+    """The absolute path of an issue's `body_file` (relative to the plan's folder), or None without one."""
+    name = issue.get('body_file')
+    if not nonempty(name):
+        return None
+    return str((Path(name) if Path(name).is_absolute() else Path(plan_path).parent / name).resolve())
+
+
 def check_body_file_approved(issue, plan_path, approval):
     """When the plan itself is the approved file, a `body_file` is checked against the stamp the approval of the
     plan recorded for it (`stamp --approve` records `bodies`): a body changed after the approval, or one the approval
@@ -2715,7 +2723,7 @@ def publish_run(plan_path, approved, root, config_path, dry_run, resume, gh, acc
     entries = publish_entries(plan, plan_path, board_, approval, approved_text,
                               Path(approved).resolve() == plan_path.resolve())
     if dry_run:
-        return publish_dry_run(entries, repo, board_, approval)
+        return publish_dry_run(entries, repo, board_, approval, plan_path)
     if not approval['approved']:
         raise PublishRefusal('not_approved', f'{approval["path"]} ({approval["sha256"]}) não confere com a última '
                              f'aprovação registrada ({approval["revision"] or "nenhuma"}); nada foi publicado',
@@ -2808,8 +2816,9 @@ def publish_remote(entries, plan, config, repo, board_, root, state, state_path,
                         '. Mostre a diferença e pergunte; nada é reescrito sozinho.') + notes_sentence(notes)}
 
 
-def publish_dry_run(entries, repo, board_, approval):
-    """The named writes, argv by argv, with `<#id>` for a number GitHub has not given yet; nothing runs."""
+def publish_dry_run(entries, repo, board_, approval, plan_path):
+    """The named writes, argv by argv, with `<#id>` for a number GitHub has not given yet; nothing runs. A body file
+    is named by its absolute path, so the argv does not depend on the current folder."""
     adopted = {e['issue']['id'] for e in entries if nonempty(e['issue'].get('url'))}
     issues = []
     for entry in entries:
@@ -2817,7 +2826,7 @@ def publish_dry_run(entries, repo, board_, approval):
         number = ident if ident in adopted else f'<#{ident}>'
         blockers = [d if d in adopted else f'<#{d}>' for d in issue['dependencies']]
         argvs = [['gh', *step_argv(kind, detail, repo, board_, number, issue.get('url') or f'<url #{ident}>',
-                                   issue['title'], issue.get('body_file') or f'<corpo #{ident}>', blockers)]
+                                   issue['title'], body_path(issue, plan_path) or f'<corpo #{ident}>', blockers)]
                  for _, kind, detail in entry['steps'] if kind != 'local']
         issues.append({'id': ident, 'adopted': ident in adopted, 'commands': argvs})
     count = sum(len(i['commands']) for i in issues)

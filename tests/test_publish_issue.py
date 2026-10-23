@@ -326,6 +326,8 @@ class PublishTests(PublishCase):
         second = result['issues'][1]['commands']
         self.assertIn('<#1>', second[0])
         self.assertEqual(second[0][:3], ['gh', 'issue', 'create'])
+        body_file = Path(second[0][second[0].index('--body-file') + 1])
+        self.assertEqual(body_file, (self.root / '.frontlights' / 'b.md').resolve())   # never relative to the cwd
         self.assertIn(['gh', 'project', 'item-edit', '7', '--owner', 'OWNER', '--url', '<url #2>', '--field',
                        'Priority', '--value', 'Medium'], second)
         self.assertIn('ainda não tem aprovação', result['message'])

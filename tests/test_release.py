@@ -109,6 +109,20 @@ class GoTests(ReleaseCase):
         self.assertTrue((self.root / '.frontlights' / 'release' / 'pending.json').is_file())
         self.assertEqual(result['skillUpdate'], {'status': 'current'})
 
+    def test_the_returned_commands_do_not_depend_on_the_current_folder(self):
+        import os
+        self.body()
+        before = os.getcwd()
+        os.chdir(self.tmp)
+        self.addCleanup(os.chdir, before)
+        result = self.release('go', body='corpo.md')
+        self.assertEqual(result['exitCode'], 0, result)
+        create = result['commands'][-1]
+        body_file = Path(create[create.index('--body-file') + 1])
+        self.assertTrue(body_file.is_absolute(), create)
+        self.assertEqual(body_file, (self.tmp / 'corpo.md').resolve())
+        self.assertEqual(create[create.index('--repo') + 1], 'OWNER/REPOSITORY')
+
     def test_a_body_that_fails_the_check_is_refused(self):
         result = self.release('go', body=self.body(GOOD_BODY.replace('Closes #12', 'Closes #99')))
         self.assertEqual((result['exitCode'], result['reason']), (1, 'body'))
@@ -148,7 +162,8 @@ class StatusTests(ReleaseCase):
         self.assertEqual((result['state'], result['offerMerge']), ('ready', True))
         self.assertEqual(result['question'], 'Mesclar a PR #77 em main?')
         self.assertEqual(result['options'], ['Sim, mesclar', 'Não, aguardar o merge'])
-        self.assertEqual(result['commands'], [['gh', 'pr', 'ready', '77'], ['gh', 'pr', 'merge', '77', '--merge']])
+        self.assertEqual(result['commands'], [['gh', 'pr', 'ready', '77', '--repo', 'OWNER/REPOSITORY'],
+                                              ['gh', 'pr', 'merge', '77', '--merge', '--repo', 'OWNER/REPOSITORY']])
 
     def test_since_wakes_only_on_a_change(self):
         self.go_and_record()
