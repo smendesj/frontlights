@@ -1527,6 +1527,10 @@ class FakeIssueGh:
         self.reads, self.edits, self.violations = [], [], []
 
     def __call__(self, argv):
+        if argv == ['api', 'user']:   # the account check of the command line before the write (_cli.gh_account)
+            return {'login': 'conta-de-teste'}
+        if argv == ['repo', 'view', '--json', 'nameWithOwner,viewerPermission']:
+            return {'nameWithOwner': REPO, 'viewerPermission': 'WRITE'}
         self.reads.append(list(argv))
         if argv != ['issue', 'view', str(self.number), '--repo', REPO, '--json', 'body']:
             self.violations.append(list(argv))

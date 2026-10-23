@@ -94,7 +94,6 @@ REMOTE = 'origin'
 OID = re.compile(r'[0-9a-f]{40,64}')
 RELEASE = re.compile(r'release-\d{4}-\d{2}-\d{2}(?:-\d+)?')   # after the branch prefix (homolog.py, release_name)
 PREFIX = re.compile(r'[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*/')
-DEFAULT_PREFIX = 'claude/'
 FOLDER = re.compile(r'[^A-Za-z0-9._-]+')
 # Folders of dependencies, builds and caches: ignored files that are rebuilt, so removing them asks nothing.
 DISPOSABLE = frozenset({'node_modules', 'bower_components', 'jspm_packages', '.venv', 'venv', '__pycache__', '.eggs',
@@ -209,18 +208,22 @@ def unique_commits(ctx, tip):
 
 def authorized_worktrees(root, issues):
     """The worktrees the authorizations of the project name for `issues`: [{issue, path, branch}], the protected
-    branch names those authorizations declare, and the branch prefixes they use (`claude/` when none says)."""
+    branch names those authorizations declare, and the branch prefixes they use: the `branchPrefix` of the config
+    and the `branch_prefix` of each record (the legacy prefix of `_cli.branch_prefix` for a record without it)."""
     found = []
     try:
         files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
     except OSError:
         files = []
     protected, prefixes = [], set()
+    named = _cli.config_prefix(Path(root) / '.frontlights' / 'config.json')
+    if named and PREFIX.fullmatch(named) and '..' not in named:
+        prefixes.add(named)
     for file in files:
         data = closeout.read_record(file)
         if not isinstance(data, dict):
             continue
-        prefix = data.get('branch_prefix', DEFAULT_PREFIX)
+        prefix = _cli.branch_prefix(record=data)[0]
         if isinstance(prefix, str) and PREFIX.fullmatch(prefix) and '..' not in prefix:
             prefixes.add(prefix)
         listed = data.get('protected_branches')
@@ -233,11 +236,13 @@ def authorized_worktrees(root, issues):
                 box = entry.get('slice')   # a slice's worktree (issue 31): judged against the branch of its issue
                 found.append({'issue': entry['issue'], 'path': entry['path'], 'branch': branch if isinstance(branch, str) else None,
                               'slice': box if isinstance(box, str) and box.strip() else None})
-    return found, protected, sorted(prefixes) or [DEFAULT_PREFIX]
+    return found, protected, sorted(prefixes)
 
 
 def release_branches(root, prefixes):
     """The local branches named like a release (`<prefix>release-<YYYY-MM-DD>[-N]`) under one of `prefixes`."""
+    if not prefixes:
+        return []
     code, out = git(root, 'for-each-ref', '--format=%(refname:short)', *(f'refs/heads/{p}' for p in prefixes))
     if code != 0:
         return []

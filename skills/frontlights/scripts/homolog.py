@@ -13,10 +13,11 @@ Operations (each prints one JSON object on stdout):
          checked clean again at the commit it stood on, and the conflicting files are reported for the session to
          ask the user. It never pushes, never touches another branch, never uses --force, reset or rebase.
   bundle write one Git bundle of the local base and of every local branch under the work prefixes into the folder
-         that `homolog.backupDir` in the config names. The prefixes are `--prefix` alone when given; otherwise every
-         `branch_prefix` of the valid `.frontlights/authorization*.json` records under `--records` (default the root;
-         a record without the key counts as `claude/`), and `claude/` when there is no valid record (issue 44);
-         `prefixes` and `prefixSource` (`argument`, `records` or `default`) say which, and `skipped` counts the
+         that `homolog.backupDir` in the config names. The prefixes are `--prefix` alone when given; otherwise the
+         `branchPrefix` of the config and every `branch_prefix` of the valid `.frontlights/authorization*.json`
+         records under `--records` (default the root; a record without the key counts as the legacy prefix of
+         `_cli.branch_prefix`), and none (only the base) without either (issue 44); `prefixes` and `prefixSource`
+         (`argument`, `config`, `authorization`, `legacy` or null) say which, and `skipped` counts the
          records left out. `backup_dir` validates the key, and `inspect` reuses it. Without the key it says there
          is no folder and writes nothing. The folder must exist and must not sit behind a junction, symbolic link
          or other reparse point (a OneDrive cloud placeholder is storage, not redirection, and is allowed); it is
@@ -27,8 +28,9 @@ Operations (each prints one JSON object on stdout):
          every `.frontlights/authorization*.json` under `--records`, default the root) is in the local base and
          not yet in `<remote>/<base>`, how many commits the local base is ahead of and behind the remote one, and
          the name of the release branch, `<prefix>release-<YYYY-MM-DD>` (`--prefix` alone when given; otherwise the
-         `branch_prefix` of the record with the newest `issued_at`, a record without a valid instant ranking last, and
-         `claude/` without a valid record, issue 44; `prefix` and `prefixSource` say which; the date in America/Sao_Paulo, the
+         `branchPrefix` of the config; otherwise the `branch_prefix` of the record with the newest `issued_at`, a
+         record without a valid instant ranking last; null without any, issue 44; `prefix` and `prefixSource`
+         (`argument`, `config`, `authorization` or `legacy`) say which; the date in America/Sao_Paulo, the
          machine's local date when that zone is unavailable), `-2`, `-3`... past a local branch, or a
          remote-tracking branch of `--remote`, that already has the name (GitHub deletes the head branch of a merged
          pull request and accepts its name again once `git fetch --prune` drops the ref).
@@ -132,7 +134,6 @@ FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
 STDERR_LIMIT = 200       # characters of Git's own text repeated in a message
 RECORD_LIMIT = 200       # authorization records release-plan and bundle read
-DEFAULT_PREFIX = 'claude/'   # the branch prefix when neither --prefix nor a record names one
 RECORD_BYTES = 2 * 1024 * 1024                  # the largest record it reads
 RELEASE_ZONE = 'America/Sao_Paulo'              # the date in the name of the release branch
 HOMOLOG_KEYS = ('backupDir', 'suites')          # the keys of the `homolog` block of the config
@@ -355,7 +356,7 @@ def is_prefix(value):
 
 
 def branch_prefix(value):
-    require(is_prefix(value or ''), 'o prefixo das branches precisa ser um nome simples terminado em `/`, como claude/')
+    require(is_prefix(value or ''), 'o prefixo das branches precisa ser um nome simples terminado em `/`, como dev/')
     return value
 
 
@@ -363,6 +364,8 @@ def bundle_refs(root, base, prefixes):
     """`refs/heads/<base>` and every local branch under one of `prefixes`, as full ref names (never ambiguous with a
     tag), each once."""
     require(rev(root, f'refs/heads/{base}'), f'a branch base `{base}` não existe neste repositório')
+    if not prefixes:   # no prefix: the base alone (for-each-ref without a pattern would list every branch)
+        return [f'refs/heads/{base}']
     code, out, err = git(root, 'for-each-ref', '--format=%(refname)', *(f'refs/heads/{prefix}' for prefix in prefixes))
     require(code == 0, f'`git for-each-ref` falhou: {trimmed(err)}')
     branches = sorted({line.strip() for line in out.splitlines() if line.strip()})
@@ -402,23 +405,31 @@ def write_bundle(root, folder, refs):
     return path, heads
 
 
-def bundle_prefixes(prefix, records):
+def bundle_prefixes(prefix, records, config=None):
     """(prefixes, source, skipped): `[prefix]` and `argument` when one is given; otherwise the sorted union of the
-    `branch_prefix` of the valid records and `records`, or `[DEFAULT_PREFIX]` and `default` without one; `skipped`
-    counts the records left out (issue 44)."""
+    `branchPrefix` of the config and the `branch_prefix` of the valid records (`legacy` for a record without the key)
+    under `records`, with the source of the chain of `_cli.branch_prefix` (`config`, `authorization` or `legacy`);
+    `[]` and None without any, and then only the base goes into the bundle; `skipped` counts the records left out
+    (issue 44)."""
     if prefix is not None:
         return [branch_prefix(prefix)], 'argument', 0
     found, skipped = record_prefixes(records)
+    named = _cli.config_prefix(config)
+    prefixes = sorted({entry['prefix'] for entry in found} | ({branch_prefix(named)} if named else set()))
+    if named:
+        return prefixes, 'config', skipped
     if found:
-        return sorted({entry['prefix'] for entry in found}), 'records', skipped
-    return [DEFAULT_PREFIX], 'default', skipped
+        legacy = all(entry['source'] == 'legacy' for entry in found)
+        return prefixes, 'legacy' if legacy else 'authorization', skipped
+    return [], None, skipped
 
 
 def op_bundle(root, config_path, base, prefix, records=None):
     worktree(root)
     base = plain_name(base, 'a branch base')
-    prefixes, source, skipped = bundle_prefixes(prefix, root if records is None else records)
-    folder = backup_dir(load_config(config_path))
+    config = load_config(config_path)
+    prefixes, source, skipped = bundle_prefixes(prefix, root if records is None else records, config)
+    folder = backup_dir(config)
     if folder is None:
         return {'configured': False, 'written': False, 'prefixes': prefixes, 'prefixSource': source,
                 'skipped': skipped, 'exitCode': 1,
@@ -457,8 +468,8 @@ def record_files(folder):
 
 
 def record_prefixes(folder):
-    """([{'file', 'prefix', 'issuedAt'}], skipped) for every record under `folder` whose `branch_prefix` (absent:
-    DEFAULT_PREFIX) is a valid prefix and whose `worktrees` (absent: none) is a list, the same validity as
+    """([{'file', 'prefix', 'source', 'issuedAt'}], skipped) for every record under `folder` whose `branch_prefix`
+    (absent: the legacy prefix of `_cli.branch_prefix`, source `legacy`) is a valid prefix and whose `worktrees` (absent: none) is a list, the same validity as
     `issue_branches`; an unreadable record, a bad prefix or `worktrees`, and every record past RECORD_LIMIT, is
     skipped and counted (issue 44)."""
     files = record_files(folder)
@@ -466,12 +477,12 @@ def record_prefixes(folder):
     found = []
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
-        prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
+        prefix, source = _cli.branch_prefix(record=data) if data is not None else (None, None)
         entries = data.get('worktrees', []) if data is not None else None
         if data is None or not is_prefix(prefix) or not isinstance(entries, list):
             skipped += 1
             continue
-        found.append({'file': file.name, 'prefix': prefix, 'issuedAt': data.get('issued_at')})
+        found.append({'file': file.name, 'prefix': prefix, 'source': source, 'issuedAt': data.get('issued_at')})
     return found, skipped
 
 
@@ -486,7 +497,7 @@ def work_branches(folder):
     """({issue number: branch}, {direct slug: branch}, skipped) from the `worktrees` entries without `slice` of every
     `.frontlights/authorization*.json` under `folder`. An entry counts when it names either a positive integer
     `issue` or a `direct` slug (work without an issue: lower-case letters, digits and hyphens, up to 64 characters),
-    never both, and its `branch` is a plain name under the record's `branch_prefix` (default `claude/`); a later
+    never both, and its `branch` is a plain name under the record's `branch_prefix` (the legacy prefix without it); a later
     record wins for the same issue or slug, except that the entry of the branch of the issue (`<prefix>issue-<n>`)
     wins over a later one of the same issue (`issue_entries`). A slice entry is ignored in silence; a malformed
     entry, record or prefix, and every record past RECORD_LIMIT, is skipped and counted."""
@@ -525,7 +536,7 @@ def work_entries(folder):
     found = []
     for file in files[:RECORD_LIMIT]:
         data = read_record(file)
-        prefix = data.get('branch_prefix', DEFAULT_PREFIX) if data is not None else None
+        prefix = _cli.branch_prefix(record=data)[0] if data is not None else None
         entries = data.get('worktrees', []) if data is not None else None
         if data is None or not is_prefix(prefix) or not isinstance(entries, list):
             skipped += 1
@@ -599,21 +610,26 @@ def instant(value):
     return moment.timestamp()
 
 
-def release_prefix(prefix, records):
-    """(prefix, source): `prefix` and `argument` when one is given; otherwise the `branch_prefix` of the record with
-    the newest `issued_at` (records without a valid instant rank last, then by file name) and `records`, or
-    DEFAULT_PREFIX and `default` without a valid record (issue 44)."""
+def release_prefix(prefix, records, config=None):
+    """(prefix, source) by the chain of `_cli.branch_prefix`: `prefix` and `argument` when one is given; else the
+    `branchPrefix` of the config and `config`; else the `branch_prefix` of the record with the newest `issued_at`
+    (records without a valid instant rank last, then by file name) and `authorization` (`legacy` for a record
+    without the key); (None, None) without any: the plan is still read, with no release branch name (issue 44)."""
     if prefix is not None:
         return branch_prefix(prefix), 'argument'
+    named = _cli.config_prefix(config)
+    if named:
+        return branch_prefix(named), 'config'
     found, _ = record_prefixes(records)
     if not found:
-        return DEFAULT_PREFIX, 'default'
+        return None, None
 
     def rank(entry):
         moment = instant(entry['issuedAt'])
         return (moment is not None, moment if moment is not None else 0.0, entry['file'])
 
-    return max(found, key=rank)['prefix'], 'records'
+    newest = max(found, key=rank)
+    return newest['prefix'], newest['source']
 
 
 def release_work(root, base, remote, records):
@@ -699,7 +715,8 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
-    prefix, source = release_prefix(prefix, root if records is None else records)
+    prefix, source = release_prefix(prefix, root if records is None else records,
+                                    config_path if config_path and Path(config_path).is_file() else None)
     local_ref, remote_ref = f'refs/heads/{base}', f'refs/remotes/{remote}/{base}'
     local = rev(root, local_ref)
     require(local, f'a branch base `{base}` não existe neste repositório')
@@ -708,7 +725,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
     release = [i['issue'] for i in issues if pending(i)]
     release_direct = [d['direct'] for d in directs if pending(d)]
     ahead, behind = counts(root, local_ref, remote_ref) if remote_tip else (None, None)
-    name = release_name(root, prefix, remote)
+    name = release_name(root, prefix, remote) if prefix else None
     result = {'base': base, 'remote': remote, 'localMain': local, 'remoteMain': remote_tip, 'ahead': ahead,
               'behind': behind, 'issues': issues, 'release': release, 'directs': directs,
               'releaseDirect': release_direct, 'releaseBranch': name, 'prefix': prefix,
@@ -733,9 +750,11 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
         parts = [f'{len(release)} issue(s) ({", ".join(f"#{number}" for number in release)})'] if release else []
         if release_direct:
             parts.append(f'{len(release_direct)} trabalho(s) sem issue ({", ".join(release_direct)})')
+        named = (f'a branch da release é {name}.' if name else
+                 'sem prefixo das branches, a release não tem nome: passe --prefix ou declare branchPrefix no config.')
         result.update(ready=True, exitCode=0,
                       message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
-                              f'ainda fora de {remote}/{base}; a branch da release é {name}.'
+                              f'ainda fora de {remote}/{base}; {named}'
                               f'{suite_sentence(result["fullSuite"])}')
     return result
 
@@ -1428,13 +1447,13 @@ def build_parser():
             command.add_argument('--config', help='.frontlights/config.json (default: the one of the main worktree); '
                                                   'its homolog.backupDir names the folder')
             command.add_argument('--prefix', help='the work branches to include: every local branch under it alone '
-                                                  '(default: every branch_prefix of the authorization records, claude/ '
-                                                  'without one)')
+                                                  '(default: branchPrefix of the config and every branch_prefix of the '
+                                                  'authorization records)')
             command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
         else:
             command.add_argument('--remote', default='origin', help='the remote whose base the release goes to (default origin)')
-            command.add_argument('--prefix', help='the prefix of the release branch name (default: the branch_prefix '
-                                                  'of the newest authorization record, claude/ without one)')
+            command.add_argument('--prefix', help='the prefix of the release branch name (default: branchPrefix of '
+                                                  'the config, else the branch_prefix of the newest authorization record)')
             command.add_argument('--records', help='the folder that holds .frontlights/authorization*.json (default --root)')
             command.add_argument('--config', help='.frontlights/config.json (default <root>/.frontlights/config.json): '
                                                   'its repository is read on GitHub for `closes`')

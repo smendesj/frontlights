@@ -628,12 +628,12 @@ def authorize(charter, operation):
     protected = {p.casefold().rstrip('/') for p in {'main', 'master'} | set(extra)}
     # The prefix may not sit inside a protected name or trailing-* namespace.
     namespaces = {p.rstrip('*').rstrip('/') for p in protected} - {''}
-    prefix = charter.get('branch_prefix', 'claude/')
+    prefix = _cli.branch_prefix(record=charter)[0]
     stem = prefix.rstrip('/').casefold() if isinstance(prefix, str) else ''
     require(nonempty(prefix) and prefix.endswith('/') and nonempty(stem) and
             not any(stem == n or stem.startswith(n + '/') for n in namespaces), 'invalid branch_prefix')
     # Each protected entry p also protects everything below it (p/*), so
-    # release/*/hotfix, */hotfix and claude/issue-1 cover their descendants
+    # release/*/hotfix, */hotfix and dev/issue-1 cover their descendants
     # without blocking sibling branches.
     folded = branch.casefold() if nonempty(branch) else ''
     require(nonempty(branch) and branch == selected.get('branch') and branch.startswith(prefix) and

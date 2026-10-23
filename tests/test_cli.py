@@ -141,5 +141,90 @@ class ScriptsTests(Fixture):
                 self.assertIn('inválido', text)
 
 
+class PrefixTests(unittest.TestCase):
+    def test_the_chain_is_argument_then_config_then_authorization(self):
+        record = {'branch_prefix': 'dev/'}
+        self.assertEqual(_cli.branch_prefix('x/', {'branchPrefix': 'y/'}, record), ('x/', 'argument'))
+        self.assertEqual(_cli.branch_prefix(None, {'branchPrefix': 'y/'}, record), ('y/', 'config'))
+        self.assertEqual(_cli.branch_prefix(None, {}, record), ('dev/', 'authorization'))
+        self.assertEqual(_cli.branch_prefix(None, None, None), (None, None))
+
+    def test_an_old_record_without_the_key_reads_as_legacy(self):
+        prefix, source = _cli.branch_prefix(record={'issue_ids': [1]})
+        self.assertEqual(source, 'legacy')
+        self.assertEqual(prefix, _cli.LEGACY_PREFIX)
+
+    def test_no_script_names_the_legacy_prefix_but_cli(self):
+        for path in sorted(SCRIPTS.glob('*.py')):
+            if path.name != '_cli.py':
+                with self.subTest(script=path.name):
+                    self.assertNotIn(_cli.LEGACY_PREFIX, path.read_text(encoding='utf-8'))
+
+    def test_release_plan_has_no_default_prefix(self):
+        import homolog
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(homolog.release_prefix(None, folder), (None, None))
+            self.assertEqual(homolog.release_prefix(None, folder, {'branchPrefix': 'dev/'}), ('dev/', 'config'))
+
+
+class FakeGh:
+    def __init__(self, login='conta-1', repository='OWNER/REPOSITORY', permission='WRITE'):
+        self.login, self.repository, self.permission, self.calls = login, repository, permission, []
+
+    def __call__(self, argv):
+        self.calls.append(list(argv))
+        if argv == ['api', 'user']:
+            return {'login': self.login}
+        if argv == ['repo', 'view', '--json', 'nameWithOwner,viewerPermission']:
+            return {'nameWithOwner': self.repository, 'viewerPermission': self.permission}
+        raise AssertionError(argv)
+
+
+class AccountTests(unittest.TestCase):
+    CONFIG = {'repository': 'OWNER/REPOSITORY'}
+
+    def test_the_login_and_the_repository_match(self):
+        found = _cli.gh_account(self.CONFIG, FakeGh())
+        self.assertEqual(found, {'login': 'conta-1', 'repository': 'OWNER/REPOSITORY', 'permission': 'WRITE'})
+
+    def test_every_check_asks_gh_again(self):
+        gh = FakeGh()
+        _cli.gh_account(self.CONFIG, gh)
+        _cli.gh_account(self.CONFIG, gh)
+        self.assertEqual(len(gh.calls), 4)
+
+    def test_another_repository_is_repository_mismatch(self):
+        with self.assertRaises(_cli.AccountMismatch) as caught:
+            _cli.gh_account(self.CONFIG, FakeGh(repository='OWNER/OUTRO'))
+        self.assertEqual(caught.exception.reason, 'repository_mismatch')
+
+    def test_the_wrong_account_is_account_mismatch_with_the_switch_question(self):
+        config = dict(self.CONFIG, github={'account': 'conta-2'})
+        with self.assertRaises(_cli.AccountMismatch) as caught:
+            _cli.gh_account(config, FakeGh())
+        result = caught.exception.result()
+        self.assertEqual((result['ok'], result['reason']), (False, 'account_mismatch'))
+        self.assertEqual(result['options'], ['Trocar para conta-2 com `gh auth switch --user conta-2` e repetir',
+                                             'Parar'])
+
+    def test_a_login_without_write_is_account_mismatch(self):
+        with self.assertRaises(_cli.AccountMismatch) as caught:
+            _cli.gh_account(self.CONFIG, FakeGh(permission='READ'))
+        self.assertEqual(caught.exception.reason, 'account_mismatch')
+
+    def test_tick_stops_before_reading_on_a_mismatch(self):
+        import closeout
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'config.json'
+            config.write_text(json.dumps(self.CONFIG), encoding='utf-8')
+            (Path(folder) / '.frontlights').mkdir()
+            gh = FakeGh(repository='OWNER/OUTRO')
+            result = closeout.run('tick', str(config), folder, gh=gh, issue='12', box='S2',
+                                  account=lambda data: _cli.gh_account(data, gh))
+        self.assertEqual((result['ok'], result['reason'], result['written']), (False, 'repository_mismatch', False))
+        self.assertIn('gh auth switch', result['question'])
+        self.assertEqual(len(gh.calls), 2)   # no issue read
+
+
 if __name__ == '__main__':
     unittest.main()

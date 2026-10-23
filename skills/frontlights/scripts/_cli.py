@@ -246,3 +246,101 @@ def emit(text, verb, full=False, tree=None):
         return
     print(json.dumps(summarize(data, path), indent=2, ensure_ascii=False))
 
+
+# ---------------------------------------------------------------- branch prefix and GitHub account
+
+LEGACY_PREFIX = 'claude/'   # the one place it is named: what a record without `branch_prefix` meant before
+
+
+def config_prefix(config):
+    """`branchPrefix` of a config (a dict, or the path of the file), or None."""
+    if not isinstance(config, dict):
+        try:
+            config = json.loads(Path(config).read_text(encoding='utf-8-sig')) if config else None
+        except (OSError, ValueError):
+            config = None
+    value = config.get('branchPrefix') if isinstance(config, dict) else None
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def branch_prefix(explicit=None, config=None, record=None):
+    """(prefix, prefixSource) by the chain `--prefix` > `config.branchPrefix` > the `branch_prefix` of the
+    authorization record: `argument`, `config`, `authorization`, or `legacy` for a record without the key (read as
+    the prefix it meant then); (None, None) when none of the three names one."""
+    if isinstance(explicit, str) and explicit.strip():
+        return explicit, 'argument'
+    named = config_prefix(config)
+    if named:
+        return named, 'config'
+    if isinstance(record, dict):
+        if 'branch_prefix' in record:
+            return record['branch_prefix'], 'authorization'
+        return LEGACY_PREFIX, 'legacy'
+    return None, None
+
+
+class AccountMismatch(Exception):
+    """The gh login or the repository of the current directory is not the one a write needs."""
+
+    def __init__(self, reason, message, login=None, expected=None):
+        super().__init__(message)
+        self.reason, self.login, self.expected = reason, login, expected
+
+    def result(self, **extra):
+        target = self.expected or '<a conta com escrita no repositório>'
+        result = {'ok': False, 'exitCode': 1, 'reason': self.reason, 'message': str(self), 'login': self.login,
+                  'question': f'Trocar para {target} com `gh auth switch --user {target}` e repetir?',
+                  'options': [f'Trocar para {target} com `gh auth switch --user {target}` e repetir', 'Parar'],
+                  'hint': 'o gh auth switch é do usuário; o script nunca troca a conta'}
+        result.update(extra)
+        return result
+
+
+def gh_json(argv):
+    """`gh <argv>` without a shell, its stdout read as JSON; None when gh fails or answers something else."""
+    try:
+        done = subprocess.run(['gh', *argv], capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              timeout=60, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    try:
+        return json.loads(done.stdout) if done.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+WRITE_PERMISSIONS = ('ADMIN', 'MAINTAIN', 'WRITE')
+
+
+def gh_account(config, gh=None):
+    """Checked before each write through gh, never cached (another session may run `gh auth switch`): the login
+    (`gh api user`), the repository of the current directory and the permission of the login on it
+    (`gh repo view --json nameWithOwner,viewerPermission`) against `config.repository` and, when the config names
+    it, `config.github.account`. Returns {login, repository, permission}; raises AccountMismatch
+    (`account_mismatch` or `repository_mismatch`). `gh` is a callable that answers JSON (or raises)."""
+    gh = gh or gh_json
+    expected_repo = config.get('repository') if isinstance(config, dict) else None
+    github = config.get('github') if isinstance(config, dict) else None
+    expected = github.get('account') if isinstance(github, dict) and isinstance(github.get('account'), str) else None
+    try:
+        user = gh(['api', 'user'])
+        repo = gh(['repo', 'view', '--json', 'nameWithOwner,viewerPermission'])
+    except Exception:  # noqa: BLE001  (a gh that cannot answer is a mismatch to show, never a write)
+        user = repo = None
+    login = user.get('login') if isinstance(user, dict) else None
+    if not isinstance(login, str) or not login:
+        raise AccountMismatch('account_mismatch', 'o gh não disse qual conta está ativa (gh auth status)',
+                              expected=expected)
+    if expected and login.casefold() != expected.casefold():
+        raise AccountMismatch('account_mismatch', f'o gh está na conta {login}, e o config pede {expected}',
+                              login, expected)
+    name = repo.get('nameWithOwner') if isinstance(repo, dict) else None
+    if not isinstance(expected_repo, str) or not isinstance(name, str) or name.casefold() != expected_repo.casefold():
+        raise AccountMismatch('repository_mismatch', f'a pasta atual é do repositório {name or "desconhecido"}, e o '
+                              f'config pede {expected_repo}', login, expected)
+    permission = repo.get('viewerPermission')
+    if permission not in WRITE_PERMISSIONS:
+        shown = permission or 'sem permissão'
+        raise AccountMismatch('account_mismatch', f'a conta {login} não tem escrita em {name} ({shown})',
+                              login, expected)
+    return {'login': login, 'repository': name, 'permission': permission}

@@ -518,20 +518,21 @@ def valid_remote(name):
 def release_defaults(root, numbers, base, remote):
     """(base, remote, prefix) for the release check: the base given, else the `base.branch` of the newest
     authorization record whose `issue_ids` name one of `numbers` (else `main`); the remote given, else `origin`;
-    the `branch_prefix` of the newest record that has a valid one (else `claude/`)."""
-    prefix = None
+    the `branchPrefix` of the config, else the `branch_prefix` of the newest record that has a valid one (the legacy
+    prefix of `_cli.branch_prefix` for a record without it), else None."""
+    prefix = _cli.config_prefix(Path(root) / '.frontlights' / 'config.json')
     for path in reversed(authorization_records(root)):
         data = read_record(path)
         if not isinstance(data, dict):
             continue
-        candidate = data.get('branch_prefix', 'claude/')
+        candidate = _cli.branch_prefix(record=data)[0]
         if prefix is None and isinstance(candidate, str) and candidate.endswith('/') and valid_branch(candidate[:-1]):
             prefix = candidate
         ids = data.get('issue_ids')
         branch = data.get('base', {}).get('branch') if isinstance(data.get('base'), dict) else None
         if (base is None and isinstance(ids, list) and any(n in ids for n in numbers) and valid_branch(branch)):
             base = branch
-    return base or 'main', remote or 'origin', prefix or 'claude/'
+    return base or 'main', remote or 'origin', prefix
 
 
 def release_check(root, numbers, base, remote):
@@ -552,8 +553,8 @@ def release_check(root, numbers, base, remote):
         mapping, _ = homolog.issue_branches(root)
         compared = False
         for number in numbers:
-            branch = mapping.get(number, f'{prefix}issue-{number}')
-            tip = homolog.rev(root, f'refs/heads/{branch}')
+            branch = mapping.get(number, f'{prefix}issue-{number}' if prefix else None)
+            tip = homolog.rev(root, f'refs/heads/{branch}') if branch else None
             if tip is None:
                 continue   # already cleaned up, or never created: the helper cannot tell and does not block
             contained = homolog.ancestry(root, tip, remote_ref)
@@ -1086,8 +1087,10 @@ def save_body(folder, kind, stamp, text):
     raise Refusal(f'tick could not find a free name for body-{kind}-{stamp}.md')
 
 
-def op_tick(config, root, issue, box, line, gh=None, edit=None):
-    """Tick one box of an issue's acceptance criteria and check the reread (see the module's docstring)."""
+def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
+    """Tick one box of an issue's acceptance criteria and check the reread (see the module's docstring). `account`,
+    given by the command line, checks the gh login and repository against the config before anything is read
+    (`_cli.gh_account`: `account_mismatch` or `repository_mismatch`, with the question to ask)."""
     require(isinstance(issue, (str, int)) and NUMBER.fullmatch(str(issue).strip()) and valid_number(int(str(issue).strip())),
             'tick needs one issue number: pass --issue 12')
     number = int(str(issue).strip())
@@ -1101,7 +1104,12 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None):
         require(NUMBER.fullmatch(str(line).strip()) and int(str(line).strip()) > 0,
                 'the line is a positive line number of the body, as in --line 14')
         line = int(str(line).strip())
-    _, repository = load_repository(config)
+    data, repository = load_repository(config)
+    if account is not None:
+        try:
+            account(data)
+        except _cli.AccountMismatch as mismatch:
+            return mismatch.result(repository=repository, issue=number, written=False)
     records = Path(root) / '.frontlights'
     require(records.is_dir(), 'tick keeps the previous body in .frontlights/issues/<n>/ of the project: pass --root, '
                               'the folder that holds .frontlights')
@@ -1186,7 +1194,7 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
             result = op_tick_check(options.get('before'), options.get('after'), options.get('lines'))
         elif operation == 'tick':
             result = op_tick(config, root, options.get('issue'), options.get('box'), options.get('line'), gh,
-                             options.get('edit'))
+                             options.get('edit'), options.get('account'))
         else:
             raise Refusal(f'Unknown operation: {rs.clean(operation, 40)}')
     except (Refusal, ValueError) as error:
@@ -1255,7 +1263,9 @@ def main(argv=None):
                      remote=getattr(args, 'remote', None),
                      before=getattr(args, 'before', None), after=getattr(args, 'after', None),
                      lines=getattr(args, 'lines', None), issue=getattr(args, 'issue', None),
-                     box=getattr(args, 'box', None), line=getattr(args, 'line', None))
+                     box=getattr(args, 'box', None), line=getattr(args, 'line', None),
+                     # checked at every write, never cached: the login and the repository against the config
+                     account=(lambda data: _cli.gh_account(data, rs.gh_default)) if args.operation == 'tick' else None)
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
