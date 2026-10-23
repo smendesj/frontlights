@@ -186,18 +186,14 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, text)
         self.assertNotIn('**Denied operations are asked one at a time.**', text)
         development = flat('skills', 'frontlights', 'references', 'development.md')
+        # redesenho, issue 5: `slice open` corta a branch e devolve o `gh issue develop`; `slice merge` devolve o
+        # push; `homolog merge` grava a operação `merge_into_local_main`. O texto cita os comandos e as regras.
         for phrase in ('`gh issue develop <n> --repo <repo> --base <base> --name <branch_prefix>issue-<n>`',
-                       '`git fetch origin <branch_prefix>issue-<n>`',
-                       '`git worktree add <path> <branch_prefix>issue-<n>`',
-                       'links it to the Development field of the issue',
-                       '`git push origin <branch_prefix>issue-<n>`',
+                       '`frontlights.py slice open --issue <n> --slice S1 [S2 …]`', 'run the push in its `commands`',
                        'the branches of the slices, the preview branch and the local main stay local and are never pushed',
-                       'never a commit that is only in the local main',
-                       'the local main never enters a pushed branch',
                        'writing the remote main (`origin/main`, the base branch on GitHub)',
-                       'the local main is written only by the covered merge',
                        '`gates` `{"browser_gate": "answered"}` (or `not_needed`), the only gate',
-                       '`merge_into_local_main`', 'the session asks the user with `AskUserQuestion` instead of merging'):
+                       'the session asks the user with `AskUserQuestion` instead of merging'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
         for gone in ('pushing the work branches', 'one issue branch and one PR', 'write the base branch',
@@ -215,12 +211,13 @@ class LocalMainTextTests(unittest.TestCase):
         recebe; os merges cobertos, o teste livre, a skill, a segurança, o README, o handoff, o exemplo e a limpeza
         dizem isso."""
         development = flat('skills', 'frontlights', 'references', 'development.md')
+        # redesenho, issue 5: `homolog merge` faz a branch de integração; o texto diz o que ela recebe.
         for phrase in ("a base into an issue's own branch or into its local integration branch "
                        "(`<branch_prefix>issue-<n>-integra`",
                        'the branch of the issue into its local integration branch',
                        'the local integration branch of the issue into the local main',
-                       'brings the branch of the issue and the local main into its integration branch',
-                       'Work without an issue has no integration branch'):
+                       'Merges the branch of the issue and the local main into a local',
+                       'Work without an issue: `git merge main` in its worktree'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
         for gone in ('by steps 1, 4 and 5 of "Into the local main"',
@@ -267,20 +264,23 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(text.index('## Review, checkpoints and renewal'), text.index('## Into the local main'))
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
         body = ' '.join(text.split(LOCAL_MAIN)[1].split(RELEASE)[0].split())
-        for phrase in ('homologation bench', 'refused as the remote main',
-                       '**Bring the local main in, on a local integration branch.**',
-                       '`git worktree add -b <branch_prefix>issue-<n>-integra <path> <branch_prefix>issue-<n>`',
-                       '`{issue: n, path, branch: <branch_prefix>issue-<n>-integra}`', 'local and never pushed',
-                       'The branch of the issue never receives the local main',
+        # redesenho, issue 5: os passos viraram `homolog.py merge`; o texto diz o que o comando faz e o que é da
+        # sessão, e o docstring do homolog.py traz a mecânica.
+        for phrase in ('homologation bench', 'refuses `origin/main` as the remote main', '`homolog.py merge --issue <n>`',
+                       '**Record it.**', 'the branch of the issue never receives the local main',
                        '`git merge main`', 'The watched run is the only gate of stage 6: no impact suite and no '
                        'review is required.', '**The gate, the watched run.**', '**The check and the merge.**',
-                       '`merge_into_local_main`',
-                       '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>-integra`',
-                       'it never edits the gates to make them pass', '**Record it.**', '"Merge na main local"',
+                       'it never edits the gates to make them pass', '"Merge na main local"',
                        '**Without a screen, the walkthroughs.**', 'running the walkthrough of each box',
-                       'a preflight, not a barrier', 'it reads no Git'):
+                       'a preflight, not a barrier'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ('cuts `<prefix>issue-<n>-integra` from the branch of the issue (its own charter entry, local, '
+                       'never pushed)', 'runs `authorize`, `git merge --no-ff` of the integration branch into the local '
+                       'base', 'Never pushes, never --force, reset or rebase.'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
         for gone in ('**Gate 1, the impact suite.**', '**Gate 2, the review.**', 'The whole suite waits for the release.',
                      '`full_suite`', '**Bring the local main in first.**', 'the branch of the issue holds the local main',
                      'is not pushed after step 1', "In the issue's worktree, `git merge main`"):
@@ -395,18 +395,19 @@ class LocalMainTextTests(unittest.TestCase):
         heading = '\n## The start of stage 6\n'
         self.assertLess(text.index(heading), text.index('## Slices in order'))
         body = ' '.join(text.split(heading)[1].split('## Slices in order')[0].split())
-        for phrase in ('`homolog sync --root <main worktree> --base <base>', 'never pushes',
+        # redesenho, issue 5: a mecânica do sync (fetch, merge, abort) vive no docstring do homolog.py.
+        for phrase in ('`homolog sync` is the covered merge of `origin/<base>` into the local main',
                        '"Resolver o conflito agora na worktree principal"', '"Seguir sem sincronizar"',
-                       '`scripts/homolog.py`', 'exit code 0 done, 1 refused or failed, 2 a question for the user',
-                       'The local main is never pushed to the remote main: its content leaves only under the release '
-                       'branch name, by the refspec push of the release ("The release", below), and `origin/<base>` '
-                       'stays a denied write.',
-                       '**The sync.**', 'is the covered merge of `origin/<base>` into the local main',
-                       'no tracked change pending and no merge in progress',
-                       '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
+                       'The local main is never pushed to the remote main: its content leaves only by the refspec push '
+                       'of the release.',
                        'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ('`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', 'A conflict is aborted at once',
+                       'It never pushes'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
         for gone in ('**The hook.**', 'pre-push', '"Sim, instalar"', '`--no-verify`'):
             with self.subTest(file='development.md', gone=gone):
                 self.assertNotIn(gone, ' '.join(text.split()))
@@ -437,13 +438,15 @@ class LocalMainTextTests(unittest.TestCase):
         text = read('skills', 'frontlights', 'references', 'development.md')
         body = ' '.join(text.split(LOCAL_MAIN)[1].split(RELEASE)[0].split())
         self.assertLess(body.index('4. **The check and the merge.**'), body.index('5. **Back it up.**'))
-        for phrase in ('5. **Back it up.**', 'homolog bundle --root <main worktree> --config',
-                       'the only write the run makes outside the project, and only into that folder',
-                       '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
-                       '`configured: false`', 'name the key, ask nothing and go on', '6. **Record it.**',
-                       '"sem backup configurado"'):
+        # redesenho, issue 5: `homolog merge` roda o bundle; a pasta, o verify e o "nunca apaga" vivem no docstring.
+        for phrase in ('5. **Back it up.**', '`homolog bundle`', '`configured: false`', '"sem backup configurado"'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ('`homolog.backupDir`', '`git bundle verify` must accept the file',
+                       'nothing is ever overwritten or deleted'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('**Backup da main local (`homolog bundle`).**', 'a única gravação da execução fora do projeto',
                        'o utilitário nunca a cria', 'nunca se sobrescreve nem se apaga um bundle', 'não há rede',
@@ -461,24 +464,23 @@ class LocalMainTextTests(unittest.TestCase):
     def test_the_bundle_follows_the_prefixes_of_the_records(self):
         """Issue 44, S1: o backup leva as branches de todo `branch_prefix` dos registros, sem `--prefix` na chamada."""
         step = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ('the local main and the work branches of every `branch_prefix` in the authorization records '
-                       '(`.frontlights/authorization*.json`; `claude/` when there is none',
-                       '`--prefix` names one prefix alone', '`prefixes`, `prefixSource` and `skipped`'):
-            with self.subTest(file='development.md', phrase=phrase):
-                self.assertIn(phrase, step)
+        # redesenho, issue 5: os prefixos do bundle saíram de development.md; vivem no docstring do homolog.py.
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ('every `branch_prefix` of the valid `.frontlights/authorization*.json`',
+                       'The prefixes are `--prefix` alone when given', '`prefixes` and `prefixSource`', '`skipped` counts'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
         self.assertNotIn('the local main and every branch under the `branch_prefix`', step)
         self.assertIn('das branches de trabalho de todo prefixo dos registros de autorização', flat('README.md'))
 
     def test_the_release_name_follows_the_newest_record(self):
         """Issue 44, S2: o nome da release usa o prefixo do registro de autorização mais recente, sem `--prefix`."""
-        release = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ("the prefix of the newest authorization record by `issued_at` (records without a valid `issued_at` "
-                       "rank below those with one, and ties go to the last file name; `claude/` when there is none; "
-                       "`--prefix` names it alone", '`prefix` and `prefixSource` say which'):
-            with self.subTest(file='development.md', phrase=phrase):
+        # redesenho, issue 5: o nome da release vem de `release plan`; a regra vive no docstring do homolog.py.
+        release = ' '.join(homolog.__doc__.split())
+        for phrase in ('the `branch_prefix` of the record with the newest `issued_at`, a record without a valid instant '
+                       'ranking last', '`prefix` and `prefixSource`'):
+            with self.subTest(file='homolog.py', phrase=phrase):
                 self.assertIn(phrase, release)
-        self.assertIn('records without a valid `issued_at` rank below those with one', release)
-        self.assertIn('say in one line how many records `skipped` counts', release)
         for file in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
             with self.subTest(file=file[-1]):
                 text = flat(*file)
@@ -504,50 +506,36 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertIn(RELEASE + '\nFrom the local main to GitHub.', text)
         self.assertIn('## Integrating a family before the local main', text)
         body = ' '.join(text.split(RELEASE)[1].split())
-        for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
+        # redesenho, issue 5: a release virou `homolog.py release plan|body-check|go|status|landed`; o push por
+        # refspec, o caminho antigo, o monitor e o pull pós-merge vivem no docstring do homolog.py.
+        for phrase in ('**Plan it.**', '`homolog.py release plan`', '**Offer it.**',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
-                       '**Branch and pull request (covered).**', '`git push origin main:refs/heads/<release branch>`',
-                       'never to the remote main, and no local release branch is created',
-                       '**When the host refuses the refspec push.**',
-                       'the old path: `git branch <release branch> <base>` and `git push -u origin <release branch>`',
-                       'the cleanup removes that local branch once it is merged (`references/closeout.md`, step 5)',
-                       '**`Closes #n` only from `closes`.**', '**Wait for the merge.**', '**Offer the merge when the PR is ready.**',
-                       '**What wakes the session.**', '**What counts as merged.**', '**At the merge.**',
-                       '`git pull --ff-only origin <base>`', '**Other work goes on.**',
+                       'The body follows `templates/pr.md`', '`release body-check`',
+                       '**Branch and pull request (covered).**', '`release go --body <file>` prints the refspec push',
+                       '"Lançar pelo caminho antigo, com a branch local <release branch>?"', '`--legacy-branch`',
+                       '**`Closes #n` only from `closes`.**', '**Wait for the merge.**',
+                       '**Offer the merge when the PR is ready.**', '**At the merge.**', '`release landed`',
+                       'act only on `release status`',
                        'No suite is required for the release (no whole check is: the watched run of each issue is its '
-                       'evidence)',
-                       'the whole suite on the local main (`homolog suite --release --mode full`, judged by `homolog '
-                       'suite-gate --release`) runs only when the user asks for it, and a red one is then a finding '
-                       'with a destination by the ladder',
-                       "The release's pull request is ready when the watched run of every issue in it is recorded "
-                       '(answered or not needed), the pull request has no conflict with the base and no finding lacks '
-                       'a destination.',
-                       'Another issue entering the local main does not make the pull request unready.'):
+                       'evidence)'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
-        self.assertLess(body.index('`git push origin main:refs/heads/<release branch>`'),
-                        body.index('**When the host refuses the refspec push.**'))
-        self.assertLess(body.index('**When the host refuses the refspec push.**'),
-                        body.index('`git push -u origin <release branch>`'))
         whole = ' '.join(text.split())
         for never in ('main:main', 'main:refs/heads/main', 'git push origin main`', 'git push origin <base>',
                       'git push origin HEAD', 'git push -u origin main', 'git push origin origin/'):
             with self.subTest(never=never):
                 self.assertNotIn(never, whole)
-        start = whole.find('git push origin main')
-        self.assertNotEqual(start, -1)
-        while start != -1:
-            with self.subTest(at=start):
-                self.assertTrue(whole.startswith('git push origin main:refs/heads/<release branch>', start),
-                                whole[start:start + 60])
-            start = whole.find('git push origin main', start + 1)
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ('prints the argv of `git push <remote> <base>:refs/heads/<release>` and of `gh pr create`',
+                       '`--legacy-branch` only with `--answer Sim`', '`git pull --ff-only` (not a fast-forward: exit 2, '
+                       'stop and ask, never reset)', 'It never pushes, never creates nor merges a pull request.'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
         for gone in ('**Run the whole suite on the local main.**', '`fullSuite` must be `current`',
                      'the whole suite of the release is green at the tip the release branch was cut from'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, body)
-        self.assertNotIn('recordedHead', body.split('**Offer the merge when the PR is ready.**')[1].split('**What wakes')[0])
         self.assertNotIn('run the full relevant suite', ' '.join(text.split()))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         for phrase in ('| Release |', 'A release é oferecida ao fim de cada issue homologada',
@@ -591,20 +579,20 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertLess(text.index(local), text.index(free))
         self.assertLess(text.index(free), text.index(release))
         body = ' '.join(text.split(free)[1].split(release)[0].split())
+        # redesenho, issue 5: `serve.py free-test start|stop` abre e fecha a janela; o texto diz quando e o que é da
+        # sessão.
         for phrase in ('In an issue whose `browser-gate` was `answered`', 'without a question',
-                       'the window, the login, the strip and the holder are in `references/browser-testing.md`, '
-                       '"The free test window"',
-                       'served from the main worktree, on the local main, on the local development database',
+                       '`serve.py free-test start --issue <n>`', '(`references/browser-testing.md`, "The free test window")',
+                       'a window on the local main and the local development database (the homologation one)',
                        'The user leads', 'One free test per homologated issue',
                        "the next issue's free test covers everything accumulated in the local main",
-                       'Closing the window right away is how the user skips it',
-                       'stops what it started for the free test (`serve stop` on the main worktree, "The free test window")',
+                       'Closing the window right away is how the user skips it', '`serve.py free-test stop`',
                        'the release question comes only after the window is closed'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         offer = ' '.join(text.split(release)[1].split('- **Plan it.**')[0].split())
         self.assertIn('offered by the session at the end of each homologated issue, once the window of its free test '
-                      'is closed ("The free test on the local main", above)', offer)
+                      'is closed', offer)
         self.assertNotIn('right after the merge into the local main and the bundle', offer)
         skill = stage(6)
         # redesenho, issue 3: os passos 6 a 8 viraram orações com o comando e o ponteiro, na mesma ordem.
@@ -633,18 +621,13 @@ class LocalMainTextTests(unittest.TestCase):
         free, release = '## The free test on the local main', RELEASE
         body = ' '.join(text.split(free)[1].split(release)[0].split())
         fix = body.split('- **A fix asked in the free test.**')[1].split('- **Window closed, next step.**')[0]
-        for phrase in ('fixes it at once on the branch of the issue',
-                       'or in a new slice worktree of that issue ("Slices in order", above)',
-                       'TDD by default ("Which tests run when", above)',
-                       'pushes the branch of the issue again (covered)',
-                       'merges that branch into the local main again by steps 4 and 5 of "Into the local main"',
-                       'the `authorize` check included',
+        # redesenho, issue 5: o novo merge é `homolog.py merge --free-test-fix`, e `free-test start` cria o rascunho.
+        for phrase in ('Fix it at once on the branch of the issue', 'TDD by default', 'push it (covered)',
+                       '`homolog.py merge --issue <n> --free-test-fix`',
                        'the free test itself is the evidence of the fix, and the watched run is not rerun',
-                       'the user reloads the page', 'the window stays open',
-                       '`.frontlights/issues/<n>/teste-livre-cas.md`', 'one box per fix',
-                       'ticked (`- [x]`) only when the user checked the fix in the free test',
-                       'open (`- [ ]`) otherwise',
-                       'leftover boxes (`references/issues.md`, "A leftover as an acceptance criterion")'):
+                       'the user reloads the page and the window stays open', 'Each fix is a box of `teste-livre-cas.md`',
+                       'a leftover box (`references/issues.md`, "A leftover as an acceptance criterion")',
+                       'ticked only when the user checked it', 'otherwise with `Evidência que fecha:`'):
             with self.subTest(part='fix', phrase=phrase):
                 self.assertIn(phrase, fix)
         closed = body.split('- **Window closed, next step.**')[1]
@@ -657,7 +640,7 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(part='closed', phrase=phrase):
                 self.assertIn(phrase, closed)
         self.assertLess(closed.index('With fixes, the batch before the release'),
-                        closed.index('Only then it goes on to "The release"'))
+                        closed.index('Without fixes, the release comes directly'))
         self.assertEqual(' '.join(text.split()).count('teste-livre-cas.md'), 1)
         self.assertNotIn('Lançar a release', body)
 
@@ -677,23 +660,17 @@ class LocalMainTextTests(unittest.TestCase):
         free, release = '## The free test on the local main', RELEASE
         body = ' '.join(text.split(free)[1].split(release)[0].split())
         terminal = body.split('- **Without a screen, in the terminal.**')[1].split('- **')[0]
-        for phrase in ('In an issue whose `browser-gate` said `not_needed`', 'no window opens and no product is served',
-                       'right after the merge into the local main and the bundle',
-                       "in one line, in the user's language, that the local main is ready for the user to try",
-                       'each in its own code block', "the charter's `verification_commands` or what `inspect` reports",
-                       'never a secret', f'asks with `AskUserQuestion` "{question}"',
-                       '"Sim, terminei" first', '"Ainda testando" leaves the question pending',
-                       'asks it again when the user comes back', 'never answers it for the user',
-                       'Only after "Sim, terminei"', 'follows "A fix asked in the free test", below'):
+        # redesenho, issue 5: `serve.py free-test commands` dá os comandos de verificação do charter.
+        for phrase in ('When `browser-gate` said `not_needed`', 'no window opens and no product is served',
+                       'the commands of `serve.py free-test commands`', 'each in its own code block',
+                       f'"{question}"', '"Sim, terminei" first', '"Ainda testando", which leaves it pending',
+                       'never answer it for the user'):
             with self.subTest(part='terminal', phrase=phrase):
                 self.assertIn(phrase, terminal)
         self.assertLess(body.index('- **Without a screen, in the terminal.**'),
                         body.index('- **A fix asked in the free test.**'))
         closed = body.split('- **Window closed, next step.**')[1]
-        for phrase in ("without a screen, the user's \"Sim, terminei\" in its place",
-                       'without a screen, only after "Sim, terminei"'):
-            with self.subTest(part='closed', phrase=phrase):
-                self.assertIn(phrase, closed)
+        self.assertIn('On the holder\'s exit (or "Sim, terminei")', closed)
         # redesenho, issue 3: o teste livre sem tela saiu da etapa 6; vive em development.md (fixado acima), para
         # onde a etapa aponta.
         self.assertIn('`serve.py free-test start` ("The free test on the local main")', stage(6))

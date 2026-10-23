@@ -16,7 +16,8 @@ SKILL = ROOT / 'skills' / 'frontlights'
 
 SLACK = 1.10
 
-# contagem de 23/10/2026 (integração do redesenho, issue 3); só desce
+# contagem de 23/10/2026 (integração do redesenho, issue 3; development.md, tdd.md, worker.md e family.md pela
+# issue 5); só desce
 BUDGET = {
     'SKILL.md': 1800,
     'docs/protocol.md': 6611,
@@ -24,7 +25,7 @@ BUDGET = {
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
-    'references/development.md': 11294,
+    'references/development.md': 6063,
     'references/grilling.md': 2871,
     'references/issue.md': 596,
     'references/issues.md': 6063,

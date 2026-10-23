@@ -119,9 +119,9 @@ class PullRequestTemplateTests(unittest.TestCase):
                        'ficam quando estas orientações são apagadas', 'com `closes` vazio, apague a linha-modelo'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
+        # redesenho, issue 5: o lugar das linhas é do modelo, conferido por `release body-check`.
         release = flat(read('skills', 'frontlights', 'references', 'development.md').split(RELEASE)[1])
-        self.assertIn('right before `## Resumo`, plain lines outside any code fence, the place `templates/pr.md` fixes',
-                      release)
+        self.assertIn('checked by `release body-check`', release)
 
     def test_a_finding_never_has_the_body_as_destination(self):
         self.assertIn('o corpo da PR nunca é destino de um achado', self.flat)
@@ -214,26 +214,25 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
         self.assertIn('The body follows `templates/pr.md` (the model of the pull request)', self.release)
         self.assertNotIn('`templates/pr.md` when it exists', self.release)
 
+    # redesenho, issue 5: development.md aponta o modelo, e `release body-check` confere o corpo contra ele; o que o
+    # Resumo, a Evidência e o Risco do merge levam vive só em templates/pr.md (fixado nos testes do modelo, acima).
     def test_summary_and_evidence_per_issue_and_one_consolidated_risk(self):
-        for phrase in ('**Resumo** and **Evidência** once per issue', 'the smallest visual that makes its point clear',
-                       '**Risco do merge** once, consolidated for the whole release',
-                       'a one-way door when a migration or deleted data is in it'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.release)
+        self.assertIn('checked by `release body-check`', self.release)
+        template = flat(read('skills', 'frontlights', 'templates', 'pr.md'))
+        for phrase in ('## Resumo', '## Evidência', '## Risco do merge', 'o menor visual que deixa o ponto claro'):
+            with self.subTest(file='pr.md', phrase=phrase):
+                self.assertIn(phrase, template)
 
     def test_the_evidence_points_to_the_records_of_each_issue(self):
-        for phrase in ("the prints of each issue's watched run", 'the tests of its checkpoints',
-                       'its gate (the watched run)', 'records that already exist, never invented'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.release)
+        template = flat(read('skills', 'frontlights', 'templates', 'pr.md'))
+        for phrase in ('A evidência só aponta registros que já existem', 'A sessão nunca inventa evidência'):
+            with self.subTest(file='pr.md', phrase=phrase):
+                self.assertIn(phrase, template)
 
     def test_prints_door_and_language_say_the_same_as_the_template(self):
-        for phrase in ("a print is cited by its file name and its folder in the issue's worktree (the lead issue's for a family)",
-                       "never an absolute path, an attached or committed image, a login or a person's data",
-                       'a one-way door when a migration or deleted data is in it, a two-way door otherwise',
-                       "in the user's language, with the project's domain vocabulary"):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, self.release)
+        self.assertIn('never an absolute path, an attached image, a login or a person\'s data', self.release)
+        template = flat(read('skills', 'frontlights', 'templates', 'pr.md'))
+        self.assertIn('nunca caminho absoluto, imagem anexada ou commitada, login ou dado de pessoa', template)
         runbook = flat(read('evals', 'runbook.md'))
         self.assertIn('a one-way door when a migration or deleted data is in it, a two-way door otherwise', runbook)
         self.assertNotIn('a one-way door only with', runbook)
@@ -241,7 +240,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
 
     def test_closes_only_from_the_list_and_no_finding_in_the_body(self):
         for phrase in ('**`Closes #n` only from `closes`.**', 'copied from that list, never counted by hand',
-                       'without a closing keyword (`Closes`, `Fixes`, `Resolves` or a variant of them)',
+                       'cited by number without a closing keyword',
                        'the body of the pull request is never the destination of a finding'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.release)
@@ -252,7 +251,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
         self.assertIn('`release landed` ("The release")', stage6)
         release = flat(read('skills', 'frontlights', 'references', 'development.md').split(RELEASE)[1])
         for phrase in ('The body follows `templates/pr.md`', '**Resumo** and **Evidência** once per issue',
-                       '**Risco do merge**', '**`Closes #n` only from `closes`.**'):
+                       '**Risco do merge** once for the release', '**`Closes #n` only from `closes`.**'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, release)
         self.assertNotIn('`templates/pr.md` when it exists', stage6)

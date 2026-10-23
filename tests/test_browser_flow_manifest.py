@@ -120,6 +120,10 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 # redesenho, issue 3: a etapa 6 cita os comandos entregues `serve.py window brief` e
                 # `serve.py free-test start`; nenhum outro verbo do `serve.py` sai da referência.
                 text = text.replace('`serve.py window brief`', '').replace('`serve.py free-test start`', '')
+            else:
+                # redesenho, issue 5: development.md cita o teste livre entregue (`serve.py free-test`); a janela do
+                # teste assistido continua só na referência do navegador.
+                text = re.sub(r'`serve\.py free-test (?:start|stop|commands)(?: --issue <n>)?`', '', text)
             with self.subTest(file=name):
                 self.assertNotIn('serve.py', text)
                 self.assertNotIn('checks.py', text)

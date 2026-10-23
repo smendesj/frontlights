@@ -15,6 +15,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import skilltext
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
+import homolog  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
 
@@ -39,57 +42,56 @@ class WaitTests(unittest.TestCase):
         self.wait = ' '.join(section(text, 'The release').split())
 
     def test_the_wait_is_the_default_and_the_user_can_end_it(self):
-        for phrase in ("By default, as soon as the release's pull request is open, the session waits for the user's merge",
-                       '"não aguardar"', 'the closeout question of the next session picks the work up',
-                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
-                       'the release branch and the branch of each issue are the only branches of the flow that are pushed'):
+        # redesenho, issue 5: a release virou `homolog.py release`; a espera é pelo `release status`.
+        for phrase in ("The merge is the user's step", '"não aguardar"',
+                       'the closeout question of the next session picks the work up',
+                       '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
     def test_it_is_said_to_the_user_and_recorded_in_the_handoff(self):
-        for phrase in ('One line to the user, in their language', 'the `Release` line', 'head and base branch',
-                       'the approved base'):
+        for phrase in ('One line to the user says which pull request the session waits for', "the handoff's `Release` line"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
     def test_only_the_closes_of_the_release_plan_carry_a_closing_keyword(self):
         """Issue 63, S3: `Closes #n` só para as issues do `closes` do `release-plan`; as outras sem palavra."""
-        for phrase in ('one `Closes #n` line per issue of the `closes` of the last `release-plan`, copied from that list, '
-                       'never counted by hand',
-                       'is cited by number without a closing keyword (`Closes`, `Fixes`, `Resolves` or a variant of them), '
-                       'in the body and in the commits, and follows the closing question of stage 7',
+        # redesenho, issue 5: `release body-check` confere as linhas contra o `closes`.
+        for phrase in ('One line per issue of `closes`, copied from that list, never counted by hand',
+                       'every other issue is cited by number without a closing keyword, in the body and in the commits',
                        'The merge itself stays a denied operation'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
 
     def test_the_notification_is_only_a_trigger_and_merge_status_decides(self):
-        for phrase in ('Either is only a trigger', 'run `merge-status` and act only on its answer, never on the notification',
-                       'may not report a merge at all, so the monitor is the dependable trigger',
-                       'prints one short line only when the set of `ready` or `settled` PRs changes',
-                       '`${CLAUDE_SKILL_DIR}` may be unset in a background shell', 'The user can also say "mesclei"',
-                       'closeout.py" merge-status --config <config> --prs <n> --base <approved base>',
-                       'the same GitHub account as the session\'s `gh`',
-                       'When the host offers neither, say so in the handoff and stop waiting'):
+        # redesenho, issue 5: o monitor é o `release status --since --quiet`, que acorda a sessão uma vez.
+        for phrase in ('A background monitor runs `release status --since <state> --quiet` and wakes the session once',
+                       'act only on `release status`', '"mesclei" runs it at once'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
+        doc = ' '.join(homolog.__doc__.split())
+        for phrase in ("`status` reads the PR through closeout's `merge-status`", '`blocked` never offers the merge',
+                       'the until-loop of the monitor wakes the session once'):
+            with self.subTest(file='homolog.py', phrase=phrase):
+                self.assertIn(phrase, doc)
 
     def test_only_a_merge_into_the_approved_base_counts(self):
-        for phrase in ('`ready` lists the PRs merged into the approved base',
-                       'A PR merged into another branch, closed without a merge, or not found is never ready',
-                       '`git pull --ff-only origin <base>`', 'if it does not fast-forward, stop and ask instead of merging or resetting',
-                       '`contained_in_base_without_pull_request`'):
+        for phrase in ('A PR merged into another branch, closed without a merge, or not found is never ready',
+                       '`release landed` pulls the local main',
+                       'if it does not fast-forward, stop and ask instead of merging or resetting'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
+        self.assertIn('`git pull --ff-only` (not a fast-forward: exit 2, stop and ask, never reset)',
+                      ' '.join(homolog.__doc__.split()))
 
     def test_the_merge_leads_to_the_cleanup_first_then_the_closing_approval_and_independent_work_goes_on(self):
-        for phrase in ('first the cleanup of the merged work (step 5), without approval and before any closing question',
-                       '`git fetch --prune`, the records of each worktree copied to the main worktree, the worktrees and the local branches of the issues, the slices and the merged release removed',
-                       'then `closeout.py verify --issues <closes>` only confirms the issues of `closes` (closed by the '
-                       'merge), and the closing of the rest (with the tick in a parent, for a sub-issue) has its own approval',
-                       'An issue whose criteria are not all ticked is not offered: say which are left, and tick only what the evidence supports',
+        # redesenho, issue 5: `release landed` lista a limpeza e o `closeout verify`; a ordem vive em closeout.md.
+        for phrase in ('lists the cleanup of `references/closeout.md`, step 5, run without a question',
                        'The wait never blocks independent issues'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.wait)
+        self.assertIn('the `cleanup plan` of the issues of the release, its `commands` and the `closeout verify` left to run',
+                      ' '.join(homolog.__doc__.split()))
 
     def test_the_stacking_rule_points_to_the_wait_and_the_skill_states_it_in_stage_six(self):
         self.assertIn('the family enters the local main as one', flat('skills', 'frontlights', 'references', 'development.md'))
@@ -103,7 +105,7 @@ class WaitTests(unittest.TestCase):
         for phrase in ('From the local main to GitHub.',
                        'offered by the session at the end of each homologated issue',
                        '"Lançar a release com as issues #a, #b agora?"', '**`Closes #n` only from `closes`.**',
-                       '"Mesclar a PR #<n> em <base>?"', '`git pull --ff-only origin <base>`',
+                       '"Mesclar a PR #<n> em <base>?"', '`release landed`',
                        'A PR merged into another branch, closed without a merge, or not found is never ready',
                        'offers the release again with everything accumulated'):
             with self.subTest(file='development.md', phrase=phrase):

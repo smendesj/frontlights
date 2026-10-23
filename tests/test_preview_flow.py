@@ -61,10 +61,9 @@ class PreviewInTheFlowTests(unittest.TestCase):
                        'stops only when the user asks', 'without the block, nothing of this runs'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, start)
+        # redesenho, issue 5: `slice merge` refaz a prévia depois do merge da slice (`frontlights.refresh_preview`).
         slices = between(development, '## Slices in order', '## Dispatch and ownership')
-        self.assertIn('then `serve preview refresh` with the branches of the issues in progress', slices)
-        self.assertLess(slices.index('the slice branch is merged into the branch of the issue'),
-                        slices.index('then `serve preview refresh`'))
+        self.assertIn('then the slice is merged into the branch of the issue and the preview refreshed', slices)
 
     def test_the_watched_run_order_never_stops_the_preview_and_its_tab_is_the_users(self):
         reference = read('skills', 'frontlights', 'references', 'browser-testing.md')
@@ -100,13 +99,16 @@ class PreviewInTheFlowTests(unittest.TestCase):
         """Revisão da issue 34 (M3): a lista de --branch vem dos registros de autorização e do que a prévia já tem."""
         development = between(read('skills', 'frontlights', 'references', 'development.md'),
                               '## The start of stage 6', '## Slices in order')
+        # redesenho, issue 5: a lista vem de `frontlights.preview_branches`, a mesma que `slice merge` usa.
+        self.assertIn('(the list `slice merge` builds)', development)
+        self.assertIn("never takes another issue's work in progress out of the preview", development)
+        source = ' '.join(read('skills', 'frontlights', 'scripts', 'frontlights.py').split())
+        for phrase in ('the branch of every issue (and work without an issue) of the authorization records, plus the '
+                       "`merged` of the preview's record, minus each one the local main already holds",
+                       'and only those that exist locally', 'every issue in progress stays in the preview'):
+            with self.subTest(file='frontlights.py', phrase=phrase):
+                self.assertIn(phrase, source)
         for name, text in (('development.md', development),):
-            for phrase in ('`.frontlights/authorization*.json`', 'whose issue is not closed', 'slice branches',
-                           'the `merged` of `serve preview status`', '`git merge-base --is-ancestor <branch> main`',
-                           "never takes another issue's work in progress out of the preview",
-                           'only those that exist locally (`git rev-parse --verify --quiet refs/heads/<branch>`)'):
-                with self.subTest(file=name, phrase=phrase):
-                    self.assertIn(phrase, text)
             for stale in ('none yet', 'none at the very start'):
                 with self.subTest(file=name, stale=stale):
                     self.assertNotIn(stale, text)
@@ -119,9 +121,7 @@ class PreviewPortRulesTextTests(unittest.TestCase):
     def test_every_list_of_preview_refusals_names_the_port_placeholder_of_a_process(self):
         sources = {
             'serve.py': (read('skills', 'frontlights', 'scripts', 'serve.py'), 'no `{port}` in the `argv` or the `cwd` of a process'),
-            # issue 8: the preview left browser-testing.md for development.md, "The start of stage 6"
-            'development.md': (read('skills', 'frontlights', 'references', 'development.md'),
-                               'no `{port}` in the `argv` or the `cwd` of its processes'),
+            # redesenho, issue 5: development.md não repete as recusas da prévia; o `inspect` e o serve as aplicam.
             'README.md': (read('README.md'), '`{port}` no argv ou no `cwd` dos processos dela'),
             'security.md': (read('skills', 'frontlights', 'docs', 'security.md'), 'sem `{port}` no argv nem no `cwd`'),
         }
