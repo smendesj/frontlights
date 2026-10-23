@@ -878,10 +878,8 @@ class ParallelSuiteTextTests(unittest.TestCase):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
         self.assertIn('`homolog suite --mode impact|full`, judged by `homolog suite-gate`', text)
-        readme = flat('README.md')
-        for phrase in ('A suíte rápida roda por `python tests/suite.py`', '`--report <arquivo>` grava um JSON'):
-            with self.subTest(file='README.md', phrase=phrase):
-                self.assertIn(phrase, readme)
+        # issue 12 do redesenho: o README virou guia curto; o runner fica no registro de aceite
+        self.assertIn('A suíte rápida roda por `python tests/suite.py`', flat('docs', 'acceptance.md'))
 
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')
