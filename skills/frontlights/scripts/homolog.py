@@ -1889,7 +1889,8 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
     release_branch = current.get('branch')
     if pruned and release_branch and rev(root, f'refs/remotes/{remote}/{release_branch}'):
         # the repository does not delete the head branch on merge: its removal is covered cleanup of the release
-        commands.append(['git', '-C', str(root), 'push', remote, '--delete', release_branch])
+        commands.append({'kind': 'delete_remote_branch', 'item': release_branch,
+                         'argv': ['git', '-C', str(root), 'push', remote, '--delete', release_branch]})
     return {'exitCode': 0, 'pr': current['pr'], 'before': before, 'after': landed['after'], 'pruned': pruned,
             'cleanup': plan, 'commands': commands,
             'verify': verify if current.get('closes') else None,

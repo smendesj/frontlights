@@ -199,8 +199,8 @@ class StatusTests(ReleaseCase):
 
 class LandedTests(ReleaseCase):
     def land(self, **options):
-        options.setdefault('planner', lambda root, config, issues, base: {'commands': [['git', 'worktree', 'remove',
-                                                                                       'x']], 'issues': issues})
+        options.setdefault('planner', lambda root, config, issues, base: {'commands': [
+            {'kind': 'remove_worktree', 'item': 12, 'argv': ['git', 'worktree', 'remove', 'x']}], 'issues': issues})
         return self.release('landed', **options)
 
     def test_landed_waits_for_the_merge(self):
@@ -214,7 +214,7 @@ class LandedTests(ReleaseCase):
         self.gh.pull_requests = {77: pr(77, state='MERGED')}
         result = self.land()
         self.assertEqual(result['exitCode'], 0, result)
-        self.assertEqual(result['commands'], [['git', 'worktree', 'remove', 'x']])
+        self.assertEqual([c['argv'] for c in result['commands']], [['git', 'worktree', 'remove', 'x']])
         self.assertEqual(result['verify'][-2:], ['--issues', '12'])
         release = self.root / '.frontlights' / 'release'
         self.assertFalse((release / 'current.json').exists())
@@ -228,7 +228,13 @@ class LandedTests(ReleaseCase):
         self.gh.pull_requests = {77: pr(77, state='MERGED')}
         result = self.land()
         self.assertEqual(result['exitCode'], 0, result)
-        self.assertEqual(result['commands'][-1], ['git', '-C', str(self.root), 'push', 'origin', '--delete', name])
+        self.assertEqual(result['commands'][-1], {'kind': 'delete_remote_branch', 'item': name,
+                                                  'argv': ['git', '-C', str(self.root), 'push', 'origin', '--delete',
+                                                           name]})
+        # one format only: every item of `commands` is {kind, argv}, as the cleanup plan writes them
+        for command in result['commands']:
+            self.assertIsInstance(command, dict, command)
+            self.assertTrue({'kind', 'argv'} <= set(command), command)
 
     def test_a_pull_that_does_not_fast_forward_stops_and_asks(self):
         self.go_and_record()
