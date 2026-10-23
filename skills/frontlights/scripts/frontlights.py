@@ -947,11 +947,16 @@ def checkpoint_candidates(tree, main, number, slice_id=None):
             folders.append(Path(entry['path']))
     seen, found = set(), []
     for folder in folders:
-        path = checkpoint_file(folder, number, slice_id)
-        key = os.path.normcase(str(path.resolve())) if path.is_file() else None
-        if key and key not in seen:
-            seen.add(key)
-            found.append(path)
+        # By the issue alone (the next window only knows "retome a issue #n") a slice checkpoint counts too, and
+        # `latest_checkpoint` picks the most recent; with --slice only that slice's file.
+        paths = [checkpoint_file(folder, number, slice_id)]
+        if slice_id is None:
+            paths += sorted(checkpoint_file(folder, number).parent.glob('checkpoint-*.json'))
+        for path in paths:
+            key = os.path.normcase(str(path.resolve())) if path.is_file() else None
+            if key and key not in seen:
+                seen.add(key)
+                found.append(path)
     return found
 
 

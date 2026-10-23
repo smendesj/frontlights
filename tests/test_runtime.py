@@ -959,6 +959,15 @@ class WindowBoundaryTests(unittest.TestCase):
         self.assertEqual(resumed['next_step'], 'etapa 6, S1')
         self.assertEqual(resumed['window']['command'], 'serve.py window attach --issue 7')
 
+    def test_resume_by_the_issue_alone_finds_a_slice_checkpoint(self):
+        # Teste com um clone real (23/10/2026): a janela nova só sabe "retome a issue #n", e o checkpoint da fronteira
+        # de slice é checkpoint-S2.json; sem --slice o resume procurava só checkpoint.json e parava.
+        self.handoff.write_text('# Passagem\n', encoding='utf-8')
+        frontlights.checkpoint_cli('7', str(self.tree), None, 'etapa 6, S3', ['teste_assistido'], 'S2',
+                                   gh=self.gh, main=str(self.main))
+        resumed = frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main))
+        self.assertEqual((resumed['next_step'], resumed['slice']), ('etapa 6, S3', 'S2'))
+
     def test_without_any_checkpoint_resume_names_where_it_looked(self):
         with self.assertRaisesRegex(ValueError, 'sem checkpoint da issue #7'):
             frontlights.resume_cli('7', str(self.main), None, None, gh=self.gh, main=str(self.main))
