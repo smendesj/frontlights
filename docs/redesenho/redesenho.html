@@ -213,7 +213,7 @@ flowchart TB
     B0["frontlights.py charter (ownership, prefixo do config)"] --> B1
     B1["slice open S1 S2 S3 → uma worktree por slice<br/>implementers em paralelo, brief por ponteiro (worker.md, tdd.md, notes/)"] --> B2
     B2["slice merge S‹k› → rerroda os testes, merge --no-ff na branch da issue<br/>ANTES do critério já capturado na janela aberta"] --> B3
-    B3["Chrome DEPOIS (faixa 'DEPOIS: branch') → prints depois-*<br/>3 perguntas: Aprovado · Quero alterações · Ainda não<br/>browser-gate --answer grava o registro"] --> B4
+    B3["Chrome DEPOIS (faixa 'DEPOIS: branch') → prints depois-*<br/>opções ao fim: Assistir de novo · Aprovado · Precisa de alteração · Pode prosseguir<br/>browser-gate --answer grava o registro"] --> B4
     B4["homolog.py merge → integra, gate, authorize, main local, bundle"] --> B5
     B5["Chrome MAIN LOCAL: teste livre (serve.py free-test)<br/>hotfix → --free-test-fix"] --> B6
     B6["homolog.py release plan · body-check · go → PR única<br/>release status lê reviewDecision · merge é do usuário"]
