@@ -2325,6 +2325,11 @@ def publish_entries(plan, plan_path, board_, approval, approved_text, same_file)
         steps, resolved, labels = publish_steps(issue, board_, plan['repository'])
         body = None if nonempty(issue.get('url')) else issue_body(issue, plan_path)
         if body is not None:
+            findings = lint_body(body)
+            if findings:
+                raise PublishRefusal('lint_failed', f'o corpo da issue {ident} ainda tem texto de instrução ou marcador '
+                                     'sem preencher; nada foi publicado', findings=findings,
+                                     hint='tire do corpo (issue-lint --body <arquivo>), mostre e aprove de novo')
             if not same_file and normalized(body) not in approved_text:
                 raise PublishRefusal('body_not_approved', f'o corpo da issue {ident} não está, letra por letra, no '
                                      f'arquivo aprovado {approval["path"]}',
@@ -2494,6 +2499,109 @@ def publish_local(entries, root, state, state_path, approval):
             'message': f'Projeto sem remoto: {len(published)} issue(s) gravadas em .frontlights/issues/<n>/issue.json.'}
 
 
+# ---------------------------------------------------------------- render-criteria and issue-lint (redesign, issue 7)
+# `render-criteria` prints the boxes of an issue of the plan for its body; `issue-lint` refuses a body that still
+# carries the template's instruction text or an unfilled `<placeholder>` (the instructions live in
+# references/issues.md and references/issue.md, never in a published body). It reads one issue with gh, or local
+# bodies with --body: the bodies a daily triage proposes go through the same lint before they are shown.
+
+# Sentences of the issue template's instructions (the template before the redesign carried ~700 words of them under
+# its sections); a body that still holds one was published with the instructions in it.
+INSTRUCTION_PHRASES = (
+    'As seções até "Fora de escopo" são a spec',
+    'O problema do ponto de vista de quem usa',
+    'A solução do ponto de vista de quem usa',
+    'O que é um bom teste aqui',
+    'O que foi recusado, com o motivo. São as linhas mais úteis da página',
+    'As slices, em ordem de dependência, bloqueadoras primeiro: uma caixa por slice, com o',
+    'Achado de revisão, de teste ao vivo ou de conferência que não for corrigido no PR entra',
+    'A fatia é esta issue mais as sub-issues dela',
+    'A fatia só é definida depois da leitura de todas as camadas',
+    'Rastreio dos campos, botões e ações que a fatia toca na tela, feito por busca no código',
+    'é uma declaração, e o `browser-gate` a confere com o diff',
+    'Troque `none` pelos links canônicos',
+    'Arquivos e componentes, arquivos gerados, migrations, portas',
+    'Riscos, dependências externas (outro sistema, outra equipe) e o tamanho da sessão',
+    'Data e hora, branch/PR, hashes exatos de `HEAD` e do diff',
+)
+HTML_TAGS = {'a', 'abbr', 'b', 'blockquote', 'br', 'code', 'dd', 'del', 'details', 'div', 'dl', 'dt', 'em', 'h1', 'h2',
+             'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'ol', 'p', 'picture', 'pre', 'q', 's',
+             'samp', 'source', 'span', 'strong', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th',
+             'thead', 'tr', 'tt', 'u', 'ul', 'var', 'video'}
+PLACEHOLDER = re.compile(r'<(?!!--)([^<>\n`]{1,120})>')
+INLINE_CODE = re.compile(r'(`+)(?:(?!\1).)+?\1')
+
+
+def placeholder(inside):
+    """Whether `<inside>` is a template placeholder: not an HTML tag, an autolink or an e-mail."""
+    word = re.match(r'/?([A-Za-z][A-Za-z0-9-]*)', inside)
+    if word and word.group(1).casefold() in HTML_TAGS and (len(inside) == len(word.group(0)) or
+                                                           inside[len(word.group(0))] in ' /'):
+        return False
+    return not re.match(r'[A-Za-z][A-Za-z0-9+.-]*:', inside) and '@' not in inside
+
+
+def lint_body(body):
+    """The findings of a body: [{'line', 'kind': 'instruction'|'placeholder', 'text'}]. Inline code, fenced code and
+    HTML comments are skipped: a placeholder quoted in backticks is a format, not a blank."""
+    import closeout  # noqa: PLC0415  (closeout imports this module)
+    findings = []
+    flat_body = ' '.join(body.split())
+    for phrase in INSTRUCTION_PHRASES:
+        if ' '.join(phrase.split()) in flat_body:
+            line = next((n for n, text in enumerate(re.split(r'\r\n|\r|\n', body), 1) if phrase[:30] in text), None)
+            findings.append({'line': line, 'kind': 'instruction', 'text': phrase[:80]})
+    for number, text in closeout.visible_lines(body):
+        for match in PLACEHOLDER.finditer(INLINE_CODE.sub('', text)):
+            if placeholder(match.group(1)):
+                findings.append({'line': number, 'kind': 'placeholder', 'text': match.group(0)[:80]})
+    return findings
+
+
+def issue_lint(issue=None, bodies=(), config_path=None, gh=None):
+    """`issue-lint`: exit 0 when every body is clean, 1 with the findings otherwise."""
+    targets = []
+    if issue is not None:
+        config = load(config_path) if config_path and Path(config_path).is_file() else {}
+        repo = config.get('repository') if isinstance(config, dict) else None
+        if not repository(repo):
+            raise PublishRefusal('no_repository', 'issue-lint --issue lê o corpo do GitHub: o config não nomeia o '
+                                 'repository', hint='passe --body <arquivo> para um corpo local')
+        view = gh_reader(gh or gh_text)(['issue', 'view', str(issue), '--repo', repo, '--json', 'body'])
+        body = view.get('body') if isinstance(view, dict) else None
+        if not isinstance(body, str):
+            raise PublishRefusal('gh_failed', f'o GitHub não deu o corpo da issue #{issue}')
+        targets.append((f'#{issue}', body))
+    for name in bodies or ():
+        targets.append((str(name), Path(name).read_bytes().decode('utf-8-sig')))
+    if not targets:
+        raise PublishRefusal('nothing_to_lint', 'issue-lint precisa de --issue <n> ou --body <arquivo>')
+    results = [{'source': source, 'findings': lint_body(body)} for source, body in targets]
+    dirty = [r for r in results if r['findings']]
+    return {'ok': not dirty, 'exitCode': 1 if dirty else 0, 'operation': 'issue-lint', 'bodies': results,
+            'message': ('Nenhum texto de instrução nem marcador sem preencher.' if not dirty else
+                        'Texto de instrução ou marcador sem preencher em ' +
+                        ', '.join(f'{r["source"]} ({len(r["findings"])})' for r in dirty) +
+                        ': tire do corpo antes de mostrar ou publicar; a instrução vive nas referências.')}
+
+
+def render_criteria(plan_path, ident, config_path=None):
+    """`render-criteria`: the boxes of issue `ident` of a valid plan, as markdown for its body."""
+    plan = load(plan_path)
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    try:
+        validate_plan(plan, config.get('project') if isinstance(config, dict) else None)
+    except ValueError as error:
+        where = {'path': error.path} if isinstance(error, PlanError) else {}
+        raise PublishRefusal('plan_invalid', f'o plano não passa no validate-plan: {error}', **where) from None
+    found = [i for i in plan['issues'] if str(i['id']) == str(ident).lstrip('#')]
+    if not found:
+        raise PublishRefusal('issue_missing', f'a issue {ident} não está no plano')
+    lines = criteria_lines(found[0])
+    return {'ok': True, 'exitCode': 0, 'operation': 'render-criteria', 'issue': found[0]['id'],
+            'boxes': sum(1 for line in lines if line.startswith('- [ ] ')), 'markdown': '\n'.join(lines) + '\n',
+            'message': 'As caixas para a seção "## Critérios de aceitação" do corpo, na ordem do plano.'}
+
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
@@ -2606,6 +2714,19 @@ def build_parser():
     p.add_argument('--resume', action='store_true', help='continue a partial publication, rereading GitHub by title')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p = sub.add_parser('render-criteria', help='stage 5: the acceptance-criteria boxes of an issue of the plan, '
+                                               'as markdown for its body')
+    p.add_argument('--plan', required=True)
+    p.add_argument('--issue', required=True, help='the id of the issue in the plan')
+    p.add_argument('--config', help='.frontlights/config.json; enforces its project board fields')
+    p.add_argument('--out', help='also write the markdown to this file')
+    p = sub.add_parser('issue-lint', help='refuse a body that still carries the template instructions or an unfilled '
+                                          '<placeholder>')
+    p.add_argument('--issue', help='an issue number, read with gh (repository of the config)')
+    p.add_argument('--body', action='append', default=[], help='a local body file, such as one a daily triage '
+                                                               'proposes; repeatable')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p = sub.add_parser('stamp', add_help=False,
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
@@ -2633,6 +2754,9 @@ def resolve_defaults(args):
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root, required=False)
         args.issue = _cli.issue_number(args.issue, _cli.current_tree(), args.root)
+    elif args.command == 'issue-lint':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root, required=False)
     elif args.command == 'publish-issue':
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root, required=False)
@@ -2708,6 +2832,20 @@ def main():
         elif args.command == 'slice':
             result = slice_cli(args.action, args.root, args.config, args.issue, args.slice, args.stacked_on,
                                args.ownership, args.dir, args.source, args.test, args.watched_only, args.comment_file)
+            code = result['exitCode']
+        elif args.command == 'render-criteria':
+            try:
+                result = render_criteria(args.plan, args.issue, args.config)
+            except PublishRefusal as refusal:
+                result = {'operation': 'render-criteria', **refusal.result()}
+            if args.out and result['ok']:
+                Path(args.out).write_bytes(result['markdown'].encode('utf-8'))
+            code = result['exitCode']
+        elif args.command == 'issue-lint':
+            try:
+                result = issue_lint(args.issue, args.body, args.config)
+            except PublishRefusal as refusal:
+                result = {'operation': 'issue-lint', **refusal.result()}
             code = result['exitCode']
         elif args.command == 'publish-issue':
             result = publish_issue(args.plan, args.approved, args.root, args.config, args.dry_run, args.resume)
