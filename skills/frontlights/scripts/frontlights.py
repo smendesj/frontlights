@@ -2200,7 +2200,16 @@ def slice_open(root, config_path, issue, slices, stacked_on=None, ownership=(), 
             entry['base'] = stacked_branch
         record['worktrees'].append(entry)
         opened.append(entry)
-    open_slices = [e for e in record['worktrees'] if isinstance(e, dict) and e.get('issue') == number and e.get('slice')]
+    issue_tip = git_rev(root, f'refs/heads/{issue_branch}')
+
+    def merged(entry):
+        """A slice already merged into the issue branch (its tip is in it, and the issue moved past it): it edits
+        nothing more, so its ownership no longer overlaps anything."""
+        tip = git_rev(root, f'refs/heads/{entry["branch"]}')
+        return (tip is not None and issue_tip is not None and tip != issue_tip
+                and git_call(root, 'merge-base', '--is-ancestor', tip, issue_tip)[0] == 0)
+    open_slices = [e for e in record['worktrees'] if isinstance(e, dict) and e.get('issue') == number and e.get('slice')
+                   and not merged(e)]
     for index, first in enumerate(open_slices):
         for second in open_slices[index + 1:]:
             if any(overlap(a, b) for a in first['ownership'] for b in second['ownership'] if '*' not in (a, b)):

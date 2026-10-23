@@ -130,6 +130,12 @@ class SliceMergeTests(Stage6Case):
         self.assertEqual(result['preview'], {'skipped': 'sem bloco preview no config: nada de prévia'})
         self.assertEqual(git(self.root, 'ls-remote', 'origin', 'PREFIX/issue-12'), '')   # nothing was pushed
 
+    def test_opening_the_next_slice_after_the_first_was_merged_does_not_warn_about_it(self):
+        self.assertTrue(self.merge()['ok'])
+        result = self.open('S2')
+        self.assertTrue(result['ok'], result)
+        self.assertFalse(any('posse em comum' in w for w in result['warnings']), result['warnings'])
+
     def test_a_dirty_worktree_is_refused(self):
         (Path(self.s1) / 'solto.txt').write_text('x', encoding='utf-8')
         result = self.merge()
