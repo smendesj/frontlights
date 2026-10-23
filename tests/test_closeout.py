@@ -7,6 +7,7 @@ lê e grava um corpo guardado em memória. Os testes usam GitHub simulado: não
 homologam o GitHub real. Marcadores genéricos (OWNER/REPOSITORY): o vocabulário de um projeto vive fora daqui.
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -1182,19 +1183,23 @@ class ReadOnlyTests(CloseoutCase):
                 gh(argv)
         self.assertEqual(len(gh.violations), 3)
 
-    def test_the_helper_runs_a_command_only_in_the_writer_of_tick(self):
+    def test_the_helper_runs_a_command_only_in_the_writers_of_tick_and_apply(self):
+        """Issue 2 do redesenho: `apply` é a segunda escrita (fecha e marca os pais); `run` grava só a lista nova
+        (`xb`, nunca sobrescreve) e `apply` só o seu `.result.json`."""
         source = SCRIPT.read_text(encoding='utf-8')
         self.assertNotIn('subprocess', without_the_writer(source))
         callers = [name for name in re.findall(r'\ndef (\w+)\(', source)
                    if name != 'gh_write' and re.search(r'\bgh_write\b', function_source(source, name))]
-        self.assertEqual(callers, ['op_tick'])
+        self.assertEqual(callers, ['op_tick', 'op_apply'])
         self.assertNotIn('os.system', source)
         writes = re.compile(r"open\([^)]*['\"][wax+]")
-        saver = function_source(source, 'save_body')
-        self.assertIsNone(writes.search(source.replace(saver, '')), 'only save_body opens a file to write')
-        self.assertEqual(len(writes.findall(saver)), 1)
-        self.assertIn("'xb'", saver, 'and never overwrites one')
-        self.assertNotIn('write_text', source)
+        saver, lister, applier = (function_source(source, name) for name in ('save_body', 'op_run', 'op_apply'))
+        self.assertIsNone(writes.search(source.replace(saver, '').replace(lister, '')),
+                          'only save_body and run open a file to write')
+        self.assertIn("'xb'", saver, 'and never overwrite one')
+        self.assertIn("'xb'", lister)
+        self.assertEqual(source.count('write_text'), applier.count('write_text'))
+        self.assertEqual(applier.count('write_text'), 1)
         self.assertNotIn('write_bytes', source)
 
 
@@ -2133,6 +2138,163 @@ class AwaitingReleaseTests(CloseoutCase):
         self.assertNotIn('subprocess', without_the_writer(source))
         self.assertNotIn('\nimport homolog', source, 'homolog is imported lazily, inside the check, never at the top')
         self.assertIn('import homolog', source)
+
+
+FAMILY_PARENT = '## Slices\n\n- [ ] Screen: #12\n\n## Acceptance criteria\n\n- [x] Everything works\n'
+
+
+class ApplyGh(FakeGh):
+    """The reads of FakeGh, `gh issue view --json body` from the nodes, and `edit`, which plays GitHub for the two
+    writes of apply: `gh issue close` (the node turns CLOSED) and `gh issue edit --body-file` (the node's body)."""
+
+    def __init__(self, nodes=None, fail_close=(), **kw):
+        super().__init__(nodes, **kw)
+        self.fail_close, self.edits = set(fail_close), []
+
+    def __call__(self, argv):
+        if argv[:2] == ['issue', 'view'] and argv[3:] == ['--repo', REPO, '--json', 'body']:
+            return {'body': self.nodes[int(argv[2])]['body']}
+        return super().__call__(argv)
+
+    def edit(self, argv):
+        self.edits.append(list(argv))
+        number = int(argv[2])
+        if argv[:2] == ['issue', 'close'] and argv[3:] == ['--repo', REPO, '--reason', 'completed']:
+            if number in self.fail_close:
+                raise rs.Refusal('gh refused the close')
+            self.nodes[number] = {**self.nodes[number], 'state': 'CLOSED', 'stateReason': 'COMPLETED'}
+        elif argv[:2] == ['issue', 'edit'] and argv[3:6] == ['--repo', REPO, '--body-file']:
+            self.nodes[number] = {**self.nodes[number], 'body': Path(argv[6]).read_bytes().decode('utf-8')}
+        else:
+            self.violations.append(list(argv))
+            raise AssertionError(f'not an expected write: {argv}')
+
+
+class RunApplyTests(CloseoutCase):
+    """Issue 2 do redesenho: `closeout.py run` grava a lista carimbada em português (`closeout-<data>.md`) e só lê o
+    GitHub; `apply --expect --answer` grava a aprovação, recalcula e recusa lista mudada, recusa `--only` que deixa
+    pai sem filha, fecha na ordem, marca os pais, confere e grava `closeout-<data>.result.json`."""
+
+    def family(self):
+        return {12: node(12, parent=5), 5: node(5, children=[(12, 'OPEN')], text=FAMILY_PARENT)}
+
+    def run_list(self, gh, issues='5,12'):
+        result = closeout.run('run', self.config, self.root, issues, False, gh)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def apply(self, gh, expect, answer='Sim, fechar tudo', only=None, account=None):
+        result = closeout.run('apply', self.config, self.root, gh=gh, edit=gh.edit, expect=expect, answer=answer,
+                              only=only, account=account, pause=0)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def test_run_writes_the_stamped_list_in_portuguese_and_closes_nothing(self):
+        gh = ApplyGh(self.family())
+        result = self.run_list(gh)
+        self.assertTrue(result['ok'], result['message'])
+        path = Path(result['path'])
+        self.assertRegex(path.name, r'^closeout-\d{8}-\d{6}\.md$')
+        self.assertEqual(result['stamp'], hashlib.sha256(path.read_bytes()).hexdigest()[:12])
+        text = path.read_text(encoding='utf-8')
+        for phrase in ('# Fechamento de issues', '| Ordem | Issue | Título | Nível | Critérios | Filhas | PRs | Avisos |',
+                       'marcar no corpo de #5 as linhas 3', '`gh issue close 12 --repo OWNER/REPOSITORY --reason completed`',
+                       'horário de São Paulo'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertLess(text.index('| 1 | #12 |'), text.index('| 2 | #5 |'))
+        self.assertEqual(result['question'], 'Fechar estas 2 issues e marcar os itens dos pais?')
+        self.assertEqual(result['options'], ['Sim, fechar tudo', 'Escolher quais', 'Só fechar, sem marcar', 'Não agora'])
+        self.assertEqual(gh.edits, [])
+
+    def test_run_with_nothing_to_close_writes_no_list(self):
+        result = self.run_list(ApplyGh({12: node(12, text=DONE_PARTIAL)}), '12')
+        self.assertEqual((result['ask'], result['path']), (False, None))
+        self.assertEqual(list((self.root / '.frontlights').glob('closeout-*')), [])
+
+    def test_apply_closes_in_order_ticks_the_parent_verifies_and_records(self):
+        gh = ApplyGh(self.family())
+        listed = self.run_list(gh)
+        result = self.apply(gh, listed['stamp'])
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['closed'], [12, 5])
+        kinds = [e[:3] for e in gh.edits]
+        self.assertEqual(kinds, [['issue', 'close', '12'], ['issue', 'edit', '5'], ['issue', 'close', '5']])
+        self.assertIn('- [x] Screen: #12', gh.nodes[5]['body'])
+        self.assertEqual([t['verified'] for t in result['ticks']], [True])
+        self.assertTrue(result['verify']['ok'])
+        saved = json.loads(Path(result['result']).read_text(encoding='utf-8'))
+        self.assertEqual((saved['answer'], saved['closed']), ('Sim, fechar tudo', [12, 5]))
+        self.assertTrue(Path(result['result']).name.endswith('.result.json'))
+        approvals = json.loads((self.root / '.frontlights' / 'approvals.json').read_text(encoding='utf-8'))
+        self.assertEqual((approvals[-1]['sha256'], approvals[-1]['answer']), (listed['stamp'], 'Sim, fechar tudo'))
+
+    def test_apply_refuses_a_list_that_changed_and_writes_nothing(self):
+        gh = ApplyGh(self.family())
+        listed = self.run_list(gh)
+        gh.nodes[13] = node(13)
+        gh.nodes[5] = node(5, children=[(12, 'OPEN')], text='## Notes\n\n- [ ] Screen: #12 and #13\n\n'
+                                                              '## Acceptance criteria\n\n- [x] Everything works\n')
+        result = self.apply(gh, listed['stamp'])
+        self.assertFalse(result['ok'])
+        self.assertTrue(result['message'].startswith('lista mudou: '), result['message'])
+        self.assertIn('#12 linhas do pai [3] → []', result['message'])
+        self.assertEqual(gh.edits, [])
+
+    def test_apply_refuses_only_that_leaves_a_parent_without_its_child(self):
+        gh = ApplyGh(self.family())
+        listed = self.run_list(gh)
+        result = self.apply(gh, listed['stamp'], answer='Escolher quais', only='5')
+        self.assertFalse(result['ok'])
+        self.assertIn('deixa sem filha o pai #5', result['message'])
+        self.assertEqual(gh.edits, [])
+        result = self.apply(gh, listed['stamp'], answer='Escolher quais', only='12')
+        self.assertEqual(result['closed'], [12])
+
+    def test_not_now_writes_nothing_and_close_only_ticks_nothing(self):
+        gh = ApplyGh(self.family())
+        listed = self.run_list(gh)
+        result = self.apply(gh, listed['stamp'], answer='Não agora')
+        self.assertEqual((result['ok'], result['closed'], gh.edits), (True, [], []))
+        result = self.apply(gh, listed['stamp'], answer='Só fechar, sem marcar')
+        self.assertEqual(result['closed'], [12, 5])
+        self.assertEqual([e[1] for e in gh.edits], ['close', 'close'])
+
+    def test_apply_refuses_a_stamp_of_no_list_or_no_stamp(self):
+        gh = ApplyGh(self.family())
+        self.run_list(gh)
+        for expect in ('0123456789ab', None, 'abc'):
+            with self.subTest(expect=expect):
+                result = self.apply(gh, expect)
+                self.assertFalse(result['ok'])
+        self.assertEqual(gh.edits, [])
+
+    def test_a_child_that_fails_to_close_holds_its_parent_back(self):
+        gh = ApplyGh(self.family(), fail_close=[12])
+        listed = self.run_list(gh)
+        result = self.apply(gh, listed['stamp'])
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['closed'], [])
+        self.assertEqual([(f['number'], f['reason']) for f in result['failed']],
+                         [(12, 'close_failed'), (5, 'child_not_closed')])
+
+    def test_the_account_is_checked_before_the_writes(self):
+        gh = ApplyGh(self.family())
+        listed = self.run_list(gh)
+
+        def wrong(_):
+            raise closeout._cli.AccountMismatch('account_mismatch', 'o gh está na conta OUTRA', 'OUTRA', 'OWNER-LOGIN')
+        result = self.apply(gh, listed['stamp'], account=wrong)
+        self.assertEqual((result['ok'], result['reason']), (False, 'account_mismatch'))
+        self.assertEqual(gh.edits, [])
+
+    def test_the_command_line_lists_run_and_apply(self):
+        for name, flags in (('run', ('--issues', '--all', '--base')), ('apply', ('--expect', '--answer', '--only'))):
+            done = subprocess.run([sys.executable, str(SCRIPT), name, '--help'], capture_output=True, text=True,
+                                  encoding='utf-8')
+            for flag in flags:
+                with self.subTest(name=name, flag=flag):
+                    self.assertIn(flag, done.stdout)
 
 
 if __name__ == '__main__':

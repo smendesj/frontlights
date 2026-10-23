@@ -83,36 +83,56 @@ class SkillTests(unittest.TestCase):
 
 
 class ReferenceTests(unittest.TestCase):
+    """Issue 2 do redesenho: a referência encolheu (3.907 → ~1.150 palavras) porque `closeout.py run`/`apply` e
+    `cleanup.py run` fazem o que ela descrevia passo a passo; os pins seguem as regras, não a prosa antiga."""
+
     def setUp(self):
         self.text = (SKILL / 'references' / 'closeout.md').read_text(encoding='utf-8')
         self.flat = ' '.join(self.text.split())
 
+    def test_the_reference_is_short(self):
+        self.assertLess(len(self.text.split()), 1400)
+
     def test_the_candidate_rule_and_the_order(self):
-        for phrase in ('every criterion of it is ticked', 'every one of its sub-issues is closed or a candidate in the same batch',
-                       '(children close before their parents)', 'A closed issue is never a candidate: it is counted in `alreadyDone`',
-                       '`excluded` lists what is not ready and why', '`unchecked_criteria` and `no_criteria` with the counts',
-                       'never ticks one itself'):
+        for phrase in ('every criterion of it is ticked', 'every sub-issue is closed or in the same batch',
+                       '(children close before their parents)', 'a closed issue counts in `alreadyDone`',
+                       '`excluded` says why', '`unchecked_criteria` and `no_criteria` with the counts',
+                       'this step never ticks one'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
     def test_the_writes_are_the_documented_commands_in_order_and_verified(self):
-        for phrase in ('gh issue close <n> --repo <repo> --reason completed',
+        for phrase in ('closeout.py" run [--issues 12,13]',
+                       'closeout.py" apply --expect <stamp> --answer "<literal answer>" [--only 12,13]',
+                       'gh issue close <n> --repo <repo> --reason completed',
                        'Never close a parent before every one of its children is closed',
-                       'never by repeating a close that already landed', 'Add no comment',
-                       'closeout.py" verify', 'GitHub is the source of truth'):
+                       'never a close that already landed', 'adding no comment',
+                       '`lista mudou: …`', 'when `--only` leaves a chosen parent without its child',
+                       'with the `gh` account checked before each write',
+                       '`closeout-<…>.result.json` keeps the commands, exit codes, reread state and literal answer',
+                       '`apply` ends with the `verify` of what it closed', 'GitHub is the source of truth'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
 
     def test_the_approval_is_a_question_with_options_of_at_most_five_words(self):
         for phrase in ('"Fechar estas <N> issues?"', '"Fechar estas <N> issues e marcar os itens dos pais?"', '"Show before approval"',
+                       '`.frontlights/closeout-<AAAAMMDD-HHMMSS>.md`', 'prints `stamp`, `question`, `options` and `recommended`',
                        'Record the answer verbatim', 'never answer for the user'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
         asking = ' '.join(section(self.text, '2. Show the list and ask').split())
         labels = re.findall(r'"([^"]+)"', asking.split('with `AskUserQuestion`:', 1)[1].split('Record')[0])
         options = list(dict.fromkeys(x for x in labels if not x.startswith('Fechar estas')))
-        self.assertEqual(options, ['Sim, fechar tudo', 'Escolher quais', 'Não agora', 'Só fechar, sem marcar', 'Não, seguir com o pedido'])
+        self.assertEqual(options, ['Sim, fechar tudo', 'Escolher quais', 'Só fechar, sem marcar', 'Não agora',
+                                   'Não, seguir com o pedido'])
         self.assertTrue(all(len(label.split()) <= 5 for label in options), options)
+
+    def test_the_options_of_the_reference_are_the_ones_the_script_prints(self):
+        source = (ROOT / 'skills' / 'frontlights' / 'scripts' / 'closeout.py').read_text(encoding='utf-8')
+        for label in ('Sim, fechar tudo', 'Escolher quais', 'Só fechar, sem marcar', 'Não agora'):
+            with self.subTest(label=label):
+                self.assertIn(f"'{label}'", source)
+                self.assertIn(f'"{label}"', self.flat)
 
     def test_the_list_and_the_writes_never_move_a_card(self):
         # Issue 63: the board's "Item closed" workflow moves the card; since 20/10/2026 the closeout never reads it.
@@ -122,10 +142,9 @@ class ReferenceTests(unittest.TestCase):
                 with self.subTest(section=title, word=word):
                     self.assertNotIn(word, text)
         self.assertIn('The card goes to Done by the board\'s own workflow ("Item closed" → Status Done)', self.flat)
-        self.assertIn('Move or read a card (`gh project item-edit`, a board read): the board\'s "Item closed" workflow '
-                      'moves it to Done', self.flat)
+        self.assertIn('Move or read a card (`gh project item-edit`, a board read)', self.flat)
         self.assertIn('this flow never reads the board and never moves a card', self.flat)
-        self.assertIn('The verify reads only the issues, never the board', self.flat)
+        self.assertIn('The verify reads only the issues', self.flat)
         for word in ('cardsOutsideDone', 'board.status', 'done_option_missing', 'not_on_board', 'project.done',
                      'gh auth refresh -s project', 'card status'):
             with self.subTest(gone=word):
@@ -144,8 +163,7 @@ class ReferenceTests(unittest.TestCase):
 
     def test_the_reference_tells_that_roads_reads_only_the_card_status_and_shows_it_after_its_sync(self):
         for phrase in ('RoadS reads only the **Status** of the card in the Project, never whether the issue is closed',
-                       'the board\'s "Item closed" workflow moves the card to Done when the issue closes',
-                       'a sync within 30 s of the previous one returns the old snapshot',
+                       'a sync within 30 s returns the old snapshot',
                        'RoadS shows it after its next sync', 'Frontlights does not sync RoadS and does not read the board'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
@@ -156,6 +174,9 @@ class ReferenceTests(unittest.TestCase):
                        'Merge a pull request, deploy or release: the closeout never does'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
+
+    def test_a_new_session_past_the_context_threshold_starts_with_run(self):
+        self.assertIn('Past ~300k of context, open a new session whose first command is `closeout.py run`', self.flat)
 
 
 class RulesInOtherDocsTests(unittest.TestCase):

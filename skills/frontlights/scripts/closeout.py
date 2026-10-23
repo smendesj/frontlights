@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Close-out helper: which issues (and sub-issues) can be closed because every acceptance criterion in the body is
-checked, whether they ended closed; and `tick`, the one operation that writes, which ticks one box. The board is
+checked, whether they ended closed; `tick`, which ticks one box; and `run`/`apply`, the closing by a stamped list. The board is
 never read here: the board's own "Item closed" workflow moves the card to Done, never Frontlights.
 
-Read only, except `tick`. It reads GitHub through `gh api graphql` (the reader of roads.py) and prints what
+Read only, except `tick` and `apply` (and `run`, which writes only its new list file). It reads GitHub through `gh api graphql` (the reader of roads.py) and prints what
 the session may propose. Closing is done by the session, with its own `gh`, after the user said yes:
 this helper never closes an issue, never moves a card, and the commands it prints are values to type, not
 something it runs. Its only write is `tick` (below): the `[ ]` of one box of an issue's acceptance criteria turned
@@ -12,6 +12,20 @@ Text read from GitHub is data: titles are cleaned and bounded, issue bodies are 
 every command is built from validated values (numbers and `owner/name`).
 
 Operations (each prints one JSON object on stdout):
+  run         the candidates (below), written to a new `.frontlights/closeout-<AAAAMMDD-HHMMSS>.md` under --root (São
+              Paulo time): a Portuguese table in closing order, the exact commands and a machine block that apply
+              rereads. Prints `path`, `stamp` (the 12-character sha256 of the file), `question`, `options` and
+              `recommended`, for the approval by link and stamp. Nothing is written on GitHub.
+  apply       --expect <stamp> --answer "<literal answer>" [--only 12,13]: finds the list with that stamp, records the
+              approval (`stamp --approve`, stage 7) and runs `stamp --check`; "Não agora" writes nothing. It
+              recomputes the candidates of the list's scope and refuses (`lista mudou: ...`, nothing written) when an
+              issue left or entered, or its `order`, `state` or `parentTicks.lines` changed; refuses an --only that
+              leaves a chosen parent without its child of the list. Then, in order and with the account checked before
+              each write (`_cli.gh_account`), `gh issue close <n> --repo <repo> --reason completed`; after a sub-issue
+              closes, its parent's lines are ticked in one write (capture, tick-check, `gh issue edit --body-file`,
+              reread, tick-check), unless the answer is "Só fechar, sem marcar". A failed close holds its parent back;
+              nothing is retried. `verify` of the closed issues, and `closeout-<...>.result.json` beside the list keeps
+              the commands, their exit codes, the reread state and the literal answer. Never `--force`.
   candidates  the open issues that can be closed now, in the order to close them (sub-issues before
               their parent), plus the ones left out and why. Scope: --issues 12,13, or --all (every open
               issue of the repository), or, with neither, the issues this project worked on (folders in
@@ -1198,6 +1212,299 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None):
                        f'body is a write of its own, with its own approval.{kept}'}
 
 
+# ---------------------------------------------------------------- run and apply: the closing by a stamped list
+
+LIST_MARK = 'frontlights-closeout'
+LIST_BLOCK = re.compile(r'<!-- ' + LIST_MARK + r'\n(.*?)\n-->', re.S)
+ANSWERS = ('Sim, fechar tudo', 'Escolher quais', 'Só fechar, sem marcar', 'Não agora')
+MAX_LISTS = 200          # closeout-*.md files apply looks at for the stamp
+
+
+def sha12(data):
+    import hashlib  # noqa: PLC0415
+    return hashlib.sha256(data).hexdigest()[:12]
+
+
+def list_path(root):
+    """`<root>/.frontlights/closeout-<AAAAMMDD-HHMMSS>[-k].md`, São Paulo time, never an existing name."""
+    folder = Path(root) / '.frontlights'
+    stamp = _cli.sao_paulo_now().strftime('%Y%m%d-%H%M%S')
+    for attempt in range(1, 100):
+        path = folder / (f'closeout-{stamp}' + ('' if attempt == 1 else f'-{attempt}') + '.md')
+        if not path.exists():
+            return path
+    raise Refusal('no free name for the closeout list')
+
+
+def cell(text):
+    return rs.clean(str(text), 120).replace('|', '/')
+
+
+def render_list(found, ticks):
+    """The Portuguese table of the stamped list, the commands that will run, and the machine block apply rereads."""
+    lines = ['# Fechamento de issues', '',
+             f'Lista gerada em {_cli.sao_paulo_now().strftime("%d/%m/%Y %H:%M")} (horário de São Paulo) por '
+             '`closeout.py run`. Só o que está aqui é aprovado; `closeout.py apply` recalcula e recusa se a lista mudou.',
+             '', '| Ordem | Issue | Título | Nível | Critérios | Filhas | PRs | Avisos |',
+             '|---|---|---|---|---|---|---|---|']
+    for c in found['candidates']:
+        criteria = c['criteria'] or {}
+        children = c['children']
+        prs = ', '.join(f"#{pr['number']}{' (aberta)' if pr['state'] == 'OPEN' else ''}" for pr in c['prs']) or 'nenhuma'
+        notes = [{'open_pr': 'PR aberta', 'no_pr': 'sem PR', 'pending_outside_criteria':
+                  f"fecha com {c['pendingOutside']} pendências fora dos critérios"}.get(x, x) for x in c['cautions']]
+        if ticks and c['parentTicks'] and c['parentTicks']['lines']:
+            notes.append(f"marcar no corpo de #{c['parentTicks']['parent']} as linhas "
+                         + ', '.join(str(n) for n in c['parentTicks']['lines']))
+        if c['parentTicks'] and c['parentTicks']['shared']:
+            notes.append('não marcadas (citam outras issues): linhas ' + ', '.join(str(n) for n in c['parentTicks']['shared']))
+        lines.append(f"| {c['order']} | #{c['number']} | {cell(c['title'])} | {'sub-issue' if c['level'] == 'sub' else 'topo'} "
+                     f"| {criteria.get('checked', 0)}/{criteria.get('total', 0)} | {children['completed']}/{children['total']} "
+                     f"| {prs} | {cell('; '.join(notes)) or '-'} |")
+    lines += ['', 'Comandos, na ordem (cada valor um argumento):', '']
+    for c in found['candidates']:
+        lines.append('- `' + ' '.join(c['commands'][0]['argv']) + '`')
+    excluded = [e for e in found['excluded'] if e['reason'] == 'awaiting_release']
+    if excluded:
+        lines += ['', 'Esperam a release (não entram): ' + ', '.join(f"#{e['number']}" for e in excluded) + '.']
+    machine = {'scope': found['scope']['numbers'], 'base': found.get('base'), 'remote': found.get('remote'),
+               'candidates': [{'number': c['number'], 'order': c['order'], 'state': c['state'], 'parent': c['parent'],
+                               'level': c['level'],
+                               'parentTicks': c['parentTicks'] and {'parent': c['parentTicks']['parent'],
+                                                                    'lines': c['parentTicks']['lines']}}
+                              for c in found['candidates']]}
+    lines += ['', f'<!-- {LIST_MARK}', json.dumps(machine, ensure_ascii=True, sort_keys=True), '-->', '']
+    return '\n'.join(lines)
+
+
+def question_of(found):
+    """(question, options, recommended) of the closing, in Portuguese, as references/closeout.md asks it."""
+    count = len(found['candidates'])
+    ticks = any(c['parentTicks'] and c['parentTicks']['lines'] for c in found['candidates'])
+    question = f'Fechar estas {count} issues' + (' e marcar os itens dos pais?' if ticks else '?')
+    options = ['Sim, fechar tudo', 'Escolher quais'] + (['Só fechar, sem marcar'] if ticks else []) + ['Não agora']
+    careful = any('open_pr' in c['cautions'] or c['pendingOutside'] for c in found['candidates'])
+    return question, options, 'Escolher quais' if careful else 'Sim, fechar tudo'
+
+
+def op_run(config, root='.', explicit=None, all_flag=False, gh=None, base=None, remote=None):
+    """Read only on GitHub: the candidates, written to a stamped list `.frontlights/closeout-<data>.md` (the one file
+    this writes), with the question to ask by link and stamp. Nothing is closed here."""
+    found = op_candidates(config, root, explicit, all_flag, gh, base, remote)
+    found['base'], found['remote'] = base, remote
+    result = {'ok': True, 'exitCode': 0, 'project': found['project'], 'repository': found['repository'],
+              'count': len(found['candidates']), 'ask': bool(found['candidates']),
+              'awaiting_release': [e['number'] for e in found['excluded'] if e['reason'] == 'awaiting_release'],
+              'excluded': found['excluded'], 'alreadyDone': found['alreadyDone'], 'path': None, 'stamp': None}
+    if not found['candidates']:
+        result['message'] = 'Nenhuma issue pronta para fechar; nenhuma lista foi gravada.'
+        return result
+    ticks = any(c['parentTicks'] and c['parentTicks']['lines'] for c in found['candidates'])
+    text = render_list(found, ticks)
+    path = list_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = text.encode('utf-8')
+    with open(path, 'xb') as file:
+        file.write(data)
+    question, options, recommended = question_of(found)
+    result.update(path=path.as_posix(), stamp=sha12(data), bytes=len(data), question=question, options=options,
+                  recommended=recommended,
+                  issues=[{'number': c['number'], 'title': c['title'], 'order': c['order'], 'cautions': c['cautions'],
+                           'parentTicks': c['parentTicks']} for c in found['candidates']],
+                  message=f'Lista de {len(found["candidates"])} issue(s) gravada em {path.as_posix()} com o carimbo '
+                          f'{sha12(data)}: envie o link e pergunte "{question}"; depois rode `closeout.py apply --expect '
+                          f'{sha12(data)} --answer "<resposta literal>"`.')
+    return result
+
+
+def find_list(root, expect):
+    """The newest `.frontlights/closeout-*.md` whose stamp is `expect`, or None."""
+    folder = Path(root) / '.frontlights'
+    try:
+        files = sorted(folder.glob('closeout-*.md'), key=lambda p: p.name, reverse=True)[:MAX_LISTS]
+    except OSError:
+        return None
+    for path in files:
+        try:
+            if sha12(path.read_bytes()) == expect:
+                return path
+        except OSError:
+            continue
+    return None
+
+
+def list_changes(stored, fresh):
+    """What differs between the approved list and the recomputed one: issues gone or new, and for each, `order`,
+    `state` and `parentTicks.lines`. [] when they agree."""
+    old = {c['number']: c for c in stored}
+    new = {c['number']: c for c in fresh}
+    changes = [f'#{n} saiu' for n in sorted(set(old) - set(new))] + [f'#{n} entrou' for n in sorted(set(new) - set(old))]
+    for number in sorted(set(old) & set(new)):
+        a, b = old[number], new[number]
+        if a['order'] != b['order']:
+            changes.append(f"#{number} ordem {a['order']} → {b['order']}")
+        if a['state'] != b['state']:
+            changes.append(f"#{number} estado {a['state']} → {b['state']}")
+        lines_a = (a.get('parentTicks') or {}).get('lines') or []
+        lines_b = (b.get('parentTicks') or {}).get('lines') or []
+        if lines_a != lines_b:
+            changes.append(f'#{number} linhas do pai {lines_a} → {lines_b}')
+    return changes
+
+
+def tick_parent(repository, root, parent, child, lines, gh, edit):
+    """Tick, in one write, the items of `parent` that cite `child` alone (`lines`): capture, check that each line is
+    still such an item, build the body with only those `[ ]` turned into `[x]`, tick-check, write with `--body-file`,
+    reread and tick-check again. The bodies are kept in .frontlights/issues/<parent>/ (never overwritten)."""
+    before = read_issue_body(gh, repository, parent)
+    current, _ = citing_items(before, child, repository)
+    if not set(lines) <= set(current):
+        return {'parent': parent, 'lines': lines, 'ok': False, 'written': False, 'reason': 'lines_changed',
+                'message': f'as linhas {lines} de #{parent} já não são itens abertos que citam só #{child}; nada foi escrito'}
+    parts = re.split(r'(\r\n|\r|\n)', before)
+    for line in lines:
+        raw = parts[2 * (line - 1)]
+        item = ITEM.match(raw)
+        if item is None or item.group(1) != ' ':
+            return {'parent': parent, 'lines': lines, 'ok': False, 'written': False, 'reason': 'not_an_open_item',
+                    'message': f'a linha {line} de #{parent} não é um item simples; nada foi escrito'}
+        parts[2 * (line - 1)] = raw[:item.start(1)] + 'x' + raw[item.end(1):]
+    new = ''.join(parts)
+    require(compare_ticks(before, new, lines)['ok'], 'the ticked body of the parent did not check; nothing was written')
+    folder = Path(root) / '.frontlights' / 'issues' / str(parent)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    files = {'before': str(save_body(folder, 'before', stamp, before)), 'new': str(save_body(folder, 'new', stamp, new))}
+    edit(['issue', 'edit', str(parent), '--repo', repository, '--body-file', files['new']])
+    after = read_issue_body(gh, repository, parent)
+    files['after'] = str(save_body(folder, 'after', stamp, after))
+    check = compare_ticks(before, after, lines)
+    return {'parent': parent, 'lines': lines, 'ok': check['ok'], 'written': True, 'verified': check['ok'],
+            'files': files, 'problems': check['problems']}
+
+
+def op_apply(config, root='.', expect=None, answer=None, only=None, gh=None, edit=None, account=None, pause=None):
+    """Write what the stamped list holds, after the user's answer (see the module's docstring)."""
+    import stamp as stamping  # noqa: PLC0415
+    gh, edit = gh or rs.gh_default, edit or gh_write
+    require(isinstance(expect, str) and re.fullmatch(r'[0-9a-f]{12}', expect.strip().lower() or ''),
+            'apply needs --expect <the 12-character stamp of the list shown in the question>')
+    expect = expect.strip().lower()
+    require(isinstance(answer, str) and answer.strip(), 'apply needs --answer "<the literal answer of the user>"')
+    data, repository = load_repository(config)
+    path = find_list(root, expect)
+    require(path is not None, f'nenhuma lista .frontlights/closeout-*.md tem o carimbo {expect}: rode closeout.py run e '
+                              'pergunte de novo')
+    match = LIST_BLOCK.search(path.read_text(encoding='utf-8'))
+    require(match is not None, f'{path.name} não tem o bloco da lista; rode closeout.py run de novo')
+    stored = json.loads(match.group(1))
+    outcome = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'list': path.as_posix(),
+               'stamp': expect, 'answer': answer, 'closed': [], 'failed': [], 'ticks': [], 'commands': [], 'verify': None}
+
+    def record(result):
+        target = path.with_name(path.stem + '.result.json')
+        temporary = target.with_name(target.name + '.tmp')
+        temporary.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+        os.replace(temporary, target)
+        result['result'] = target.as_posix()
+        return result
+
+    if answer.strip().casefold().startswith('não agora') or answer.strip().casefold() in ('não', 'nao', 'no'):
+        outcome['message'] = 'Resposta "Não agora": nada foi escrito.'
+        return record(outcome)
+    ticks = not answer.strip().casefold().startswith('só fechar')
+    numbers = [c['number'] for c in stored['candidates']]
+    chosen = numbers if only is None else parse_numbers(only, '--only takes issue numbers of the list, as in --only 12,13')
+    require(set(chosen) <= set(numbers), '--only names an issue that is not in the approved list: ' +
+            ', '.join(f'#{n}' for n in sorted(set(chosen) - set(numbers))))
+    if answer.strip().casefold().startswith('escolher'):
+        require(only is not None, 'a resposta "Escolher quais" pede --only com as issues escolhidas')
+    orphans = sorted({c['parent'] for c in stored['candidates'] if c['parent'] in chosen and c['number'] not in chosen})
+    require(not orphans, '--only deixa sem filha o pai ' + ', '.join(f'#{n}' for n in orphans)
+            + ': escolha também as filhas da lista, ou deixe o pai de fora (ele espera por elas)')
+    # the approval of the file with that stamp, recorded with the literal answer, then checked right before the writes
+    try:
+        approval = stamping.run(argparse.Namespace(file=str(path), root=str(root), revision=None, approve=True,
+                                                   answer=answer, stage=7, check=False, expect=expect))
+        require(approval['exitCode'] == 0, 'o carimbo da lista não confere com o da pergunta: ' + approval['message'])
+        checked = stamping.run(argparse.Namespace(file=str(path), root=str(root), revision=None, approve=False,
+                                                  answer=None, stage=None, check=True, expect=None))
+    except stamping.Refusal as error:
+        raise Refusal(f'o carimbo não pôde ser gravado ou conferido: {error}')
+    require(checked['exitCode'] == 0, 'stamp --check recusou a lista: ' + checked['message'])
+    fresh = op_candidates(config, root, stored['scope'] or None, False, gh, stored.get('base'), stored.get('remote'))
+    changes = list_changes(stored['candidates'], fresh['candidates'])
+    if changes:
+        outcome.update(ok=False, exitCode=1, changes=changes,
+                       message='lista mudou: ' + '; '.join(changes) + '. Nada foi escrito; rode closeout.py run e '
+                               'pergunte de novo.')
+        return record(outcome)
+    def mismatch():
+        """The account check before each write through gh (never cached): None, or the result that stops here."""
+        if account is None:
+            return None
+        try:
+            account(data)
+        except _cli.AccountMismatch as found:
+            return found
+        return None
+
+    pause = (1.0 if len(chosen) > 5 else 0.0) if pause is None else pause
+    blocked = set()
+    for candidate in sorted(fresh['candidates'], key=lambda c: c['order']):
+        number = candidate['number']
+        if number not in chosen:
+            continue
+        held = [c['number'] for c in fresh['candidates'] if c['parent'] == number and c['number'] in blocked]
+        if held:
+            blocked.add(number)
+            outcome['failed'].append({'number': number, 'reason': 'child_not_closed', 'children': held})
+            continue
+        argv = candidate['commands'][0]['argv'][1:]
+        if outcome['commands'] and pause:
+            import time  # noqa: PLC0415
+            time.sleep(pause)   # the pace of the batch, under the secondary rate limit; no new question
+        step = {'number': number, 'argv': candidate['commands'][0]['argv']}
+        wrong = mismatch()
+        if wrong is not None:
+            stop = wrong.result(repository=repository, written=bool(outcome['closed']))
+            return record({**outcome, **stop, 'ok': False, 'exitCode': 1})
+        try:
+            edit(argv)
+            step['exitCode'] = 0
+            outcome['closed'].append(number)
+        except Refusal as error:
+            step.update(exitCode=1, message=rs.clean(str(error), 200))
+            blocked.add(number)
+            outcome['failed'].append({'number': number, 'reason': 'close_failed', 'message': step['message']})
+        outcome['commands'].append(step)
+        parent = candidate['parentTicks']
+        if ticks and number in outcome['closed'] and parent and parent['lines']:
+            wrong = mismatch()
+            if wrong is not None:
+                stop = wrong.result(repository=repository, written=True)
+                return record({**outcome, **stop, 'ok': False, 'exitCode': 1})
+            try:
+                outcome['ticks'].append(tick_parent(repository, root, parent['parent'], number, parent['lines'], gh, edit))
+            except Refusal as error:
+                outcome['ticks'].append({'parent': parent['parent'], 'lines': parent['lines'], 'ok': False,
+                                         'written': None, 'message': rs.clean(str(error), 200)})
+    if outcome['closed']:
+        outcome['verify'] = op_verify(config, root, outcome['closed'], gh)
+    bad_ticks = [t for t in outcome['ticks'] if not t['ok']]
+    outcome['ok'] = not outcome['failed'] and not bad_ticks and (outcome['verify'] is None or outcome['verify']['ok'])
+    outcome['exitCode'] = 0 if outcome['ok'] else 1
+    parts = [f"{len(outcome['closed'])} issue(s) fechadas: " + ', '.join(f'#{n}' for n in outcome['closed']) + '.'
+             if outcome['closed'] else 'Nenhuma issue foi fechada.']
+    if outcome['ticks']:
+        parts.append(f"{len(outcome['ticks']) - len(bad_ticks)} pai(s) marcados e conferidos.")
+    if outcome['failed'] or bad_ticks:
+        parts.append(f"{len(outcome['failed'])} fechamento(s) e {len(bad_ticks)} marcação(ões) falharam: só esses se "
+                     'repetem, nunca um fechamento que já entrou.')
+    outcome['message'] = ' '.join(parts)
+    return record(outcome)
+
+
 def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, **options):
     try:
         if operation == 'candidates':
@@ -1211,6 +1518,11 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
         elif operation == 'tick':
             result = op_tick(config, root, options.get('issue'), options.get('box'), options.get('line'), gh,
                              options.get('edit'), options.get('account'))
+        elif operation == 'run':
+            result = op_run(config, root, issues, all_flag, gh, options.get('base'), options.get('remote'))
+        elif operation == 'apply':
+            result = op_apply(config, root, options.get('expect'), options.get('answer'), options.get('only'), gh,
+                              options.get('edit'), options.get('account'), options.get('pause'))
         else:
             raise Refusal(f'Unknown operation: {rs.clean(operation, 40)}')
     except (Refusal, ValueError) as error:
@@ -1223,20 +1535,33 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
     return result
 
 
+# The commands the redesign replaced stay for one cycle as aliases (issue 2): they work as before and say what replaces them.
+ALIASES = {'candidates': 'closeout.py candidates segue por um ciclo como alias: a lista carimbada sai de `closeout.py run` '
+                         'e o fechamento de `closeout.py apply`; a abertura lê com `frontlights.py open`'}
+
+
 def build_parser():
     parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('candidates', 'verify'):
-        command = sub.add_parser(name, allow_abbrev=False)
+    for name in ('candidates', 'verify', 'run'):
+        command = sub.add_parser(name, allow_abbrev=False,
+                                 description=('alias for one cycle: ' + ALIASES[name]) if name in ALIASES else None)
         command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
         command.add_argument('--root', help='project whose .frontlights records name the issues worked on '
                                                  '(default: the main worktree of the current directory)')
-        command.add_argument('--issues', help='issue numbers, such as 12,13' + ('' if name == 'candidates' else ' (required)'))
-        if name == 'candidates':
+        command.add_argument('--issues', help='issue numbers, such as 12,13' + ('' if name != 'verify' else ' (required)'))
+        if name != 'verify':
             command.add_argument('--all', action='store_true', dest='all_flag', help='every open issue of the repository')
             command.add_argument('--base', help='the base branch the release lands in; without it, the base.branch of the '
                                                 'newest authorization record that names the issue, else main')
             command.add_argument('--remote', help='the remote that holds the released base (default origin)')
+    apply = sub.add_parser('apply', allow_abbrev=False)
+    apply.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
+    apply.add_argument('--root', help='the project whose .frontlights holds the stamped list (default: the main worktree '
+                                      'of the current directory)')
+    apply.add_argument('--expect', help='the stamp of the list shown in the question (required)')
+    apply.add_argument('--answer', help="the user's answer, verbatim (required)")
+    apply.add_argument('--only', help='the issues chosen after "Escolher quais", such as 12,13')
     status = sub.add_parser('merge-status', allow_abbrev=False)
     status.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
     status.add_argument('--prs', help='pull request numbers, such as 12,13 (required)')
@@ -1280,10 +1605,15 @@ def main(argv=None):
                      before=getattr(args, 'before', None), after=getattr(args, 'after', None),
                      lines=getattr(args, 'lines', None), issue=getattr(args, 'issue', None),
                      box=getattr(args, 'box', None), line=getattr(args, 'line', None),
+                     expect=getattr(args, 'expect', None), answer=getattr(args, 'answer', None),
+                     only=getattr(args, 'only', None),
                      # checked at every write, never cached: the login and the repository against the config
-                     account=(lambda data: _cli.gh_account(data, rs.gh_default)) if args.operation == 'tick' else None)
+                     account=((lambda data: _cli.gh_account(data, rs.gh_default))
+                              if args.operation in ('tick', 'apply') else None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
+    if args.operation in ALIASES:
+        result['alias'] = ALIASES[args.operation]
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 

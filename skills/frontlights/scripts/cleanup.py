@@ -2,7 +2,7 @@
 """Clean-up helper: which worktrees and branches the work left behind are no longer needed, once the pull
 requests that carried the work were merged into the approved base, and the commands that remove them.
 
-`plan` and `verify` only read. They read Git (worktree list, status, ancestry; always with `--no-optional-locks`, so
+`plan` and `verify` only read; `run`, `archive` and `unlink` write. They read Git (worktree list, status, ancestry; always with `--no-optional-locks`, so
 not even the index is refreshed) and GitHub (`gh api graphql`, the reader of roads.py) and print what the session
 runs. The cleanup of merged work needs no approval (closeout.md, step 5): the session runs the printed commands
 itself, with its own `git`, in order; only a candidate with `ask: true` waits for the user's yes. The commands are
@@ -46,6 +46,24 @@ Operations (each prints one JSON object on stdout):
           A slice's worktree (an authorization entry with `slice`, issue 31) is delivered to the branch of its own
           issue, never by a pull request: it can go when that branch (the entry of the same issue without `slice`)
           contains its tip, it was never pushed and no pull request was opened from it.
+          --from-authorizations takes the issues (the `issue_ids`) and the base (`base.branch` of the newest record
+          naming one of them) from the authorization records; --issues then narrows them. More than 50 worktrees
+          are read a page at a time (--page, `page` and `pages`). The saved outputs of the main worktree
+          (`.frontlights/out`, what a long output leaves) older than 30 days are a candidate of their own, `key` `out`,
+          caution `saved_outputs`, always `ask: true`, with the command `unlink_outputs`.
+  run     plan again, in this process, and run only the commands of that fresh plan: `git fetch --prune origin`
+          first (before the plan reads `origin/<base>`), then per candidate, in order, `copy_records` (the archive,
+          in process), the junctions of the first two levels of the worktree undone with `os.rmdir` (never the
+          target, never inside `.frontlights`), `git worktree remove`, `git branch -D`; a failed command stops its
+          item. No `--force`, ever, and no `git push`: a candidate with `delete_remote_branch` leaves that command and
+          the rest of its item in `sessionCommands`, for the session to run in order. A candidate with `ask: true`
+          runs only when --yes names its `key` (its branch, or `out`), after the user's yes in its own question.
+          --integration takes only the worktree of an `-integra` entry of the records. A locked worktree, or one a
+          process holds (the removal fails with "permission denied" or the like), goes to `excluded` as `in_use`.
+          `verify` runs at the end on what was removed; `.frontlights/cleanup-<AAAAMMDD-HHMMSS>.json` (São Paulo time)
+          keeps the result as evidence. Exit 1 when an item failed or the verify did not pass.
+  unlink  remove the saved outputs of --out (a `.frontlights/out` folder of a worktree of this repository): only the
+          files named by the saver and older than 30 days, recomputed; never a folder, a link or another file.
   archive copy --from <worktree>/.frontlights into --to, a folder under the `.frontlights` folder of the main
           worktree of that repository (read from Git), that does not exist yet or is empty. One whose files are all
           the same as the records (same paths, same bytes: an earlier copy, whole or stopped half-way, whose removal
@@ -57,6 +75,20 @@ Operations (each prints one JSON object on stdout):
 
 Run it from the folder the session stands in, with --root pointing at the project's main worktree: it never
 offers the folder it runs in.
+
+Cautions of a candidate (they inform): frontlights_records, ignored_files, local_only_integration,
+slice_merged_into_issue_branch, contained_in_base_without_pull_request, merged_release_branch,
+branch_differs_from_authorization, saved_outputs. Ignored files ask nothing when they are dependency or build output
+(node_modules, .venv, __pycache__, dist, build, bin, obj, .vs, TestResults, next-env.d.ts, *.tsbuildinfo, .dart_tool,
+Pods, DerivedData, .terraform, caches and the like), when the `cleanup.disposable` globs of the project's config match
+them, or when they are a byte-for-byte copy of the same path in the main worktree.
+Reasons a worktree or branch stays (`excluded`, each needs work or a decision, never removal): main_worktree,
+current_directory, detached_head, locked_worktree (in_use for `run`), in_use, junction_unverifiable (Windows before
+Python 3.12, which cannot see a junction), checked_out_elsewhere, not_a_worktree, not_found, path_missing,
+unsafe_path, unsafe_branch, protected_branch, uncommitted_changes, unreadable_status, open_pr, no_merged_pr,
+newer_than_merged_pr, merged_into_other_branch, ancestry_unverifiable, open_dependents, pull_requests_unreadable,
+integration_has_pull_request, integration_pushed, integration_has_unique_commits, slice_has_pull_request,
+slice_pushed, slice_is_issue_branch, slice_issue_branch_unknown, slice_not_in_issue_branch.
 
 Exit codes: 0 done; 1 refusal (bad usage or configuration, a failed read or copy) or, for verify, something that is
 not gone or not copied yet. A refusal is JSON, never a traceback.
@@ -72,6 +104,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -99,8 +132,16 @@ FOLDER = re.compile(r'[^A-Za-z0-9._-]+')
 DISPOSABLE = frozenset({'node_modules', 'bower_components', 'jspm_packages', '.venv', 'venv', '__pycache__', '.eggs',
                         'dist', 'build', 'out', 'target', 'coverage', 'htmlcov', '.cache', '.parcel-cache', '.turbo',
                         '.next', '.nuxt', '.svelte-kit', '.angular', '.gradle', '.pytest_cache', '.mypy_cache',
-                        '.ruff_cache', '.tox', '.nox'})
-DISPOSABLE_SUFFIXES = ('.pyc', '.pyo', '.egg-info')
+                        '.ruff_cache', '.tox', '.nox',
+                        # .NET, Next.js, Flutter, iOS and Terraform (issue 2 of the redesign: asked about in real sessions)
+                        'bin', 'obj', '.vs', 'TestResults', 'next-env.d.ts', '.dart_tool', 'Pods', 'DerivedData',
+                        '.terraform'})
+DISPOSABLE_SUFFIXES = ('.pyc', '.pyo', '.egg-info', '.tsbuildinfo')
+MAX_SAME_FILES = 200     # files of an ignored folder compared byte for byte with the main worktree's
+OUT_AGE_DAYS = 30        # saved outputs (.frontlights/out) older than this are offered, with a question
+OUT_NAME = re.compile(r'[a-z0-9][a-z0-9-]*-\d{8}-\d{6}-\d+\.json')   # the name `_cli.save_output` gives
+JUNCTION_DEPTH = 2       # levels of a worktree where `run` looks for junctions to undo before `git worktree remove`
+IN_USE = re.compile(r'permission denied|being used|resource busy|invalid argument|access is denied', re.IGNORECASE)
 PULLS = 'nodes { number state merged mergedAt baseRefName headRefOid }'
 
 
@@ -239,6 +280,27 @@ def authorized_worktrees(root, issues):
     return found, protected, sorted(prefixes)
 
 
+def authorization_scope(root, numbers=None):
+    """(issue numbers, approved base) the authorization records of the project give, for `--from-authorizations`:
+    the `issue_ids` of every `.frontlights/authorization*.json` (or `numbers`, when the command line narrows them) and
+    the `base.branch` of the newest record that names one of them (None when no record names a plain one)."""
+    ids, base = set(), None
+    for path in closeout.authorization_records(root):
+        data = closeout.read_record(path)
+        listed = data.get('issue_ids') if isinstance(data, dict) else None
+        if isinstance(listed, list):
+            ids.update(n for n in listed if closeout.valid_number(n))
+    wanted = sorted(ids) if numbers is None else list(numbers)
+    for path in reversed(closeout.authorization_records(root)):
+        data = closeout.read_record(path)
+        listed = data.get('issue_ids') if isinstance(data, dict) else None
+        branch = data.get('base', {}).get('branch') if isinstance(data, dict) and isinstance(data.get('base'), dict) else None
+        if isinstance(listed, list) and any(n in listed for n in wanted) and isinstance(branch, str) and closeout.valid_branch(branch):
+            base = branch
+            break
+    return wanted, base
+
+
 def release_branches(root, prefixes):
     """The local branches named like a release (`<prefix>release-<YYYY-MM-DD>[-N]`) under one of `prefixes`."""
     if not prefixes:
@@ -264,11 +326,58 @@ def nothing_left(main, entry, key, known):
     return closeout.valid_branch(branch) and local_tip(main, branch) is None
 
 
-def disposable(name):
-    """An ignored name inside a folder of dependencies, builds or caches (rebuilt, so removing it asks nothing)."""
+def disposable(name, globs=()):
+    """An ignored name inside a folder of dependencies, builds or caches (rebuilt, so removing it asks nothing), or one
+    the project's `cleanup.disposable` globs match (the whole relative path or any part of it)."""
     parts = [part for part in name.strip('/"').split('/') if part]
-    return bool(parts) and (any(part in DISPOSABLE or part.endswith('.egg-info') for part in parts)
-                            or parts[-1].endswith(DISPOSABLE_SUFFIXES))
+    if not parts:
+        return False
+    if any(part in DISPOSABLE or part.endswith('.egg-info') for part in parts) or parts[-1].endswith(DISPOSABLE_SUFFIXES):
+        return True
+    whole = '/'.join(parts)
+    return any(fnmatch.fnmatchcase(whole, g.strip('/')) or any(fnmatch.fnmatchcase(part, g.strip('/')) for part in parts)
+               for g in globs)
+
+
+def config_disposable(config):
+    """The `cleanup.disposable` globs of the project's config (a list of plain strings), or ()."""
+    try:
+        data = frontlights.load(config)
+    except (OSError, ValueError):
+        return ()
+    block = data.get('cleanup') if isinstance(data, dict) else None
+    globs = block.get('disposable') if isinstance(block, dict) else None
+    return tuple(g for g in globs if isinstance(g, str) and g.strip('/ ')) if isinstance(globs, list) else ()
+
+
+def same_as_main(main, worktree, name):
+    """Whether the ignored `name` of `worktree` is a byte-for-byte copy of the same path in the main worktree (a
+    `.env` copied there, say): a file with the same bytes, or a folder whose every file (at most MAX_SAME_FILES) has
+    its twin there. A link or junction never counts as a copy."""
+    relative = name.strip('/"')
+    if not relative or '..' in relative.split('/'):
+        return False
+    mine, theirs = Path(worktree) / relative, Path(main) / relative
+    try:
+        if is_link(mine) or is_link(theirs):
+            return False
+        if mine.is_file():
+            return theirs.is_file() and filecmp.cmp(mine, theirs, shallow=False)
+        if not (mine.is_dir() and theirs.is_dir()):
+            return False
+        seen = 0
+        for folder, dirs, files in os.walk(mine):
+            for entry in dirs + files:
+                if is_link(Path(folder) / entry):
+                    return False
+            for entry in files:
+                seen += 1
+                twin = theirs / (Path(folder) / entry).relative_to(mine)
+                if seen > MAX_SAME_FILES or not twin.is_file() or not filecmp.cmp(Path(folder) / entry, twin, shallow=False):
+                    return False
+        return True
+    except OSError:
+        return False
 
 
 def records_destination(main, item, folder, tip):
@@ -489,6 +598,8 @@ def assess(ctx, item, registered, github):
             return ['detached_head'], None
         if registered['locked']:
             return ['locked_worktree'], None
+        if not junctions_readable():
+            return ['junction_unverifiable'], None   # a junction left in it could lead the removal outside it
         if not Path(registered['path']).is_dir():
             reasons.append('path_missing')
     if not branch or not closeout.valid_branch(branch):
@@ -509,7 +620,7 @@ def assess(ctx, item, registered, github):
         elif uncommitted:
             reasons.append('uncommitted_changes')
         records = Path(registered['path']) / '.frontlights'
-        if records.is_dir() and any(records.iterdir()):
+        if records.is_dir() and any(entry.name != 'out' for entry in records.iterdir()):   # out/ is never archived
             cautions.append('frontlights_records')
         if ignored:
             cautions.append('ignored_files')
@@ -547,7 +658,7 @@ def assess(ctx, item, registered, github):
     commands.append({'kind': 'delete_branch', 'argv': ['git', '-C', main, 'branch', '-D', branch]})
     for command in commands:
         command['item'] = branch   # a failed command skips the rest of its item
-    record = {'issue': item.get('issue'), 'slice': item.get('slice'), 'release': False,
+    record = {'key': branch, 'issue': item.get('issue'), 'slice': item.get('slice'), 'release': False,
               'path': path if registered is not None else None, 'branch': branch, 'tip': tip,
               'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
               'removeWorktree': registered is not None, 'recordsTo': destination, 'cautions': cautions,
@@ -555,7 +666,8 @@ def assess(ctx, item, registered, github):
     if ignored:
         record['ignoredCount'] = len(ignored)
         record['ignored'] = [rs.clean(name, 200) for name in ignored[:MAX_IGNORED]]
-        kept = [name for name in ignored if not disposable(name)]
+        kept = [name for name in ignored if not disposable(name, ctx.get('disposable', ()))
+                and not same_as_main(main, registered['path'], name)]
         if kept:
             record.update(ask=True, askReason='ignored_files_besides_dependencies',
                           askIgnored=[rs.clean(name, 200) for name in kept[:MAX_IGNORED]])
@@ -577,23 +689,38 @@ def assess_release(ctx, branch, github):
         reasons = ['checked_out_elsewhere']
     if reasons:
         return reasons, None
-    return [], {'issue': None, 'slice': None, 'release': True, 'path': None, 'branch': branch, 'tip': tip,
+    return [], {'key': branch, 'issue': None, 'slice': None, 'release': True, 'path': None, 'branch': branch, 'tip': tip,
                 'pullRequests': sorted(p['number'] for p in github['heads'] if isinstance(p.get('number'), int)),
                 'removeWorktree': False, 'recordsTo': None, 'cautions': ['merged_release_branch'], 'ask': False,
                 'commands': [{'kind': 'delete_branch', 'item': branch,
                               'argv': ['git', '-C', ctx['main_path'], 'branch', '-D', branch]}]}
 
 
-def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None):
-    """Read only: what can be removed now, with the commands in the order to run them, and what stays."""
+def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations=(), gh=None, from_authorizations=False,
+            page=1):
+    """Read only: what can be removed now, with the commands in the order to run them, and what stays. With
+    `from_authorizations`, the issues (unless `issues` narrows them) and the base (unless `base` is given) come from
+    the authorization records (`authorization_scope`)."""
     gh = gh or rs.gh_default
     repository = closeout.load_project(config)
-    require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
-    numbers = closeout.parse_numbers(issues)
-    require(base is None or closeout.valid_branch(base), '--base must be a plain branch name')
     listing = list_worktrees(root)
     main_entry = listing[0]
     records_root = root if (Path(root) / '.frontlights').is_dir() else main_entry['path']
+    if from_authorizations:
+        given = None if issues is None or issues == '' or issues == [] else closeout.parse_numbers(issues)
+        numbers, recorded = authorization_scope(records_root, given)
+        base = base or recorded
+        if not numbers and not worktrees and not integrations:
+            return {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': base,
+                    'baseSource': 'authorization' if recorded else None, 'issues': [], 'commands': [], 'candidates': [],
+                    'excluded': [], 'alreadyClean': 0, 'ask': False,
+                    'message': 'No authorization record lists issue ids: nothing to clean.'}
+        numbers = numbers or [0]   # only named worktrees: no issue of the records takes part
+    else:
+        require(issues is not None and issues != '' and issues != [], 'plan needs the issues whose work is done: pass --issues 12,13')
+        numbers = closeout.parse_numbers(issues)
+        recorded = None
+    require(base is None or closeout.valid_branch(base), '--base must be a plain branch name')
     authorized, protected, prefixes = authorized_worktrees(records_root, set(numbers))
     # the branch of the issue (`<prefix>issue-<n>`) wins over a later entry of the same issue without `slice`, such as
     # its local integration branch (`<prefix>issue-<n>-integra`, issue 70): the slices are merged into the former
@@ -625,18 +752,25 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
             gone += 1   # what `assess` would count as already clean: it never takes a place under the cap
             continue
         items.append(entry)
-    require(len(items) <= MAX_ITEMS, f'name at most {MAX_ITEMS} worktrees')
+    # more than MAX_ITEMS worktrees are read a page at a time (`page`, 1-based); the release branches and the saved
+    # outputs belong to the first page
+    require(isinstance(page, int) and page >= 1, '--page must be a positive integer')
+    pages = max(1, -(-len(items) // MAX_ITEMS))
+    require(page <= pages, f'there are {pages} page(s) of worktrees; --page {page} has none')
+    items = items[(page - 1) * MAX_ITEMS:page * MAX_ITEMS]
     default = read_default_branch(gh, repository)
     expected = base or default
     require(isinstance(expected, str), 'the approved base is unknown: pass --base <branch> (the repository default could not be read)')
     by_path = {norm(e['path']): e for e in listing}
     protected = list(protected) + ['main', 'master', expected] + ([default] if default else [])
     main = main_entry['path']
-    releases = [b for b in release_branches(main, prefixes) if not is_protected(b, protected)][:MAX_ITEMS]
+    releases = [b for b in release_branches(main, prefixes) if not is_protected(b, protected)][:MAX_ITEMS] if page == 1 else []
+    outputs = saved_outputs(main) if page == 1 else None
+    source = ('authorization' if recorded and base == recorded else 'argument') if base else 'default_branch'
     result = {'ok': True, 'exitCode': 0, 'project': repository, 'repository': repository, 'expectedBase': expected,
-              'baseSource': 'argument' if base else 'default_branch', 'commands': [], 'candidates': [], 'excluded': [],
-              'alreadyClean': gone, 'ask': False}
-    if not items and not releases:
+              'baseSource': source, 'issues': [n for n in numbers if n], 'commands': [], 'candidates': [], 'excluded': [],
+              'alreadyClean': gone, 'ask': False, 'page': page, 'pages': pages}
+    if not items and not releases and outputs is None:
         result['message'] = (f'{gone} recorded worktree(s) of these issues are already gone, with their branches: nothing to clean.'
                               if gone else
                               'No worktree is recorded for these issues in an authorization and none was named: nothing to clean. '
@@ -652,6 +786,7 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     ctx = {'root': main, 'main': norm(main), 'main_path': main, 'base': expected, 'origin': has_origin(main),
            'issue_branches': issue_branches,
            'protected': protected, 'gh': gh, 'repository': repository, 'more': {}, 'delivered': set(), 'listing': listing,
+           'disposable': config_disposable(config),
            'python': Path(sys.executable).as_posix(), 'script': Path(__file__).resolve().as_posix()}
     # the integration worktrees go last: what they hold is judged against the pull requests the others delivered
     for item, registered, branch in sorted(resolved, key=lambda r: bool(r[0].get('integration'))):
@@ -681,6 +816,8 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
     # the slices of an issue come before the issue's own worktree: its branch is what they are judged against; the
     # release branches go last
     result['candidates'].sort(key=lambda c: (c['release'], c['issue'] is None, c['issue'] or 0, c.get('slice') is None, c['branch']))
+    if outputs is not None:
+        result['candidates'].append(outputs)   # always asked: removing them is the user's call
     if ctx['origin']:
         # GitHub deletes the merged head branches; the fetch drops the remote-tracking refs they left here
         result['commands'].append({'kind': 'fetch_prune', 'item': None, 'argv': ['git', '-C', main, 'fetch', '--prune', REMOTE]})
@@ -697,10 +834,71 @@ def op_plan(config, root='.', issues=None, base=None, worktrees=(), integrations
         parts.append(f'{result["alreadyClean"]} already gone.')
     parts.append('Nothing was removed. Run `commands` in order, with no question; verify afterwards.')
     if asking:
-        parts.append(f'{len(asking)} candidate(s) hold ignored files besides dependency or build folders (`ask`): '
-                     'their commands are not in `commands` and run only after the user said yes.')
+        parts.append(f'{len(asking)} candidate(s) hold ignored files besides dependency or build folders, or saved '
+                     'outputs (`ask`): their commands are not in `commands` and run only after the user said yes.')
+    if pages > 1:
+        parts.append(f'Page {page} of {pages} of worktrees (at most {MAX_ITEMS} each): pass --page for the next one; '
+                     '`run` reads them all.')
     result['message'] = ' '.join(parts)
     return result
+
+
+def saved_outputs(main):
+    """The candidate for the saved outputs of the main worktree (`.frontlights/out`, what `_cli.emit` writes) older than
+    OUT_AGE_DAYS, or None when there is none. Always `ask: true`: removing them is the user's call, never silent."""
+    folder = Path(main) / '.frontlights' / 'out'
+    old = old_outputs(folder)
+    if not old:
+        return None
+    command = {'kind': 'unlink_outputs', 'item': 'out',
+               'argv': [Path(sys.executable).as_posix(), Path(__file__).resolve().as_posix(), 'unlink', '--out',
+                        folder.as_posix()]}
+    return {'key': 'out', 'issue': None, 'slice': None, 'release': False, 'path': folder.as_posix(), 'branch': None,
+            'tip': None, 'pullRequests': [], 'removeWorktree': False, 'recordsTo': None, 'cautions': ['saved_outputs'],
+            'files': len(old), 'ask': True, 'askReason': 'saved_outputs',
+            'askIgnored': [p.name for p in old[:MAX_IGNORED]], 'commands': [command]}
+
+
+def old_outputs(folder, now=None):
+    """The files of an `out` folder named as `_cli.save_output` names them, regular (never a link or a junction) and
+    older than OUT_AGE_DAYS, oldest first. [] when the folder is missing, is a link, or cannot be read."""
+    folder = Path(folder)
+    now = time.time() if now is None else now
+    try:
+        if not folder.is_dir() or is_link(folder):
+            return []
+        found = []
+        for entry in folder.iterdir():
+            if (OUT_NAME.fullmatch(entry.name) and not is_link(entry) and entry.is_file()
+                    and now - entry.stat().st_mtime > OUT_AGE_DAYS * 86400):
+                found.append(entry)
+    except OSError:
+        return []
+    return sorted(found, key=lambda e: (e.stat().st_mtime, e.name))
+
+
+def op_unlink(folder):
+    """Remove the saved outputs (`unlink_outputs`) of a `.frontlights/out` folder of a worktree of this repository: only
+    the files `old_outputs` names (regular, named by `_cli.save_output`, older than OUT_AGE_DAYS), recomputed now; never
+    a folder, a link or another file. Run only after the user's yes to the candidate `out`."""
+    require(folder, 'unlink needs --out <worktree>/.frontlights/out')
+    target = Path(os.path.abspath(folder))
+    require(target.name == 'out' and target.parent.name == '.frontlights', '--out must be a .frontlights/out folder')
+    require(target.is_dir() and not is_link(target) and not is_link(target.parent),
+            '--out must be a real folder, not a link or a junction')
+    listing = list_worktrees(target.parent.parent)
+    require(any(norm(e['path']) == norm(target.parent.parent) for e in listing),
+            '--out must be inside a worktree of this repository')
+    removed, failed = [], []
+    for entry in old_outputs(target):
+        try:
+            entry.unlink()
+            removed.append(entry.name)
+        except OSError:
+            failed.append(entry.name)
+    return {'ok': not failed, 'exitCode': 0 if not failed else 1, 'out': target.as_posix(), 'removed': len(removed),
+            'failed': failed, 'message': f'{len(removed)} saved output(s) removed from {target.as_posix()}.'
+            + (f' {len(failed)} could not be removed.' if failed else '')}
 
 
 ARCHIVE_TEMP = re.compile(r'^\..+\.frontlights-archive-tmp$')
@@ -719,6 +917,12 @@ def is_link(path):
 def is_junction(path):
     """A Windows junction (`os.path.isjunction`, Python 3.12 and later; none before it is read)."""
     return bool(getattr(os.path, 'isjunction', lambda _: False)(path)) and not os.path.islink(path)
+
+
+def junctions_readable():
+    """False on Windows before Python 3.12: no `os.path.isjunction`, so a junction in a worktree cannot be seen, and
+    removing that worktree could reach through it (`junction_unverifiable`)."""
+    return os.name != 'nt' or hasattr(os.path, 'isjunction')
 
 
 def within(path, folder):
@@ -886,13 +1090,211 @@ def op_verify(config, root='.', worktrees=(), branches=(), gh=None, records=(), 
     return result
 
 
+# ---------------------------------------------------------------- run: the plan, executed
+
+def execute(argv):
+    """(exit code, stdout, stderr) of a command of the plan, run without a shell. Its text is data, never repeated
+    whole: only a bounded, cleaned line reaches the result."""
+    environment = rs.gh_environment()
+    environment['GIT_TERMINAL_PROMPT'] = '0'
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              timeout=GIT_TIMEOUT * 4, stdin=subprocess.DEVNULL, env=environment)
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, '', 'the command could not be run or did not finish in time'
+    return done.returncode, done.stdout, done.stderr
+
+
+def undo_junctions(worktree):
+    """Undo the junctions (and directory symlinks) at the first JUNCTION_DEPTH levels of `worktree` with `os.rmdir`,
+    which removes the link and never what it points at, so `git worktree remove` cannot reach through one. Never
+    inside `.frontlights` (the archive refuses a junction there), never the target. Returns the relative paths undone;
+    raises Refusal when one cannot be undone (the worktree then stays)."""
+    undone = []
+    top = Path(worktree)
+    level = [top]
+    for _ in range(JUNCTION_DEPTH):
+        deeper = []
+        for folder in level:
+            try:
+                entries = list(os.scandir(folder))
+            except OSError:
+                continue
+            for entry in entries:
+                path = Path(entry.path)
+                if path.parent == top and entry.name in ('.frontlights', '.git'):
+                    continue
+                if is_junction(path) or (os.path.islink(path) and os.path.isdir(path)):
+                    try:
+                        if os.path.islink(path) and os.name != 'nt':
+                            os.unlink(path)   # a POSIX symlink to a folder: unlink removes the link alone
+                        else:
+                            os.rmdir(path)    # a junction or a Windows directory symlink: the link alone
+                    except OSError:
+                        raise Refusal(f'the link {path.relative_to(top).as_posix()} could not be undone; the worktree '
+                                      'stays, so nothing outside it is reached')
+                    undone.append(path.relative_to(top).as_posix())
+                elif entry.is_dir(follow_symlinks=False):
+                    deeper.append(path)
+        level = deeper
+    return undone
+
+
+def integration_paths(root):
+    """The worktree paths of the `-integra` entries of the authorization records (`--integration` takes only those)."""
+    found = set()
+    for path in closeout.authorization_records(root):
+        data = closeout.read_record(path)
+        entries = data.get('worktrees') if isinstance(data, dict) else None
+        for entry in entries if isinstance(entries, list) else []:
+            if (isinstance(entry, dict) and isinstance(entry.get('branch'), str) and entry['branch'].endswith('-integra')
+                    and isinstance(entry.get('path'), str) and entry['path'].strip()):
+                found.add(norm(entry['path']))
+    return found
+
+
+def evidence_path(main):
+    """`<main>/.frontlights/cleanup-<AAAAMMDD-HHMMSS>[-k].json`, São Paulo time, never an existing name."""
+    folder = Path(main) / '.frontlights'
+    stamp = _cli.sao_paulo_now().strftime('%Y%m%d-%H%M%S')
+    for attempt in range(1, 100):
+        path = folder / (f'cleanup-{stamp}' + ('' if attempt == 1 else f'-{attempt}') + '.json')
+        if not path.exists():
+            return path
+    raise Refusal('no free name for the cleanup evidence')
+
+
+def op_run(config, root='.', issues=None, base=None, integrations=(), yes=(), gh=None, from_authorizations=False,
+           runner=None):
+    """Plan again in this process and run only the commands of that fresh plan (see the module's docstring)."""
+    runner = runner or execute
+    require(from_authorizations or not (issues is None or issues == '' or issues == []),
+            'run needs --from-authorizations (or --issues 12,13)')
+    listing = list_worktrees(root)
+    main = listing[0]['path']
+    records_root = root if (Path(root) / '.frontlights').is_dir() else main
+    allowed = integration_paths(records_root)
+    for path in integrations:
+        require(norm(path) in allowed, '--integration takes only the worktree of an -integra entry of the authorization '
+                                       'records')
+    require(all(isinstance(k, str) and (k == 'out' or closeout.valid_branch(k)) for k in yes),
+            '--yes takes the branch of a candidate with ask (or out), as many times as needed')
+    ran, failed, session, warnings = [], [], [], []
+    if has_origin(main):
+        argv = ['git', '-C', main, 'fetch', '--prune', REMOTE]
+        code, _, _ = runner(argv)
+        ran.append({'item': None, 'kind': 'fetch_prune', 'argv': argv, 'exitCode': code})
+        if code != 0:
+            warnings.append('fetch_failed: the plan judged by origin/<base> as of the last fetch')
+    plans = [op_plan(config, root, issues, base, (), integrations, gh, from_authorizations, 1)]
+    for page in range(2, plans[0]['pages'] + 1):
+        plans.append(op_plan(config, root, issues, base, (), integrations, gh, from_authorizations, page))
+    candidates = [c for plan in plans for c in plan['candidates']]
+    excluded = [dict(e) for plan in plans for e in plan['excluded']]
+    for entry in excluded:
+        if 'locked_worktree' in entry['reasons']:
+            entry['reasons'] = ['in_use']
+            entry['inUse'] = 'locked'
+    approved = set(yes)
+    asked = [{'key': c['key'], 'path': c['path'], 'askReason': c.get('askReason'), 'askIgnored': c.get('askIgnored', [])}
+             for c in candidates if c['ask'] and c['key'] not in approved]
+    unused = sorted(approved - {c['key'] for c in candidates if c['ask']})
+    removed, deleted, copied = [], [], []
+    for candidate in candidates:
+        if candidate['ask'] and candidate['key'] not in approved:
+            continue
+        commands = candidate['commands']
+        for position, command in enumerate(commands):
+            kind, argv = command['kind'], command['argv']
+            step = {'item': candidate['key'], 'kind': kind, 'argv': argv}
+            if kind == 'delete_remote_branch':
+                # no script runs `git push`: the session runs this and what follows of the item, in order
+                session += [dict(c) for c in commands[position:]]
+                break
+            try:
+                if kind == 'copy_records':
+                    outcome = op_archive(argv[argv.index('--from') + 1], argv[argv.index('--to') + 1])
+                    step['exitCode'] = 0
+                    copied.append(outcome['to'])
+                elif kind == 'unlink_outputs':
+                    outcome = op_unlink(argv[argv.index('--out') + 1])
+                    step.update(exitCode=outcome['exitCode'], removed=outcome['removed'])
+                    require(outcome['ok'], outcome['message'])
+                elif kind == 'remove_worktree':
+                    step['junctionsUndone'] = undo_junctions(argv[-1])
+                    code, _, err = runner(argv)
+                    step['exitCode'] = code
+                    if code != 0:
+                        if Path(argv[-1]).exists() and IN_USE.search(err or ''):
+                            excluded.append({'issue': candidate['issue'], 'path': rs.clean(argv[-1], 300),
+                                             'branch': candidate['branch'], 'reasons': ['in_use'], 'inUse': 'busy'})
+                            step['inUse'] = True
+                        raise Refusal(f'git worktree remove failed (exit {code})')
+                    removed.append(argv[-1])
+                else:
+                    code, _, _ = runner(argv)
+                    step['exitCode'] = code
+                    require(code == 0, f'{kind} failed (exit {code})')
+                    if kind == 'delete_branch':
+                        deleted.append(argv[-1])
+            except Refusal as error:
+                step.setdefault('exitCode', 1)
+                step['message'] = rs.clean(str(error), 300)
+                ran.append(step)
+                failed.append({'item': candidate['key'], 'kind': kind, 'message': step['message']})
+                break   # the rest of this item does not run
+            ran.append(step)
+    verify = None
+    if removed or deleted or copied:
+        verify = op_verify(config, main, removed, deleted, gh, copied)
+    result = {'ok': not failed and (verify is None or verify['ok']), 'project': plans[0]['project'],
+              'repository': plans[0]['repository'], 'expectedBase': plans[0]['expectedBase'],
+              'issues': plans[0].get('issues', []), 'ran': ran, 'failed': failed, 'excluded': excluded,
+              'alreadyClean': sum(plan['alreadyClean'] for plan in plans), 'ask': asked, 'yesUnused': unused,
+              'sessionCommands': session, 'verify': verify, 'warnings': warnings}
+    result['exitCode'] = 0 if result['ok'] else 1
+    parts = [f'{len(removed)} worktree(s) and {len(deleted)} branch(es) removed.']
+    if failed:
+        parts.append(f'{len(failed)} item(s) stopped at a failed command (failed); never retried with force.')
+    if session:
+        parts.append(f'{len(session)} command(s) left for the session, in order (sessionCommands: the push that deletes '
+                     'a released issue branch on origin, then its local delete).')
+    if asked:
+        parts.append(f'{len(asked)} candidate(s) wait for their own question (ask); run again with --yes <key> after a yes.')
+    if unused:
+        parts.append('--yes named no asking candidate: ' + ', '.join(unused) + '.')
+    if excluded:
+        parts.append(f'{len(excluded)} stay (excluded).')
+    result['message'] = ' '.join(parts)
+    try:
+        path = evidence_path(main)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + '.tmp')
+        temporary.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+        os.replace(temporary, path)
+        result['evidence'] = path.as_posix()
+    except (OSError, Refusal):
+        result['evidence'] = None
+        result['warnings'].append('evidence_not_written: the cleanup evidence file could not be written')
+    return result
+
+
 # ---------------------------------------------------------------- command line
 
+# The commands the redesign replaced stay for one cycle as aliases (issue 2): they work as before and say what replaces them.
+ALIASES = {'plan': 'cleanup.py plan segue por um ciclo como alias: a abertura lê o plano com `frontlights.py open` '
+                   'e a limpeza roda com `cleanup.py run --from-authorizations`'}
+
 def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
-        records=(), source=None, destination=None, remote_branches=()):
+        records=(), source=None, destination=None, remote_branches=(), from_authorizations=False, page=1, yes=(),
+        runner=None, out=None):
     try:
         if operation == 'plan':
-            result = op_plan(config, root, issues, base, worktrees, integrations, gh)
+            result = op_plan(config, root, issues, base, worktrees, integrations, gh, from_authorizations, page)
+        elif operation == 'run':
+            result = op_run(config, root, issues, base, integrations, yes, gh, from_authorizations, runner)
+        elif operation == 'unlink':
+            result = op_unlink(out)
         elif operation == 'verify':
             result = op_verify(config, root, worktrees, branches, gh, records, remote_branches)
         elif operation == 'archive':
@@ -912,22 +1314,37 @@ def run(operation, config, root='.', issues=None, base=None, worktrees=(), branc
 def build_parser():
     parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
-    for name in ('plan', 'verify'):
-        command = sub.add_parser(name, allow_abbrev=False)
+    for name in ('plan', 'verify', 'run'):
+        command = sub.add_parser(name, allow_abbrev=False,
+                                 description=('alias for one cycle: ' + ALIASES[name]) if name in ALIASES else None)
         command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
         command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
-        command.add_argument('--worktree', action='append', default=[], dest='worktrees', help='a worktree path, as many times as needed')
-        if name == 'plan':
-            command.add_argument('--issues', help='issue numbers whose work is done, such as 12,13 (required)')
+        if name != 'run':
+            command.add_argument('--worktree', action='append', default=[], dest='worktrees', help='a worktree path, as many times as needed')
+        if name in ('plan', 'run'):
+            command.add_argument('--issues', help='issue numbers whose work is done, such as 12,13 (required without '
+                                                  '--from-authorizations, which it then narrows)')
+            command.add_argument('--from-authorizations', action='store_true', dest='from_authorizations',
+                                 help='the issues (the issue_ids) and the base (base.branch of the newest record) from '
+                                      '.frontlights/authorization*.json')
             command.add_argument('--base', help="the approved base branch; without it, the repository's default branch")
             command.add_argument('--integration', action='append', default=[], dest='integrations',
-                                 help="the local-only integration worktree of a family, as many times as needed")
+                                 help="the local-only integration worktree of a family, as many times as needed"
+                                      + (' (only an -integra entry of the records)' if name == 'run' else ''))
+            if name == 'plan':
+                command.add_argument('--page', type=int, default=1, help=f'the page of worktrees, {MAX_ITEMS} each (default 1)')
+            else:
+                command.add_argument('--yes', action='append', default=[], dest='yes',
+                                     help='the key (branch, or out) of a candidate with ask the user said yes to, in its '
+                                          'own question; as many times as needed')
         else:
             command.add_argument('--branch', action='append', default=[], dest='branches', help='a branch name, as many times as needed')
             command.add_argument('--remote-branch', action='append', default=[], dest='remote_branches',
                                  help='a branch name on origin (the `delete_remote_branch` of plan), as many times as needed')
             command.add_argument('--records', action='append', default=[], dest='records',
                                  help='a folder the records of a worktree were copied to (the `recordsTo` of plan)')
+    command = sub.add_parser('unlink', allow_abbrev=False)
+    command.add_argument('--out', required=True, help='the .frontlights/out folder whose old saved outputs go (after a yes)')
     command = sub.add_parser('archive', allow_abbrev=False)
     command.add_argument('--from', required=True, dest='source', help='the .frontlights folder of the worktree')
     command.add_argument('--to', required=True, dest='destination', help='the folder of the main worktree it is copied to')
@@ -953,9 +1370,13 @@ def main(argv=None):
                      getattr(args, 'base', None), getattr(args, 'worktrees', []), getattr(args, 'branches', []),
                      integrations=getattr(args, 'integrations', []), records=getattr(args, 'records', []),
                      remote_branches=getattr(args, 'remote_branches', []),
+                     from_authorizations=getattr(args, 'from_authorizations', False),
+                     page=getattr(args, 'page', 1), yes=getattr(args, 'yes', []), out=getattr(args, 'out', None),
                      source=getattr(args, 'source', None), destination=getattr(args, 'destination', None))
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
+    if args.operation in ALIASES:
+        result['alias'] = ALIASES[args.operation]
     _cli.emit(json.dumps(result, indent=2, ensure_ascii=True), args.operation, args.full)
     return int(result['exitCode'])
 

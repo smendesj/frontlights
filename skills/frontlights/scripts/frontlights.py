@@ -1314,6 +1314,70 @@ def update_check(skill_root=SKILL_ROOT):
         result['commands'] = [f'git -C "{root}" pull --ff-only']
     return result
 
+OPEN_QUESTION = 'Fechar as issues que já têm todos os critérios marcados?'
+
+
+def open_session(config, root, gh=None, fetch=True):
+    """`open` (issue 2 of the redesign): the reads of the opening in one command. `git fetch --prune origin` (the one
+    write: remote-tracking refs, never a branch or a worktree), then `cleanup.py plan --from-authorizations` and
+    `closeout.py candidates`, in the same process. It removes, closes and asks nothing: `cleanup.py run` executes the
+    cleanup, and the closing question waits for the session. A part that fails becomes a warning; the other runs."""
+    import cleanup   # noqa: PLC0415  (lazy: both import this module)
+    import closeout  # noqa: PLC0415
+    warnings = []
+    result = {'ok': True, 'exitCode': 0, 'operation': 'open', 'fetched': False, 'cleanup': None, 'closeout': None,
+              'warnings': warnings}
+    try:
+        origin = cleanup.has_origin(root)
+        if fetch and origin:
+            code, _ = cleanup.git(root, 'fetch', '--prune', cleanup.REMOTE)
+            result['fetched'] = code == 0
+            if code != 0:
+                warnings.append('fetch_failed: o git fetch --prune origin falhou; a limpeza e o fechamento julgaram '
+                                'pelo origin/<base> da última busca')
+        elif not origin:
+            warnings.append('no_origin: o projeto não tem o remoto origin; nada foi buscado')
+    except cleanup.Refusal as error:
+        warnings.append(f'fetch_failed: {error}')
+    plan = cleanup.run('plan', config, root, gh=gh, from_authorizations=True)
+    if plan.get('ok'):
+        result['cleanup'] = {
+            'commands': plan['commands'],
+            'ask': [{'key': c['key'], 'branch': c['branch'], 'path': c['path'], 'askReason': c.get('askReason'),
+                     'askIgnored': c.get('askIgnored', [])} for c in plan['candidates'] if c['ask']],
+            'excluded': plan['excluded'], 'alreadyClean': plan['alreadyClean'], 'candidates': len(plan['candidates']),
+            'issues': plan.get('issues', []), 'expectedBase': plan.get('expectedBase')}
+    else:
+        warnings.append(f"cleanup_failed: {plan.get('message')}")
+    found = closeout.run('candidates', config, root, gh=gh)
+    if found.get('ok'):
+        issues = [{'number': c['number'], 'title': c['title'], 'order': c['order'], 'level': c['level'],
+                   'parent': c['parent'], 'cautions': c['cautions'], 'pendingOutside': c['pendingOutside'],
+                   'parentTicks': c['parentTicks']} for c in found['candidates']]
+        result['closeout'] = {'ask': bool(issues), 'count': len(issues), 'issues': issues,
+                              'awaiting_release': [e['number'] for e in found['excluded'] if e['reason'] == 'awaiting_release'],
+                              'excluded': len(found['excluded']), 'alreadyDone': found['alreadyDone']}
+        if issues:
+            result['closeout']['question'] = OPEN_QUESTION
+    else:
+        warnings.append(f"closeout_failed: {found.get('message')}")
+    parts = []
+    if result['cleanup'] is not None:
+        count = result['cleanup']['candidates']
+        parts.append(f'Limpeza: {count} item(ns) para remover sem pergunta com `cleanup.py run --from-authorizations`'
+                     if count else 'Limpeza: nada a remover')
+        if result['cleanup']['ask']:
+            parts.append(f"{len(result['cleanup']['ask'])} com arquivos ignorados pedem pergunta própria (`ask`)")
+    if result['closeout'] is not None:
+        parts.append(f"Fechamento: {result['closeout']['count']} issue(s) prontas; pergunte \"{OPEN_QUESTION}\""
+                     if result['closeout']['ask'] else 'Fechamento: nenhuma issue pronta para fechar')
+        if result['closeout']['awaiting_release']:
+            parts.append('esperam a release: ' + ', '.join(f'#{n}' for n in result['closeout']['awaiting_release']))
+    parts.append('Nada foi removido nem fechado')
+    result['message'] = '. '.join(parts) + '.'
+    return result
+
+
 def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
@@ -1340,6 +1404,11 @@ def build_parser():
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--summary', action='store_true',
                    help='per source the status and the count; per issue only number, title, state and boxes')
+    p = sub.add_parser('open', help='the opening reads in one command: git fetch --prune, cleanup plan '
+                                    '--from-authorizations and closeout candidates; removes and closes nothing')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
+    p.add_argument('--no-fetch', action='store_true', dest='no_fetch', help='skip git fetch --prune origin')
     p = sub.add_parser('evidence')
     p.add_argument('--root', help='default: the worktree of the current directory')
     p = sub.add_parser('review-gate')
@@ -1393,6 +1462,9 @@ def resolve_defaults(args):
     if args.command == 'inspect':
         args.root = str(_cli.root_path(args.root))
         args.config = _cli.config_path(args.config, args.root)
+    elif args.command == 'open':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root)
     elif args.command in ('evidence', 'review-gate', 'checkpoint', 'resume'):
         args.root = str(_cli.tree_path(args.root))
     elif args.command == 'archive':
@@ -1438,6 +1510,8 @@ def main():
                     result['ask_before_continuing'] = ['teste_assistido']
         elif args.command == 'inspect':
             result = inspect(load(args.config), args.root, args.config, args.summary)
+        elif args.command == 'open':
+            result = open_session(args.config, args.root, fetch=not args.no_fetch)
         elif args.command == 'evidence':
             result = git_evidence(args.root)
         elif args.command == 'review-gate':

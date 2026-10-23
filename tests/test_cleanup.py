@@ -612,14 +612,21 @@ class StaleAuthorizationTests(CleanupCase):
         self.assertEqual((result['alreadyClean'], len(result['candidates']), result['excluded']),
                          (cleanup.MAX_ITEMS + 10, 1, []))
 
-    def test_entries_with_a_local_branch_left_still_count_toward_the_cap(self):
+    def test_entries_with_a_local_branch_left_still_count_toward_the_cap_and_are_read_a_page_at_a_time(self):
+        """Issue 2 do redesenho: acima de MAX_ITEMS o plano pagina (`--page`), em vez de recusar."""
         self.gone(cleanup.MAX_ITEMS + 1)
         for n in range(cleanup.MAX_ITEMS + 1):
             self.git('branch', f'claude/gone{n}')
-        result, gh = self.plan({})
-        self.assertFalse(result['ok'])
-        self.assertIn(f'name at most {cleanup.MAX_ITEMS} worktrees', result['message'])
-        self.assertEqual(gh.calls, [])
+        result, _ = self.plan({})
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual((result['page'], result['pages'], len(result['candidates']) + len(result['excluded'])),
+                         (1, 2, cleanup.MAX_ITEMS))
+        self.assertIn('Page 1 of 2', result['message'])
+        gh = FakeGh({})
+        second = cleanup.run('plan', self.config, self.root, '12', None, (), (), gh, page=2)
+        self.assertEqual((second['page'], len(second['candidates']) + len(second['excluded'])), (2, 1))
+        third = cleanup.run('plan', self.config, self.root, '12', None, (), (), FakeGh({}), page=3)
+        self.assertFalse(third['ok'])
 
 
 class MoreStayTests(CleanupCase):
@@ -1443,6 +1450,280 @@ class MergedWorkTests(CleanupCase):
         result, _ = self.plan({self.RELEASE: {'heads': [pull(70, 'OPEN', oid=self.main_tip)]}})
         self.assertEqual([c['branch'] for c in result['candidates']], [])
         self.assertNotIn('claude/release-2026-10-21', [e['branch'] for e in result['excluded']])
+
+
+class FromAuthorizationsTests(CleanupCase):
+    """Issue 2 do redesenho: `--from-authorizations` lê as issues (`issue_ids`) e a base (`base.branch` do registro
+    mais novo) dos registros de autorização; `--issues` só estreita."""
+
+    def run_plan(self, issues=None, base=None, branches=None):
+        gh = FakeGh(branches)
+        result = cleanup.run('plan', self.config, self.root, issues, base, (), (), gh, from_authorizations=True)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def test_the_issues_and_the_base_come_from_the_records(self):
+        path, branch, tip = self.worktree('wt12')
+        data = json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8'))
+        data['base'] = {'branch': 'main'}
+        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(data), encoding='utf-8')
+        result = self.run_plan(branches={branch: merged(tip)})
+        self.assertEqual((result['issues'], result['expectedBase'], result['baseSource']), ([12], 'main', 'authorization'))
+        self.assertEqual([c['branch'] for c in result['candidates']], [branch])
+
+    def test_issues_narrow_the_records(self):
+        path, branch, tip = self.worktree('wt12')
+        other, branch13, tip13 = self.worktree('wt-a', issue=13)
+        result = self.run_plan('13', branches={branch: merged(tip), branch13: merged(tip13)})
+        self.assertEqual(result['issues'], [13])
+        self.assertEqual([c['branch'] for c in result['candidates']], [branch13])
+
+    def test_no_record_means_nothing_to_clean(self):
+        result = self.run_plan()
+        self.assertTrue(result['ok'], result)
+        self.assertEqual((result['commands'], result['issues']), ([], []))
+
+
+class DisposableTests(CleanupCase):
+    """Issue 2 do redesenho: lixo de build de .NET, Next.js e afins não pergunta; `cleanup.disposable` do config
+    acrescenta globs; um arquivo ignorado byte-igual ao da worktree principal (um `.env` copiado) não pergunta."""
+
+    def ignore(self, *patterns):
+        with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
+            exclude.write('\n'.join(patterns) + '\n')
+
+    def test_build_output_of_other_stacks_asks_nothing(self):
+        self.ignore('bin/', 'obj/', '.vs/', 'TestResults/', 'next-env.d.ts', '*.tsbuildinfo', '.dart_tool/', 'Pods/',
+                    'DerivedData/', '.terraform/')
+        path, branch, tip = self.worktree('wt12')
+        for folder in ('bin', 'obj', '.vs', 'TestResults', '.dart_tool', 'Pods', 'DerivedData', '.terraform'):
+            (path / folder).mkdir()
+            (path / folder / 'x').write_text('x')
+        (path / 'next-env.d.ts').write_text('x')
+        (path / 'tsconfig.tsbuildinfo').write_text('x')
+        entry = self.only(self.plan({branch: merged(tip)})[0])
+        self.assertEqual((entry['ignoredCount'], entry['ask']), (10, False))
+
+    def test_the_config_adds_globs(self):
+        self.ignore('*.log', 'scratch/')
+        data = json.loads(self.config.read_text(encoding='utf-8'))
+        data['cleanup'] = {'disposable': ['*.log', 'scratch']}
+        self.config.write_text(json.dumps(data), encoding='utf-8')
+        path, branch, tip = self.worktree('wt12')
+        (path / 'run.log').write_text('x')
+        (path / 'scratch').mkdir()
+        (path / 'scratch' / 'a.txt').write_text('x')
+        entry = self.only(self.plan({branch: merged(tip)})[0])
+        self.assertFalse(entry['ask'], entry)
+
+    def test_a_byte_for_byte_copy_of_the_main_file_asks_nothing_and_a_different_one_asks(self):
+        self.ignore('*.env', 'conf/')
+        (self.root / 'local.env').write_text('X=1')
+        (self.root / 'conf').mkdir()
+        (self.root / 'conf' / 'a.json').write_text('{}')
+        path, branch, tip = self.worktree('wt12')
+        (path / 'local.env').write_text('X=1')
+        (path / 'conf').mkdir()
+        (path / 'conf' / 'a.json').write_text('{}')
+        entry = self.only(self.plan({branch: merged(tip)})[0])
+        self.assertFalse(entry['ask'], entry)
+        (path / 'local.env').write_text('X=2')
+        entry = self.only(self.plan({branch: merged(tip)})[0])
+        self.assertEqual((entry['ask'], entry['askIgnored']), (True, ['local.env']))
+
+    def test_python_without_isjunction_on_windows_keeps_every_worktree(self):
+        path, branch, tip = self.worktree('wt12')
+        with patch.object(cleanup, 'junctions_readable', return_value=False):
+            self.assertEqual(self.reasons(self.plan({branch: merged(tip)})[0]), [['junction_unverifiable']])
+
+    def test_a_records_folder_with_only_saved_outputs_is_not_archived(self):
+        path, branch, tip = self.worktree('wt12')
+        (path / '.frontlights' / 'out').mkdir(parents=True)
+        (path / '.frontlights' / 'out' / 'plan-20260101-000000-1.json').write_text('{}')
+        entry = self.only(self.plan({branch: merged(tip)})[0])
+        self.assertNotIn('frontlights_records', entry['cautions'])
+
+
+class SavedOutputsTests(CleanupCase):
+    """Issue 2 do redesenho: as saídas guardadas (`.frontlights/out`) com mais de 30 dias são candidatas do plano,
+    sempre com pergunta; o `unlink` só apaga essas, recalculadas."""
+
+    def outputs(self):
+        folder = self.root / '.frontlights' / 'out'
+        folder.mkdir(parents=True)
+        old, new, other = (folder / 'plan-20260101-000000-1.json', folder / 'plan-20261020-000000-2.json',
+                           folder / 'notes.txt')
+        for file in (old, new, other):
+            file.write_text('{}')
+        past = time.time() - (cleanup.OUT_AGE_DAYS + 1) * 86400
+        for file in (old, other):
+            os.utime(file, (past, past))
+        return folder, old, new, other
+
+    def test_old_outputs_are_a_candidate_that_asks(self):
+        folder, old, _, _ = self.outputs()
+        result, _ = self.plan({})
+        entry = self.only(result)
+        self.assertEqual((entry['key'], entry['ask'], entry['askReason'], entry['files'], entry['askIgnored']),
+                         ('out', True, 'saved_outputs', 1, [old.name]))
+        self.assertEqual([c['kind'] for c in result['commands']], ['fetch_prune'])
+
+    def test_unlink_removes_only_the_old_saved_outputs(self):
+        folder, old, new, other = self.outputs()
+        result = cleanup.run('unlink', None, out=str(folder))
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['removed'], 1)
+        self.assertEqual((old.exists(), new.exists(), other.exists()), (False, True, True))
+
+    def test_unlink_refuses_a_folder_that_is_not_a_frontlights_out(self):
+        result = cleanup.run('unlink', None, out=str(self.root))
+        self.assertFalse(result['ok'])
+
+    def test_nothing_old_means_no_candidate(self):
+        folder = self.root / '.frontlights' / 'out'
+        folder.mkdir(parents=True)
+        (folder / 'plan-20261020-000000-2.json').write_text('{}')
+        result, _ = self.plan({})
+        self.assertEqual(result['candidates'], [])
+
+
+def no_fetch(argv):
+    """The runner of `run` in these tests: the fetch answers ok without the network; the rest really runs."""
+    return (0, '', '') if 'fetch' in argv else cleanup.execute(argv)
+
+
+class RunTests(CleanupCase):
+    """Issue 2 do redesenho: `cleanup.py run` replaneja no mesmo processo e roda só os comandos do plano fresco,
+    item a item, parando o item na primeira falha; nunca `--force` nem `git push` (a exclusão da branch remota fica
+    para a sessão); `--yes` só para um candidato com `ask`; `verify` embutido e a evidência gravada."""
+
+    RELEASE = MergedWorkTests.RELEASE
+    released = MergedWorkTests.released
+
+    def run_cleanup(self, info, yes=(), runner=no_fetch, integrations=()):
+        gh = FakeGh(info)
+        result = cleanup.run('run', self.config, self.root, None, None, (), (), gh, integrations=integrations,
+                             from_authorizations=True, yes=yes, runner=runner)
+        self.assertEqual(gh.violations, [])
+        return result
+
+    def test_the_merged_work_goes_and_the_remote_delete_is_left_to_the_session(self):
+        (issue_path, issue_branch), (s1_path, s1_branch), info = self.released()
+        result = self.run_cleanup(info, runner=cleanup.execute)
+        self.assertTrue(result['ok'], result)
+        self.assertEqual((issue_path.exists(), s1_path.exists()), (False, False))
+        self.assertEqual(self.git('branch', '--list', s1_branch, self.RELEASE), '')
+        self.assertIn(issue_branch, self.git('branch', '--list', issue_branch))   # its local delete waits for the push
+        self.assertEqual([c['kind'] for c in result['sessionCommands']], ['delete_remote_branch', 'delete_branch'])
+        self.assertTrue(result['verify']['ok'], result['verify'])
+        kinds = [r['kind'] for r in result['ran']]
+        self.assertEqual(kinds[0], 'fetch_prune')
+        self.assertNotIn('delete_remote_branch', kinds)
+        argv = [a for r in result['ran'] for a in r['argv']]
+        self.assertNotIn('push', argv)
+        self.assertNotIn('--force', argv)
+        evidence = Path(result['evidence'])
+        self.assertTrue(evidence.is_file())
+        self.assertRegex(evidence.name, r'^cleanup-\d{8}-\d{6}\.json$')
+        self.assertEqual(json.loads(evidence.read_text(encoding='utf-8'))['ran'], result['ran'])
+
+    def test_a_candidate_that_asks_runs_only_with_its_yes(self):
+        with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
+            exclude.write('*.env\n')
+        path, branch, tip = self.worktree('wt12')
+        (path / 'local.env').write_text('X=1')
+        result = self.run_cleanup({branch: merged(tip)})
+        self.assertTrue(path.exists())
+        self.assertEqual([a['key'] for a in result['ask']], [branch])
+        result = self.run_cleanup({branch: merged(tip)}, yes=[branch])
+        self.assertFalse(path.exists())
+        self.assertEqual(result['ask'], [])
+
+    def test_a_yes_for_no_asking_candidate_runs_nothing_more_and_is_said(self):
+        path, branch, tip = self.worktree('wt12')
+        result = self.run_cleanup({branch: merged(tip)}, yes=['claude/other'])
+        self.assertEqual(result['yesUnused'], ['claude/other'])
+        self.assertFalse(path.exists())
+
+    def test_a_failed_removal_stops_its_item_and_is_never_forced(self):
+        path, branch, tip = self.worktree('wt12')
+
+        def failing(argv):
+            return (1, '', 'fatal: something') if 'remove' in argv else no_fetch(argv)
+        result = self.run_cleanup({branch: merged(tip)}, runner=failing)
+        self.assertFalse(result['ok'])
+        self.assertEqual(result['exitCode'], 1)
+        self.assertEqual([f['kind'] for f in result['failed']], ['remove_worktree'])
+        self.assertTrue(path.exists())
+        self.assertIn(branch, self.git('branch', '--list', branch))
+
+    def test_a_worktree_in_use_goes_to_excluded_in_use(self):
+        path, branch, tip = self.worktree('wt12')
+
+        def busy(argv):
+            return (1, '', "error: failed to delete 'x': Permission denied") if 'remove' in argv else no_fetch(argv)
+        result = self.run_cleanup({branch: merged(tip)}, runner=busy)
+        self.assertEqual([(e['reasons'], e['inUse']) for e in result['excluded']], [(['in_use'], 'busy')])
+
+    def test_a_locked_worktree_is_in_use(self):
+        path, branch, tip = self.worktree('wt12')
+        self.git('worktree', 'lock', str(path))
+        result = self.run_cleanup({branch: merged(tip)})
+        self.assertEqual([(e['reasons'], e['inUse']) for e in result['excluded']], [(['in_use'], 'locked')])
+        self.assertTrue(path.exists())
+
+    def test_integration_takes_only_an_integra_entry_of_the_records(self):
+        path, branch, tip = self.worktree('wt12')
+        result = self.run_cleanup({branch: merged(tip)}, integrations=[str(path)])
+        self.assertFalse(result['ok'])
+        self.assertIn('-integra', result['message'])
+        self.assertTrue(path.exists())
+
+    def test_the_command_line_refuses_without_scope(self):
+        result = cleanup.run('run', self.config, self.root, None, None, (), (), FakeGh({}))
+        self.assertFalse(result['ok'])
+        self.assertIn('--from-authorizations', result['message'])
+
+    def junction(self, link, to):
+        done = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(to)], capture_output=True, timeout=30)
+        if done.returncode != 0:
+            self.skipTest('mklink /J failed here')
+
+    @unittest.skipUnless(os.name == 'nt', 'junctions exist only on Windows')
+    def test_junctions_are_undone_before_the_removal_and_their_target_stays(self):
+        with open(self.root / '.git' / 'info' / 'exclude', 'a', encoding='utf-8') as exclude:
+            exclude.write('node_modules/\n')
+        target = self.base / 'shared-modules'
+        target.mkdir()
+        (target / 'keep.js').write_text('keep')
+        path, branch, tip = self.worktree('wt12')
+        (path / 'web').mkdir()
+        (path / 'web' / 'page.txt').write_text('x')
+        self.git('add', '.', cwd=path)
+        self.git('commit', '-q', '-m', 'web', cwd=path)
+        tip = self.git('rev-parse', 'HEAD', cwd=path)
+        self.junction(path / 'node_modules', target)
+        self.junction(path / 'web' / 'node_modules', target)
+        result = self.run_cleanup({branch: merged(tip)})
+        self.assertTrue(result['ok'], result)
+        step = next(r for r in result['ran'] if r['kind'] == 'remove_worktree')
+        self.assertEqual(sorted(step['junctionsUndone']), ['node_modules', 'web/node_modules'])
+        self.assertFalse(path.exists())
+        self.assertEqual((target / 'keep.js').read_text(), 'keep')
+
+
+class HelpListsTests(unittest.TestCase):
+    """Issue 2 do redesenho: as razões e cautelas saem da referência e vivem no `--help` (o docstring do script)."""
+
+    def test_every_reason_and_caution_the_script_produces_is_in_the_help(self):
+        source = SCRIPT.read_text(encoding='utf-8')
+        codes = {a or b for a, b in re.findall(r"reasons?\.append\('([a-z_]+)'\)|return \['([a-z_]+)'\]", source)}
+        codes |= set(re.findall(r"cautions\.append\('([a-z_]+)'\)", source))
+        codes |= {'in_use', 'saved_outputs', 'merged_release_branch'}
+        codes.discard('nothing_left')   # counted in alreadyClean, or said as not_found
+        for code in sorted(codes):
+            with self.subTest(code=code):
+                self.assertIn(code, cleanup.__doc__)
 
 
 if __name__ == '__main__':
