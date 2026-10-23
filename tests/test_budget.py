@@ -25,8 +25,8 @@ BUDGET = {
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
     'references/development.md': 11294,
-    'references/grilling.md': 2871,
-    'references/issue.md': 596,
+    'references/grilling.md': 1893,
+    'references/issue.md': 360,
     'references/issues.md': 6063,
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
@@ -34,10 +34,11 @@ BUDGET = {
     'references/review.md': 753,
     'references/tdd-mocking.md': 202,
     'references/tdd-tests.md': 291,
-    'templates/discovery.md': 339,
-    'templates/grilling-section.html': 497,
+    'templates/artifact-page.html': 444,   # redesenho, issue 6
+    'templates/discovery.md': 292,
+    'templates/grilling-section.html': 244,
     'templates/handoff.md': 729,
-    'templates/issue.md': 1359,
+    'templates/issue.md': 775,
     'templates/pr.md': 753,
 }
 

@@ -94,7 +94,8 @@ class ReconnaissanceInTheGrillingTests(unittest.TestCase):
         recon = self.recon()
         self.assertIn('The decision tree (section 4) names where to look; these probes bring the facts', recon)
         tree = flat(read(GRILLING).split('## 4. Decision tree')[1].split('## 5. Pre-mortem')[0])
-        self.assertEqual(tree.count('| Feature |'), 1)
+        # redesenho, issue 6: a tabela de tipos virou uma frase da fronteira, "Branches by kind: feature (...)"
+        self.assertEqual(tree.count('feature ('), 1)
         self.assertNotIn('live HTTP probe', tree)
 
     def test_a_fact_comes_before_the_option(self):
@@ -132,7 +133,7 @@ class ReconnaissanceInTheGrillingTests(unittest.TestCase):
 
     def test_the_artifact_shows_the_screen_states(self):
         recon = self.recon()
-        self.assertIn('the **after** of each approach in the artifact shows the empty state, no image, error, '
+        self.assertIn('each approach **com a opção** in the artifact shows the empty state, no image, error, '
                       'loading, dark theme and 1366 px, plus the states the project\'s pitfalls list', recon)
         artifact = flat(section(read(GRILLING), 'The artifact'))
         self.assertIn('the screen states of "Reconnaissance"', artifact)
@@ -146,7 +147,8 @@ class ReconnaissanceInTheSkillTests(unittest.TestCase):
         self.assertNotIn('depth', stage3.lower())
         for phrase in ('Read `references/grilling.md`', 'reconnaissance by trigger', 'pitfalls first',
                        'facts in subagents', 'a fact before an option',
-                       'the decision tree asks product, scope and visual only'):
+                       'the decision tree asks product, scope and visual only',
+                       'by frontier (every settled decision in one call, at most four)'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
         self.assertLess(stage3.index('reconnaissance by trigger'), stage3.index('at least three'))
@@ -209,6 +211,21 @@ class FindingsBatchTests(unittest.TestCase):
     def test_a_technical_branch_the_evidence_cannot_settle_is_asked_with_its_facts(self):
         text = ' '.join((SKILL / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
         self.assertIn('A technical branch the evidence cannot settle is asked like a product one', text)
+
+    def test_the_tree_asks_by_frontier_and_one_interview_runs_at_a_time(self):
+        # redesenho, issue 6: "walk its branches in order" virou a fronteira, dentro de "## 4. Decision tree"
+        text = ' '.join((SKILL / 'references' / 'grilling.md').read_text(encoding='utf-8').split())
+        tree = text.split('## 4. Decision tree')[1].split('## 5. Pre-mortem')[0]
+        for phrase in ('the branches go by frontier', 'every decision whose prerequisites are settled is asked in the '
+                       'same call', 'batched at most four per call', 'the recommended one first',
+                       'in plain words without jargon', 'the fact it rests on written inside the question',
+                       'A dependent decision waits for the next round', 'a verified fact is never an option',
+                       'an empty frontier ends the tree', 'The seams stay in stage 4'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, tree)
+        self.assertNotIn('walk its branches in order', text)
+        self.assertIn('**One interview at a time.** A second grilling only runs its reconnaissance until the user '
+                      'closes the first.', text.split('## The artifact')[0])
 
     def test_a_family_runs_one_reconnaissance(self):
         text = ' '.join((SKILL / 'references' / 'grilling.md').read_text(encoding='utf-8').split())

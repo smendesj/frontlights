@@ -11,7 +11,10 @@ Seams: o texto de `SKILL.md` (etapas 3 e 5), `references/grilling.md`, `referenc
 `docs/acceptance.md`, `evals/grilling-artifact.md` e `evals/runbook.md`. É regra da skill, não barreira: nenhum
 script monta o artefato.
 """
+import json
 import re
+import subprocess
+import tempfile
 import unittest
 import sys
 from pathlib import Path
@@ -63,19 +66,19 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         artifact = self.artifact()
         self.assertNotEqual(artifact, '')
-        for phrase in ('one **artifact** per grilling',
-                       'created at the problem round with the **before**',
+        for phrase in ('One **artifact** per grilling',
+                       'created at the problem round with the **base**',
                        'updated **on the same URL**', 'never one page per round',
                        'a **print of the system running at the base**',
                        'a diagram of the flow, of the layers or of the current rule',
                        '**one section per decision question**',
                        'the solution round and every branch of the decision tree, the pre-mortem included',
                        'Confirmation questions and the closing "Seguimos?" get no section',
-                       'the before first, then the decision questions', 'titled by the question',
+                       'the base first, then the decision questions', 'titled by the question',
                        "in stage 5 the slices' sections follow them",
                        'Every section follows `templates/grilling-section.html`',
                        'a field with nothing to say is omitted',
-                       'the **after** for each approach',
+                       'which for each approach carries the screen states',
                        '"artefato" is the page, "preview" is the field',
                        'Never an inline widget',
                        'say so in one line, go on in text', 'artefato indisponível'):
@@ -83,27 +86,32 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                 self.assertIn(phrase, artifact)
         self.assertLess(grilling.index('## The artifact'), grilling.index('## 1. Problem round'))
 
-    def test_each_section_is_a_small_edit_of_the_local_source(self):
+    def test_the_script_builds_and_the_session_publishes_once_per_round(self):
+        # redesenho, issue 6: a edição pequena da fonte virou `frontlights.py artifact`; uma publicação por rodada
         artifact = self.artifact()
         for phrase in ('`.frontlights/artifact.html`', '`.frontlights/issues/<n>/artifact.html`', 'untracked',
-                       'a small edit of that file', 'never rewrite the whole page each round',
+                       '`frontlights.py artifact init`', '`frontlights.py artifact section --n <k> --kind '
+                       'tela|fluxo|regra|camadas|texto', '`frontlights.py artifact choose --n <k> --answer',
+                       'the same number replaces a section',
+                       'Publish the whole source once per round, on the same URL, never by `edits`',
                        'The discovery log records the URL and the source path',
-                       "read the published page back with the artifact tool's read and go on editing that copy"):
+                       "read the published page back with the artifact tool's read into that path"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
+        for gone in ('a small edit of that file', 'never rewrite the whole page each round'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, artifact)
 
     def test_code_enters_the_page_data_never(self):
+        # redesenho, issue 6: a regra vive só em security.md, "Artefato do grilling", que a etapa lê ao entrar
         artifact = self.artifact()
-        for phrase in ("A real excerpt of the project's code (up to 15 lines, with its path)",
-                       'replaced by `***`', '(password, token, key, connection string)',
-                       "real records, people's data, real endpoints and client or organization names stay out"):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, artifact)
+        self.assertIn('**Code, never data:** `docs/security.md`, "Artefato do grilling"', artifact)
+        self.assertIn('On entering, read `docs/security.md`, "Artefato do grilling"',
+                      flat(read('skills', 'frontlights', 'references', 'grilling.md')))
         self.assertNotIn('only fictitious data', artifact)
 
     def test_the_code_excerpt_limit_is_up_to_15_lines_everywhere(self):
-        for parts, phrase in ((('skills', 'frontlights', 'references', 'grilling.md'), 'up to 15 lines'),
-                              (('skills', 'frontlights', 'docs', 'security.md'), 'até 15 linhas'),
+        for parts, phrase in ((('skills', 'frontlights', 'docs', 'security.md'), 'até 15 linhas'),
                               (('skills', 'frontlights', 'templates', 'grilling-section.html'), 'até 15 linhas'),
                               (('evals', 'grilling-artifact.md'), 'up to 15 lines')):
             text = flat(read(*parts))
@@ -142,20 +150,18 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         artifact = self.artifact()
         for phrase in ('explains more than the question, never repeats it', 'what does this imply',
                        'Visual, Cenário por opção and Consequências are always present',
-                       'the cost of getting it wrong, whether it is reversible and what each option prevents',
-                       'one concrete scenario per option, with made-up data',
-                       'the before of the problem round', 'each decision question',
+                       'the base of the problem round', 'each decision question',
                        'each slice section of the stage 5 quiz', 'why it is a problem'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
-        for kind, drawing in (('A screen', 'the before print and, per option, the **same print with markings**'),
-                              ('A flow or an order of steps', 'a timeline per option, side by side'),
-                              ('A rule', 'a table of cases'),
-                              ('Layers, files or where something lives', 'a layers diagram per option'),
-                              ('A name or a text', 'a side-by-side comparison of where it appears')):
+        # redesenho, issue 6: a tabela de tipos virou uma frase, "The visual follows the kind of question: ..."
+        for kind, drawing in (('a screen', 'the base print and, per option, the **same print with markings**'),
+                              ('a flow', 'a timeline per option, side by side'),
+                              ('a rule', 'a table of cases'),
+                              ('layers', 'a layers diagram per option'),
+                              ('a name or a text', 'a side-by-side comparison of where it appears')):
             with self.subTest(kind=kind):
-                row = re.search(r'\| ' + re.escape(kind) + r' \|[^|]*' + re.escape(drawing), artifact)
-                self.assertIsNotNone(row)
+                self.assertIn(f'{kind}, {drawing}', artifact)
         for gone in ('what the question decides', 'what each option changes'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, artifact)
@@ -163,7 +169,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
     def test_every_decision_question_cites_the_artifact(self):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
-        self.assertIn('Publish the artifact with the **before**', problem)
+        self.assertIn('Publish the artifact with the **base**', problem)
         self.assertIn('the confirmation question cites its section', problem)
         solution = flat(grilling.split('## 3. Solution round')[1].split('## 4. Decision tree')[0])
         self.assertIn('the section of the artifact that shows what this approach changes', solution)
@@ -195,15 +201,18 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         # redesenho, issue 3: a etapa 3 diz só "One artifact per grilling, the base print first" e aponta para
         # grilling.md, "The artifact"; o resto da regra vive lá, nas palavras da referência
         stage3 = flat(skilltext.stage(3))
-        for phrase in ('One artifact per grilling', 'the base print first', '(`references/grilling.md`, "The artifact")'):
+        # redesenho, issue 6: a etapa 3 cita os comandos do print da base e do artefato
+        for phrase in ('One artifact per grilling', 'the base print first', '(`references/grilling.md`, "The artifact")',
+                       '`serve.py window shot --pass antes`', '`frontlights.py artifact init`',
+                       '`frontlights.py artifact section` per question', 'one publication per round, never `edits`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
         self.assertNotIn('only fictitious data', stage3)
         artifact = self.artifact()
-        for phrase in ('one **artifact** per grilling', '**on the same URL**', '**print of the system running at the base**',
-                       '**same print with markings**', 'created at the problem round with the **before**',
+        for phrase in ('One **artifact** per grilling', '**on the same URL**', '**print of the system running at the base**',
+                       '**same print with markings**', 'created at the problem round with the **base**',
                        'one section per decision question', '`templates/grilling-section.html`',
-                       'added with a small edit of that file', 'replaced by `***`', 'real data never enters',
+                       '`frontlights.py artifact section', 'never by `edits`',
                        'The discovery log records the URL and the source path'):
             with self.subTest(where='grilling.md', phrase=phrase):
                 self.assertIn(phrase, artifact)
@@ -250,11 +259,11 @@ class PrintOfTheBaseTests(unittest.TestCase):
 
     def test_the_before_is_a_print_of_the_base_with_a_test_account(self):
         artifact = self.artifact()
-        for phrase in ('With a screen, the before is a **print of the system running at the base** (`origin/<base>`)',
+        for phrase in ('With a screen, the base is a **print of the system running at the base** (`origin/<base>`)',
                        'taken with a test account and test data',
                        'in the disposable Chrome window of the watched run (`references/browser-testing.md`)',
                        'never a screen rebuilt from the template or redrawn in the style of the page',
-                       'without a screen, it is a diagram of the flow, of the layers or of the current rule'):
+                       'Without a screen, it is a diagram of the flow, of the layers or of the current rule'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, artifact)
         for gone in ('built from the real template of the component', 'never a free sketch'):
@@ -269,7 +278,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
         for phrase in ('as notes on its one marked print', 'never one print per state',
-                       'the evidence of the after still comes from the watched run'):
+                       'the evidence of DEPOIS still comes from the watched run'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, states)
 
@@ -283,7 +292,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
                                        'Slices as acceptance criteria'))
         self.assertIn('with a screen, the same before print with the markings of what that slice changes', quiz)
         template = read('skills', 'frontlights', 'templates', 'grilling-section.html')
-        for phrase in ('o print da base', 'o mesmo print do antes', 'class="marca'):
+        for phrase in ('o print da base', 'o mesmo print da base', 'class="marca'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, template)
         self.assertNotIn('montada do template real', template)
@@ -292,12 +301,11 @@ class PrintOfTheBaseTests(unittest.TestCase):
         artifact = self.artifact()
         self.assertNotIn('Never a real screenshot', artifact)
         self.assertNotIn('that belongs to the watched run', artifact)
-        self.assertIn('real data never enters, not even in a print', artifact)
         security = self.security()
         self.assertNotIn('Os prints do produto em execução são do teste assistido', security)
         self.assertNotIn('nunca do artefato', security)
-        for phrase in ('Dado nunca entra', 'o antes é um print do sistema rodando na base',
-                       'tirado com conta de teste e dados de teste', 'o depois é o mesmo print com marcações',
+        for phrase in ('Dado nunca entra', 'a base é um print do sistema rodando na base',
+                       'tirado com conta de teste e dados de teste', 'cada opção é o mesmo print com marcações',
                        'nem num print'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, security)
@@ -412,6 +420,184 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         self.assertIn('uma seção por pergunta de decisão', row)
         self.assertIn('templates/grilling-section.html', row)
         self.assertNotIn('só dados fictícios', row)
+
+
+class BaseAndOptionVocabularyTests(unittest.TestCase):
+    """Redesenho, issue 6, S5: o artefato diz "base" e "com a opção", nunca antes/depois (nem before/after no texto
+    que o descreve): ANTES e DEPOIS são as janelas do teste assistido."""
+
+    def test_the_grilling_describes_the_artifact_with_base_and_option(self):
+        grilling = read('skills', 'frontlights', 'references', 'grilling.md')
+        artifact = flat(section_containing(grilling, 'The artifact'))
+        self.assertIn('**Base and com a opção.** The page, its labels and the questions that cite it say "base" and '
+                      '"com a opção", never antes/depois nor before/after: ANTES and DEPOIS name the windows of the '
+                      'watched run.', artifact)
+        rule = artifact.replace('never antes/depois nor before/after', '')
+        self.assertNotRegex(rule, r'(?i)\b(before|after)\b')
+        problem = flat(grilling.split('## 1. Problem round')[1].split('## 2. Project conventions')[0])
+        states = flat(grilling.split('**Screen states in the artifact.**')[1].split('## 3.')[0])
+        for text in (problem, states):
+            self.assertNotRegex(text, r'\*\*(before|after)\*\*')
+
+    def test_the_templates_and_the_security_doc_say_base_and_option(self):
+        section = read('skills', 'frontlights', 'templates', 'grilling-section.html')
+        body = section.split('-->', 1)[1]
+        page = read('skills', 'frontlights', 'templates', 'artifact-page.html').split('-->', 1)[1]
+        for name, text in (('grilling-section.html', body), ('artifact-page.html', page)):
+            visible = re.sub(r'src="[^"]*"', '', text)
+            with self.subTest(template=name):
+                self.assertNotRegex(visible, r'(?i)\b(antes|depois)\b')
+        self.assertIn('<figcaption>Base</figcaption>', body)
+        self.assertIn('<figcaption>Com a opção: <opção></figcaption>', body)
+        self.assertIn('Rótulos "Base" e "Com a opção", nunca antes/depois', flat(section.split('-->')[0]))
+        security = flat(section_containing(read('skills', 'frontlights', 'docs', 'security.md'), 'Artefato do grilling'))
+        self.assertIn('na página, "base" e "com a opção", nunca antes/depois, que são as janelas do teste assistido',
+                      security)
+        for gone in ('o antes é', 'o depois é'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, security)
+
+
+SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
+SECTION = """## Por que
+A lista cresce e ninguém acha o pedido.
+## Visual
+- **Filtro no topo** @10,5: um campo de data acima da tabela
+- **Filtro lateral**: um painel à direita
+## Cenário por opção
+- **Filtro no topo**: Ana filtra 03/10 e vê 4 pedidos.
+- **Filtro lateral**: Ana abre o painel e escolhe 03/10.
+## Consequências
+- **Filtro no topo**: barato e reversível.
+- **Filtro lateral**: mais espaço, custo maior.
+## Onde o projeto já faz
+`src/lista.ts:12`
+```ts
+const filtro = null;
+```
+"""
+
+
+class ArtifactCommandTests(unittest.TestCase):
+    """Redesenho, issue 6, S1: `frontlights.py artifact init|section|choose` monta o esqueleto na fonte local;
+    conteúdo, publicação (uma por rodada, nunca `edits`) e URL são da sessão."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.source = self.root / '.frontlights' / 'artifact.html'
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_cli(self, *argv):
+        done = subprocess.run([sys.executable, str(SCRIPT), 'artifact', *argv, '--root', str(self.root)],
+                              capture_output=True, encoding='utf-8', timeout=60)
+        return done.returncode, json.loads(done.stdout)
+
+    def content(self, text=SECTION, name='secao.md'):
+        path = self.root / name
+        path.write_text(text, encoding='utf-8')
+        return str(path)
+
+    def section(self, *extra, content=None):
+        return self.run_cli('section', '--n', '2', '--kind', 'tela', '--title', 'Onde fica o filtro?',
+                            '--option', 'Filtro no topo', '--option', 'Filtro lateral',
+                            '--content', content or self.content(), *extra)
+
+    def test_init_writes_the_page_with_the_base_print_and_says_how_to_publish(self):
+        code, out = self.run_cli('init', '--title', 'Filtro por data', '--before', 'base.png')
+        self.assertEqual(code, 0, out)
+        page = self.source.read_text(encoding='utf-8')
+        self.assertIn('<title>Filtro por data</title>', page)
+        self.assertIn('<img class="print" src="antes.png"', page)
+        self.assertIn('id="secao-1"', page)
+        self.assertEqual(out['publish'], {'file_path': str(self.source.resolve()), 'files': {'antes.png': 'base.png'}})
+        self.assertIn('nunca por edits', out['message'])
+        self.assertIn('Artifact URL and source path', out['message'])
+        code, out = self.run_cli('init')
+        self.assertEqual((code, out['reason']), (1, 'artifact_exists'))
+
+    def test_init_of_a_published_issue_goes_to_its_records(self):
+        code, out = self.run_cli('init', '--issue', '12', '--kind', 'fluxo')
+        self.assertEqual(code, 0, out)
+        page = (self.root / '.frontlights' / 'issues' / '12' / 'artifact.html').read_text(encoding='utf-8')
+        self.assertNotIn('antes.png', page)
+
+    def test_section_fills_the_fields_of_the_model_in_order(self):
+        self.run_cli('init')
+        code, out = self.section()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out['sections'], [2])
+        page = self.source.read_text(encoding='utf-8')
+        model = (ROOT / 'skills' / 'frontlights' / 'templates' / 'grilling-section.html').read_text(encoding='utf-8')
+        block = page[page.index('id="secao-2"'):]
+        block = block[:block.index('</section>')]
+        model_fields = re.findall(r'<h3>([^<]*)</h3>', model)
+        found = re.findall(r'<h3>([^<]*)</h3>', block)
+        self.assertEqual(found, [f for f in model_fields if f not in ('Conceitos', 'Recomendação (opinião)')])
+        for phrase in ('<figcaption>Base</figcaption>', '<figcaption>Com a opção: Filtro no topo</figcaption>',
+                       'class="marca marca-texto" id="marca-2-1"', '<pre class="codigo"><code>const filtro = null;'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, block)
+        self.assertIn('#marca-2-1 { left: 10%; top: 5%; }', page)
+        self.assertNotIn('style="', page)
+        visible = re.sub(r'src="[^"]*"', '', block)
+        self.assertNotRegex(visible, r'(?i)\b(antes|depois)\b')
+
+    def test_the_same_number_replaces_the_section_and_choose_records_the_answer(self):
+        self.run_cli('init')
+        self.section()
+        self.section()
+        page = self.source.read_text(encoding='utf-8')
+        self.assertEqual(page.count('id="secao-2"'), 1)
+        code, out = self.run_cli('choose', '--n', '2', '--answer', 'Filtro no topo')
+        self.assertEqual(code, 0, out)
+        block = self.source.read_text(encoding='utf-8').split('id="secao-2"')[1]
+        self.assertIn('<h3>Escolha</h3>\n<p>Filtro no topo</p>', block)
+
+    def test_several_sections_in_one_call(self):
+        self.run_cli('init')
+        rule = self.content('## Visual\n| Caso | A | B |\n| --- | --- | --- |\n| vazio | erro | ignora |\n'
+                            '## Cenário\n- **A**: x\n- **B**: y\n## Consequências\n- **A**: x\n- **B**: y\n', 'regra.md')
+        code, out = self.run_cli('section', '--n', '4', '--n', '3', '--kind', 'regra', '--title', 'Regra?',
+                                 '--title', 'Outra?', '--option', '4:A', '--option', '4:B', '--option', '3:A',
+                                 '--option', '3:B', '--content', rule, '--content', rule)
+        self.assertEqual(code, 0, out)
+        page = self.source.read_text(encoding='utf-8')
+        self.assertLess(page.index('id="secao-3"'), page.index('id="secao-4"'))
+        self.assertIn('<table class="casos">', page)
+
+    def test_refusals(self):
+        self.run_cli('init')
+        for text, reason in (('## Visual\nx\n## Cenário\n- **Filtro no topo**: a\n- **Filtro lateral**: b\n', 'missing_field'),
+                             (SECTION.replace('- **Filtro lateral**: mais espaço, custo maior.', ''), 'option_missing'),
+                             (SECTION + '<div style="color:red">x</div>\n', 'inline_style'),
+                             (SECTION.replace('const filtro = null;', '\n'.join(['x'] * 16)), 'code_too_long')):
+            with self.subTest(reason=reason):
+                code, out = self.section(content=self.content(text))
+                self.assertEqual((code, out['reason']), (1, reason))
+
+    def test_a_missing_source_with_a_logged_url_is_read_back(self):
+        (self.root / '.frontlights').mkdir()
+        (self.root / '.frontlights' / 'discovery.md').write_text(
+            '- Artifact URL and source path (...): https://claude.ai/code/artifact/abc, .frontlights/artifact.html\n',
+            encoding='utf-8')
+        code, out = self.section()
+        self.assertEqual((code, out['reason']), (1, 'source_missing'))
+        self.assertIn('leia a página publicada de volta para', out['message'])
+        self.assertIn('https://claude.ai/code/artifact/abc', out['hint'])
+        (self.root / '.frontlights' / 'discovery.md').unlink()
+        code, out = self.section()
+        self.assertEqual(out['reason'], 'no_artifact')
+
+    def test_the_security_doc_gives_the_skeleton_to_the_script_and_the_rest_to_the_session(self):
+        security = flat(section_containing(read('skills', 'frontlights', 'docs', 'security.md'), 'Artefato do grilling'))
+        for phrase in ('O esqueleto vem do script (`frontlights.py artifact`', 'conteúdo, publicação e URL são da sessão',
+                       'uma vez por rodada', 'nunca por `edits`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, security)
+        self.assertNotIn('nenhum script monta a página', security)
 
 
 if __name__ == '__main__':
