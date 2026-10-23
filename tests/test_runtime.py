@@ -1011,6 +1011,48 @@ class HandoffTemplateTests(unittest.TestCase):
         self.assertIn('the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home', development)
 
 
+class ContextCadenceAndHostBaseTests(unittest.TestCase):
+    """Redesenho, issue 9, S3: `context --used` a cada 50 turnos (`--turn` diz o próximo), `--pending
+    teste_assistido` mantido e o aviso da base do host acima de 80 mil no `update-check` e no `open`."""
+
+    def run_script(self, *args):
+        done = subprocess.run([sys.executable, str(SUMMARY_SCRIPT), *args], capture_output=True, text=True,
+                              encoding='utf-8', timeout=120)
+        return json.loads(done.stdout)
+
+    def test_the_next_report_is_the_next_multiple_of_fifty(self):
+        self.assertEqual([frontlights.next_report(t) for t in (0, 49, 50, 120)], [50, 50, 100, 150])
+        result = self.run_script('context', '--used', '160000', '--reserve', '5000', '--pending', 'teste_assistido',
+                                 '--turn', '100')
+        self.assertEqual(result, {'action': 'stop', 'pending': ['teste_assistido'],
+                                  'ask_before_continuing': ['teste_assistido'], 'next_report_turn': 150})
+        self.assertNotIn('next_report_turn', self.run_script('context', '--used', '1000', '--reserve', '10'))
+
+    def test_the_host_base_names_the_connectors_that_are_not_the_projects(self):
+        self.assertIsNone(frontlights.host_base(None, ['conector-a']))
+        low = frontlights.host_base(80000, ['conector-a'])
+        self.assertEqual((low['over'], low['notProject']), (False, []))
+        self.assertNotIn('message', low)
+        high = frontlights.host_base(120000, ['conector-a', 'Conector-Projeto', 'conector-a'], ['conector-projeto'])
+        self.assertEqual((high['over'], high['notProject']), (True, ['conector-a']))
+        self.assertIn('120 mil tokens, acima de 80 mil', high['message'])
+        self.assertIn('conector-a', high['message'])
+
+    def test_update_check_and_open_carry_the_warning(self):
+        result = self.run_script('update-check', '--base', '95000', '--connector', 'conector-a')
+        self.assertEqual(result['hostBase']['notProject'], ['conector-a'])
+        self.assertNotIn('hostBase', self.run_script('update-check'))
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / 'config.json'
+            config.write_text(json.dumps({'repository': None, 'connectors': ['conector-projeto']}), encoding='utf-8')
+            self.assertEqual(frontlights.project_connectors(config), ['conector-projeto'])
+            done = subprocess.run([sys.executable, str(SUMMARY_SCRIPT), 'open', '--config', str(config), '--root',
+                                   folder, '--no-fetch', '--base', '90000', '--connector', 'conector-projeto',
+                                   '--connector', 'conector-b'], capture_output=True, text=True, encoding='utf-8',
+                                  timeout=120)
+        self.assertEqual(json.loads(done.stdout)['hostBase']['notProject'], ['conector-b'], done.stderr)
+
+
 # Economia nos utilitários: `inspect --summary` (por issue só número, título, estado e caixas; a saída
 # padrão não muda) e um `authorize` que lê a operação da entrada padrão e não exige que as outras
 # worktrees do charter já existam.

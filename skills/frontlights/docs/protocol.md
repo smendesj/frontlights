@@ -443,7 +443,7 @@ próximo ponto seguro: uma slice fechada, uma pergunta respondida); de 150 mil, 
 passagem e checkpoint agora); de 200 mil, `cut` (o corte duro: a janela termina já). Consumo desconhecido é `stop`.
 Com o teste assistido devido, `--pending teste_assistido` faz `handoff`, `stop` e `cut` responderem também
 `ask_before_continuing`, e a pergunta sai antes de gastar mais. Um fechamento que começa acima de ~300 mil abre em
-janela nova. O `context` confere os números informados, não o medidor do host; se o host não renova a sessão, não
+janela nova. Com `--turn <n>`, o `context` diz o turno do próximo relato (`next_report_turn`). A base do host conta em todo turno: `update-check` e `open` com `--base <tokens do primeiro turno>` e um `--connector <nome>` por conector da sessão devolvem `hostBase`; acima de 80 mil, `message` nomeia os conectores que não estão em `connectors` do `.frontlights/config.json` (a lista de conectores do projeto) e a sessão a diz numa linha. O `context` confere os números informados, não o medidor do host; se o host não renova a sessão, não
 garanta o teto nem inicie fase sem supervisão que dependa dele. Renomear uma sessão compactada não a torna nova.
 
 A conclusão exige cobertura dos critérios de aceitação, alterações completas e

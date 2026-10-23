@@ -586,6 +586,47 @@ def publish_order(plan):
 
 # The thresholds of a window (docs/protocol.md, "Contexto e conclusão", their only home in the text).
 CONTEXT_HANDOFF, CONTEXT_STOP, CONTEXT_CUT = 100000, 150000, 200000
+CONTEXT_EVERY = 50        # turns between two `context --used` reports
+HOST_BASE_LIMIT = 80000   # first-turn context above which the host's connectors are named
+
+
+def next_report(turn):
+    """The turn of the next `context --used` report: the next multiple of `CONTEXT_EVERY`."""
+    require(type(turn) is int and turn >= 0, 'turn is a whole number of turns')
+    return (turn // CONTEXT_EVERY + 1) * CONTEXT_EVERY
+
+
+def host_base(tokens, connectors, project=()):
+    """The host-base warning of `update-check` and `open`: above 80k on the first turn, the connectors of the host
+    that are not the project's (`connectors` of `.frontlights/config.json`). None when nothing was measured."""
+    if tokens is None:
+        return None
+    require(type(tokens) is int and tokens >= 0, 'base is the context of the first turn, in tokens')
+    own = {str(c).strip().lower() for c in project or () if str(c).strip()}
+    names = []
+    for name in connectors or ():
+        name = str(name).strip()
+        if name and name.lower() not in own and name not in names:
+            names.append(name)
+    over = tokens > HOST_BASE_LIMIT
+    result = {'tokens': tokens, 'limit': HOST_BASE_LIMIT, 'over': over, 'notProject': names if over else []}
+    if over:
+        listed = ', '.join(names) if names else 'nenhum informado'
+        result['message'] = (f'A base do host abre com {round(tokens / 1000)} mil tokens, acima de 80 mil, e pesa em '
+                             f'todo turno. Conectores que não são deste projeto: {listed}. Desligá-los nesta sessão '
+                             'baixa esse custo.')
+    return result
+
+
+def project_connectors(config_path):
+    """`connectors` of the config (names of the host connectors the project uses); [] without config or key."""
+    if not config_path:
+        return []
+    try:
+        names = load(config_path).get('connectors')
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
 
 
 def context_action(used, reserve):
@@ -2183,6 +2224,13 @@ def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
 
+def host_flags(p):
+    p.add_argument('--base', type=int, help='context of the first turn, in tokens; above 80k the host connectors '
+                                            'that are not the project\'s are named (hostBase)')
+    p.add_argument('--connector', action='append', default=[],
+                   help='a connector (MCP server) of the host in this session; repeatable')
+
+
 def build_parser():
     parser = _cli.JsonParser(prog='frontlights.py', description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -2200,6 +2248,7 @@ def build_parser():
     p.add_argument('--used', type=int)
     p.add_argument('--reserve', type=int, required=True)
     p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
+    p.add_argument('--turn', type=int, help='the turn of this report; prints next_report_turn (every 50 turns)')
     p = sub.add_parser('inspect')
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
@@ -2210,6 +2259,7 @@ def build_parser():
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--no-fetch', action='store_true', dest='no_fetch', help='skip git fetch --prune origin')
+    host_flags(p)
     p = sub.add_parser('evidence')
     p.add_argument('--root', help='default: the worktree of the current directory')
     p = sub.add_parser('review-gate')
@@ -2226,7 +2276,8 @@ def build_parser():
     p.add_argument('--record', help='the batch result.json, which may not exist yet')
     p.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
                    help='the branch of a stacked issue and the branch its PR targets (its base in the stacking authorization); repeatable')
-    sub.add_parser('update-check')
+    p = sub.add_parser('update-check')
+    host_flags(p)
     p = sub.add_parser('publish-order')
     p.add_argument('--plan', required=True, help='the plan; prints its issue ids blockers first, for --blocked-by')
     for name in ('checkpoint', 'resume'):
@@ -2355,10 +2406,15 @@ def main():
                 if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop', 'cut'):
                     # The watched run must not be the last thing a window pays for: ask it before spending more.
                     result['ask_before_continuing'] = ['teste_assistido']
+            if args.turn is not None:
+                result['next_report_turn'] = next_report(args.turn)
         elif args.command == 'inspect':
             result = inspect(load(args.config), args.root, args.config, args.summary)
         elif args.command == 'open':
             result = open_session(args.config, args.root, fetch=not args.no_fetch)
+            warning = host_base(args.base, args.connector, project_connectors(args.config))
+            if warning:
+                result['hostBase'] = warning
         elif args.command == 'evidence':
             result = git_evidence(args.root)
         elif args.command == 'review-gate':
@@ -2371,6 +2427,10 @@ def main():
             result = {'order': publish_order(load(args.plan))}
         elif args.command == 'update-check':
             result = update_check()
+            warning = host_base(args.base, args.connector,
+                                project_connectors(_cli.config_path(None, _cli.main_worktree(), required=False)))
+            if warning:
+                result['hostBase'] = warning
         elif args.command == 'checkpoint':
             result = checkpoint_cli(args.issue, args.root, args.handoff, args.next_step, args.pending, args.slice)
         elif args.command == 'resume':
