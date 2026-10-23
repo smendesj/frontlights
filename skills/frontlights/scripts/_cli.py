@@ -324,9 +324,8 @@ def gh_account(config, gh=None):
     expected = github.get('account') if isinstance(github, dict) and isinstance(github.get('account'), str) else None
     try:
         user = gh(['api', 'user'])
-        repo = gh(['repo', 'view', '--json', 'nameWithOwner,viewerPermission'])
     except Exception:  # noqa: BLE001  (a gh that cannot answer is a mismatch to show, never a write)
-        user = repo = None
+        user = None
     login = user.get('login') if isinstance(user, dict) else None
     if not isinstance(login, str) or not login:
         raise AccountMismatch('account_mismatch', 'o gh não disse qual conta está ativa (gh auth status)',
@@ -334,6 +333,11 @@ def gh_account(config, gh=None):
     if expected and login.casefold() != expected.casefold():
         raise AccountMismatch('account_mismatch', f'o gh está na conta {login}, e o config pede {expected}',
                               login, expected)
+    try:
+        repo = gh(['repo', 'view', '--json', 'nameWithOwner,viewerPermission'])
+    except Exception:  # noqa: BLE001  (the folder's repository could not be read: no write either)
+        raise AccountMismatch('repository_mismatch', 'o gh não leu o repositório da pasta atual (gh repo view); '
+                              f'o config pede {expected_repo}', login, expected) from None
     name = repo.get('nameWithOwner') if isinstance(repo, dict) else None
     if not isinstance(expected_repo, str) or not isinstance(name, str) or name.casefold() != expected_repo.casefold():
         raise AccountMismatch('repository_mismatch', f'a pasta atual é do repositório {name or "desconhecido"}, e o '
