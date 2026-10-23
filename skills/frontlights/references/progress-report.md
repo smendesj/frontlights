@@ -1,5 +1,7 @@
 # Progress report ("Resumo para a diretoria") in RoadS
 
+Read when: the user asks for the "Resumo para a diretoria", after `progress_report.py status`.
+
 On entering, read `docs/security.md`, "Resumo para a diretoria", and `docs/protocol.md`, "RoadS e resumo".
 
 Prepares the plain-language progress summary for people who follow the work from outside, and
@@ -8,8 +10,7 @@ to e-mail and marking as sent all happen in RoadS. Frontlights never e-mails any
 marks anything as sent.
 
 This step runs only when the user asks for the summary ("/frontlights pode criar/atualizar o resumo", or any
-other request for it), from any project; the opening of a session never asks about it (`SKILL.md`, stage 1,
-"Board summary on request"). It goes on to the steps below only when `progress_report.py status` reports
+other request for it), from any project; the opening of a session never asks about it (`SKILL.md`, stage 1). It goes on to the steps below only when `progress_report.py status` reports
 `ask` true: an enabled `roadmapSync.progress` block in `.frontlights/config.json` (shape in
 `examples/config.json`), the project's own or the registered home's (next section). When `ask` is false
 and nothing is to be registered, say the `message` in one line and come back to the request.

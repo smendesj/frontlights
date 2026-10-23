@@ -1,10 +1,12 @@
 # Browser, checks and cross-account testing
 
+Read when: before any pass of the watched run is run or dispatched, and at the first non-zero exit of
+`browser-gate`; an exit 0 needs nothing from here.
+
 On entering, read `docs/security.md`, "`serve`, `checks` e o teste no navegador", and `docs/protocol.md`,
 "Teste no navegador" (the fields of `result.json` live only there).
 
-Read this in stage 6 before running or dispatching any pass, and at the first non-zero exit of `browser-gate`; an
-exit 0 needs nothing from here. It applies whenever anything the session delivers changes what the user sees: the
+It applies whenever anything the session delivers changes what the user sees: the
 plan has the section `## Navegador e testes ligados` (`templates/issue.md`) with `Toca o frontend: sim`, or
 `browser-gate` finds a visible change in the diff (the browser step opens with the watched-run question below and,
 when the user watched, ends with the question of what to do next). **Portuguese.** Everything the user reads stays in Portuguese,

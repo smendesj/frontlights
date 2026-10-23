@@ -1,10 +1,11 @@
 # Closing finished issues
 
+Read when: stage 7, after the stage 1 yes, the merged release pull request or a request.
+
 On entering, read `docs/security.md`, "Fechamento e limpeza", and `docs/protocol.md`, "Fechamento e release".
 
-Read this at stage 7: when the release of stage 6 (`development.md`, "The release") finds its pull request merged
-into the approved base and the local main brought up to it, when the stage 1 closeout question is answered yes, or
-when the user asks. Past ~300k of context, open a new session whose first command is `closeout.py run`. The user
+The release of stage 6 (`development.md`, "The release") hands over here when it finds its pull request merged into
+the approved base and the local main brought up to it. Past ~300k of context, open a new session whose first command is `closeout.py run`. The user
 reads Portuguese. Step 5 (the cleanup, without a question) runs first. Closing comes with **its own approval**: no
 implementation authorization, no merged PR and no green test stands in for it. The card goes to Done by the board's
 own workflow ("Item closed" → Status Done): this flow never reads the board and never moves a card.

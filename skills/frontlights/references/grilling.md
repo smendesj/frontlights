@@ -1,5 +1,7 @@
 # Discovery interview
 
+Read when: entering stage 3; "Reconnaissance" also on the Direct path.
+
 On entering, read `docs/security.md`, "Artefato do grilling".
 
 Stress-test the request until the user and you share one understanding of what
@@ -225,8 +227,8 @@ artifact (the artifact, above).
 
 ## Sub-issues of the issue (same session)
 
-When the work comes from an issue with open sub-issues (`SKILL.md`, "An issue and
-its sub-issues move together") and the user declined the conversion offered before the
+When the work comes from an issue with open sub-issues (`SKILL.md`, "The issue is the
+unit") and the user declined the conversion offered before the
 grilling (`references/issues.md`, "Converting a family"), they are grilled in this session, after the
 parent's problem and solution rounds. Never leave one out to "decide later". A converted
 family has no sub-issues left: its boxes are grilled as the slices of one issue.

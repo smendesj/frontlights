@@ -1,5 +1,8 @@
 # Vertical issue planning
 
+Read when: entering stage 5; "Follow-ups" when a finding needs a destination; "Converting a family" when an
+issue has open sub-issues or on the Conversion path; "Project board" before any issue write.
+
 On entering, read `docs/security.md`, "Revisão e sobras", and `docs/protocol.md`, "Quadro e publicação" and
 "`plan.json`".
 

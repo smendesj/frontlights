@@ -1,17 +1,30 @@
 # Bounded implementation
 
-Read the recorded authorization and the current GitHub issues, and from `docs/security.md` the sections
-"Hooks e escritas em `.git/`", "Autorização permanente", "Subagentes", "`authorize` e a main local",
-"`homolog sync` e `homolog bundle`", "Registro de autorização e `branch_prefix`", "Permissões do host e
-AFK", "Revisão e sobras", "Fechamento e limpeza" (the limits of `closeout.py tick`) and "`serve`, `checks` e o
-teste no navegador"; from `docs/protocol.md`,
-"Desenvolvimento e release" (the format of the authorization record and of its `monitoring` block), "Registros"
-(`plan.json`), "Ponto de retomada e continuação" and "Contexto e conclusão". Stage 6 runs under
-the standing authorization (below): the session fills the run itself, announces it in one block and records
-the charter without asking. A decision the standing authorization does not cover (a new product decision, an
-operation on its denied list, a scope change) goes back to the coordinator's `AskUserQuestion`. Each external
-write needs its own authority; local shell access grants none. Run structured authorization checks where
-applicable; they are advisory preflight, not sandbox enforcement.
+Read when: entering stage 6, one section per step from the index below; again on resume, or when `update-check`
+reports a newer skill.
+
+Stage 6 runs under the standing authorization (below): the session announces the run in one block and records the
+charter without asking. A decision it does not cover (a new product decision, a denied operation, a scope change)
+goes back to the coordinator's `AskUserQuestion`. Each external write needs its own authority; local shell access
+grants none. When a hook, a permission or a script refuses a step, read `docs/security.md` by its headings; record
+formats live in `docs/protocol.md`, "Desenvolvimento e release" and "Registros".
+
+| Section | Read when |
+|---|---|
+| Standing authorization and the denied operations | first, before the charter; before any denied operation |
+| The start of stage 6 | the sync of the local main and the preview, before the first slice |
+| Slices in order | opening, merging and ticking each slice |
+| Which tests run when | choosing what a slice's loop runs |
+| Dispatch and ownership | briefing an implementer or a helper |
+| Stacked branches: parent and children without waiting for the merge | a family that already exists |
+| Integrating a family before the local main | a family that already exists, before the local main |
+| Test-driven development | the implementer's loop; a hotfix of the free test |
+| Review, checkpoints and renewal | findings, the review the user asks for, a checkpoint, the final report |
+| When the review is done | a review round ends |
+| Into the local main | the issue's slices are merged and the watched run is answered or not needed |
+| Work without an issue | the Direct path, or a Short one that publishes no issue |
+| The free test on the local main | the issue is in the local main |
+| The release | after the free test |
 
 ## Standing authorization and the denied operations
 
@@ -60,7 +73,9 @@ are still asked.
 - the local integration branch of the issue into the local main once its watched run is answered or not needed
   ("Into the local main"; work without an issue, its own branch).
 
-**Work without an issue.** The Direct path, or a Short one that publishes no issue, is homologated the same way
+### Work without an issue
+
+The Direct path, or a Short one that publishes no issue, is homologated the same way
 in a project with a remote. Its charter lists a slug of its own (lower-case letters, digits and hyphens, up to 64
 characters) in `direct_ids`, and its `worktrees` entry carries `direct` in place of `issue` (a slice entry adds
 `slice`, as for an issue). In the rules of this stage "the issue" reads as that work and "the branch of the issue"
@@ -85,7 +100,7 @@ silence or any other answer leaves it undone, and the work goes on without it. T
 own stage (the issue's text, issue plan and publication, closeout and summary) keep them. The
 host's own permission prompts are not Frontlights' to remove and still apply.
 
-## The start of stage 6: the sync of the local main
+## The start of stage 6
 
 The sync runs in the main worktree of the project (where the local main is checked out), in a project with a
 remote, before the first branch of the run is cut; a project without a remote (`repository: null`, no
@@ -130,7 +145,9 @@ preview branch is never pushed and nothing is edited in the preview worktree. A 
 the branch and the files) and a broken build is torn down with `build: "quebrado"`, the log and its last lines: say it
 in one line, then ask. Record in the handoff the preview's branch, the branches merged into it and the last refresh.
 
-## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
+## Slices in order
+
+One issue branch, one worktree per slice, one merge into the local main per issue.
 
 An issue is worked on one issue branch, created on GitHub when its work starts: `gh issue develop <n> --repo
 <repo> --base <base> --name <branch_prefix>issue-<n>` creates the branch on GitHub from the remote base
@@ -189,7 +206,9 @@ the local main as one) apply only to a family that already exists (an issue with
 sub-issues published before this rule); a slice stacked on another slice uses only the branch cut,
 the `base` of its worktree entry and `--stacked`, as said above.
 
-**Which tests run when.** TDD per slice is the default practice: each slice's loop writes and runs its own
+### Which tests run when
+
+TDD per slice is the default practice: each slice's loop writes and runs its own
 tests at its seams, plus the test modules the slice touches and the type checks. These tests are evidence, never a
 gate: no suite holds back the merge into the local main or the release. When the user asks to implement "só com teste
 assistido", the session writes and runs no tests in that run: the slices skip the red → green loop (their seams stay
@@ -221,7 +240,7 @@ never a criterion.
 
 Inspect Git status/remotes/worktrees and current issue acceptance criteria. For a family
 that already exists, the scope of a dispatch is the family: the issue and all its open
-sub-issues (`SKILL.md`, "An issue and its sub-issues move together"), each with its own branch
+sub-issues (`SKILL.md`, "The issue is the unit"), each with its own branch
 and worktree; the parent never goes alone unless the user chose that. Create one
 isolated branch/worktree per issue from its approved base (the approved base
 branch, or its dependency's branch when stacked, see below) using native
@@ -486,7 +505,9 @@ reviewer's standard (what a finding is, its severity, what is only style, the ro
 its base and, from the second round on, the tip of the previous round, the base it had and its findings. The standard belongs to
 the reviewer: the implementer's brief names the issue, its seams and its tests, and leaves `review.md` out.
 
-**When the review is done.** A round is one dispatch of the reviewer on the current tip. The review of an issue is
+### When the review is done
+
+A round is one dispatch of the reviewer on the current tip. The review of an issue is
 done at the first round that reports 0 sérios and 0 médios. The baixos still open then go to the findings batch,
 each with the proposed destination of a new acceptance criterion of the source issue (a top-level issue when there
 is no source issue with a criteria section, or it is closed; the ladder of `issues.md`), and the batch also offers
@@ -548,7 +569,7 @@ the handoff), the tests and the review when they ran,
 the findings left unfixed with the destination of each, the count of its lines in `.frontlights/pitfalls.md` (criteria that entered after the approval: `references/issues.md`, "A pitfall line"), remaining risk and next
 action. Leave worktrees and evidence intact for recovery.
 
-## Into the local main: the watched run
+## Into the local main
 
 The local main of the project (the base branch of the charter, checked out in the main worktree) is the
 homologation bench: it accumulates every issue whose watched run was answered (or was not needed), and the local
@@ -672,7 +693,9 @@ says that the window is theirs to test the local main as they like and that clos
   release", below, with the batch written or with no fix: the release question comes only after the window is closed, never while it is open (without a screen, only after "Sim, terminei", never while the
   question of the terminal is pending).
 
-## The release: from the local main to GitHub
+## The release
+
+From the local main to GitHub.
 
 The local main accumulates homologated issues; none of them reaches the remote main until the release, offered by the
 session at the end of each homologated issue, once the window of its free test is closed ("The free test on the
