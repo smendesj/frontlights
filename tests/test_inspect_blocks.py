@@ -4,6 +4,7 @@ Sem os blocos, a saída do `inspect` não muda. Só marcadores genéricos (repos
 """
 import copy
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontli
 import checks
 import frontlights
 import serve
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gitfixture
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
@@ -59,10 +63,23 @@ def inspect_file(config, root):
         return frontlights.inspect(config, root, path)
 
 
+SETUP_CODES = ('legacy_workflows_dir', 'browser_test_missing', 'project_unresolved', 'frontlights_not_ignored',
+               'branch_prefix_missing')
+
+
+def block_warnings(result):
+    """Os avisos dos blocos, sem os da configuração (setup_warnings), que dependem da pasta e do Git."""
+    return [w for w in result.get('warnings', []) if not w.startswith(SETUP_CODES)]
+
+
 def stable(result):
-    """Tira o horário da leitura, o único campo que muda entre duas execuções."""
+    """Tira o horário da leitura, o único campo que muda entre duas execuções, e os avisos de configuração."""
     result = dict(result)
     result.pop('fetched_at')
+    warnings = block_warnings(result)
+    result.pop('warnings', None)
+    if warnings:
+        result['warnings'] = warnings
     return result
 
 
@@ -113,8 +130,9 @@ class InspectWithoutBlocksTests(unittest.TestCase):
             run = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--config', str(config), '--root', root],
                                  capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(sorted(json.loads(run.stdout)), ['fetched_at', 'path_risk', 'repository', 'sources',
-                                                          'verification_candidates', 'verification_commands'])
+        keys = sorted([*stable(dict(json.loads(run.stdout), fetched_at=None)), 'fetched_at'])
+        self.assertEqual(keys, ['fetched_at', 'path_risk', 'repository', 'sources', 'verification_candidates',
+                                'verification_commands'])
 
 
 class InspectValidBlocksTests(unittest.TestCase):
@@ -232,13 +250,13 @@ class InspectRefusesInvalidBlocksTests(unittest.TestCase):
 class FrontPathsWarningTests(unittest.TestCase):
     def test_a_browser_test_without_front_paths_warns_that_the_gate_will_guess(self):
         result = inspect_file(with_browser(front_paths=None), ROOT)
-        self.assertEqual(len(result['warnings']), 1)
-        self.assertIn('browserTest.frontPaths', result['warnings'][0])
-        self.assertIn('browser-gate', result['warnings'][0])
+        self.assertEqual(len(block_warnings(result)), 1)
+        self.assertIn('browserTest.frontPaths', block_warnings(result)[0])
+        self.assertIn('browser-gate', block_warnings(result)[0])
 
     def test_declaring_them_silences_it_and_no_browser_test_has_nothing_to_warn_about(self):
-        self.assertNotIn('warnings', inspect_file(with_browser(), ROOT))
-        self.assertNotIn('warnings', inspect_file({'repository': None}, ROOT))
+        self.assertEqual(block_warnings(inspect_file(with_browser(), ROOT)), [])
+        self.assertEqual(block_warnings(inspect_file({'repository': None}, ROOT)), [])
 
 
 class AccountsOnlyBrowserTestTests(unittest.TestCase):
@@ -256,9 +274,9 @@ class AccountsOnlyBrowserTestTests(unittest.TestCase):
     def test_inspect_goes_on_and_warns_that_serve_has_nothing_to_start(self):
         with tempfile.TemporaryDirectory() as root:
             result = inspect_file(self.accounts_only(baseUrl='http://127.0.0.1:4200'), root)
-        self.assertEqual(len(result['warnings']), 1)
-        self.assertIn('browserTest.processes', result['warnings'][0])
-        self.assertIn('serve', result['warnings'][0])
+        self.assertEqual(len(block_warnings(result)), 1)
+        self.assertIn('browserTest.processes', block_warnings(result)[0])
+        self.assertIn('serve', block_warnings(result)[0])
         self.assertNotIn(PASSWORD, json.dumps(result))
 
     def test_a_block_with_processes_has_no_warning(self):
@@ -273,7 +291,7 @@ class AccountsOnlyBrowserTestTests(unittest.TestCase):
             run = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--config', str(config), '--root', root],
                                  capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn('browserTest.processes', json.loads(run.stdout)['warnings'][0])
+        self.assertIn('browserTest.processes', block_warnings(json.loads(run.stdout))[0])
 
     def test_the_secret_rules_still_apply(self):
         with tempfile.TemporaryDirectory() as root, self.assertRaises(ValueError) as caught:
@@ -670,6 +688,205 @@ class IsolatedBlockTests(unittest.TestCase):
         self.assertNotIn('dropDatabase', block)
         with tempfile.TemporaryDirectory() as root:
             inspect_file(local(EXAMPLE), root)
+
+
+def codes(result):
+    return sorted(w.split(':')[0] for w in result.get('warnings', []) if w.startswith(SETUP_CODES))
+
+
+def fake_gh(issues, boards=None):
+    """Um gh de mentira: responde às consultas GraphQL de `closeout` (apelidos i<n>) com a tabela `issues`
+    ({n: {state, title, parent, children: [n | 'outro/repo#n']}}) e ao `project list` com `boards`."""
+    def node(n):
+        item = issues.get(n)
+        if item is None:
+            return None
+        kids = []
+        for kid in item.get('children', []):
+            if isinstance(kid, str):
+                repo, _, k = kid.partition('#')
+                kids.append({'number': int(k), 'state': 'OPEN', 'repository': {'nameWithOwner': repo}})
+            else:
+                kids.append({'number': kid, 'state': issues[kid]['state'],
+                             'repository': {'nameWithOwner': 'OWNER/REPOSITORY'}})
+        parent = item.get('parent')
+        return {'number': n, 'state': item['state'], 'title': item['title'], 'body': '',
+                'parent': None if parent is None else {'number': parent,
+                                                       'repository': {'nameWithOwner': 'OWNER/REPOSITORY'}},
+                'subIssues': {'totalCount': len(kids), 'nodes': kids}}
+
+    def gh(argv):
+        if argv[:2] == ['project', 'list']:
+            return boards
+        query = next(a for a in argv if a.startswith('query='))
+        wanted = [int(n) for n in re.findall(r'i(\d+): issue', query)]
+        return {'data': {'repository': {f'i{n}': node(n) for n in wanted}}}
+    return gh
+
+
+class SetupWarningsTests(unittest.TestCase):
+    """Issue 11, S1: o inspect nomeia o que falta na configuração, um código por linha em `warnings`."""
+
+    def test_a_config_without_browser_test_or_board_says_so_and_null_declares_them(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=OSError):
+            self.assertEqual(codes(frontlights.inspect({'repository': 'OWNER/REPOSITORY'}, root)),
+                             ['browser_test_missing', 'project_unresolved'])
+            self.assertEqual(codes(frontlights.inspect({'repository': 'OWNER/REPOSITORY', 'project': None,
+                                                        'browserTest': None}, root)), [])
+            self.assertEqual(codes(frontlights.inspect({'repository': None, 'browserTest': None}, root)), [])
+
+    def test_a_legacy_workflows_folder_is_named(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / '.workflows').mkdir()
+            result = frontlights.inspect({'repository': None, 'browserTest': None}, root)
+            self.assertEqual(codes(result), ['legacy_workflows_dir'])
+            self.assertIn('renomeie', result['warnings'][0])
+            (Path(root) / '.frontlights').mkdir()
+            self.assertIn('use .frontlights/', frontlights.inspect({'repository': None, 'browserTest': None},
+                                                                   root)['warnings'][0])
+
+    def test_in_git_the_ignore_line_and_the_branch_prefix_are_checked(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = gitfixture.init(Path(folder) / 'repo')
+            config = {'repository': None, 'browserTest': None}
+            self.assertEqual(codes(frontlights.inspect(config, root)),
+                             ['branch_prefix_missing', 'frontlights_not_ignored'])
+            (root / '.git' / 'info').mkdir(exist_ok=True)
+            (root / '.git' / 'info' / 'exclude').write_text('/.frontlights/\n', encoding='utf-8')
+            self.assertEqual(codes(frontlights.inspect(config, root)), ['branch_prefix_missing'])
+            self.assertEqual(codes(frontlights.inspect(dict(config, branchPrefix='nome/'), root)), [])
+            (root / '.frontlights').mkdir()
+            (root / '.frontlights' / 'authorization.json').write_text(json.dumps({'branch_prefix': 'nome/'}),
+                                                                     encoding='utf-8')
+            self.assertEqual(codes(frontlights.inspect(config, root)), [])
+
+
+class InspectOfflineAndFamilyTests(unittest.TestCase):
+    """Issue 11, S1: `--offline` não lê a rede; `--issue <n>` traz a família por `closeout.expand`."""
+
+    FAMILY = {10: {'state': 'OPEN', 'title': 'Pai', 'children': [11, 12, 'outro/repo#5']},
+              11: {'state': 'OPEN', 'title': 'Filha aberta', 'parent': 10, 'children': [13]},
+              12: {'state': 'CLOSED', 'title': 'Filha fechada', 'parent': 10},
+              13: {'state': 'OPEN', 'title': 'Neta', 'parent': 11}}
+
+    def test_offline_reads_nothing_and_names_each_configured_source(self):
+        def forbidden(*args, **kwargs):
+            raise AssertionError('leitura de rede no modo offline')
+        config = {'repository': 'OWNER/REPOSITORY', 'project': None, 'browserTest': None,
+                  'roads': {'observations_url': 'https://roads.example.com/x', 'token_env': 'NADA'}}
+        with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', forbidden), \
+                patch.object(frontlights.urllib.request, 'build_opener', forbidden):
+            result = frontlights.inspect(config, root, offline=True, issue=10, gh=forbidden)
+        self.assertEqual(result['sources'], {'github': {'status': 'offline'}, 'project': {'status': 'unconfigured'},
+                                             'roads': {'status': 'offline'}})
+        self.assertEqual(result['family'], {'status': 'offline', 'issue': 10})
+
+    def test_the_family_lists_open_descendants_history_and_excluded(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(frontlights, 'run', side_effect=OSError):
+            result = frontlights.inspect({'repository': 'OWNER/REPOSITORY', 'project': None, 'browserTest': None},
+                                         root, issue=10, gh=fake_gh(self.FAMILY))
+        family = result['family']
+        self.assertEqual((family['status'], family['issue'], family['title'], family['open_count']),
+                         ('available', 10, 'Pai', 2))
+        self.assertEqual(family['open'], [{'number': 11, 'title': 'Filha aberta', 'parent': 10},
+                                          {'number': 13, 'title': 'Neta', 'parent': 11}])
+        self.assertEqual((family['history'], family['excluded'], family['truncated']), ([12], ['outro/repo#5'], False))
+
+    def test_an_issue_without_sub_issues_has_an_empty_family_and_a_failed_read_is_unavailable(self):
+        lone = {7: {'state': 'OPEN', 'title': 'Sozinha'}}
+        self.assertEqual(frontlights.issue_family('OWNER/REPOSITORY', 7, fake_gh(lone))['open_count'], 0)
+        self.assertEqual(frontlights.issue_family('OWNER/REPOSITORY', 8, fake_gh(lone))['status'], 'unavailable')
+        broken = frontlights.issue_family('OWNER/REPOSITORY', 7, lambda argv: {'message': 'erro'})
+        self.assertEqual(broken['status'], 'unavailable')
+        self.assertEqual(frontlights.issue_family(None, 7)['status'], 'unconfigured')
+
+    def test_the_cli_takes_offline_and_issue(self):
+        with tempfile.TemporaryDirectory() as root:
+            config = Path(root) / 'config.json'
+            config.write_text(json.dumps({'repository': 'OWNER/REPOSITORY', 'browserTest': None}), encoding='utf-8')
+            run = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--config', str(config), '--root', root,
+                                  '--offline', '--issue', '3', '--summary'],
+                                 capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        out = json.loads(run.stdout)
+        self.assertEqual((out['sources']['github'], out['family']['status']), ({'status': 'offline'}, 'offline'))
+        self.assertEqual(codes(out), ['project_unresolved'])
+
+    def test_without_a_config_the_cli_points_to_init_config(self):
+        with tempfile.TemporaryDirectory() as root:
+            run = subprocess.run([sys.executable, str(SCRIPT), 'inspect', '--root', root],
+                                 capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        out = json.loads(run.stdout)
+        self.assertEqual(out['status'], 'config_missing')
+        self.assertIn('init-config', out['hint'])
+        self.assertIn('references/setup.md', out['hint'])
+
+
+class InitConfigTests(unittest.TestCase):
+    """Issue 11, S1: `init-config` grava só na worktree principal, `repository` do origin, nunca `project`."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.folder = Path(tmp.name)
+        self.root = gitfixture.init(self.folder / 'repo')
+        (self.root / 'LEIA.md').write_text('x\n', encoding='utf-8')
+        gitfixture.git(self.root, 'add', '.')
+        gitfixture.git(self.root, 'commit', '-q', '-m', 'base')
+
+    def config(self):
+        return json.loads((self.root / '.frontlights' / 'config.json').read_text(encoding='utf-8'))
+
+    def test_repository_from_origin_never_the_project_key_and_the_boards_come_back(self):
+        gitfixture.git(self.root, 'remote', 'add', 'origin', 'https://github.com/OWNER/REPOSITORY.git')
+        boards = {'projects': [{'number': 3, 'title': 'Quadro', 'url': 'https://github.com/orgs/OWNER/projects/3'}]}
+        result = frontlights.init_config(self.root, gh=fake_gh({}, boards))
+        self.assertEqual(self.config(), {'repository': 'OWNER/REPOSITORY'})
+        self.assertEqual(result['boards'], [{'number': 3, 'title': 'Quadro',
+                                             'url': 'https://github.com/orgs/OWNER/projects/3'}])
+        self.assertIn('project_unresolved', ' '.join(result['warnings']))
+        self.assertIn('quadro', result['message'])
+
+    def test_ssh_remote_prefix_and_unreadable_boards(self):
+        gitfixture.git(self.root, 'remote', 'add', 'origin', 'git@github.com:OWNER/REPOSITORY.git')
+        result = frontlights.init_config(self.root, prefix='nome/', gh=lambda argv: None)
+        self.assertEqual(self.config(), {'repository': 'OWNER/REPOSITORY', 'branchPrefix': 'nome/'})
+        self.assertIsNone(result['boards'])
+
+    def test_no_remote_is_a_local_project(self):
+        result = frontlights.init_config(self.root, gh=fake_gh({}))
+        self.assertEqual((self.config(), result['boards']), ({'repository': None}, []))
+
+    def test_refusals_write_nothing(self):
+        gitfixture.git(self.root, 'remote', 'add', 'upstream', 'https://github.com/OWNER/A.git')
+        gitfixture.git(self.root, 'remote', 'add', 'fork', 'https://github.com/OWNER/B.git')
+        with self.assertRaises(frontlights.Stage6Refusal) as caught:
+            frontlights.init_config(self.root, gh=fake_gh({}))
+        self.assertEqual(caught.exception.reason, 'ambiguous_remote')
+        self.assertFalse((self.root / '.frontlights' / 'config.json').exists())
+        frontlights.init_config(self.root, repository='OWNER/A', gh=fake_gh({}, {'projects': []}))
+        with self.assertRaises(frontlights.Stage6Refusal) as caught:
+            frontlights.init_config(self.root, repository=None)
+        self.assertEqual(caught.exception.reason, 'config_exists')
+        linked = self.folder / 'linked'
+        gitfixture.git(self.root, 'worktree', 'add', '-q', '-b', 'outra', str(linked))
+        with self.assertRaises(frontlights.Stage6Refusal) as caught:
+            frontlights.init_config(linked, repository=None)
+        self.assertEqual(caught.exception.reason, 'not_main_worktree')
+        self.assertFalse((linked / '.frontlights').exists())
+
+    def test_a_non_github_origin_is_ambiguous_and_the_cli_answers_json(self):
+        gitfixture.git(self.root, 'remote', 'add', 'origin', 'https://example.com/x.git')
+        run = subprocess.run([sys.executable, str(SCRIPT), 'init-config', '--root', str(self.root)],
+                             capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(run.returncode, 1)
+        self.assertEqual(json.loads(run.stdout)['reason'], 'ambiguous_remote')
+        run = subprocess.run([sys.executable, str(SCRIPT), 'init-config', '--root', str(self.root),
+                              '--repository', 'null'], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.config(), {'repository': None})
+
 
 
 if __name__ == '__main__':
