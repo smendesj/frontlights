@@ -81,6 +81,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import frontlights  # noqa: E402  (the configuration rules live there; this helper only reads them)
+import _cli  # noqa: E402  (defaults of --root, --config and --issue, the parser and UTF-8)
 import roads as rs  # noqa: E402  (its reader of GitHub: graphql, clean)
 
 Refusal = rs.Refusal
@@ -1198,20 +1199,14 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
     return result
 
 
-class JsonParser(argparse.ArgumentParser):
-    """A usage mistake is a JSON refusal like any other."""
-
-    def error(self, message):
-        raise Refusal(f'usage: {message}')
-
-
 def build_parser():
-    parser = JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
     for name in ('candidates', 'verify'):
         command = sub.add_parser(name, allow_abbrev=False)
-        command.add_argument('--config', required=True, help="the project's .frontlights/config.json")
-        command.add_argument('--root', default='.', help='project whose .frontlights records name the issues worked on')
+        command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
+        command.add_argument('--root', help='project whose .frontlights records name the issues worked on '
+                                                 '(default: the main worktree of the current directory)')
         command.add_argument('--issues', help='issue numbers, such as 12,13' + ('' if name == 'candidates' else ' (required)'))
         if name == 'candidates':
             command.add_argument('--all', action='store_true', dest='all_flag', help='every open issue of the repository')
@@ -1219,7 +1214,7 @@ def build_parser():
                                                 'newest authorization record that names the issue, else main')
             command.add_argument('--remote', help='the remote that holds the released base (default origin)')
     status = sub.add_parser('merge-status', allow_abbrev=False)
-    status.add_argument('--config', required=True, help="the project's .frontlights/config.json")
+    status.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
     status.add_argument('--prs', help='pull request numbers, such as 12,13 (required)')
     status.add_argument('--base', help="the approved base branch; without it, the repository's default branch")
     ticks = sub.add_parser('tick-check', allow_abbrev=False)
@@ -1227,17 +1222,34 @@ def build_parser():
     ticks.add_argument('--after', help='the body about to be written, or read back after the write (required)')
     ticks.add_argument('--lines', help='the line numbers that were ticked, such as 14,22 (required)')
     tick = sub.add_parser('tick', allow_abbrev=False)
-    tick.add_argument('--config', required=True, help="the project's .frontlights/config.json")
-    tick.add_argument('--root', default='.', help='the project whose .frontlights/issues/<n>/ keeps the previous body')
-    tick.add_argument('--issue', help='the issue number, such as 12 (required)')
+    tick.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
+    tick.add_argument('--root', help='the project whose .frontlights/issues/<n>/ keeps the previous body '
+                                         '(default: the main worktree of the current directory)')
+    tick.add_argument('--issue', help='the issue number, such as 12 (default: the issue of the charter entry of the '
+                                      'worktree of the current directory)')
     tick.add_argument('--box', help='the slice box to tick, such as S2')
     tick.add_argument('--line', help='or the line of any criterion of the section, such as 14')
     return parser
 
 
+def resolve_defaults(args):
+    """--root, --config and the issue of tick the command line left out, by the rules of `_cli`."""
+    if hasattr(args, 'root'):
+        args.root = str(_cli.root_path(args.root))
+    if hasattr(args, 'config'):
+        args.config = _cli.config_path(args.config, getattr(args, 'root', None) or _cli.main_worktree())
+    if args.operation == 'tick' and args.issue is None:
+        args.issue = str(_cli.issue_number(None, _cli.current_tree(), args.root))
+    return args
+
+
 def main(argv=None):
+    _cli.utf8_streams()
     try:
-        args = build_parser().parse_args(argv)
+        args = resolve_defaults(build_parser().parse_args(argv))
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error)
+    try:
         result = run(args.operation, getattr(args, 'config', None), getattr(args, 'root', '.'), getattr(args, 'issues', None),
                      getattr(args, 'all_flag', False), prs=getattr(args, 'prs', None), base=getattr(args, 'base', None),
                      remote=getattr(args, 'remote', None),

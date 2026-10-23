@@ -121,6 +121,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root and --config, the parser and UTF-8)
+
 POLL_SECONDS = 0.2
 DEFAULT_TIMEOUT = 60
 PORT_AUTO = 'auto'
@@ -1823,21 +1828,39 @@ def run(operation, config_file, root, issue, action=None, log=None, branches=Non
     return stop(root, issue)
 
 
+def resolve_defaults(args):
+    """--config, --root and --issue the command line left out, by the rules of `_cli`: the root of preview is the
+    main worktree, the one of start, stop and status the worktree of the current directory."""
+    main_tree = _cli.main_worktree()
+    args.config = _cli.config_path(args.config, main_tree)
+    if args.operation == 'preview':
+        args.root = args.root or str(main_tree)
+    elif args.operation in ('start', 'stop', 'status'):
+        args.root = args.root or str(_cli.current_tree())
+        if args.issue is None:
+            args.issue = _cli.issue_number(None, args.root, main_tree)
+    return args
+
+
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    _cli.utf8_streams()
+    parser = _cli.JsonParser(description=__doc__.split('\n')[0])
     parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
     parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),
                         help='só para preview: start, refresh, status ou stop')
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--root', help='worktree da issue (start, stop, status) ou worktree principal (preview)')
-    parser.add_argument('--issue', type=int, help='número da issue (start, stop, status)')
+    parser.add_argument('--config', help='padrão: o .frontlights/config.json da worktree principal')
+    parser.add_argument('--root', help='worktree da issue (start, stop, status; padrão: a da pasta atual) ou worktree '
+                                       'principal (preview; padrão: a principal)')
+    parser.add_argument('--issue', type=int, help='número da issue (start, stop, status; padrão: a do charter para a '
+                                                  'worktree)')
     parser.add_argument('--log', help='só para relay: arquivo de log a acrescentar')
     parser.add_argument('--branch', action='append', help='só para preview refresh: branch de issue em andamento a '
                         'mesclar na branch da prévia (repetível, na ordem dada)')
     parser.add_argument('--base', help=f'só para preview refresh: branch base local (padrão {DEFAULT_BASE})')
-    args = parser.parse_args(argv)
-    if hasattr(sys.stdout, 'reconfigure'):
-        sys.stdout.reconfigure(encoding='utf-8')
+    try:
+        args = resolve_defaults(parser.parse_args(argv))
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2, category='uso')
     try:
         result = run(args.operation, args.config, args.root, args.issue, args.action, args.log, args.branch,
                      args.base)

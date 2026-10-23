@@ -19,9 +19,8 @@ null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and
   --expect   0 when the stamp equals the given one, 1 otherwise.
 
 A missing file, an unreadable or malformed approvals file and a usage error exit 1 with `ok: false`, never a
-traceback. `--root` defaults to the current directory. Standard library only.
+traceback. `--root` defaults to the main worktree of the current directory (the current directory outside Git). Standard library only.
 """
-import argparse
 import hashlib
 import json
 import os
@@ -29,6 +28,11 @@ import sys
 import zoneinfo
 from datetime import datetime
 from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (the default of --root, the parser and UTF-8)
 
 ZONE = 'America/Sao_Paulo'
 APPROVALS = Path('.frontlights') / 'approvals.json'
@@ -39,16 +43,12 @@ class Refusal(Exception):
     pass
 
 
-class JsonParser(argparse.ArgumentParser):
-    def error(self, message):
-        raise Refusal(f'uso inválido do stamp: {message}')
-
-
 def build_parser():
-    parser = JsonParser(prog='frontlights.py stamp', allow_abbrev=False,
+    parser = _cli.JsonParser(prog='frontlights.py stamp', allow_abbrev=False,
                         description='Carimbo de aprovação: liga a aprovação de um documento ao conteúdo exato.')
     parser.add_argument('file', help='the document to stamp')
-    parser.add_argument('--root', default='.', help='the project whose .frontlights/approvals.json is used')
+    parser.add_argument('--root', help='the project whose .frontlights/approvals.json is used (default: the main '
+                                       'worktree of the current directory)')
     parser.add_argument('--revision', help='the revision of the document, such as r2')
     parser.add_argument('--approve', action='store_true', help='record the approval (requires --answer and --expect with the stamp shown in the question)')
     parser.add_argument('--answer', help="the user's answer, verbatim")
@@ -147,8 +147,13 @@ def run(args):
 
 
 def main(argv=None):
+    _cli.utf8_streams()
     try:
-        result = run(build_parser().parse_args(argv))
+        args = build_parser().parse_args(argv)
+        args.root = str(_cli.root_path(args.root))
+        result = run(args)
+    except _cli.UsageError as error:
+        result = error.result(operation='stamp')
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'operation': 'stamp', 'message': str(error)}
     except Exception as error:  # noqa: BLE001  (a refusal in JSON, never a traceback)

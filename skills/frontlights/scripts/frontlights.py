@@ -17,6 +17,11 @@ import sys
 import urllib.request
 import urllib.parse
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root, --tree, --config and --issue, the parser and UTF-8)
+
 
 def require(condition, message):
     if not condition:
@@ -1199,12 +1204,8 @@ def load(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
 
-def main():
-    if sys.argv[1:2] == ['stamp']:
-        # Delegated whole, so its options may come before the file (a REMAINDER would leave them to this parser).
-        import stamp
-        return stamp.main(sys.argv[2:])  # prints its own JSON
-    parser = argparse.ArgumentParser(description=__doc__)
+def build_parser():
+    parser = _cli.JsonParser(prog='frontlights.py', description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ('validate-plan', 'schedule'):
         p = sub.add_parser(name)
@@ -1221,20 +1222,22 @@ def main():
     p.add_argument('--reserve', type=int, required=True)
     p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
     p = sub.add_parser('inspect')
-    p.add_argument('--config', required=True)
-    p.add_argument('--root', default='.')
+    p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
+    p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--summary', action='store_true',
                    help='per source the status and the count; per issue only number, title, state and boxes')
     p = sub.add_parser('evidence')
-    p.add_argument('--root', default='.')
+    p.add_argument('--root', help='default: the worktree of the current directory')
     p = sub.add_parser('review-gate')
-    p.add_argument('--root', default='.')
+    p.add_argument('--root', help='default: the worktree of the current directory')
     p.add_argument('--review', required=True, help='saved evidence output taken when the independent review was bound')
     p = sub.add_parser('browser-gate')
-    p.add_argument('--root', action='append', required=True,
-                   help='worktree of the issue, or of one of its slices (named in --stacked with the branch of its issue); repeatable')
+    p.add_argument('--root', action='append',
+                   help='worktree of the issue, or of one of its slices (named in --stacked with the branch of its issue); '
+                        'repeatable (default: the worktree of the current directory)')
     p.add_argument('--base', required=True, help='approved base of the issue (the local main, or the branch it is stacked on), the same for every --root')
-    p.add_argument('--config', help='.frontlights/config.json (browserTest and browserTest.frontPaths)')
+    p.add_argument('--config', help='.frontlights/config.json (browserTest and browserTest.frontPaths; default: the '
+                                    'one of the main worktree, when it exists)')
     p.add_argument('--toca', choices=['sim', 'nao', 'não', 'ausente'], help="the plan's `Toca o frontend:`")
     p.add_argument('--record', help='the batch result.json, which may not exist yet')
     p.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
@@ -1244,7 +1247,7 @@ def main():
     p.add_argument('--plan', required=True, help='the plan; prints its issue ids blockers first, for --blocked-by')
     for name in ('checkpoint', 'resume'):
         p = sub.add_parser(name)
-        p.add_argument('--root', required=True)
+        p.add_argument('--root', help='default: the worktree of the current directory')
         p.add_argument('--issue', required=True, help='Current gh api issue JSON')
         p.add_argument('--handoff', required=True)
         if name == 'checkpoint':
@@ -1263,7 +1266,32 @@ def main():
                        help='stamp.py: binds the approval of a document to its exact content (issue 61); '
                             'delegated before this parser runs')
     p.add_argument('stamp_args', nargs=argparse.REMAINDER, help='the file and its options, e.g. spec.md --check')
-    args = parser.parse_args()
+    return parser
+
+
+def resolve_defaults(args):
+    """--root and --config the command line left out, by the rules of `_cli`."""
+    if args.command == 'inspect':
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root)
+    elif args.command in ('evidence', 'review-gate', 'checkpoint', 'resume'):
+        args.root = str(_cli.tree_path(args.root))
+    elif args.command == 'browser-gate':
+        args.root = args.root or [str(_cli.current_tree())]
+        args.config = _cli.config_path(args.config, _cli.main_worktree(), required=False)
+    return args
+
+
+def main():
+    _cli.utf8_streams()
+    if sys.argv[1:2] == ['stamp']:
+        # Delegated whole, so its options may come before the file (a REMAINDER would leave them to this parser).
+        import stamp
+        return stamp.main(sys.argv[2:])  # prints its own JSON
+    try:
+        args = resolve_defaults(build_parser().parse_args())
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2)
     code = 0
     try:
         if args.command == 'validate-plan':

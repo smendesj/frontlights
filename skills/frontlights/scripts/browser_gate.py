@@ -74,6 +74,11 @@ import sys
 import time
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root and --config, the parser and UTF-8)
+
 TEST_SEGMENTS = {'tests', 'test', '__tests__', '__mocks__', 'e2e', 'cypress', 'fixtures', 'spec', 'specs',
                  'docs', 'doc'}
 TEST_NAME = re.compile(r'\.(spec|test|e2e)\.[a-z0-9]+$')
@@ -378,17 +383,25 @@ def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--root', action='append', required=True,
-                        help='worktree of the issue, or of one of its slices (named in --stacked); repeatable')
+    _cli.utf8_streams()
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--root', action='append',
+                        help='worktree of the issue, or of one of its slices (named in --stacked); repeatable '
+                             '(default: the worktree of the current directory)')
     parser.add_argument('--base', required=True, help='approved base of the issue, the same for every root')
-    parser.add_argument('--config', help="the project's .frontlights/config.json (browserTest.frontPaths, browserTest)")
+    parser.add_argument('--config', help="the project's .frontlights/config.json (browserTest.frontPaths, browserTest; "
+                                         "default: the one of the main worktree, when it exists)")
     parser.add_argument('--toca', choices=sorted(k for k in TOCA if k), help="the plan's `Toca o frontend:`")
     parser.add_argument('--record', help="the issue's result.json (may not exist yet)")
     parser.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
                         help='the branch of a slice (or of a stacked issue) and the branch it is measured from: the branch '
                              'of its issue, or the one its PR targets; repeatable')
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+        args.root = args.root or [str(_cli.current_tree())]
+        args.config = _cli.config_path(args.config, _cli.main_worktree(), required=False)
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2)
     try:
         result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked)
     except (ValueError, OSError, subprocess.TimeoutExpired) as error:

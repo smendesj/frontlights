@@ -93,6 +93,7 @@ import urllib.parse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import roads as rs  # noqa: E402  (shared configuration, credential and transport helpers)
+import _cli  # noqa: E402  (the default of --root, the parser and UTF-8)
 from roads import Refusal, require  # noqa: E402
 
 TAIL_BYTES = 6 * 1024
@@ -1168,10 +1169,12 @@ def render(result):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    _cli.utf8_streams()
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('operation', choices=OPERATIONS)
-    parser.add_argument('--root', default='.', help='project the session is in: its own roadmapSync.progress block wins, '
-                                                     'else the registered home (the other operations take the operationsRoot that status reports)')
+    parser.add_argument('--root', help='project the session is in: its own roadmapSync.progress block wins, '
+                                       'else the registered home (the other operations take the operationsRoot that '
+                                       'status reports); default: the main worktree of the current directory')
     parser.add_argument('--set', dest='home_set', help='project that declares the block, to register as its home (home)')
     parser.add_argument('--clear', dest='home_clear', action='store_true', help='remove the registered home (home)')
     parser.add_argument('--start', help='first instant of the period, as window printed it (collect)')
@@ -1186,7 +1189,11 @@ def main():
     parser.add_argument('--draft', help='path of the draft file the push command reads (push)')
     parser.add_argument('--shot', action='append', default=[], help='screenshot to attach; repeatable (push)')
     parser.add_argument('--caption', action='append', default=[], help="caption of the matching --shot, in order (push)")
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2)
+    args.root = str(_cli.root_path(args.root))
     result = run(args.operation, args.root, date_from=args.date_from, date_to=args.date_to, draft=args.draft,
                  shots=args.shot, captions=args.caption, meeting=args.meeting, home_set=args.home_set,
                  home_clear=args.home_clear, ref=args.ref, repository=args.repository, start=args.start, end=args.end,

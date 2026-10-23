@@ -112,6 +112,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root and --config, the parser and UTF-8)
+
 import serve
 
 SHELL_PROGRAMS = {'cmd', 'sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'csh', 'tcsh', 'powershell', 'pwsh'}
@@ -664,10 +669,10 @@ def execute(label, settings, tree, record_dir, ancestor=None):
 
 
 def configure_regression(parser):
-    parser.add_argument('--config', required=True, help='.frontlights/config.json com o bloco checks.regression')
-    parser.add_argument('--root', required=True, help='worktree da issue (branch)')
+    parser.add_argument('--config', help='.frontlights/config.json com o bloco checks.regression (padrão: o da worktree principal)')
+    parser.add_argument('--root', help='worktree da issue (branch; padrão: a worktree da pasta atual)')
     parser.add_argument('--base', required=True, help='worktree ou checkout da base')
-    parser.add_argument('--issue', required=True, type=int)
+    parser.add_argument('--issue', help='número da issue (padrão: a issue do charter para a worktree)')
 
 
 def compare(base, branch):
@@ -737,9 +742,9 @@ class Infra(Exception):
 
 
 def configure_environment_check(parser):
-    parser.add_argument('--config', required=True, help='.frontlights/config.json com o bloco checks')
-    parser.add_argument('--root', required=True, help='worktree da issue (branch), onde o serve foi iniciado')
-    parser.add_argument('--issue', required=True, type=int)
+    parser.add_argument('--config', help='.frontlights/config.json com o bloco checks (padrão: o da worktree principal)')
+    parser.add_argument('--root', help='worktree da issue (branch), onde o serve foi iniciado (padrão: a da pasta atual)')
+    parser.add_argument('--issue', help='número da issue (padrão: a issue do charter para a worktree)')
     parser.add_argument('--base', help='worktree ou checkout da base, para o hash do diff contra o merge-base')
 
 
@@ -1329,11 +1334,19 @@ SUBCOMMANDS = {'regression': (configure_regression, run_regression),
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    _cli.utf8_streams()
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
     for name, (configure, _) in SUBCOMMANDS.items():
         configure(sub.add_parser(name))
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+        main_tree = _cli.main_worktree()
+        args.root = str(_cli.tree_path(args.root))
+        args.config = _cli.config_path(args.config, main_tree)
+        args.issue = _cli.issue_number(args.issue, args.root, main_tree)
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2, blocking=True)
     load_user_secrets(args.config)
     try:
         result, code = SUBCOMMANDS[args.command][1](args)

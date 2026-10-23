@@ -36,6 +36,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root and --config, the parser and UTF-8)
+
 GH_COMMAND = ['gh']
 GH_TIMEOUT = 60
 GAPS_BATCH = 20        # issues per GraphQL read of the closeout
@@ -444,11 +449,16 @@ def run(operation, root='.'):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    _cli.utf8_streams()
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('operation', choices=['status', 'approve'])
-    parser.add_argument('--root', default='.', help='project whose .frontlights/config.json declares roadmapSync')
-    args = parser.parse_args()
-    result = run(args.operation, args.root)
+    parser.add_argument('--root', help='project whose .frontlights/config.json declares roadmapSync (default: the main '
+                                       'worktree of the current directory)')
+    try:
+        args = parser.parse_args()
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2)
+    result = run(args.operation, str(_cli.root_path(args.root)))
     print(protect(json.dumps(result, indent=2, ensure_ascii=True)))
     return int(result['exitCode'])
 

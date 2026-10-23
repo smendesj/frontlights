@@ -122,6 +122,11 @@ import zoneinfo
 from datetime import datetime, timezone
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import _cli  # noqa: E402  (defaults of --root, --config and --issue, the parser and UTF-8)
+
 GIT_TIMEOUT = 45
 FETCH_TIMEOUT = 120
 BUNDLE_TIMEOUT = 300
@@ -1384,27 +1389,23 @@ def run(operation, root, base='main', remote='origin', config=None, prefix=None,
     return result
 
 
-class JsonParser(argparse.ArgumentParser):
-    """A usage mistake is a JSON refusal like any other."""
-
-    def error(self, message):
-        raise Refusal(f'uso: {message}')
-
-
 def build_parser():
-    parser = JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+    parser = _cli.JsonParser(prog='homolog', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
                         allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
     for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):
         command = sub.add_parser(name, allow_abbrev=False)
-        command.add_argument('--root', required=True, help="the project's main worktree (suite: the issue's worktree)")
+        command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current "
+                                            "directory; suite and suite-gate: the worktree of the current directory)")
         command.add_argument('--base', default='main',
                              help='the base branch, the local homologation (default main); suite: replaces {base}; '
                                   '--release: the local base whose tip the record covers')
         if name in ('suite', 'suite-gate'):
-            command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.suites')
-            record = command.add_mutually_exclusive_group(required=True)
-            record.add_argument('--issue', help='the issue number: the record is .frontlights/issues/<n>/suite.json')
+            command.add_argument('--config', help='.frontlights/config.json (default: the one of the main worktree); '
+                                                  'its homolog.suites')
+            record = command.add_mutually_exclusive_group()
+            record.add_argument('--issue', help='the issue number: the record is .frontlights/issues/<n>/suite.json '
+                                                '(default: the issue of the charter entry of the worktree)')
             record.add_argument('--release', action='store_true',
                                 help='the whole suite of the release on the local base: .frontlights/release/suite.json')
         if name == 'suite':
@@ -1424,7 +1425,8 @@ def build_parser():
         elif name == 'sync':
             command.add_argument('--remote', default='origin', help='the remote the base is fetched from (default origin)')
         elif name == 'bundle':
-            command.add_argument('--config', required=True, help='.frontlights/config.json; its homolog.backupDir names the folder')
+            command.add_argument('--config', help='.frontlights/config.json (default: the one of the main worktree); '
+                                                  'its homolog.backupDir names the folder')
             command.add_argument('--prefix', help='the work branches to include: every local branch under it alone '
                                                   '(default: every branch_prefix of the authorization records, claude/ '
                                                   'without one)')
@@ -1439,9 +1441,30 @@ def build_parser():
     return parser
 
 
+def resolve_defaults(args):
+    """--root, --config and --issue the command line left out, by the rules of `_cli`."""
+    main = _cli.main_worktree()
+    if args.operation in ('suite', 'suite-gate'):
+        args.root = str(_cli.tree_path(args.root))
+        args.config = _cli.config_path(args.config, main)
+        if not args.release:
+            args.issue = str(_cli.issue_number(args.issue, args.root, main))
+    else:
+        args.root = str(_cli.root_path(args.root))
+        if args.operation == 'bundle':
+            args.config = _cli.config_path(args.config, args.root)
+        elif args.operation == 'release-plan':
+            args.config = _cli.config_path(args.config, args.root, required=False)
+    return args
+
+
 def main(argv=None):
+    _cli.utf8_streams()
     try:
-        args = build_parser().parse_args(argv)
+        args = resolve_defaults(build_parser().parse_args(argv))
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error)
+    try:
         result = run(args.operation, args.root, getattr(args, 'base', 'main'), getattr(args, 'remote', 'origin'),
                      getattr(args, 'config', None), getattr(args, 'prefix', None),
                      getattr(args, 'records', None), getattr(args, 'issue', None), getattr(args, 'mode', None),

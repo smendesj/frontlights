@@ -78,6 +78,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import closeout  # noqa: E402  (its reader of the records, branch rule and the GitHub reader it shares)
 import frontlights  # noqa: E402  (the rule for text a command line can carry)
+import _cli  # noqa: E402  (defaults of --root, --config and --issue, the parser and UTF-8)
 import roads as rs  # noqa: E402
 
 Refusal = rs.Refusal
@@ -902,20 +903,13 @@ def run(operation, config, root='.', issues=None, base=None, worktrees=(), branc
     return result
 
 
-class JsonParser(argparse.ArgumentParser):
-    """A usage mistake is a JSON refusal like any other."""
-
-    def error(self, message):
-        raise Refusal(f'usage: {message}')
-
-
 def build_parser():
-    parser = JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, allow_abbrev=False)
     sub = parser.add_subparsers(dest='operation', required=True)
     for name in ('plan', 'verify'):
         command = sub.add_parser(name, allow_abbrev=False)
-        command.add_argument('--config', required=True, help="the project's .frontlights/config.json")
-        command.add_argument('--root', default='.', help="the project's main worktree")
+        command.add_argument('--config', help="the project's .frontlights/config.json (default: the one of the main worktree)")
+        command.add_argument('--root', help="the project's main worktree (default: the main worktree of the current directory)")
         command.add_argument('--worktree', action='append', default=[], dest='worktrees', help='a worktree path, as many times as needed')
         if name == 'plan':
             command.add_argument('--issues', help='issue numbers whose work is done, such as 12,13 (required)')
@@ -934,9 +928,21 @@ def build_parser():
     return parser
 
 
+def resolve_defaults(args):
+    """--root and --config the command line left out, by the rules of `_cli`."""
+    if hasattr(args, 'root'):
+        args.root = str(_cli.root_path(args.root))
+        args.config = _cli.config_path(args.config, args.root)
+    return args
+
+
 def main(argv=None):
+    _cli.utf8_streams()
     try:
-        args = build_parser().parse_args(argv)
+        args = resolve_defaults(build_parser().parse_args(argv))
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error)
+    try:
         result = run(args.operation, getattr(args, 'config', None), getattr(args, 'root', '.'), getattr(args, 'issues', None),
                      getattr(args, 'base', None), getattr(args, 'worktrees', []), getattr(args, 'branches', []),
                      integrations=getattr(args, 'integrations', []), records=getattr(args, 'records', []),

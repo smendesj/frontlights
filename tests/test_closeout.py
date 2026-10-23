@@ -1836,7 +1836,8 @@ class CliTests(CloseoutCase):
     def test_usage_mistakes_are_json_refusals_too(self):
         for argv in ([], ['candidates'], ['frobnicate', '--config', 'x'], ['candidates', '--config', 'x', '--bogus'],
                      ['verify', '--config']):
-            with self.subTest(argv=argv):
+            # outside any project: without --config the default config is missing too (a refusal with a hint)
+            with self.subTest(argv=argv), tempfile.TemporaryDirectory() as empty, contextlib.chdir(empty):
                 code, out, _ = self.main(*argv)
                 self.assertEqual(code, 1)
                 result = json.loads(out)
