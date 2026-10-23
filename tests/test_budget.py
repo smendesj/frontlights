@@ -25,7 +25,7 @@ BUDGET = {
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
     'references/development.md': 11294,
-    'references/grilling.md': 2871,
+    'references/grilling.md': 1878,
     'references/issue.md': 596,
     'references/issues.md': 6063,
     'references/LICENSE-pr.md': 279,

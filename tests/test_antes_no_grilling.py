@@ -88,6 +88,9 @@ class AntesOpensInTheGrillingTests(unittest.TestCase):
     def test_the_grilling_and_the_skill_point_to_the_window_rule(self):
         grilling = flat(read('skills', 'frontlights', 'references', 'grilling.md'))
         self.assertIn('its ANTES window, which opens here and stays open', grilling)
+        # redesenho, issue 6: o grilling cita os comandos da janela ANTES que a issue 8 entregou
+        self.assertIn('(`serve.py window open --strip "ANTES: origin/main"`, then `serve.py window shot --pass antes '
+                      '--name base`)', grilling)
         # redesenho, issue 3: a etapa 3 diz a mesma regra em palavras novas e aponta para "Watched run"
         stage3 = flat(skilltext.stage(3))
         self.assertIn('with a screen the ANTES window opens here and stays open '
