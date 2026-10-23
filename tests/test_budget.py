@@ -27,7 +27,7 @@ BUDGET = {
     'references/development.md': 11294,
     'references/grilling.md': 2871,
     'references/issue.md': 596,
-    'references/issues.md': 6063,
+    'references/issues.md': 2609,   # issue 7: etapa 5 por comando
     'references/LICENSE-pr.md': 279,
     'references/LICENSE-tdd.md': 198,
     'references/progress-report.md': 3797,
