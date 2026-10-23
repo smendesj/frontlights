@@ -82,6 +82,8 @@ ele trabalha num projeto consumidor.
   approvals.json           gravado por `frontlights.py stamp --approve`: path, revision, sha256 de 12 caracteres,
                            bytes, answer literal, bodies (plano: carimbo de cada body_file), stage e at
                            (ISO-8601 em -03:00)
+  stamps.json              gravado por `frontlights.py stamp --revision`: a revisão e o carimbo mostrados na
+                           pergunta, por caminho; o `--approve` sem `--revision` leva essa revisão
   plan.json
   authorization.json
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, nunca apagados

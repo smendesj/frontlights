@@ -103,6 +103,19 @@ class StampTests(unittest.TestCase):
         self.assertTrue(entry['at'].endswith('-03:00'), entry['at'])
         self.assertNotIn('Z', entry['at'])
 
+    def test_approve_carries_the_revision_of_the_stamp_shown_in_the_question(self):
+        self.run_stamp(str(self.doc), '--revision', 'r1')
+        code, result = self.run_stamp(str(self.doc), '--approve', '--answer', ANSWER, '--expect', stamp_of(CONTENT))
+        self.assertEqual(code, 0, result['message'])
+        self.assertEqual(self.approvals()[0]['revision'], 'r1')
+        self.assertEqual(result['revision'], 'r1')
+
+    def test_the_revision_is_not_carried_to_other_bytes(self):
+        self.run_stamp(str(self.doc), '--revision', 'r1')
+        self.doc.write_bytes(CONTENT + b'mais\n')
+        self.run_stamp(str(self.doc), '--approve', '--answer', ANSWER, '--expect', stamp_of(self.doc.read_bytes()))
+        self.assertIsNone(self.approvals()[0]['revision'])
+
     def test_approve_without_stage_leaves_stage_out(self):
         self.run_stamp(str(self.doc), '--approve', '--answer', ANSWER, '--expect', stamp_of(CONTENT))
         self.assertNotIn('stage', self.approvals()[0])

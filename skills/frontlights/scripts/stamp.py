@@ -5,8 +5,9 @@ Usage: frontlights.py stamp <file> [--root <project>] [--revision rN] [--approve
        [--stage N]] [--check] [--expect <sha12>]   (--approve requires --expect and does not combine with --check)
 
 Prints one JSON object: `ok`, `exitCode`, `operation` ("stamp"), `message` (Portuguese, for the user), `path`
-(relative to --root when the file is inside it, else as given; forward slashes), `revision` (from --revision, else
-null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and `bytes` (the size).
+(relative to --root when the file is inside it, else as given; forward slashes), `revision` (from --revision; with
+--approve and no --revision, the one of the last `--revision` stamp of the same path when its bytes are the same, kept
+in <root>/.frontlights/stamps.json; else null), `sha256` (the first 12 hex characters of the sha256 of the raw bytes) and `bytes` (the size).
 
   --approve  appends one entry to <root>/.frontlights/approvals.json (a JSON list, created when absent, existing
              entries kept, extra keys included): path, revision, sha256, bytes, answer (verbatim), bodies (when the
@@ -36,6 +37,7 @@ import _cli  # noqa: E402  (the default of --root, the parser and UTF-8)
 
 ZONE = 'America/Sao_Paulo'
 APPROVALS = Path('.frontlights') / 'approvals.json'
+SHOWN = Path('.frontlights') / 'stamps.json'   # the revision named with --revision, per path, with its stamp
 STAMP_LENGTH = 12
 
 
@@ -99,6 +101,26 @@ def plan_bodies(file, data):
     return bodies
 
 
+def read_shown(root):
+    """{path: {revision, sha256}} of the last `--revision` stamp of each path; {} when absent or unreadable."""
+    try:
+        data = json.loads((Path(root) / SHOWN).read_text(encoding='utf-8-sig'))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def remember_revision(root, path, revision, sha):
+    """Keep the revision of the stamp shown in the question, so `--approve` without --revision carries it."""
+    shown = read_shown(root)
+    shown[path] = {'revision': revision, 'sha256': sha}
+    target = Path(root) / SHOWN
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + '.tmp')
+    temporary.write_text(json.dumps(shown, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    os.replace(temporary, target)
+
+
 def read_approvals(path):
     if not path.exists():
         return []
@@ -125,8 +147,16 @@ def run(args):
         data = Path(args.file).read_bytes()
     except OSError as error:
         raise Refusal(f'arquivo não encontrado ou ilegível: {path}') from error
-    result = {'ok': True, 'exitCode': 0, 'operation': 'stamp', 'path': path, 'revision': args.revision,
-              'sha256': file_stamp(data), 'bytes': len(data)}
+    sha = file_stamp(data)
+    revision = args.revision
+    if revision is not None:
+        remember_revision(root, path, revision, sha)
+    elif args.approve:   # the revision of the stamp shown in the question, when it is these same bytes
+        last = read_shown(root).get(path)
+        if isinstance(last, dict) and last.get('sha256') == sha and isinstance(last.get('revision'), str):
+            revision = last['revision']
+    result = {'ok': True, 'exitCode': 0, 'operation': 'stamp', 'path': path, 'revision': revision,
+              'sha256': sha, 'bytes': len(data)}
     messages = [f'carimbo de {path}: {result["sha256"]} ({len(data)} bytes)']
     if args.expect is not None:
         if args.expect.strip().lower() == result['sha256']:
@@ -155,7 +185,7 @@ def run(args):
     elif args.approve:
         target = root / APPROVALS
         entries = read_approvals(target)
-        entry = {'path': path, 'revision': args.revision, 'sha256': result['sha256'], 'bytes': len(data),
+        entry = {'path': path, 'revision': revision, 'sha256': result['sha256'], 'bytes': len(data),
                  'answer': args.answer}
         bodies = plan_bodies(args.file, data)
         if bodies:
