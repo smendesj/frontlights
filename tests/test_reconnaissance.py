@@ -187,10 +187,7 @@ class ReconnaissanceInTheSkillTests(unittest.TestCase):
 
     def test_the_readme_describes_the_reconnaissance(self):
         readme = flat(read(ROOT / 'README.md'))
-        for phrase in ('reconhecimento por gatilho', 'as armadilhas do projeto', 'tabela curta de fatos',
-                       'fato não verificado não vira opção', 'só produto, escopo e visual'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('reconhecimento, perguntas, artefato, janela ANTES', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_the_depth_question_is_retired_everywhere(self):
         files = (sorted(SKILL.rglob('*.md')) + [ROOT / 'README.md'] + sorted((ROOT / 'evals').glob('*.md'))

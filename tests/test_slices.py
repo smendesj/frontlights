@@ -273,7 +273,7 @@ class SlicesTextTests(unittest.TestCase):
             with self.subTest(where='templates/issue.md', phrase=phrase):
                 self.assertIn(phrase, template)
         self.assertIn('até cinco por issue', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
-        self.assertIn('no máximo cinco CAs', flat(read('README.md')))
+        self.assertIn('até cinco caixas', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         self.assertIn('more than five slices', flat(read('evals', 'vertical-slices.md')))
 
     def test_the_protocol_the_readme_and_the_evals_follow(self):
@@ -283,7 +283,7 @@ class SlicesTextTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat(protocol))
         readme = flat(read('README.md'))
-        for phrase in ('uma caixa por slice', 'lista numerada'):
+        for phrase in ('até 5 caixas na issue',):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
         evals = flat(read('evals', 'vertical-slices.md'))

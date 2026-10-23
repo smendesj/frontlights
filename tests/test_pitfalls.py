@@ -103,7 +103,8 @@ class TheRecordIsListedTests(unittest.TestCase):
 
     def test_the_readme_mentions_the_line_with_the_leftover(self):
         text = flat(read(README))
-        self.assertIn('deixa uma linha nas armadilhas do projeto (`.frontlights/pitfalls.md`)', text)
+        # issue 12 do redesenho: o README virou guia curto; a linha das armadilhas vive em references/issues.md
+        self.assertNotIn('deixa uma linha nas armadilhas do projeto', text)
 
 
 if __name__ == '__main__':

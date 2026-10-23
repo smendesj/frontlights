@@ -150,8 +150,8 @@ class NamesTests(unittest.TestCase):
         self.assertNotIn('`antes-<n>`', evidence)
 
     def test_the_docs_use_the_new_names(self):
-        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'security.md'), ('evals', 'runbook.md'),
-                     ('skills', 'frontlights', 'templates', 'pr.md')):
+        for name in (('skills', 'frontlights', 'docs', 'security.md'), ('evals', 'runbook.md'),
+                     ('skills', 'frontlights', 'templates', 'pr.md')):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             text = flat(read(*name))
             with self.subTest(doc=name[-1]):
                 self.assertIn('antes-<cover>-S<n>', text)
@@ -174,7 +174,7 @@ class TestDataStaysTests(unittest.TestCase):
     def test_the_question_and_the_docs_say_the_data_stays(self):
         self.assertIn('which stays on the local development database for reuse', WATCHED)
         self.assertNotIn('removes it afterwards', WATCHED)
-        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'security.md')):
+        for name in (('skills', 'frontlights', 'docs', 'security.md'),):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             text = flat(read(*name))
             with self.subTest(doc=name[-1]):
                 self.assertIn('ficam para reuso', text)
@@ -202,7 +202,7 @@ class DocsFollowTests(unittest.TestCase):
         runbook = flat(read('evals', 'runbook.md'))
         self.assertIn('the ANTES window opens at the problem round', runbook)
         self.assertNotIn('Close the ANTES window early and confirm DEPOIS starts at once', runbook)
-        self.assertIn('ANTES abre no grilling', flat(read('README.md')))
+        self.assertIn('abre no grilling<br/>fica aberta durante as slices', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
 
 if __name__ == '__main__':

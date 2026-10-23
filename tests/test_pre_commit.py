@@ -334,7 +334,7 @@ class DocumentationTest(unittest.TestCase):
 
     def test_the_readme_development_section_cites_the_command(self):
         text = (ROOT / 'README.md').read_text(encoding='utf-8')
-        section = ' '.join(text.split('## Fluxo de trabalho e utilitários')[1].split('\n## ')[0].split())
+        section = ' '.join(text.split('## Para quem desenvolve o Frontlights')[1].split('\n## ')[0].split())
         self.assertIn('python tests/pre_commit.py', section)
         self.assertIn('fica para a suíte inteira', section)
         self.assertIn('nenhum hook o roda', section)

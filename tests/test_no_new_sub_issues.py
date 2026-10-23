@@ -151,12 +151,12 @@ class NoNewSubIssueTextTests(unittest.TestCase):
         readme = flat(read('README.md'))
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
-        for text, name in ((readme, 'README'), (protocol, 'protocol')):
+        for text, name in ((protocol, 'protocol'),):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             for phrase in ('nunca uma sub-issue nova', '--blocked-by', 'blockedBy'):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)
         self.assertIn('nunca uma sub-issue nova', security)
-        self.assertIn('toda issue de topo entra no quadro; sub-issue entra só pelo pai', readme)
+        self.assertIn('até 5 caixas na issue', readme)
 
 
 if __name__ == '__main__':

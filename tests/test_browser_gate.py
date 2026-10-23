@@ -839,7 +839,7 @@ class GateDocumentationTests(unittest.TestCase):
 
     def test_the_eval_the_runbook_and_the_record_cover_the_case(self):
         self.assertIn('browser-gate', self.flat('evals', 'batch-watched-run.md'))
-        for name in (('skills', 'frontlights', 'references', 'browser-testing.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',),
+        for name in (('skills', 'frontlights', 'references', 'browser-testing.md'), ('skills', 'frontlights', 'docs', 'security.md'),
                      ('evals', 'batch-watched-run.md'), ('evals', 'runbook.md')):
             with self.subTest(doc=name[-1]):
                 self.assertIn('dispensado', self.flat(*name))

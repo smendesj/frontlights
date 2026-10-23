@@ -233,9 +233,7 @@ class LocalMainTextTests(unittest.TestCase):
         self.assertNotIn('the local main brought into the branch of the issue,', skill)
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         self.assertIn('só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue', security)
-        readme = flat('README.md')
-        self.assertIn('a main local é trazida para uma branch local de integração da issue', readme)
-        self.assertNotIn('a main local é trazida para a branch da issue', readme)
+        self.assertNotIn('a main local é trazida para a branch da issue', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         handoff = read('skills', 'frontlights', 'templates', 'handoff.md')
         self.assertIn('a main local trazida para a branch local de integração', handoff)
         self.assertNotIn('a main local trazida para a branch da issue;', handoff)
@@ -352,10 +350,7 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_the_readme_the_handoff_and_the_examples_follow(self):
         readme = flat('README.md')
-        for phrase in ('A branch de cada issue é criada no GitHub a partir da `origin/main` por `gh issue develop`',
-                       'numa branch por issue, criada no GitHub a partir da `origin/main`',
-                       'o da branch da issue na main local com o teste assistido respondido',
-                       'a branch da issue sobe para o GitHub a cada fatia mesclada'):
+        for phrase in ('empurra a branch da issue', 'O trabalho aprovado entra na sua `main` local, nunca na remota'):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
         for gone in ('cortadas da main local do projeto (a homologação) e ficam só locais até a release',
@@ -423,9 +418,7 @@ class LocalMainTextTests(unittest.TestCase):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         self.assertIn('a sincronização da main local e a prévia, em "The start of stage 6"', protocol)
         readme = flat('README.md')
-        for phrase in ('A skill não instala hook nenhum', 'traz `origin/main` para a main local (`homolog sync`'):
-            with self.subTest(file='README.md', phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('Nenhum hook bloqueia nada: a skill não instala hook', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         self.assertNotIn('instala só o hook `pre-push` da homologação', readme)
         self.assertIn('confirm that no hook is installed or asked about', flat('evals', 'runbook.md'))
 
@@ -452,7 +445,7 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, security)
         self.assertIn('o portão do merge na main local (o teste assistido) e o bundle depois dele, em "Into the local main"',
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
-        self.assertIn('a chave `homolog.backupDir` aponta uma pasta sua, por caminho absoluto', flat('README.md'))
+        self.assertIn('backup da homologação', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         example = json.loads(read('skills', 'frontlights', 'examples', 'config.json'))
         self.assertIsNone(example['homolog']['backupDir'])
         self.assertIn('S3: `homolog bundle` grava', flat('docs', 'acceptance.md'))
@@ -467,7 +460,6 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, step)
         self.assertNotIn('the local main and every branch under the `branch_prefix`', step)
-        self.assertIn('das branches de trabalho de todo prefixo dos registros de autorização', flat('README.md'))
 
     def test_the_release_name_follows_the_newest_record(self):
         """Issue 44, S2: o nome da release usa o prefixo do registro de autorização mais recente, sem `--prefix`."""
@@ -479,7 +471,7 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, release)
         self.assertIn('records without a valid `issued_at` rank below those with one', release)
         self.assertIn('say in one line how many records `skipped` counts', release)
-        for file in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
+        for file in (('skills', 'frontlights', 'docs', 'protocol.md'),):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             with self.subTest(file=file[-1]):
                 text = flat(*file)
                 self.assertIn('o prefixo do registro de autorização mais recente', text)
@@ -567,13 +559,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`contained_in_base_without_pull_request`'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
-        readme = flat('README.md')
-        for phrase in ('#### Homologar na main local, lançar a release, fechar e limpar', '`homolog release-plan`',
-                       'cujo tip já está em `origin/main`', 'oferta da release (branch de release e PR única)',
-                       'a release fica pronta quando há o que lançar e a main local não está atrás, sem suíte '
-                       'obrigatória'):
-            with self.subTest(file='README.md', phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('`homolog.py release`', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         self.assertIn('- Release (a saída do `release-plan`', read('skills', 'frontlights', 'templates', 'handoff.md'))
         self.assertIn('a suíte inteira na ponta da main local só quando o usuário a pediu',
                       flat('skills', 'frontlights', 'templates', 'handoff.md'))
@@ -622,8 +608,7 @@ class LocalMainTextTests(unittest.TestCase):
                        'Ao fim de cada issue homologada, depois de fechada a janela do teste livre'):
             with self.subTest(file='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
-        self.assertIn('merge na main local e bundle de backup → teste livre na main local (até você fechar a janela) → '
-                      'oferta da release', flat('README.md'))
+        self.assertIn('M --> L["Teste livre<br/>na main local"]', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_a_fix_in_the_free_test_is_made_at_once_and_its_criteria_go_in_one_batch(self):
         """Issue 69, S4: uma correção pedida no teste livre é feita na hora na branch da issue e mesclada de novo na
@@ -700,7 +685,6 @@ class LocalMainTextTests(unittest.TestCase):
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         self.assertIn('sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta '
                       'de fim do teste, e só o "Sim, terminei" leva à release', protocol)
-        self.assertIn('Num projeto sem tela, o teste livre acontece no terminal', flat('README.md'))
 
     def test_the_closeout_waits_for_the_release(self):
         """S5: o fechamento documenta `awaiting_release` na referência, na etapa 1 da skill, no protocolo, na
@@ -719,7 +703,6 @@ class LocalMainTextTests(unittest.TestCase):
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`',
                       flat('skills', 'frontlights', 'docs', 'security.md'))
-        self.assertIn('fica fora como `awaiting_release`, e o Frontlights só avisa', flat('README.md'))
         self.assertIn('S5: `closeout.py candidates` exclui como `awaiting_release`', flat('docs', 'acceptance.md'))
         self.assertIn('the issue waits for the release (`awaiting_release`)', flat('evals', 'runbook.md'))
 

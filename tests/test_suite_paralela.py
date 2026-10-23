@@ -853,12 +853,9 @@ class ParallelSuiteTextTests(unittest.TestCase):
 
     def test_the_readme_runs_the_fast_suite_by_the_runner_and_the_whole_one_by_discover(self):
         text = flat('README.md')
-        for phrase in ('A suíte rápida roda por `python tests/suite.py`', 'numa fila serial',
-                       '`--report <arquivo>` grava um JSON',
-                       'vale igual para o `discover` e para o runner',
-                       'pelo `python -m unittest discover -s tests -v`',
-                       'o runner não deixa a suíte inteira mais rápida do que o `discover`',
-                       'que não define a variável'):
+        # issue 12 do redesenho: o README virou guia curto; o runner e a variável vivem no tests/suite.py
+        for phrase in ('`python -m unittest discover -s tests -v` é a suíte inteira, à mão',
+                       '`python tests/suite.py` roda a rápida em paralelo'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         readme = read('README.md')

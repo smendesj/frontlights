@@ -87,10 +87,6 @@ class PreviewInTheFlowTests(unittest.TestCase):
                        'o teste assistido nunca usa a prévia nem as portas dela'):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
-        readme = flat(read('README.md'))
-        self.assertIn('**Prévia ao vivo.**', readme)
-        self.assertIn('numa aba do Claude in Chrome', readme)
-        self.assertRegex(readme, r'prévia ao vivo[^→]*→ desenvolvimento orientado a testes')
         runbook = read('evals', 'runbook.md')
         self.assertIn('30. Live preview (issue 34).', runbook)
         self.assertLess(runbook.index('29. Pull request template'), runbook.index('30. Live preview (issue 34).'))
@@ -122,7 +118,6 @@ class PreviewPortRulesTextTests(unittest.TestCase):
             # issue 8: the preview left browser-testing.md for development.md, "The start of stage 6"
             'development.md': (read('skills', 'frontlights', 'references', 'development.md'),
                                'no `{port}` in the `argv` or the `cwd` of its processes'),
-            'README.md': (read('README.md'), '`{port}` no argv ou no `cwd` dos processos dela'),
             'security.md': (read('skills', 'frontlights', 'docs', 'security.md'), 'sem `{port}` no argv nem no `cwd`'),
         }
         for name, (text, phrase) in sources.items():

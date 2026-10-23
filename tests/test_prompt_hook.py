@@ -126,7 +126,7 @@ class NeverBlocksTests(HookTestCase):
 class HookDocumentationTests(unittest.TestCase):
     def test_the_readme_and_the_security_notes_describe_the_opt_in_hook(self):
         readme = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
-        for phrase in ('frontlights-prompt-hook.py', 'UserPromptSubmit', 'Início por linguagem natural', 'settings.json'):
+        for phrase in ('frontlights-prompt-hook.py', 'UserPromptSubmit', 'settings.json'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, readme)
         security = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'security.md').read_text(encoding='utf-8').split())
@@ -134,7 +134,7 @@ class HookDocumentationTests(unittest.TestCase):
         self.assertIn('O Frontlights não instala hook nenhum.', security)
         self.assertIn('é um modelo que o usuário copia para o `~/.claude/hooks/`', security)
         self.assertNotIn('é o único hook que o Frontlights instala', security)
-        self.assertIn('há um hook **opcional**, que a skill não instala', readme)
+        self.assertIn('Um lembrete a cada prompt é opcional', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_the_skill_description_names_the_plain_language_triggers(self):
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')

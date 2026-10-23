@@ -105,7 +105,6 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         for parts, phrase in ((('skills', 'frontlights', 'references', 'grilling.md'), 'up to 15 lines'),
                               (('skills', 'frontlights', 'docs', 'security.md'), 'até 15 linhas'),
                               (('skills', 'frontlights', 'templates', 'grilling-section.html'), 'até 15 linhas'),
-                              (('README.md',), 'até 15 linhas'),
                               (('evals', 'grilling-artifact.md'), 'up to 15 lines')):
             text = flat(read(*parts))
             with self.subTest(file=parts[-1]):
@@ -236,11 +235,7 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
                 self.assertIn(phrase, artifact)
         self.assertNotIn('só dados fictícios', flat(raw_security))
         readme = flat(read('README.md'))
-        for phrase in ('**Artefato visual.**', 'um artefato por entrevista, na mesma URL',
-                       'uma seção por pergunta de decisão', '`templates/grilling-section.html`',
-                       'trecho de código real', 'segredo trocado por `***`'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('Uma página por entrevista, com o print da base primeiro e uma seção por decisão', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
 
 class PrintOfTheBaseTests(unittest.TestCase):
@@ -331,9 +326,7 @@ class PrintOfTheBaseTests(unittest.TestCase):
 
     def test_readme_acceptance_and_dry_run_describe_the_print(self):
         readme = flat(read('README.md'))
-        for phrase in ('print do sistema rodando na base', 'o mesmo print com marcações', 'o grilling para'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('com o print da base primeiro', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         self.assertNotIn('a tela montada do template real', readme)
         acceptance = read('docs', 'acceptance.md')
         row = acceptance[acceptance.index('| 28. Artefato visual'):].split('\n')[0]
@@ -377,8 +370,7 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('cada slice com a seção do artefato que mostra o que ela entrega', protocol)
         self.assertNotIn('sem seção, dito uma vez', protocol)
-        readme = flat(read('README.md'))
-        self.assertIn('cada CA com a seção do artefato que mostra o que ela entrega', readme)
+        self.assertIn('até 5 caixas na issue', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_the_dry_run_and_the_runbook_cover_the_artifact(self):
         case = read('evals', 'grilling-artifact.md')

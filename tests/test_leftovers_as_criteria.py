@@ -303,9 +303,6 @@ class TemplateAndCloseoutTests(unittest.TestCase):
 class DocsAndEvalsTests(unittest.TestCase):
     def test_the_documents_carry_the_rule(self):
         cases = {
-            ('README.md',): ('critério `- [ ] Pendência (achado da revisão): ...`', 'seção de critérios de aceitação da issue de origem',
-                             '"citado no corpo do PR" nunca é destino', 'Achados sem correção e destino de cada um',
-                             'fecha com N pendências fora dos critérios'),
             ('skills', 'frontlights', 'docs', 'protocol.md'): ('critério de aceitação novo na issue de origem', 'nunca numa seção à parte',
                                       '"citado no corpo do PR" nunca é destino', 'Achados sem correção e destino de cada um'),
             ('skills', 'frontlights', 'docs', 'security.md'): ('O Frontlights não impede a sessão de encerrar com o achado só no texto do PR',

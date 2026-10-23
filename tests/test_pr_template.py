@@ -261,11 +261,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('a PR única leva o corpo do modelo `templates/pr.md`', protocol)
         self.assertNotIn('`templates/pr.md` quando existir', protocol)
-        readme = flat(read('README.md'))
-        for phrase in ('abre a PR única pelo modelo `templates/pr.md`', 'Resumo (o menor visual) e Evidência (antes e depois) por issue',
-                       'Risco do merge consolidado (porta de mão única ou de mão dupla e raio de impacto)'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('uma única PR leva a ponta da main local para uma branch de release', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_the_acceptance_record_and_the_rehearsals_name_the_template(self):
         self.assertIn('S2: a PR da release usa o modelo', flat(read('docs', 'acceptance.md')))

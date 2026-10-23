@@ -640,7 +640,6 @@ class ShotsDocumentationTests(unittest.TestCase):
 
     def test_security_and_readme_describe_the_write_outside_the_project(self):
         self.assertIn('weekShots', self.read('skills', 'frontlights', 'docs', 'security.md'))
-        self.assertIn('weekShots', self.read('README.md'))
         config = json.loads(self.read('skills', 'frontlights', 'examples', 'config.json'))
         self.assertNotIn('weekShots', config['roadmapSync']['progress'])
 

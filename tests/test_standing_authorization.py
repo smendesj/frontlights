@@ -85,8 +85,8 @@ class StandingAuthorizationTests(unittest.TestCase):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase.casefold(), development.casefold())
         readme = flat('README.md')
-        for phrase in ('Cada operação negada (merge de PR e fechar issue, entre outras) vira uma pergunta própria com '
-                       '"Sim" e "Não" e o comando exato',
+        for phrase in ('Cada operação negada só roda depois do "Sim" de uma pergunta própria, que cita o comando exato',
+                       'mesclar uma PR (a de release incluída)', 'fechar uma issue',
                        '#standing-authorization-and-the-denied-operations'):
             with self.subTest(file='README.md', phrase=phrase):
                 self.assertIn(phrase, readme)
@@ -112,8 +112,7 @@ class StandingAuthorizationTests(unittest.TestCase):
                       development)
         self.assertIn('deleting anything (the test data the run created included: it stays for reuse) but the cleanup of '
                       'merged work (`references/closeout.md`, step 5', development)
-        self.assertIn('do fechamento e do resumo (a limpeza do trabalho mesclado roda sem pergunta)',  # issue 65: sem issues do RoadS
-                      flat('README.md'))
+        self.assertIn('apagar qualquer coisa, fora a limpeza do que já foi mesclado', flat('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_the_merge_is_offered_when_the_pr_is_ready(self):
         development = flat('skills', 'frontlights', 'references', 'development.md')

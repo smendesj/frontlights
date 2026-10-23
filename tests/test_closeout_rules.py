@@ -215,10 +215,7 @@ class RulesInOtherDocsTests(unittest.TestCase):
         self.assertIn('scripts/closeout.py', flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('só lê', flat('skills', 'frontlights', 'docs', 'security.md'))
         readme = flat('README.md')
-        for phrase in ('### Fechar o que terminou', 'todos os critérios de aceitação marcados', 'sub-issues antes dos pais',
-                       'o fechamento do Frontlights não lê o quadro', 'scripts/closeout.py candidates|verify'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        self.assertIn('`closeout.py run`, `closeout.py apply`', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         for phrase in ('`done` é opcional', '"Status", "value": "Done"', 'não chegou a Done'):
             with self.subTest(gone=phrase):
                 self.assertNotIn(phrase, readme)

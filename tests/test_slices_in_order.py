@@ -170,7 +170,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
         self.assertIn('O teste é um por issue', security)
         self.assertIn('uma vez por issue e antes da revisão independente', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
-        self.assertIn('**Um teste por issue, o único portão.**', flat(read('README.md')))
+        self.assertIn('Esse teste, um por issue, é o único portão.', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_each_slice_has_its_own_worktree_cut_from_the_issue_branch(self):
         """Issue 31, S2: a worktree e a branch de cada CA, o `slice` no charter, um checkpoint por worktree e o
@@ -193,7 +193,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         for phrase in ('uma worktree por slice', '`checkpoint-<id>.json`'):
             with self.subTest(where='protocol.md', phrase=phrase):
                 self.assertIn(phrase, protocol)
-        self.assertIn('cada CA na própria worktree', flat(read('README.md')))
+        self.assertIn('uma worktree por slice', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         charter = json.loads(read('skills', 'frontlights', 'examples', 'authorization.json'))
         sliced = [w for w in charter['worktrees'] if 'slice' in w]
         self.assertEqual([w['slice'] for w in sliced], ['S2'])
@@ -213,7 +213,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
     def test_the_protocol_the_readme_and_the_runbook_follow(self):
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         readme = flat(read('README.md'))
-        for text, name in ((protocol, 'protocol'), (readme, 'README')):
+        for text, name in ((protocol, 'protocol'),):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             for phrase in ('slices de cada issue em ordem', 'uma branch por issue, criada no GitHub a partir da', 'família que já existe'):
                 with self.subTest(file=name, phrase=phrase):
                     self.assertIn(phrase, text)

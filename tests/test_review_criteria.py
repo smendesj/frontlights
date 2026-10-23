@@ -148,7 +148,7 @@ class StopCriterionTests(unittest.TestCase):
     def test_the_protocol_and_the_readme_point_to_the_stop_criterion(self):
         # Rodada 5, médio 1, depois da fonte única: a exceção da reconferência vive em development.md, e o
         # protocolo e o README apontam para "When the review is done" em vez de copiar o critério.
-        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('README.md',)):
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'),):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             text = flat(read(*name))
             with self.subTest(file='/'.join(name)):
                 self.assertIn('"When the review is done"', text)
@@ -215,14 +215,8 @@ class DocumentationTests(unittest.TestCase):
 
     def test_the_readme_says_it_in_portuguese(self):
         readme = flat(read('README.md'))
-        for phrase in ('A revisão independente roda só quando você a pede, e segue o padrão de '
-                       '`skills/frontlights/references/review.md`',
-                       'um achado é um defeito com cenário de falha', 'largura de linha, linhas em branco',
-                       'são estilo e nunca viram achado', 'Só o brief do revisor cita esse arquivo',
-                       'A revisão termina na primeira rodada sem achado sério nem médio',
-                       '#review-checkpoints-and-renewal'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, readme)
+        # issue 12 do redesenho: o README virou guia curto; a revisão, só a pedido, vive em references/review.md
+        self.assertNotIn('"Mais uma rodada"', readme)
 
     def test_the_handoff_records_each_round(self):
         handoff = flat(read('skills', 'frontlights', 'templates', 'handoff.md'))

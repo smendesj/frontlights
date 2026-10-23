@@ -154,8 +154,9 @@ class ReleaseManifestTests(unittest.TestCase):
 
     def test_readme_says_each_decision_question_has_its_explaining_section(self):
         flat = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
-        for phrase in ('Cada pergunta de decisão do grilling tem a sua seção no artefato',
-                       'a recomendação como opinião', 'em texto livre', 'amplia a mesma seção'):
+        # issue 12 do redesenho: o README virou guia curto, com a mesma promessa em palavras novas
+        for phrase in ('uma seção por decisão', 'a recomendada primeiro',
+                       'texto livre ("não entendi") amplia a explicação'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat)
 

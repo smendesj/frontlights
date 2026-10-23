@@ -170,14 +170,9 @@ class FastSuiteTextTests(unittest.TestCase):
 
     def test_the_readme_documents_the_variable_and_the_rule(self):
         text = flat('README.md')
-        for phrase in (f'{VARIABLE}=rapida', '`tests.test_serve_ports`', '`tests.test_checks_integration`',
-                       'pulado com o motivo', 'qualquer outro valor, ou a ausência dela, roda tudo',
-                       'o TDD de cada slice é a prática padrão e nenhuma suíte é portão: nem no merge na main local, '
-                       'nem na release',
-                       'nenhuma conferência inteira é exigida (a CI de um projeto, quando houver, não é esperada nem é '
-                       'portão)',
-                       'Este repositório não tem workflow de CI', '`tests.test_serve_preview`',
-                       'os seis sensíveis'):
+        # issue 12 do redesenho: o README virou guia curto; a variável e a regra vivem no tests/suite.py e em
+        # references/development.md, "Which tests run when"
+        for phrase in ('Esse teste, um por issue, é o único portão',):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         for old in ('com ou sem CI no projeto', 'A CI do GitHub'):

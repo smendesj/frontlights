@@ -229,7 +229,7 @@ class FollowUpsManifestTests(unittest.TestCase):
         self.assertNotIn('Parent: none', text)
 
     def test_docs_say_top_level_issues_join_the_board(self):
-        for path in (ROOT / 'README.md', ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md'):
+        for path in (ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md',):  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
             with self.subTest(path=path.name):
                 self.assertIn('toda issue de topo entra no quadro; sub-issue entra só pelo pai',
                               path.read_text(encoding='utf-8'))

@@ -102,12 +102,7 @@ class FanOutRuleTests(unittest.TestCase):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
         readme = flat(read('README.md'))
-        for phrase in ('**Paralelismo máximo.**', 'em todo projeto', 'tantos subagentes quantas forem as partes',
-                       'CAs independentes ao mesmo tempo, cada uma na própria worktree', 'sessão coordenadora, que é uma só',
-                       'conferido antes de virar evidência'):
-            with self.subTest(file='README', phrase=phrase):
-                self.assertIn(phrase, readme)
-        self.assertIn('CAs independentes em paralelo dentro da issue e entre issues', readme)
+        self.assertIn('uma worktree por slice', readme)  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
         self.assertNotIn('slices em paralelo só entre issues', readme)
 
     def test_acceptance_runbook_and_eval_track_it(self):

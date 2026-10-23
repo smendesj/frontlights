@@ -302,10 +302,6 @@ class FamilyConversionTextTests(unittest.TestCase):
             with self.subTest(file='security', phrase=phrase):
                 self.assertIn(phrase, security)
         self.assertIn('conversão de família', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
-        readme = flat(read('README.md'))
-        for phrase in ('**Conversão de famílias.**', 'uma aprovação por família', 'arrume as issues'):
-            with self.subTest(file='README', phrase=phrase):
-                self.assertIn(phrase, readme)
         case = flat(read('evals', 'family-conversion.md'))
         for phrase in ('one approval per family', 'Reject:', 'more than five'):
             with self.subTest(file='eval', phrase=phrase):
@@ -377,14 +373,14 @@ class WatchedRunTextTests(unittest.TestCase):
         self.assertIn('ends with the question of what to do next', flat(self.text))
 
     def test_the_docs_and_the_runbook_carry_the_closing_question(self):
-        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('evals', 'runbook.md')):
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('evals', 'runbook.md')):
             text = flat(read(*name))
             with self.subTest(doc=name[-1]):
                 self.assertIn('Assistir de novo', text)
                 self.assertIn('Aprovado', text)
                 self.assertIn('Precisa de alteração', text)
                 self.assertIn('Pode prosseguir', text)
-        for name in (('README.md',), ('skills', 'frontlights', 'docs', 'protocol.md'), ('evals', 'runbook.md')):
+        for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('evals', 'runbook.md')):
             with self.subTest(doc=name[-1], field='record'):
                 text = flat(read(*name))
                 self.assertIn('`rodadas`', text)
@@ -404,9 +400,13 @@ class WatchedRunTextTests(unittest.TestCase):
         self.assertIn('`perfil` é só `campo`, `antes` e `depois`', fields)
         self.assertIn('the watched-run question below', flat(self.text))
         self.assertIn('"pronto para assistir?"', flat(read('skills', 'frontlights', 'references', 'development.md')))
-        for doc in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):
+        for doc in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md')):
             with self.subTest(doc=doc[-1]):
                 self.assertIn('assistir', flat(read(*doc)))
+        readme = flat(read('README.md'))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
+        for answer in ('**Assistir de novo**', '**Aprovado**', '**Precisa de alteração**', '**Pode prosseguir**'):
+            with self.subTest(doc='README.md', answer=answer):
+                self.assertIn(answer, readme)
 
 
 class PublicRepositoryTests(unittest.TestCase):

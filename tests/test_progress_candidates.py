@@ -363,7 +363,6 @@ class TextTests(unittest.TestCase):
                 self.assertIn(phrase, text)
         self.assertNotIn('folded above the print on the web', text)
         readme = self.flat('README.md')
-        self.assertIn('aberto acima do print no e-mail e na Prévia, e recolhido na semana', readme)
         self.assertNotIn('minimizado acima do print na web', readme)
 
 
