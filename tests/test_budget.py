@@ -36,7 +36,7 @@ BUDGET = {
     'references/tdd-tests.md': 291,
     'templates/discovery.md': 339,
     'templates/grilling-section.html': 497,
-    'templates/handoff.md': 729,
+    'templates/handoff.md': 259,  # redesenho, issue 9: português, só ponteiros
     'templates/issue.md': 1359,
     'templates/pr.md': 753,
 }

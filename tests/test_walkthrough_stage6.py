@@ -101,8 +101,8 @@ class BrowserTestingTests(unittest.TestCase):
 class HandoffTests(unittest.TestCase):
     def test_the_handoff_has_the_walkthrough_table(self):
         text = read('templates', 'handoff.md')
-        self.assertIn('Roteiros rodados sem tela', text)
-        self.assertIn('| Caixa | Antes | Depois | Arquivo |', text)
+        # redesenho, issue 9: o handoff só aponta o arquivo do roteiro de cada slice fechada
+        self.assertIn('o roteiro sem tela', text)
         self.assertIn('`.frontlights/issues/<n>/walkthroughs/S<k>.md`', text)
 
 

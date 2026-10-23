@@ -435,13 +435,16 @@ outra sessão do modelo.
 
 ## Contexto e conclusão
 
-Use o consumo acumulado medido da sessão e uma reserva conservadora para o próximo
-passo. O comando `context` retorna `handoff` ao atingir 100 mil tokens com a reserva,
-`stop` ao atingir 150 mil com a reserva e `stop` quando o consumo é desconhecido.
-Ele não mede nem intercepta os tokens do modelo. Se não for possível aplicar medição
-e renovação de sessão, não garanta o teto de 150 mil nem inicie uma fase sem supervisão
-que dependa dele. Crie o contexto novo com os controles suportados pelo ambiente;
-renomear uma sessão compactada não a torna nova.
+Esta seção é a casa única dos limiares de contexto; os outros textos apontam para ela. Some ao consumo acumulado
+medido da sessão uma reserva conservadora para o próximo passo e rode
+`frontlights.py context --used <tokens> --reserve <tokens>` a cada 50 turnos. Os limiares são 100 mil, 150 mil e
+200 mil tokens: abaixo de 100 mil, `continue`; de 100 mil, `handoff` (a passagem e o checkpoint fecham a janela no
+próximo ponto seguro: uma slice fechada, uma pergunta respondida); de 150 mil, `stop` (nenhum passo novo começa:
+passagem e checkpoint agora); de 200 mil, `cut` (o corte duro: a janela termina já). Consumo desconhecido é `stop`.
+Com o teste assistido devido, `--pending teste_assistido` faz `handoff`, `stop` e `cut` responderem também
+`ask_before_continuing`, e a pergunta sai antes de gastar mais. Um fechamento que começa acima de ~300 mil abre em
+janela nova. O `context` confere os números informados, não o medidor do host; se o host não renova a sessão, não
+garanta o teto nem inicie fase sem supervisão que dependa dele. Renomear uma sessão compactada não a torna nova.
 
 A conclusão exige cobertura dos critérios de aceitação, alterações completas e
 atuais, o teste assistido respondido (ou dispensável, sem mudança na tela), verificação de tipos quando aplicável,

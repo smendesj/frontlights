@@ -545,13 +545,9 @@ first, so the next window starts by asking the watched run, and echoes the slice
 next window continues at that box.
 Read both the human handoff and current issue/diff in the fresh session.
 
-Check context using measured accumulated session usage plus a conservative next
-step reserve, not remaining context after compaction. Target renewal near 100k;
-stop before 150k. Unknown telemetry means no unattended continuation. While a watched run is
-due and unanswered, pass `--pending teste_assistido` to `context`: on `handoff` or `stop` it also answers
-`ask_before_continuing`, and the question goes out before more is spent. The helper
-checks reported numbers, not the host's actual token meter. If the host cannot
-enforce renewal, explicitly report that hard-cap AFK acceptance is unproven.
+Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home;
+while a watched run is due and unanswered, pass `--pending teste_assistido`. If the host cannot enforce renewal,
+explicitly report that hard-cap AFK acceptance is unproven.
 
 Update GitHub checkpoints/status only if authorized and supported by current
 evidence; tick an acceptance criterion in the issue body only with evidence for it

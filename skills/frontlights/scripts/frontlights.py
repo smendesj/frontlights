@@ -584,13 +584,21 @@ def publish_order(plan):
     return order
 
 
+# The thresholds of a window (docs/protocol.md, "Contexto e conclusão", their only home in the text).
+CONTEXT_HANDOFF, CONTEXT_STOP, CONTEXT_CUT = 100000, 150000, 200000
+
+
 def context_action(used, reserve):
+    """`continue` below 100k; `handoff` (close at the next safe point), `stop` (no new step) and `cut` (the hard
+    cut: end the window now) from 100k, 150k and 200k, the reserve included; unknown usage is `stop`."""
     if used is None:
         return 'stop'
     require(type(used) is int and used >= 0 and number(reserve), 'invalid context accounting')
-    if used + reserve >= 150000:
+    if used + reserve >= CONTEXT_CUT:
+        return 'cut'
+    if used + reserve >= CONTEXT_STOP:
         return 'stop'
-    if used + reserve >= 100000:
+    if used + reserve >= CONTEXT_HANDOFF:
         return 'handoff'
     return 'continue'
 
@@ -2344,7 +2352,7 @@ def main():
             result = {'action': context_action(args.used, args.reserve)}
             if args.pending:
                 result['pending'] = pending_names(args.pending)
-                if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop'):
+                if 'teste_assistido' in result['pending'] and result['action'] in ('handoff', 'stop', 'cut'):
                     # The watched run must not be the last thing a window pays for: ask it before spending more.
                     result['ask_before_continuing'] = ['teste_assistido']
         elif args.command == 'inspect':

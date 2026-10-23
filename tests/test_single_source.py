@@ -45,6 +45,11 @@ GONE = {
     '**Run the whole suite on the local main.**': 'a suíte inteira da release, que virou ferramenta a pedido',
 }
 
+# os limiares de contexto das janelas (redesenho, issue 9): casa única em docs/protocol.md, "Contexto e conclusão"
+THRESHOLDS = {'fragment': 'Os limiares são 100 mil, 150 mil e 200 mil tokens',
+              'home': SKILL_DIR / 'docs' / 'protocol.md',
+              'gone': ('Target renewal near 100k', 'stop before 150k')}
+
 DESCRIPTION_MAX_WORDS = 80
 
 
@@ -72,6 +77,17 @@ class SingleSourceTests(unittest.TestCase):
             with self.subTest(copy=copy):
                 homes = [path.relative_to(ROOT).as_posix() for path, text in found.items() if fragment in text]
                 self.assertEqual(homes, [], f'{copy} deve virar um ponteiro para references/development.md')
+
+
+class ThresholdTests(unittest.TestCase):
+    def test_the_context_thresholds_live_once_in_the_protocol(self):
+        found = texts()
+        homes = {path.relative_to(ROOT).as_posix(): text.count(THRESHOLDS['fragment'])
+                 for path, text in found.items() if THRESHOLDS['fragment'] in text}
+        self.assertEqual(homes, {THRESHOLDS['home'].relative_to(ROOT).as_posix(): 1})
+        for gone in THRESHOLDS['gone']:
+            with self.subTest(gone=gone):
+                self.assertEqual([p.name for p, text in found.items() if gone in text], [])
 
 
 class DescriptionTests(unittest.TestCase):

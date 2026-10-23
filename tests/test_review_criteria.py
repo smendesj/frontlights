@@ -226,7 +226,7 @@ class DocumentationTests(unittest.TestCase):
 
     def test_the_handoff_records_each_round(self):
         handoff = flat(read('skills', 'frontlights', 'templates', 'handoff.md'))
-        self.assertIn('and each round (its HEAD and its counts `sérios/médios/baixos`)', handoff)
+        self.assertIn('cada rodada com o HEAD e `sérios/médios/baixos`', handoff)  # redesenho, issue 9: em português
 
     def test_the_acceptance_and_the_runbook_carry_the_item(self):
         acceptance = flat(read('docs', 'acceptance.md'))

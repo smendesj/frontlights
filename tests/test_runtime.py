@@ -455,6 +455,9 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(frontlights.context_action(99000, 1000), 'handoff')
         self.assertEqual(frontlights.context_action(140000, 10000), 'stop')
         self.assertEqual(frontlights.context_action(None, 1000), 'stop')
+        # redesenho, issue 9: o corte duro em 200 mil (docs/protocol.md, "Contexto e conclusão")
+        self.assertEqual(frontlights.context_action(190000, 10000), 'cut')
+        self.assertEqual(frontlights.context_action(189000, 10000), 'stop')
         with self.assertRaises(ValueError):
             frontlights.context_action(-1, 100)
 
@@ -975,6 +978,37 @@ class WindowBoundaryTests(unittest.TestCase):
         protocol = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
                             .split('## Ponto de retomada')[1].split('\n## ')[0].split())
         self.assertIn('O GitHub vence o handoff', protocol)
+
+
+class HandoffTemplateTests(unittest.TestCase):
+    """Redesenho, issue 9, S2: o handoff em português, ~250 palavras, só ponteiros; os limiares numa casa só."""
+
+    def test_the_handoff_is_short_portuguese_and_points(self):
+        text = (ROOT / 'skills' / 'frontlights' / 'templates' / 'handoff.md').read_text(encoding='utf-8')
+        self.assertLessEqual(len(text.split()), 260)
+        flat = ' '.join(text.split())
+        for phrase in ('# Passagem da issue #<n>', 'Só ponteiros', 'O GitHub vence esta passagem', '- Issue:',
+                       '- Charter: `.frontlights/authorization.json`', '- Checkpoints:',
+                       '`frontlights.py resume --issue <n>`', '`.frontlights/issues/<n>/browser/window.json`',
+                       '`serve.py window attach`', '- Plano resumido:', '- Slices fechadas:', '- Release:',
+                       'Achados sem correção e destino de cada um', '- Pergunta pendente e resposta literal:',
+                       '- Próximo passo:'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat)
+        for english in ('Approved acceptance criteria', 'Next concrete step', 'Resume in a fresh context'):
+            with self.subTest(english=english):
+                self.assertNotIn(english, flat)
+
+    def test_the_thresholds_live_in_the_protocol(self):
+        protocol = ' '.join((ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
+                            .split('## Contexto e conclusão')[1].split('\n## ')[0].split())
+        for phrase in ('casa única dos limiares', '100 mil, 150 mil e 200 mil', 'a cada 50 turnos', '`cut`',
+                       '`--pending teste_assistido`'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, protocol)
+        development = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'development.md')
+                               .read_text(encoding='utf-8').split())
+        self.assertIn('the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home', development)
 
 
 # Economia nos utilitários: `inspect --summary` (por issue só número, título, estado e caixas; a saída
