@@ -199,9 +199,14 @@ class BrowserFlowManifestTests(unittest.TestCase):
         self.assertTrue(cited_serve and cited_checks)
         self.assertLessEqual(cited_serve, serve_ops, 'subcomando do serve inexistente na reference')
         self.assertLessEqual(cited_checks, check_subs, 'subcomando do checks inexistente na reference')
-        self.assertEqual(cited_serve, serve_ops, 'a reference precisa citar start, status e stop')
+        # issue 8: the preview moved to development.md and `relay` is internal; the window is the new one
+        self.assertLessEqual({'start', 'status', 'stop', 'window'}, cited_serve,
+                             'a reference precisa citar start, status, stop e window')
         self.assertEqual(cited_checks, check_subs, 'a reference precisa citar todos os subcomandos do checks')
         known = set(re.findall(r'--[a-z][a-z-]*', serve_help))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/serve.py', 'window')))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/progress_report.py')))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/frontlights.py', 'browser-gate', 'record')))
         for sub in check_subs:
             known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/checks.py', sub)))
         for sub in ('evidence', 'browser-gate', 'checkpoint', 'context'):
@@ -211,24 +216,21 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 self.assertIn(flag, known)
 
     def test_cited_checks_exit_codes_match_the_script(self):
-        keys = {'passed': 'passed', 'product failure': 'product_failure',
-                'config or usage refused': 'refused', 'infrastructure': 'infrastructure'}
-        section = ' '.join(self.reference.split('## Checks: `checks`')[1].split('\n## ')[0].split())
-        sentence = section.split('Exit codes:')[1].split('.')[0]
-        cited = re.findall(r'`(\d)` ([a-z ]+?)(?= \(|,|$)', sentence)
-        self.assertEqual(sorted(label for _, label in cited), sorted(keys))
-        for code, label in cited:
+        """Issue 8: the exit codes live in the `--help` of the scripts; the reference points there and the
+        classification of "Every failure is a question" cites the same codes (test above)."""
+        section = ' '.join(self.reference.split('## Environment and checks')[1].split('\n## ')[0].split())
+        self.assertIn('exit codes and categories are in', section)
+        self.assertIn('serve.py" --help', section)
+        self.assertIn('checks.py --help', section)
+        text = ' '.join(help_text('scripts/checks.py').split())
+        for code, label in ((0, 'passou'), (1, 'falha de produto'), (2, 'config ou uso recusado')):
             with self.subTest(label=label):
-                self.assertEqual(int(code), checks.EXIT_CODES[keys[label]])
+                self.assertIn(f'{code} {label}', text)
+        self.assertEqual((checks.EXIT_CODES['passed'], checks.EXIT_CODES['product_failure'],
+                          checks.EXIT_CODES['refused'], checks.EXIT_CODES['infrastructure']), (0, 1, 2, 3))
 
     def test_cited_serve_exit_codes_and_categories_match_the_script(self):
-        section = self.reference.split('## Environment: `serve`')[1].split('\n## ')[0]
-        exits = ' '.join(section.split()).split('Exit ')[1].split(';')[0]
-        self.assertEqual(set(re.findall(r'`(\d)`', exits)), {'0', '1'})
-        meaning = dict(re.findall(r'^- `(\w+)`: (.+)$', section, re.M))
-        self.assertEqual(set(meaning), {serve.USAGE, serve.INFRASTRUCTURE})
-        self.assertIn('invalid config', meaning[serve.USAGE])
-        self.assertIn('missing config', meaning[serve.INFRASTRUCTURE])
+        self.assertIn('Exit codes: 0 done; 1 refusal or failure', ' '.join(help_text('scripts/serve.py').split()))
         # the script itself: an invalid config is `uso`, a missing one `infraestrutura`, both exit 1
         with tempfile.TemporaryDirectory() as folder:
             invalid = Path(folder) / 'invalid.json'
@@ -243,13 +245,73 @@ class BrowserFlowManifestTests(unittest.TestCase):
                     self.assertEqual(json.loads(done.stdout)['category'], category)
 
     def test_cited_output_fields_exist_in_the_scripts(self):
-        sources = read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'serve.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'checks.py') \
-            + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'browser_gate.py')
+        sources = ''.join(read(ROOT / 'skills' / 'frontlights' / 'scripts' / name) for name in (
+            'serve.py', 'checks.py', 'frontlights.py', 'browser_gate.py', '_window.py', 'progress_report.py'))
         fields = set(re.findall(r'`([a-z]+(?:_[a-z0-9]+)+)`', self.reference))
-        self.assertIn('reservas_compartilhadas', fields)
+        self.assertIn('ended_by', fields)
         for field in fields:
             with self.subTest(field=field):
                 self.assertIn(field, sources)
+
+
+class DeliveredDriverTextTests(unittest.TestCase):
+    """Issue 8: o teste assistido entregue por script. A referência cita os comandos (nunca um driver de memória),
+    guarda as frases pinadas e as três perguntas, e só encolhe; o brief do condutor e a linha da janela em
+    security.md acompanham."""
+
+    BUDGET = 4750   # catraca: a contagem do dia (issue 8), que só desce
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = read(REFERENCE)
+        cls.flat = ' '.join(cls.text.split())
+
+    def test_the_reference_only_shrinks(self):
+        self.assertLessEqual(len(self.text.split()), self.BUDGET)
+
+    def test_the_pinned_sentences_and_the_three_questions_stay(self):
+        for phrase in ("Chrome driven by Playwright, visible, disposable profile, never Claude's built-in browser nor "
+                       'Claude in Chrome',
+                       'Passes never overlap while one is running: one issue at a time (a batch counts as one) on the '
+                       'same account and database; an ANTES window that is open but idle holds no other issue back',
+                       'the database behind the server is the local development database',
+                       'Closing the window or the 5 minutes ending is never an answer',
+                       '"Pronto para assistir ao teste de navegador da issue #<n>?"',
+                       '"O que fazer depois do teste assistido da issue #<n>?"',
+                       'Report the three kinds separately, then ask with `AskUserQuestion`, one question per failure',
+                       'No script judges a pass: passed or failed is the session\'s and the user\'s'):
+            with self.subTest(phrase=phrase[:50]):
+                self.assertIn(phrase, self.flat)
+
+    def test_the_window_comes_from_the_script_and_the_record_from_the_gate(self):
+        for phrase in ('window brief --issue <n> --pass antes|depois --criteria S1,S2', '`window open`',
+                       '`window attach`', '`window hold`', '`window shot`', '`browser-gate record`',
+                       '--answer "<the option, verbatim>"', 'never by hand', 'never from a driver written from memory',
+                       'progress_report.py" keep'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.flat)
+        self.assertNotIn('cdp.js', self.flat)
+
+    def test_browser_test_null_with_a_visible_file_is_still_unconfigured(self):
+        self.assertIn('`unconfigured` (`ask-how`): something visible changed and the project has no `browserTest` (also '
+                      '`browserTest: null`)', self.flat)
+        self.assertIn('never skip the question', self.flat)
+
+    def test_the_pointers_into_the_reference_still_resolve(self):
+        prints = self.text.split('## Prints kept for the progress summary')[1]
+        self.assertIn('- **Clean.**', prints)   # security.md and grilling.md point to item "Clean"
+        for title in ('## Watched run: before and after, with the user watching', '## The free test window',
+                      '## Test data the run creates', '## Prints kept for the progress summary'):
+            with self.subTest(title=title):
+                self.assertIn(title, self.text)
+
+    def test_security_lists_the_window_and_its_limits(self):
+        security = read(SKILL / 'docs' / 'security.md')
+        row = next(line for line in security.splitlines() if line.startswith('| `serve.py window` |'))
+        for phrase in ('window.json', 'evidencias-pendentes', 'nunca instala nada', 'para só o Chrome que abriu',
+                       'não julga a passada'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, row)
 
 
 if __name__ == '__main__':

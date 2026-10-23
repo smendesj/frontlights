@@ -63,12 +63,26 @@ the user's answer, and the gate compares it later. `by_root` lists the visible f
 session can compare each issue with its own plan, and `stacked_on` names the branch each stacked issue is
 measured from. Roots with no visible change are listed in `other_roots` and never make a record stale:
 when one of them changes behavior the `Fluxo:` exercises, the session asks again by hand.
+
+`--answer "<literal>"` (with `--record`, or `--issue <n>` for `.frontlights/issues/<n>/browser/result.json` of the main
+worktree) records the user's answer in the same call: `situacao` from the option the literal names, `lote.roots` from
+this run of the gate, `pergunta.resposta` verbatim; the output is the gate read again over the record just written.
+An option that is not a decision ("Assistir de novo", "Sim, pode rodar") is refused: it starts a run, it ends none.
+
+`record --pass antes|depois --criterion S<n> --head <sha> [--case id=ok|falha:<texto>] [--failure-kind ...]
+[--account conta1|conta2] [--profile-field "<campo>=<antes>-><depois>"] [--origin back-real|interceptada]` writes one
+criterion of one pass into the same result.json, run by whoever conducts the pass, and prints one line. The fields
+(`RECORD_FIELDS`, `PASS_FIELDS`, `CRITERION_FIELDS`) are those of `docs/protocol.md`, "Teste no navegador", the only
+place they are described; `serve.py window shot` writes the print of a criterion through `record_print`, the same
+schema. Neither judges a pass: passed or failed is the session's and the user's.
 """
 
 import argparse
 import hashlib
 import json
+import os
 import re
+import unicodedata
 import subprocess
 import sys
 import time
@@ -96,6 +110,25 @@ MAX_PATTERNS = 50
 MAX_PATTERN_LENGTH = 200
 MAX_WILDCARD_GROUPS = 8
 MATCH_BUDGET_SECONDS = 20     # per root: a pathological frontPaths is an error, never a silent wait or a silent pass
+
+# The result.json of the watched run: docs/protocol.md, "Teste no navegador", lists exactly these (a test compares).
+RECORD_FIELDS = ('situacao', 'aprovacao', 'pergunta', 'lote', 'assistido', 'rodadas', 'pastaDosPrints', 'criterios',
+                 'passadas', 'registradoEm')
+PASS_FIELDS = ('branch', 'head', 'repeticoes', 'criterios')
+CRITERION_FIELDS = ('head', 'print', 'casos', 'tipoDeFalha', 'conta', 'perfil', 'origem', 'registradoEm')
+PASSES = ('antes', 'depois')
+FAILURE_KINDS = ('infraestrutura', 'produto', 'config')
+ACCOUNTS = {'conta1': 'conta 1', 'conta2': 'conta 2'}
+ORIGINS = {'back-real': 'back real', 'interceptada': 'interceptada'}
+CRITERION = re.compile(r'S[1-9][0-9]?')
+HEAD = re.compile(r'[0-9a-f]{7,64}')
+CASE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,39}')
+# the literal of an option of the three questions (and of the gate's own) -> situacao; None keeps the decision
+ANSWERS = (('aprovado', 'aprovado'), ('pode prosseguir', 'prosseguir'), ('precisa de alteracao', 'alteracao'),
+           ('ainda nao', 'ainda-nao'), ('rodar sem assistir', 'sem-assistir'), ('dispensar o teste', 'dispensado'),
+           ('verificar a mao e dispensar', 'dispensado'), ('manter a decisao anterior', None))
+NOT_DECISIONS = ('assistir de novo', 'sim, pode rodar', 'rodar o teste assistido', 'sem mudar perfil',
+                 'configurar o browsertest agora', 'informar a issue', 'corrigir e testar de novo')
 
 
 def git(root, *args):
@@ -373,17 +406,230 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 
 
-def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=()):
+def plain(text):
+    folded = unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('ascii')
+    return ' '.join(folded.lower().replace('`', '').split())
+
+
+def answer_situation(literal):
+    """(label, situacao or None to keep the decision) of the option the literal names; ValueError otherwise."""
+    text = plain(literal)
+    if not text:
+        raise ValueError('--answer needs the literal answer of the user')
+    for label in NOT_DECISIONS:
+        if text.startswith(label):
+            raise ValueError(f'"{literal}" starts a run, it is not a decision of the gate: record the answer of the '
+                             'question that ends the run')
+    for label, state in ANSWERS:
+        if text.startswith(label):
+            return label, state
+    options = ', '.join(f'"{label}"' for label, _ in ANSWERS)
+    raise ValueError(f'"{literal}" names none of the options the gate records ({options}); pass the literal of the '
+                     'option the user chose')
+
+
+def now_text():
+    return _cli.sao_paulo_now().isoformat(timespec='seconds')
+
+
+def load_record(path):
+    if not path or not Path(path).is_file():
+        return {}
+    data = read_json(path)
+    if not isinstance(data, dict):
+        raise ValueError(f'{path} must hold a JSON object')
+    return data
+
+
+def save_record(path, record):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    temporary.write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding='utf-8')
+    os.replace(temporary, path)
+
+
+def record_answer(path, result, literal, issues=None):
+    """Write the user's answer into the record: situacao, lote.roots of this gate run, pergunta.resposta verbatim."""
+    label, state = answer_situation(literal)
+    record = load_record(path)
+    if state is None:
+        state = situation(record)
+        if state not in ANSWERED:
+            raise ValueError('"Manter a decisão anterior" needs a decision already recorded; there is none')
+    record['situacao'] = state
+    if state in ('aprovado', 'prosseguir', 'alteracao'):
+        record['aprovacao'] = state
+    lote = record.get('lote') if isinstance(record.get('lote'), dict) else {}
+    lote['roots'] = result['roots']
+    if issues:
+        lote['issues'] = sorted(set(lote.get('issues') or []) | set(issues))
+    record['lote'] = lote
+    record['pergunta'] = {'resposta': literal, 'opcao': label, 'em': now_text()}
+    record['registradoEm'] = now_text()
+    save_record(path, record)
+    return record
+
+
+def pass_entry(record, pass_):
+    passes = record.setdefault('passadas', {})
+    entry = passes.setdefault(pass_, {})
+    entry.setdefault('criterios', {})
+    return entry
+
+
+def record_print(path, pass_, criterion, file_name, folder=None):
+    """`serve.py window shot`: the print of one criterion of one pass, in the same schema as `record`."""
+    if pass_ not in PASSES or not CRITERION.fullmatch(criterion or ''):
+        raise ValueError('a print is recorded for --pass antes|depois and --criterion S<n>')
+    record = load_record(path)
+    item = pass_entry(record, pass_)['criterios'].setdefault(criterion, {})
+    item['print'] = file_name
+    item['registradoEm'] = now_text()
+    if folder:
+        record['pastaDosPrints'] = str(folder)
+    save_record(path, record)
+    return record
+
+
+def parse_case(text):
+    name, separator, value = str(text).partition('=')
+    usage = f'--case takes <id>=ok or <id>=falha:<o que aconteceu>, got {text!r}'
+    if not (separator and CASE_ID.fullmatch(name.strip())):
+        raise ValueError(usage)
+    value = value.strip()
+    if value == 'ok':
+        return name.strip(), 'ok'
+    if value.startswith('falha:') and value[len('falha:'):].strip():
+        return name.strip(), 'falha: ' + value[len('falha:'):].strip()[:300]
+    raise ValueError(usage)
+
+
+def parse_profile(text):
+    field, separator, change = str(text).partition('=')
+    before, arrow, after = change.partition('->')
+    if not (separator and arrow and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]{0,59}', field.strip())):
+        raise ValueError('--profile-field takes "<campo>=<antes>-><depois>", only the field of the profile, never a row')
+    return {'campo': field.strip(), 'antes': before.strip()[:100], 'depois': after.strip()[:100]}
+
+
+def missing_before(record):
+    """The criteria of the record that still lack their ANTES (no print and no case in the antes pass)."""
+    wanted = record.get('criterios') if isinstance(record.get('criterios'), list) else []
+    antes = ((record.get('passadas') or {}).get('antes') or {}).get('criterios') or {}
+    return [name for name in wanted
+            if not (antes.get(name) or {}).get('print') and not (antes.get(name) or {}).get('casos')]
+
+
+def record_pass(path, pass_, criterion, head, cases=(), failure_kind=None, account=None, profile=None, origin=None,
+                branch=None, criteria=None):
+    """One criterion of one pass into the record (the fields of CRITERION_FIELDS); never a verdict."""
+    if pass_ not in PASSES:
+        raise ValueError('--pass must be antes or depois')
+    if not CRITERION.fullmatch(criterion or ''):
+        raise ValueError('--criterion is S<n>, the box whose Fluxo: the pass walks')
+    if not HEAD.fullmatch(head or ''):
+        raise ValueError('--head is the commit served in the pass (7 to 64 hexadecimal characters)')
+    if failure_kind is not None and failure_kind not in FAILURE_KINDS:
+        raise ValueError(f'--failure-kind is one of {", ".join(FAILURE_KINDS)}')
+    if account is not None and account not in ACCOUNTS:
+        raise ValueError('--account is conta1 or conta2, never the login')
+    if origin is not None and origin not in ORIGINS:
+        raise ValueError('--origin is back-real or interceptada')
+    parsed_cases = dict(parse_case(case) for case in cases)
+    parsed_profile = parse_profile(profile) if profile else None
+    record = load_record(path)
+    if criteria:
+        names = [name.strip() for name in criteria.split(',') if name.strip()]
+        if not names or not all(CRITERION.fullmatch(name) for name in names):
+            raise ValueError('--criteria lists the boxes as S1,S2,S3')
+        record['criterios'] = sorted(set(record.get('criterios') or []) | set(names), key=lambda n: int(n[1:]))
+    entry = pass_entry(record, pass_)
+    if branch:
+        entry['branch'] = branch
+    entry['head'] = head
+    entry['repeticoes'] = 2
+    item = entry['criterios'].setdefault(criterion, {})
+    item['head'] = head
+    if parsed_cases:
+        item['casos'] = dict(item.get('casos') or {}, **parsed_cases)
+    if failure_kind:
+        item['tipoDeFalha'] = failure_kind
+    if account:
+        item['conta'] = ACCOUNTS[account]
+    if parsed_profile:
+        item['perfil'] = parsed_profile
+    if origin:
+        item['origem'] = ORIGINS[origin]
+    item['registradoEm'] = now_text()
+    save_record(path, record)
+    cases_now = item.get('casos') or {}
+    return {'ok': True, 'record': str(path), 'pass': pass_, 'criterion': criterion, 'head': head,
+            'ok_cases': sum(1 for value in cases_now.values() if value == 'ok'),
+            'failed_cases': sum(1 for value in cases_now.values() if value != 'ok'),
+            'missing_before': missing_before(record)}
+
+
+def default_record(issue, root):
+    """(path, number): `.frontlights/issues/<n>/browser/result.json` of the main worktree of `root`."""
+    main = _cli.main_worktree(root)
+    number = _cli.issue_number(issue, _cli.current_tree(root), main)
+    return str(Path(main) / '.frontlights' / 'issues' / str(number) / 'browser' / 'result.json'), number
+
+
+def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=(), answer=None, issues=None):
     config = read_json(config_path) if config_path else None
     if config is not None and not isinstance(config, dict):
         raise ValueError('the config must be a JSON object')
     record = read_json(record_path) if record_path and Path(record_path).is_file() else None
     result = gate(roots, base, config, toca, record, parse_stacked(stacked))
+    if answer is not None:
+        if not record_path:
+            raise ValueError('--answer needs --record (or --issue) to write the answer into')
+        record = record_answer(record_path, result, answer, issues)
+        result = gate(roots, base, config, toca, record, parse_stacked(stacked))
+        result['recorded'] = {'record': str(record_path), 'situacao': record['situacao'],
+                              'resposta': record['pergunta']['resposta']}
     return result, (0 if result['status'] in ('not_needed', 'answered') else 2)
 
 
-def main():
+def record_main(argv):
+    """`browser-gate record ...`: one criterion of one pass into the result.json; one line out."""
+    parser = _cli.JsonParser(prog='browser-gate record', description='Grava um critério de uma passada no result.json '
+                             '(campos: docs/protocol.md, "Teste no navegador"). Não julga a passada.')
+    parser.add_argument('--record', help="the issue's result.json (default: the one of --issue in the main worktree)")
+    parser.add_argument('--issue', help="the issue (the lead one of a family); default: the charter's for this worktree")
+    parser.add_argument('--root', help='a worktree of the project (default: the current one)')
+    parser.add_argument('--pass', dest='pass_', required=True, choices=PASSES)
+    parser.add_argument('--criterion', required=True, help='S<n>, the box whose Fluxo: the pass walks')
+    parser.add_argument('--head', required=True, help='the commit served in the pass')
+    parser.add_argument('--branch', help='the branch served (DEPOIS) or the base (ANTES)')
+    parser.add_argument('--criteria', help='every box of the run, as S1,S2,S3 (once is enough)')
+    parser.add_argument('--case', action='append', default=[], help='<id>=ok or <id>=falha:<o que aconteceu>; repeatable')
+    parser.add_argument('--failure-kind', choices=FAILURE_KINDS)
+    parser.add_argument('--account', choices=sorted(ACCOUNTS))
+    parser.add_argument('--profile-field', help='"<campo>=<antes>-><depois>": only the field of a moved profile')
+    parser.add_argument('--origin', choices=sorted(ORIGINS))
+    try:
+        args = parser.parse_args(argv)
+        path = args.record or default_record(args.issue, args.root or '.')[0]
+    except _cli.UsageError as error:
+        return _cli.print_usage_error(error, 2)
+    try:
+        result = record_pass(path, args.pass_, args.criterion, args.head, args.case, args.failure_kind, args.account,
+                             args.profile_field, args.origin, args.branch, args.criteria)
+    except (ValueError, OSError) as error:
+        print(json.dumps({'error': str(error)}, ensure_ascii=True), file=sys.stderr)
+        return 1
+    print(json.dumps(result, ensure_ascii=True))
+    return 0
+
+
+def main(argv=None):
     _cli.utf8_streams()
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ['record']:
+        return record_main(argv[1:])
     parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--root', action='append',
                         help='worktree of the issue, or of one of its slices (named in --stacked); repeatable '
@@ -396,14 +642,22 @@ def main():
     parser.add_argument('--stacked', action='append', default=[], metavar='BRANCH=TARGET',
                         help='the branch of a slice (or of a stacked issue) and the branch it is measured from: the branch '
                              'of its issue, or the one its PR targets; repeatable')
+    parser.add_argument('--answer', help="the user's answer, verbatim: recorded in --record with this run's roots")
+    parser.add_argument('--issue', help='the issue whose result.json (main worktree) is --record when it is left out')
     try:
-        args = _cli.output_flags(parser).parse_args()
+        args = _cli.output_flags(parser).parse_args(argv)
         args.root = args.root or [str(_cli.current_tree())]
         args.config = _cli.config_path(args.config, _cli.main_worktree(args.root[0]), required=False)
+        issues = None
+        if args.issue is not None:
+            path, number = default_record(args.issue, args.root[0])
+            args.record = args.record or path
+            issues = [number]
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 2)
     try:
-        result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked)
+        result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked, args.answer,
+                               issues)
     except (ValueError, OSError, subprocess.TimeoutExpired) as error:
         print(json.dumps({'error': str(error)}), file=sys.stderr)
         return 1

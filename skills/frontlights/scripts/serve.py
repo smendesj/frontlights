@@ -101,6 +101,9 @@ the same way but without `build`: the process itself did not fail. Git runs from
 without prompts, with a deadline; the refresh never pushes, rebases or forces a merge, and writes no branch but
 `preview.branch` (the local main and the issue branches never move). The preview branch is never pushed.
 
+Window (issue 8): `window open|attach|hold|shot|close|brief` is the visible Chrome window of the watched run, with
+its own parser and help (`serve.py window --help`, the code in `_window.py`).
+
 Exit codes: 0 done; 1 refusal or failure (a failed start tears down whatever already came up and
 names the failing process, classified as an infrastructure failure).
 
@@ -1983,8 +1986,13 @@ def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ['free-test']:   # its own parser: `free-test start|stop|commands`
         return free_test_main(argv[1:])
-    parser = _cli.JsonParser(description=__doc__.split('\n')[0])
-    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
+    if argv[:1] == ['window']:   # the visible window of the watched run (issue 8), its own parser in _window.py
+        import _window
+        return _window.main(argv[1:])
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay', 'window', 'free-test'),
+                        help='window: `serve.py window --help`; free-test: `serve.py free-test --help` '
+                             '(both dispatched before this parser)')
     parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),
                         help='só para preview: start, refresh, status ou stop')
     parser.add_argument('--config', help='padrão: o .frontlights/config.json da worktree principal')

@@ -116,9 +116,19 @@ holds (`git merge-base --is-ancestor <branch> main`), and only those that exist 
 in progress out of the preview. From then on the preview follows the work (below,
 "Slices in order"); it stops only when the user asks, and the session that finds it already up (its record)
 refreshes it instead of starting another one. The tab belongs to the user, never to a test: the session opens it once and leaves it
-to the user, outside the rule of the disposable window, and the watched run never uses the preview nor its ports. The commands, the
-record and the log are in `references/browser-testing.md` ("Environment: `serve`"). Record in the handoff the
-preview's branch, the branches merged into it and the last refresh.
+to the user, outside the rule of the disposable window, and the watched run never uses the preview nor its ports. The
+commands are `serve preview start|refresh|status|stop`, run in the main worktree (flags in the serve script's
+`--help`). The preview runs its processes in the preview worktree on fixed ports only, so its tab stays valid across
+every refresh: no process of the `preview` block takes `"port": "auto"`, there is no `{port}` in the `argv` or the `cwd`
+of its processes, its `baseUrl` takes no `{port}`, and the port of that `baseUrl` is the fixed port of one of its
+processes; `inspect` refuses anything else, and a fixed port of `browserTest` that is a port of the preview. Each
+process's output goes through `serve relay` (spawned by `preview start`, never by hand) into a masked log in
+`.frontlights/preview/log/`; the record, `.frontlights/preview/registry.json`, survives the `serve stop` of an issue
+and a change of session. `preview start` is refused while the preview is alive: run `preview refresh`, which redoes the
+preview branch from the local main, merges the `--branch` list in order and brings the processes up again; the
+preview branch is never pushed and nothing is edited in the preview worktree. A conflict is undone (`conflict: true`,
+the branch and the files) and a broken build is torn down with `build: "quebrado"`, the log and its last lines: say it
+in one line, then ask. Record in the handoff the preview's branch, the branches merged into it and the last refresh.
 
 ## Slices in order: one issue branch, one worktree per slice, one merge into the local main per issue
 

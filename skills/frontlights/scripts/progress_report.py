@@ -55,6 +55,12 @@ Operations (each prints one JSON object on stdout):
             roadmapSync is enabled) it is `<scrumRoot>/<weekFolderPattern of the Monday of the run>/evidencias/
             <repository name>/<n>`, created when missing, and its `resumo/`; `--at` is the instant of the run,
             default now, its week taken in the Sao Paulo calendar. Without them, `.frontlights` as before.
+  keep      no network, no approval, run after a print of the DEPOIS pass is cleaned: `--issue <n>` (the lead issue)
+            `--file <image> --caption "<one plain sentence>" --slice <k> --head <DEPOIS head> --visible-file <path>...`
+            [`--cover <c>`] [`--new`] writes one entry of `candidates.json` in the `summaryDir` of evidence-dir (an image
+            outside it is copied in, never moved), with `repository` from the config, `takenAt` now (Sao Paulo) and the
+            Git blob id of each visible file at `--head`; it validates the entry as `candidates` reads it and refuses one
+            with problems. `--new` starts the file from scratch (the first print of a run).
   push      run the configured push command with `{draft}` substituted (plus --shot/--caption when the
             config names no `shotsDir` nor `weekShots`; the project's push command reads `shotsDir`
             itself). With `weekShots` (and `--to`), first check the summary folder's `captions.json` and
@@ -102,7 +108,7 @@ DEFAULT_TIMEOUT = 300
 MAX_TIMEOUT = 24 * 60 * 60
 PATH_PATTERN = r'[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9_-]*)*'
 DATE_PATTERN = r'\d{4}-\d{2}-\d{2}'
-OPERATIONS = ['status', 'approve', 'window', 'collect', 'shots', 'push', 'home', 'candidates', 'evidence-dir']
+OPERATIONS = ['status', 'approve', 'window', 'collect', 'shots', 'push', 'home', 'candidates', 'evidence-dir', 'keep']
 MAX_SHOTS = 40
 MAX_SHOT_BYTES = 1024 * 1024
 MAX_CAPTIONS_BYTES = 256 * 1024
@@ -964,6 +970,49 @@ def op_evidence_dir(root, issue, at=None):
             'message': f'Save the prints of the run in {folder} and record it as pastaDosPrints in result.json.'}
 
 
+def op_keep(root, issue, file, caption, slice_, cover=None, head=None, visible=(), new=False):
+    """One print kept for the summary: an entry of `candidates.json` in the summaryDir of the run, validated as
+    `candidates` will read it. Copies an image from outside that folder, never moves it. No network, no approval."""
+    require(isinstance(caption, str) and caption.strip(), '--caption is one plain sentence in Portuguese')
+    require(type(slice_) is int and slice_ >= 1, '--slice is the number of the issue the print shows')
+    require(isinstance(head, str) and re.fullmatch(r'[0-9a-f]{7,64}', head), '--head is the DEPOIS commit')
+    require(visible, '--visible-file names each visible file of the slice (the by_root of browser-gate)')
+    where = op_evidence_dir(root, issue)
+    folder = where['summaryDir']
+    os.makedirs(folder, exist_ok=True)
+    source = Path(file)
+    if not source.is_absolute() and not source.exists():
+        source = Path(folder) / file
+    require(source.is_file(), f'--file {file} does not exist')
+    if os.path.normcase(str(source.resolve().parent)) != os.path.normcase(str(Path(folder).resolve())):
+        import shutil
+        shutil.copyfile(source, Path(folder) / source.name)
+    name = source.name
+    blobs = {}
+    for path in visible:
+        blob = blob_at(root, head, path)
+        require(blob, f'{path} is not a file in {head}: name the visible files of the slice as served in DEPOIS')
+        blobs[path] = blob
+    config = rs.read_json(rs.config_path(root)) if rs.config_path(root) else {}
+    repository = config.get('repository') if isinstance(config, dict) else None
+    item = {'file': name, 'caption': caption.strip(), 'issue': slice_, 'cover': cover or issue,
+            'takenAt': dt.datetime.now(SAO_PAULO).isoformat(timespec='seconds'), 'head': head, 'visibleFiles': blobs}
+    if repository:
+        item['repository'] = repository
+    entry = candidate_entry(root, head, folder, str(issue), item, dt.datetime.now(SAO_PAULO).date(), repository)
+    problems = (entry or {}).get('problems') or ['outside the period']
+    require(entry is not None and entry['usable'], 'The print cannot be kept: ' + '; '.join(problems))
+    listing = os.path.join(folder, 'candidates.json')
+    items = [] if new or not os.path.isfile(listing) else (candidate_listing(folder, issue, []) or [])
+    items = [old for old in items if not (isinstance(old, dict) and old.get('file') == name)] + [item]
+    temporary = listing + '.tmp'
+    with open(temporary, 'w', encoding='utf-8') as handle:
+        json.dump(items, handle, ensure_ascii=False, indent=2)
+    os.replace(temporary, listing)
+    return {'ok': True, 'exitCode': 0, 'candidates': listing, 'count': len(items), 'file': name, 'summaryDir': folder,
+            'message': 'Kept for the summary; it reaches the summary folder only when the user chooses it there.'}
+
+
 def by_number(names):
     return sorted(names, key=lambda name: (len(name), name))
 
@@ -1132,10 +1181,11 @@ def op_push(root, draft, shots, captions, date_to=None, date_from=None, meeting=
 
 
 def run(operation, root='.', transport=None, date_from=None, date_to=None, draft=None, shots=(), captions=(), meeting=None,
-        home_set=None, home_clear=False, ref=None, repository=None, start=None, end=None, issue=None, at=None):
+        home_set=None, home_clear=False, ref=None, repository=None, start=None, end=None, issue=None, at=None,
+        keep=()):
     transport = transport or rs.http_default
     try:
-        if operation not in ('status', 'home', 'candidates', 'evidence-dir'):
+        if operation not in ('status', 'home', 'candidates', 'evidence-dir', 'keep'):
             root = resolve_root(root)[0]
         if operation == 'status':
             result = op_status(root)
@@ -1153,6 +1203,8 @@ def run(operation, root='.', transport=None, date_from=None, date_to=None, draft
             result = op_candidates(root, date_to, ref, repository)
         elif operation == 'evidence-dir':
             result = op_evidence_dir(root, issue, at)
+        elif operation == 'keep':
+            result = op_keep(root, issue, *keep)
         elif operation == 'push':
             result = op_push(root, draft, shots, captions, date_to, date_from, meeting)
         else:
@@ -1186,6 +1238,12 @@ def main():
     parser.add_argument('--repository', help='OWNER/REPOSITORY of the product of the summary; prints recorded for another one are refused (candidates)')
     parser.add_argument('--issue', type=int, help='the issue whose watched browser test saves its prints; the lead one of a family (evidence-dir)')
     parser.add_argument('--at', help='ISO 8601 instant of the run, with its offset; default now (evidence-dir)')
+    parser.add_argument('--file', help='the cleaned print to keep, in summaryDir or copied into it (keep)')
+    parser.add_argument('--slice', type=int, help='the issue the print shows (keep)')
+    parser.add_argument('--cover', type=int, help='the top-level issue of its family; default --issue (keep)')
+    parser.add_argument('--head', help='the commit served in DEPOIS (keep)')
+    parser.add_argument('--visible-file', action='append', default=[], help='a visible file of the slice; repeatable (keep)')
+    parser.add_argument('--new', action='store_true', help='start candidates.json from scratch: the first print of a run (keep)')
     parser.add_argument('--draft', help='path of the draft file the push command reads (push)')
     parser.add_argument('--shot', action='append', default=[], help='screenshot to attach; repeatable (push)')
     parser.add_argument('--caption', action='append', default=[], help="caption of the matching --shot, in order (push)")
@@ -1197,7 +1255,9 @@ def main():
     result = run(args.operation, args.root, date_from=args.date_from, date_to=args.date_to, draft=args.draft,
                  shots=args.shot, captions=args.caption, meeting=args.meeting, home_set=args.home_set,
                  home_clear=args.home_clear, ref=args.ref, repository=args.repository, start=args.start, end=args.end,
-                 issue=args.issue, at=args.at)
+                 issue=args.issue, at=args.at,
+                 keep=(args.file, (args.caption or [None])[0], args.slice, args.cover, args.head, args.visible_file,
+                       args.new))
     _cli.emit(render(result), args.operation, args.full)
     return int(result['exitCode'])
 

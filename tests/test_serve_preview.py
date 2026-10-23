@@ -329,7 +329,7 @@ class PreviewUsageTest(PreviewTestCase):
         done = subprocess.run([sys.executable, str(SCRIPT), '--help'], capture_output=True, text=True,
                               encoding='utf-8', errors='replace')
         self.assertEqual(done.returncode, 0)
-        self.assertIn('{start,stop,status,preview,relay}', done.stdout)
+        self.assertIn('{start,stop,status,preview,relay,window}', done.stdout)
         self.assertIn('[{start,refresh,status,stop}]', done.stdout)
         for flag in ('--config', '--root', '--issue', '--log', '--branch', '--base'):
             self.assertIn(flag, done.stdout)

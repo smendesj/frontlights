@@ -846,5 +846,140 @@ class GateDocumentationTests(unittest.TestCase):
         self.assertIn('One watched run per issue', self.flat('evals', 'batch-watched-run.md'))
 
 
+class AnswerTests(GateTestCase):
+    """Issue 8, S2: `--answer "<literal>"` grava situacao, lote.roots e pergunta.resposta na própria chamada do gate."""
+
+    def setUp(self):
+        super().setUp()
+        self.config_file = Path(self.tmp.name) / 'config.json'
+        self.config_file.write_text(json.dumps(self.config), encoding='utf-8')
+
+    def answer(self, root, literal, *extra):
+        return self.cli([root], '--config', str(self.config_file), '--toca', 'sim', '--record', str(self.record),
+                        '--answer', literal, *extra)
+
+    def test_the_answer_is_recorded_with_the_roots_of_this_run_and_the_gate_reads_it_back(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        done = self.answer(loud, 'Aprovado')
+        out = json.loads(done.stdout)
+        self.assertEqual((done.returncode, out['status']), (0, 'answered'), done.stderr)
+        record = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertEqual(record['situacao'], 'aprovado')
+        self.assertEqual(record['aprovacao'], 'aprovado')
+        self.assertEqual(record['pergunta']['resposta'], 'Aprovado')
+        self.assertEqual(record['lote']['roots'], out['roots'])
+        self.assertEqual(out['recorded']['situacao'], 'aprovado')
+
+    def test_each_option_maps_to_its_situation(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        cases = (('Pode prosseguir', 'prosseguir', 0), ('Precisa de alteração: o botão sumiu', 'alteracao', 2),
+                 ('Ainda não', 'ainda-nao', 2), ('Rodar sem assistir', 'sem-assistir', 0),
+                 ('Verificar à mão e dispensar', 'dispensado', 0))
+        for literal, state, code in cases:
+            with self.subTest(literal=literal):
+                self.record.unlink(missing_ok=True)
+                done = self.answer(loud, literal)
+                self.assertEqual(done.returncode, code, done.stderr)
+                record = json.loads(self.record.read_text(encoding='utf-8'))
+                self.assertEqual(record['situacao'], state)
+                self.assertEqual(record['pergunta']['resposta'], literal)
+
+    def test_keeping_the_previous_decision_rebinds_the_roots(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        self.answer(loud, 'Aprovado')
+        self.edit(loud, SCREEN)
+        stale = self.cli([loud], '--config', str(self.config_file), '--toca', 'sim', '--record', str(self.record))
+        self.assertEqual(json.loads(stale.stdout)['status'], 'stale')
+        kept = self.answer(loud, 'Manter a decisão anterior')
+        self.assertEqual(json.loads(kept.stdout)['status'], 'answered')
+        self.assertEqual(json.loads(self.record.read_text(encoding='utf-8'))['situacao'], 'aprovado')
+
+    def test_an_option_that_starts_a_run_or_an_unknown_text_is_refused_and_nothing_is_written(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        for literal in ('Assistir de novo', 'Sim, pode rodar', 'talvez'):
+            with self.subTest(literal=literal):
+                done = self.answer(loud, literal)
+                self.assertEqual(done.returncode, 1)
+                self.assertIn('error', json.loads(done.stderr))
+                self.assertFalse(self.record.exists())
+
+    def test_without_browser_test_a_visible_change_stays_unconfigured_until_the_answer(self):
+        """`browserTest: null` com arquivo visível continua `unconfigured`: uma pergunta, nunca pula."""
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        for config in ({'repository': None, 'browserTest': None}, {'repository': None}):
+            with self.subTest(config=config):
+                result = self.gate([loud], toca='ausente', config=config)
+                self.assertEqual((result['status'], result['action']), ('unconfigured', 'ask-how'))
+        self.config_file.write_text(json.dumps({'repository': None, 'browserTest': None}), encoding='utf-8')
+        done = self.answer(loud, 'Verificar à mão e dispensar')
+        self.assertEqual(json.loads(done.stdout)['status'], 'answered')
+
+
+class RecordPassTests(GateTestCase):
+    """Issue 8, S2: `browser-gate record` grava um critério de uma passada; os campos são os de protocol.md."""
+
+    def record_cli(self, *extra):
+        return subprocess.run([sys.executable, str(SCRIPT), 'browser-gate', 'record', '--record', str(self.record),
+                               *extra], capture_output=True, text=True, encoding='utf-8')
+
+    def test_each_pass_and_criterion_is_recorded_in_one_short_line(self):
+        done = self.record_cli('--pass', 'antes', '--criterion', 'S1', '--head', 'abc1234', '--criteria', 'S1,S2',
+                               '--case', 'lista=ok', '--account', 'conta1', '--branch', 'origin/main')
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertLessEqual(len(done.stdout.strip().splitlines()), 10)
+        self.assertEqual(json.loads(done.stdout)['missing_before'], ['S2'])
+        done = self.record_cli('--pass', 'depois', '--criterion', 'S1', '--head', 'def5678', '--case', 'lista=ok',
+                               '--case', 'filtro=falha:o filtro não aplicou', '--failure-kind', 'produto',
+                               '--profile-field', 'perfil=admin->leitor', '--origin', 'back-real')
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(json.loads(done.stdout)['failed_cases'], 1)
+        record = json.loads(self.record.read_text(encoding='utf-8'))
+        item = record['passadas']['depois']['criterios']['S1']
+        self.assertEqual(item['casos'], {'lista': 'ok', 'filtro': 'falha: o filtro não aplicou'})
+        self.assertEqual(item['perfil'], {'campo': 'perfil', 'antes': 'admin', 'depois': 'leitor'})
+        self.assertEqual(record['passadas']['antes']['criterios']['S1']['conta'], 'conta 1')
+        self.assertEqual(item['origem'], 'back real')
+        self.assertNotIn('situacao', record, 'record nunca decide pela sessão nem pelo usuário')
+        assert_schema(self, record)
+
+    def test_bad_input_is_refused_without_writing(self):
+        for extra in (('--criterion', 'passo3', '--head', 'abc1234'), ('--criterion', 'S1', '--head', 'xyz'),
+                      ('--criterion', 'S1', '--head', 'abc1234', '--case', 'x=talvez'),
+                      ('--criterion', 'S1', '--head', 'abc1234', '--profile-field', 'linha inteira')):
+            with self.subTest(extra=extra):
+                done = self.record_cli('--pass', 'antes', *extra)
+                self.assertEqual(done.returncode, 1, done.stdout)
+                self.assertFalse(self.record.exists())
+
+
+def assert_schema(case, record):
+    """Every key of a written result.json is one of the fields of protocol.md (top, pass, criterion)."""
+    case.assertLessEqual(set(record), set(browser_gate.RECORD_FIELDS))
+    for entry in (record.get('passadas') or {}).values():
+        case.assertLessEqual(set(entry), set(browser_gate.PASS_FIELDS))
+        for item in entry['criterios'].values():
+            case.assertLessEqual(set(item), set(browser_gate.CRITERION_FIELDS))
+
+
+class RecordSchemaTests(unittest.TestCase):
+    """Issue 8, S2: os campos do result.json vivem só em protocol.md, "Teste no navegador", e são os do código."""
+
+    def test_protocol_lists_exactly_the_fields_the_code_reads_and_writes(self):
+        self.assertEqual(protocol_fields('- no topo'), browser_gate.RECORD_FIELDS)
+        self.assertEqual(protocol_fields('- em cada passada'), browser_gate.PASS_FIELDS)
+        self.assertEqual(protocol_fields('- em cada crit'), browser_gate.CRITERION_FIELDS)
+        section = (ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
+        self.assertIn('esta é a única descrição', ' '.join(section.split('### Teste no navegador')[1].split()))
+
+
+def protocol_fields(prefix):
+    """The backticked names after the last colon of the line of protocol.md "Teste no navegador" that starts so."""
+    import re
+    text = (ROOT / 'skills' / 'frontlights' / 'docs' / 'protocol.md').read_text(encoding='utf-8')
+    section = text.split('### Teste no navegador')[1].split('\n### ')[0]
+    line = next(line for line in section.splitlines() if line.startswith(prefix))
+    return tuple(re.findall(r'`([^`]+)`', line.rsplit('): ', 1)[-1].split(': ', 1)[-1]))
+
+
 if __name__ == '__main__':
     unittest.main()

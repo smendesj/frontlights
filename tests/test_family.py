@@ -382,11 +382,14 @@ class WatchedRunTextTests(unittest.TestCase):
 
     def test_the_run_is_part_of_the_order_the_evidence_and_the_docs(self):
         evidence = flat(section(self.text, 'Evidence') or '')
-        self.assertIn('A watched run adds `assistido`', evidence)
-        self.assertIn('`rodadas`', evidence)
-        self.assertIn('`aprovacao` (`aprovado`, `prosseguir` or `alteracao`)', evidence)
+        # issue 8: the fields of result.json live only in protocol.md, "Teste no navegador"; Evidence points there
+        self.assertIn('the fields are in `docs/protocol.md`, "Teste no navegador"', evidence)
         self.assertIn('exactly one per pass and criterion, named `antes-<cover>-S<n>.png` and `depois-<cover>-S<n>.png`', evidence)
-        self.assertIn('only the profile field before and after the undo', evidence)
+        fields = flat(read('skills', 'frontlights', 'docs', 'protocol.md')).split('Campos do `result.json`')[1]
+        for field in ('`assistido`', '`rodadas`', '`aprovacao`', '`perfil`', '`passadas`'):
+            with self.subTest(field=field):
+                self.assertIn(field, fields)
+        self.assertIn('`perfil` é só `campo`, `antes` e `depois`', fields)
         self.assertIn('the watched-run question below', flat(self.text))
         self.assertIn('"pronto para assistir?"', flat(read('skills', 'frontlights', 'references', 'development.md')))
         for doc in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md'), ('README.md',)):

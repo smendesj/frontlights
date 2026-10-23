@@ -114,8 +114,9 @@ class PreviewPortRulesTextTests(unittest.TestCase):
     def test_every_list_of_preview_refusals_names_the_port_placeholder_of_a_process(self):
         sources = {
             'serve.py': (read('skills', 'frontlights', 'scripts', 'serve.py'), 'no `{port}` in the `argv` or the `cwd` of a process'),
-            'browser-testing.md': (read('skills', 'frontlights', 'references', 'browser-testing.md'),
-                                   'no `{port}` in the `argv` or the `cwd` of its processes'),
+            # issue 8: the preview left browser-testing.md for development.md, "The start of stage 6"
+            'development.md': (read('skills', 'frontlights', 'references', 'development.md'),
+                               'no `{port}` in the `argv` or the `cwd` of its processes'),
             'README.md': (read('README.md'), '`{port}` no argv ou no `cwd` dos processos dela'),
             'security.md': (read('skills', 'frontlights', 'docs', 'security.md'), 'sem `{port}` no argv nem no `cwd`'),
         }

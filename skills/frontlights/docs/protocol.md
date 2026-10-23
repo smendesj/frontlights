@@ -281,6 +281,30 @@ registros nunca trazem login nem senha: a conta aparece como `conta 1` ou `conta
 rodou: no teste assistido, quem diz se ela ainda vale é o `browser-gate`; os registros de `checks` ficam
 antigos depois de qualquer commit.
 
+Três comandos gravam o registro, e nenhum julga: passou ou falhou é da sessão e do usuário olhando a tela. `serve.py
+window open|attach|hold|shot|close|brief` abre a janela, a segura, tira os prints e preenche o brief de quem conduz (`shot` grava o `print` do critério);
+`frontlights.py browser-gate ... --answer "<literal>"` grava a resposta do usuário na mesma chamada do gate
+(`situacao` pela opção que o literal nomeia, `lote.roots` desta rodada do gate, `pergunta.resposta` literal, e
+`aprovacao` quando a opção é `aprovado`, `prosseguir` ou `alteracao`); `frontlights.py browser-gate record --pass
+antes|depois --criterion S<n> --head <sha>` grava um critério de uma passada, rodado por quem conduz. A janela guarda
+`cdpUrl`, `pid` e `profileDir` em `.frontlights/issues/<n>/browser/window.json` (o perfil é descartável e é apagado no
+fim); antes de a issue ter número, a janela e os prints ficam em `.frontlights/evidencias-pendentes/`
+(`antes-pendente-<rótulo>.png`) e vão para as pastas da issue, renomeados com o número, no primeiro comando da janela
+com `--issue <n>`.
+
+Campos do `result.json` (esta é a única descrição; `browser_gate.py` e `serve.py window` leem e gravam só estes, e um
+teste os compara com o código):
+
+- no topo: `situacao`, `aprovacao`, `pergunta`, `lote`, `assistido`, `rodadas`, `pastaDosPrints`, `criterios`, `passadas`, `registradoEm`;
+- em cada passada (`passadas.antes`, `passadas.depois`): `branch`, `head`, `repeticoes`, `criterios`;
+- em cada critério (`passadas.<passada>.criterios.S<n>`): `head`, `print`, `casos`, `tipoDeFalha`, `conta`, `perfil`, `origem`, `registradoEm`.
+
+`pergunta` traz `resposta` (literal), `opcao` e `em`; `lote` traz `issues` e `roots`; `criterios` no topo lista as
+caixas da rodada (`S1`, `S2`), e as que ainda não têm print nem caso na ANTES são as que faltam; `casos` mapeia o id de
+cada caso a `ok` ou `falha: <o que aconteceu>`; `tipoDeFalha` é `infraestrutura`, `produto` ou `config`; `conta` é
+`conta 1` ou `conta 2`; `perfil` é só `campo`, `antes` e `depois`; `origem` é `back real` ou `interceptada`; os
+instantes são de São Paulo, com o fuso.
+
 ### RoadS e resumo
 
 O contrato com o RoadS (rotas, versão, o que é mudança aditiva e a regra para uma quebra) está em
