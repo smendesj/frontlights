@@ -1762,7 +1762,7 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
                planner=None):
     """`release plan|body-check|go|status|landed` (see the module's docstring)."""
     worktree(root)
-    root = Path(root)
+    root = Path(os.path.abspath(root))   # the returned argv never depends on the folder it is run from
     require(action in RELEASE_ACTIONS, f'release {str(action)[:20]}: a ação é {", ".join(RELEASE_ACTIONS)}')
     if action == 'plan':
         result = op_release_plan(root, base, remote, prefix, records, config_path, gh)

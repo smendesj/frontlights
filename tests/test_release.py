@@ -109,6 +109,18 @@ class GoTests(ReleaseCase):
         self.assertTrue((self.root / '.frontlights' / 'release' / 'pending.json').is_file())
         self.assertEqual(result['skillUpdate'], {'status': 'current'})
 
+    def test_a_relative_root_becomes_absolute_in_the_returned_git_commands(self):
+        # Reverificação real (23/10/2026): `release go --root .` imprimia `git -C .`, que depende da pasta.
+        import os
+        before = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, before)
+        result = homolog.op_release('go', '.', config_path=str(self.config), body=self.body(), gh=self.gh,
+                                    update_check=lambda: {'status': 'current'})
+        self.assertEqual(result['exitCode'], 0, result)
+        push = result['commands'][0]
+        self.assertTrue(Path(push[2]).is_absolute(), push)
+
     def test_the_returned_commands_do_not_depend_on_the_current_folder(self):
         import os
         self.body()
