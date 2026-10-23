@@ -88,9 +88,9 @@ nunca por `edits`. É regra da skill, não barreira.
 
 No paralelismo (`docs/protocol.md`), um subagente trabalha sob as mesmas permissões nativas da
 sessão que o lançou, e o "Sim" de uma operação negada vale para a sessão coordenadora que
-o perguntou, nunca para um agente que a execute por ela. O brief diz o que o agente nunca faz (perguntar ao
-usuário, escrever no GitHub, mesclar, rodar operação negada, editar fora dos caminhos dele), e isso é regra
-da skill, não barreira: os pedidos de permissão do Claude Code continuam valendo para cada agente, e o
+o perguntou, nunca para um agente que a execute por ela. O que o agente nunca faz (perguntar ao usuário, escrever
+no GitHub, mesclar, rodar operação negada, editar fora dos caminhos dele) está em `references/worker.md`, "What a
+worker never does", e é regra da skill, não barreira: os pedidos de permissão do Claude Code continuam valendo para cada agente, e o
 relato dele é conferido pela sessão (diff lido, comandos repetidos) antes de virar evidência.
 
 ## `authorize` e a main local

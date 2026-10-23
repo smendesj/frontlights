@@ -154,6 +154,11 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
                    acima de 4 KB ou 80 linhas), na worktree em que ele rodou: horário de São Paulo, os 5 últimos por
                    verbo; fica fora da cópia que a limpeza faz dos registros da worktree
   discovery.md
+  notes/<nome>.md  nota de exploração de uma sonda ou de um leitor, antes de a issue ter número: no máximo 300
+                   palavras, cada achado com `caminho:linha` e o comando que o provou; na publicação (etapa 5) vai para
+                   `issues/<n>/notes/`; sempre no `.frontlights` da worktree principal, nunca no de uma worktree de
+                   issue ou de slice. O brief aponta o caminho da nota em vez de recontá-la, e a nota é mapa, não
+                   evidência: quem a lê confere cada `caminho:linha` e roda o próprio teste vermelho antes de corrigir
   artifact.html    fonte local do artefato do grilling, editada a cada seção e publicada na mesma URL
   issue.md         corpo da issue aprovado na etapa 4, até a publicação da etapa 5
   <documento>-r<N>.md   revisões anteriores guardadas ao lado do documento (`issue-r1.md` ao lado de `issue.md`),
@@ -172,6 +177,7 @@ do Frontlights enquanto ele executa trabalho no projeto consumidor. Estrutura re
     worktrees/<pasta>-<tip curto>/  cópia do `.frontlights` de cada worktree da issue, feita pela limpeza antes de removê-la
     issue.json
     handoff.md
+    notes/<nome>.md        notas de exploração depois do número, no mesmo formato de `notes/` acima
     artifact.html          fonte do artefato do grilling quando a issue já está publicada
     checkpoint.json        gravado por `checkpoint --issue <n>` na worktree, que lê sozinho o retrato da issue pelo `gh`
     checkpoint-<id>.json   um por worktree de slice (`checkpoint --slice <id>`)

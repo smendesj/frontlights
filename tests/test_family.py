@@ -121,9 +121,8 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertNotIn('An issue and its sub-issues move together', text)
         # redesenho, issue 3: o caminho Direct diz "no open sub-issues" em vez de "the issue has open sub-issues"
         self.assertIn('no open sub-issues', flat(skilltext.stage(1)))
-        # redesenho, issue 3: "does not serialize the work behind a merge" vive em development.md, "Stacked branches"
-        development = read('skills', 'frontlights', 'references', 'development.md')
-        stacked = flat(section(development, 'Stacked branches: parent and children without waiting for the merge') or '')
+        # redesenho, issue 5: o empilhamento saiu de development.md para references/family.md, "Stacking"
+        stacked = flat(section(read('skills', 'frontlights', 'references', 'family.md'), 'Stacking') or '')
         self.assertIn('Making children wait for the parent to reach the base serializes the family', stacked)
 
     def test_stage_three_five_and_six_carry_the_family_rules(self):
@@ -139,9 +138,12 @@ class FamilyRulesTextTests(unittest.TestCase):
         self.assertIn('not touched with the reason', layers)
         self.assertIn('The scope is the whole family', stage6)
         development = flat(read('skills', 'frontlights', 'references', 'development.md'))
-        for phrase in ('no stacking question', 'independent children', 'without waiting for the merge'):
-            with self.subTest(file='development.md', phrase=phrase):
-                self.assertIn(phrase, development)
+        self.assertIn('no stacking question', development)
+        self.assertIn('the family enters the local main as one', development)
+        family = flat(read('skills', 'frontlights', 'references', 'family.md'))
+        for phrase in ('independent children', 'Making children wait for the parent to reach the base'):
+            with self.subTest(file='family.md', phrase=phrase):
+                self.assertIn(phrase, family)
 
     def test_issues_reference_defines_the_slice_and_its_layers(self):
         issues = read('skills', 'frontlights', 'references', 'issues.md')
@@ -202,8 +204,8 @@ class FamilyRulesTextTests(unittest.TestCase):
                 self.assertIn(phrase, body)
 
     def test_development_offers_stacked_branches_with_the_safe_mechanics(self):
-        body = flat(section(read('skills', 'frontlights', 'references', 'development.md'),
-                            'Stacked branches: parent and children without waiting for the merge') or '')
+        # redesenho, issue 5: a mecânica segura do empilhamento vive em references/family.md, "Stacking"
+        body = flat(section(read('skills', 'frontlights', 'references', 'family.md'), 'Stacking') or '')
         for phrase in ('"Como as filhas se apoiam no pai?"', '"Empilhadas no pai (Recomendada)"',
                        '"Esperar o merge do pai"', 'schedule --limit 24', 'throwaway copy',
                        'git merge-base --is-ancestor', 'Stack on one dependency only',
@@ -220,7 +222,7 @@ class FamilyRulesTextTests(unittest.TestCase):
                 self.assertIn(phrase, body)
 
     def test_option_labels_in_the_docs_fit_the_five_word_limit(self):
-        stacking = labels(read('skills', 'frontlights', 'references', 'development.md'),
+        stacking = labels(read('skills', 'frontlights', 'references', 'family.md'),
                           r'with "([^"]+)" first .*? and "([^"]+)" second')
         watching = labels(read('skills', 'frontlights', 'references', 'browser-testing.md'),
                           r'Options: "([^"]+)" first and recommended; "([^"]+)" \(.*?\); "([^"]+)" \(')

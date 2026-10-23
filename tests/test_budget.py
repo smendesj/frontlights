@@ -16,7 +16,8 @@ SKILL = ROOT / 'skills' / 'frontlights'
 
 SLACK = 1.10
 
-# contagem de 23/10/2026 (integração do redesenho, issue 3); só desce
+# contagem de 23/10/2026 (integração do redesenho, issue 3; development.md, tdd.md, worker.md e family.md pela
+# issue 5); só desce
 BUDGET = {
     'SKILL.md': 1800,
     'docs/protocol.md': 6611,
@@ -24,7 +25,8 @@ BUDGET = {
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,
-    'references/development.md': 11294,
+    'references/development.md': 4128,
+    'references/family.md': 1442,
     'references/grilling.md': 1893,
     'references/issue.md': 360,
     'references/issues.md': 6063,
@@ -32,8 +34,8 @@ BUDGET = {
     'references/LICENSE-tdd.md': 198,
     'references/progress-report.md': 3797,
     'references/review.md': 753,
-    'references/tdd-mocking.md': 202,
-    'references/tdd-tests.md': 291,
+    'references/tdd.md': 1271,
+    'references/worker.md': 526,
     'templates/artifact-page.html': 444,   # redesenho, issue 6
     'templates/discovery.md': 292,
     'templates/grilling-section.html': 244,

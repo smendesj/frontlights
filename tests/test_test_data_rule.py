@@ -59,7 +59,8 @@ class TestDataRuleTests(unittest.TestCase):
         # reuse" saiu do SKILL.md; a regra vive na referência e a etapa 6 aponta para o "Watched run" dela
         self.assertIn('test data the `Fluxo:` needs to run completely, and keeps it for reuse', ' '.join(self.reference.split()))
         self.assertIn('(`references/browser-testing.md`, "Watched run")', flat('skills', 'frontlights', 'SKILL.md'))
-        self.assertIn('create what the flow needs', flat('skills', 'frontlights', 'references', 'development.md'))
+        # redesenho, issue 5: a regra que todo brief leva vive em worker.md, a casa única do brief
+        self.assertIn('create what the flow needs', flat('skills', 'frontlights', 'references', 'worker.md'))
 
     def test_the_data_stays_and_only_the_moved_profile_is_undone(self):
         self.assertNotIn('right after the last case of a run with no watcher', self.rule)

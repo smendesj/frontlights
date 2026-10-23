@@ -873,13 +873,15 @@ class ParallelSuiteTextTests(unittest.TestCase):
                 self.assertIn(phrase, text)
 
     def test_the_stage_six_reference_says_the_same_inside_its_section(self):
+        # redesenho, issue 5: o ferramental do repositório do Frontlights saiu da referência da etapa 6 (que vale
+        # para todo projeto); a seção cita só as ferramentas da skill, e o runner vive no README.
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
-        for phrase in ('in the Frontlights repository, `python tests/suite.py`',
-                       '`--report <file>` writes the JSON of the run',
-                       'or `python -m unittest discover -s tests -v` for the whole'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+        self.assertIn('`homolog suite --mode impact|full`, judged by `homolog suite-gate`', text)
+        readme = flat('README.md')
+        for phrase in ('A suíte rápida roda por `python tests/suite.py`', '`--report <arquivo>` grava um JSON'):
+            with self.subTest(file='README.md', phrase=phrase):
+                self.assertIn(phrase, readme)
 
     def test_the_acceptance_record_names_the_runner_and_the_discover(self):
         text = flat('docs', 'acceptance.md')

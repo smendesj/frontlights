@@ -45,6 +45,29 @@ GONE = {
     '**Run the whole suite on the local main.**': 'a suíte inteira da release, que virou ferramenta a pedido',
 }
 
+# redesenho, issue 5: regras que saíram de development.md (e do SKILL.md) para a casa única delas; fragmento -> (casa,
+# o que ele marca). Uma cópia num segundo arquivo volta a ser pega aqui.
+MOVED = {
+    'A worker never calls `AskUserQuestion`, edits outside its paths, writes GitHub':
+        ('skills/frontlights/references/worker.md', 'o que o worker nunca faz'),
+    "Workers share the codebase and must preserve others' changes":
+        ('skills/frontlights/references/worker.md', 'o worker preserva a mudança dos outros'),
+    '## Brief shape': ('skills/frontlights/references/worker.md', 'a forma do brief'),
+    '**Test only at pre-agreed seams.**': ('skills/frontlights/references/tdd.md', 'os seams combinados'),
+    'Reproduce the red before the hypothesis': ('skills/frontlights/references/tdd.md', 'o vermelho inesperado'),
+    '"Como as filhas se apoiam no pai?"': ('skills/frontlights/references/family.md', 'a pergunta do empilhamento'),
+    'Stack on one dependency only': ('skills/frontlights/references/family.md', 'uma dependência só'),
+    'no máximo 300 palavras': ('skills/frontlights/docs/protocol.md', 'o formato das notas de exploração'),
+}
+
+# o que ficou para trás na mudança (issue 5)
+MOVED_GONE = {
+    'Each brief is bounded (outcome, owned paths, tests, stage rules)': 'o brief recontado na regra Fan out',
+    'tdd-tests.md': 'o arquivo de testes do TDD, fundido em tdd.md',
+    'tdd-mocking.md': 'o arquivo de mocks do TDD, fundido em tdd.md',
+    '## Stacked branches: parent and children without waiting for the merge': 'o empilhamento em development.md',
+}
+
 DESCRIPTION_MAX_WORDS = 80
 
 
@@ -72,6 +95,40 @@ class SingleSourceTests(unittest.TestCase):
             with self.subTest(copy=copy):
                 homes = [path.relative_to(ROOT).as_posix() for path, text in found.items() if fragment in text]
                 self.assertEqual(homes, [], f'{copy} deve virar um ponteiro para references/development.md')
+
+
+class MovedRulesTests(unittest.TestCase):
+    """Redesenho, issue 5: worker.md, tdd.md, family.md e as notas em protocol.md são casas únicas."""
+
+    def test_each_moved_rule_lives_once_in_its_home(self):
+        found = texts()
+        for fragment, (home, rule) in MOVED.items():
+            with self.subTest(rule=rule):
+                homes = {path.relative_to(ROOT).as_posix(): text.count(fragment)
+                         for path, text in found.items() if fragment in text}
+                self.assertEqual(homes, {home: 1}, f'{rule} deve aparecer uma vez, só em {home}')
+
+    def test_the_new_references_have_real_headings(self):
+        expected = {
+            'worker.md': ('Brief shape', 'What a worker never does', 'The report is a claim'),
+            'tdd.md': ('What a good test is', 'Seams: where tests go', 'When to mock', 'Anti-patterns',
+                       'Rules of the loop', 'Diagnosing an unexpected red'),
+            'family.md': ('Reading the family', 'Offering the conversion', 'Grilling the children', 'Stacking',
+                          'Integrating before the local main', 'Converting a family'),
+        }
+        for name, titles in expected.items():
+            text = (SKILL_DIR / 'references' / name).read_text(encoding='utf-8')
+            self.assertTrue(text.split('\n\n')[1].startswith('Read when:'), name)
+            for title in titles:
+                with self.subTest(file=name, title=title):
+                    self.assertEqual(text.count(f'\n## {title}\n'), 1)
+
+    def test_what_moved_left_no_copy_behind(self):
+        found = texts()
+        for fragment, copy in MOVED_GONE.items():
+            with self.subTest(copy=copy):
+                homes = [path.relative_to(ROOT).as_posix() for path, text in found.items() if fragment in text]
+                self.assertEqual(homes, [], copy)
 
 
 class DescriptionTests(unittest.TestCase):

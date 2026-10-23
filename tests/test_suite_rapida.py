@@ -142,12 +142,9 @@ class FastSuiteTextTests(unittest.TestCase):
                        'the release.',
                        'When the user asks to implement "só com teste assistido", the session writes and runs no tests '
                        'in that run',
+                       # redesenho, issue 5: as flags da suíte estão no --help; o runner do repositório, no README.
                        'A broader suite runs only when the user asks for one, through the optional tools',
-                       'homolog suite --root <issue-worktree> --config <config> --issue <n> --mode impact|full --base <base>',
-                       'judged by `homolog suite-gate`',
-                       '`--impact <base>` runs only what the diff touches, by the selection of `tests/pre_commit.py`',
-                       f'`{VARIABLE}=rapida`, Windows only, it skips the modules that start real processes and ports',
-                       '`python -m unittest discover -s tests -v` for the whole',
+                       '`homolog suite --mode impact|full`', 'judged by `homolog suite-gate`',
                        'a red one is a finding',
                        "No whole check is required anywhere: a project's CI, when there is one, is neither expected "
                        'nor a gate, and the watched run of each issue is the evidence.'):
@@ -164,7 +161,6 @@ class FastSuiteTextTests(unittest.TestCase):
         text = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split('\n## The release\n')[1].split())
         self.assertIn('No suite is required for the release (no whole check is: the watched run of each issue is its '
                       'evidence)', text)
-        self.assertIn('runs only when the user asks for it', text)
         self.assertNotIn("This run is the release's only whole check", text)
         self.assertNotIn("The CI of the release's pull request stays the full check", text)
 

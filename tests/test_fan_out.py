@@ -45,10 +45,17 @@ class FanOutRuleTests(unittest.TestCase):
                        'Wait only for a real dependency', 'an approval not given', '`Depende de`',
                        'a file two pieces would edit', 'a shared resource', 'a shared test run',
                        'This session is the only coordinator', 'it alone asks, approves, writes GitHub, merges',
-                       'Each brief is bounded', 'forbids asking the user, editing outside its paths, writing GitHub',
+                       'Each brief follows `references/worker.md`', 'a worker returns at most 20 lines',
                        'its report is a claim until this session reads the diff and reruns the measured commands'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, rules)
+        # redesenho, issue 5: o brief tem casa única, references/worker.md
+        worker = flat(read('skills', 'frontlights', 'references', 'worker.md'))
+        for phrase in ('## Brief shape', 'At most 20 lines', 'A worker never calls `AskUserQuestion`, edits outside its paths, '
+                       'writes GitHub', 'or widens the scope', "Workers share the codebase and must preserve others' changes",
+                       'only one worker edits a worktree at a time', '## The report is a claim'):
+            with self.subTest(file='worker.md', phrase=phrase):
+                self.assertIn(phrase, worker)
         self.assertLess(skill.index('**Fan out.**'), skill.index('## Stages'))
         # redesenho, issue 3: o teto de issues, o trabalho em volta da slice aberta, o "um de cada vez" e o limite
         # de capacidade saíram do SKILL.md e vivem em development.md, "Dispatch and ownership"
@@ -70,7 +77,7 @@ class FanOutRuleTests(unittest.TestCase):
         self.assertIn('in dependency order: independent slices run at once', slices)
         self.assertIn('Slices run in parallel inside an issue and between issues', slices)
         dispatch = flat(section(development, 'Dispatch and ownership'))
-        for phrase in ('all launched in one message', 'A worker never calls `AskUserQuestion`',
+        for phrase in ('all launched in one message', 'each with a brief by `references/worker.md`',
                        "A worker's report is a claim", '**Fan out inside an issue.**',
                        'dispatch in the same message read-only workers', 'runs one at a time',
                        'the reviewer is never the implementer', 'one implementer per open slice',
