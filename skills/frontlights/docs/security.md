@@ -152,7 +152,7 @@ escapes por diretórios ou links simbólicos, mas isso não é um isolamento de 
 imune a alterações concorrentes. Edite só os caminhos que a autorização nomeia como responsabilidade da
 tarefa; responsabilidade desconhecida não autoriza edição.
 
-As branches precisam começar pelo `branch_prefix` da autorização (padrão `claude/`).
+As branches precisam começar pelo prefixo da cadeia `--prefix` > `branchPrefix` do config > `branch_prefix` da autorização; sem nenhum deles não há prefixo padrão, e um registro antigo sem a chave é lido como `claude/` com `prefixSource: legacy`.
 O prefixo é recusado quando coincide com uma branch protegida ou com o espaço de nomes
 dela: `release/*` protegido impede o prefixo `release/`. A comparação não distingue
 maiúsculas de minúsculas. Autorizações antigas com branches `codex/` passam a ser
