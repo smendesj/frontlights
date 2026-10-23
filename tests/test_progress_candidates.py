@@ -242,6 +242,59 @@ class RepositoryTests(CandidatesTestCase):
                 self.assertFalse(self.run_op(repository=bad)['ok'])
 
 
+class KeepTests(CandidatesTestCase):
+    """Issue 8, S4: `keep` grava e valida uma entrada do candidates.json (fim do JSON à mão)."""
+
+    def setUp(self):
+        super().setUp()
+        (self.root / '.frontlights' / 'config.json').write_text(json.dumps({'repository': 'OWNER/REPOSITORY'}),
+                                                                encoding='utf-8')
+        self.head = git(self.root, 'rev-parse', 'HEAD')
+
+    def keep(self, file='101-lista.png', new=False, visible=(VISIBLE,), caption='A lista mostra a empresa excluída.'):
+        return pr.run('keep', str(self.root), issue=100,
+                      keep=(file, caption, 101, None, self.head, list(visible), new))
+
+    def test_a_kept_print_is_listed_by_candidates_as_usable(self):
+        self.shot()
+        out = self.keep()
+        self.assertTrue(out['ok'], out)
+        items = json.loads((self.folder / 'candidates.json').read_text(encoding='utf-8'))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['visibleFiles'], {VISIBLE: self.blob})
+        self.assertEqual((items[0]['issue'], items[0]['cover'], items[0]['repository']), (101, 100, 'OWNER/REPOSITORY'))
+        self.assertTrue(items[0]['takenAt'].endswith('-03:00'))
+        listed = pr.run('candidates', str(self.root), date_to='2099-12-31')
+        self.assertTrue(listed['candidates'][0]['usable'], listed)
+
+    def test_new_starts_from_scratch_and_the_same_file_is_replaced_not_duplicated(self):
+        self.shot()
+        self.keep()
+        self.keep()
+        self.assertEqual(len(json.loads((self.folder / 'candidates.json').read_text(encoding='utf-8'))), 1)
+        self.shot('101-outra.png')
+        self.keep('101-outra.png')
+        self.assertEqual(len(json.loads((self.folder / 'candidates.json').read_text(encoding='utf-8'))), 2)
+        self.keep('101-outra.png', new=True)
+        self.assertEqual(len(json.loads((self.folder / 'candidates.json').read_text(encoding='utf-8'))), 1)
+
+    def test_an_image_outside_the_folder_is_copied_never_moved(self):
+        outside = self.root / 'depois-100-S1.png'
+        outside.write_bytes(PNG)
+        out = self.keep(str(outside))
+        self.assertTrue(out['ok'], out)
+        self.assertTrue(outside.is_file())
+        self.assertTrue((self.folder / 'depois-100-S1.png').is_file())
+
+    def test_a_print_with_problems_is_refused_and_nothing_is_written(self):
+        self.shot('101-vazio.png', data=b'nao e png')
+        for kwargs in ({'file': '101-vazio.png'}, {'visible': ('web/src/nao-existe.html',)}, {'caption': ' '}):
+            with self.subTest(kwargs=kwargs):
+                out = self.keep(**kwargs)
+                self.assertFalse(out['ok'])
+                self.assertFalse((self.folder / 'candidates.json').exists())
+
+
 class TextTests(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[1]
 

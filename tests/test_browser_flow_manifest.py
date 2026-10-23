@@ -199,9 +199,14 @@ class BrowserFlowManifestTests(unittest.TestCase):
         self.assertTrue(cited_serve and cited_checks)
         self.assertLessEqual(cited_serve, serve_ops, 'subcomando do serve inexistente na reference')
         self.assertLessEqual(cited_checks, check_subs, 'subcomando do checks inexistente na reference')
-        self.assertEqual(cited_serve, serve_ops, 'a reference precisa citar start, status e stop')
+        # issue 8: the preview moved to development.md and `relay` is internal; the window is the new one
+        self.assertLessEqual({'start', 'status', 'stop', 'window'}, cited_serve,
+                             'a reference precisa citar start, status, stop e window')
         self.assertEqual(cited_checks, check_subs, 'a reference precisa citar todos os subcomandos do checks')
         known = set(re.findall(r'--[a-z][a-z-]*', serve_help))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/serve.py', 'window')))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/progress_report.py')))
+        known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/frontlights.py', 'browser-gate', 'record')))
         for sub in check_subs:
             known |= set(re.findall(r'--[a-z][a-z-]*', help_text('scripts/checks.py', sub)))
         for sub in ('evidence', 'browser-gate', 'checkpoint', 'context'):
@@ -211,24 +216,21 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 self.assertIn(flag, known)
 
     def test_cited_checks_exit_codes_match_the_script(self):
-        keys = {'passed': 'passed', 'product failure': 'product_failure',
-                'config or usage refused': 'refused', 'infrastructure': 'infrastructure'}
-        section = ' '.join(self.reference.split('## Checks: `checks`')[1].split('\n## ')[0].split())
-        sentence = section.split('Exit codes:')[1].split('.')[0]
-        cited = re.findall(r'`(\d)` ([a-z ]+?)(?= \(|,|$)', sentence)
-        self.assertEqual(sorted(label for _, label in cited), sorted(keys))
-        for code, label in cited:
+        """Issue 8: the exit codes live in the `--help` of the scripts; the reference points there and the
+        classification of "Every failure is a question" cites the same codes (test above)."""
+        section = ' '.join(self.reference.split('## Environment and checks')[1].split('\n## ')[0].split())
+        self.assertIn('exit codes and categories are in', section)
+        self.assertIn('serve.py" --help', section)
+        self.assertIn('checks.py --help', section)
+        text = ' '.join(help_text('scripts/checks.py').split())
+        for code, label in ((0, 'passou'), (1, 'falha de produto'), (2, 'config ou uso recusado')):
             with self.subTest(label=label):
-                self.assertEqual(int(code), checks.EXIT_CODES[keys[label]])
+                self.assertIn(f'{code} {label}', text)
+        self.assertEqual((checks.EXIT_CODES['passed'], checks.EXIT_CODES['product_failure'],
+                          checks.EXIT_CODES['refused'], checks.EXIT_CODES['infrastructure']), (0, 1, 2, 3))
 
     def test_cited_serve_exit_codes_and_categories_match_the_script(self):
-        section = self.reference.split('## Environment: `serve`')[1].split('\n## ')[0]
-        exits = ' '.join(section.split()).split('Exit ')[1].split(';')[0]
-        self.assertEqual(set(re.findall(r'`(\d)`', exits)), {'0', '1'})
-        meaning = dict(re.findall(r'^- `(\w+)`: (.+)$', section, re.M))
-        self.assertEqual(set(meaning), {serve.USAGE, serve.INFRASTRUCTURE})
-        self.assertIn('invalid config', meaning[serve.USAGE])
-        self.assertIn('missing config', meaning[serve.INFRASTRUCTURE])
+        self.assertIn('Exit codes: 0 done; 1 refusal or failure', ' '.join(help_text('scripts/serve.py').split()))
         # the script itself: an invalid config is `uso`, a missing one `infraestrutura`, both exit 1
         with tempfile.TemporaryDirectory() as folder:
             invalid = Path(folder) / 'invalid.json'
@@ -243,10 +245,10 @@ class BrowserFlowManifestTests(unittest.TestCase):
                     self.assertEqual(json.loads(done.stdout)['category'], category)
 
     def test_cited_output_fields_exist_in_the_scripts(self):
-        sources = read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'serve.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'checks.py') \
-            + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py') + read(ROOT / 'skills' / 'frontlights' / 'scripts' / 'browser_gate.py')
+        sources = ''.join(read(ROOT / 'skills' / 'frontlights' / 'scripts' / name) for name in (
+            'serve.py', 'checks.py', 'frontlights.py', 'browser_gate.py', '_window.py', 'progress_report.py'))
         fields = set(re.findall(r'`([a-z]+(?:_[a-z0-9]+)+)`', self.reference))
-        self.assertIn('reservas_compartilhadas', fields)
+        self.assertIn('ended_by', fields)
         for field in fields:
             with self.subTest(field=field):
                 self.assertIn(field, sources)

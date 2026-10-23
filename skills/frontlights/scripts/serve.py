@@ -1851,8 +1851,9 @@ def main(argv=None):
     if argv[:1] == ['window']:   # the visible window of the watched run (issue 8), its own parser in _window.py
         import _window
         return _window.main(argv[1:])
-    parser = _cli.JsonParser(description=__doc__.split('\n')[0])
-    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay'))
+    parser = _cli.JsonParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('operation', choices=('start', 'stop', 'status', 'preview', 'relay', 'window'),
+                        help='window: `serve.py window --help` (dispatched before this parser)')
     parser.add_argument('action', nargs='?', choices=('start', 'refresh', 'status', 'stop'),
                         help='só para preview: start, refresh, status ou stop')
     parser.add_argument('--config', help='padrão: o .frontlights/config.json da worktree principal')
