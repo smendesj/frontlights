@@ -21,7 +21,7 @@ SLACK = 1.10
 BUDGET = {
     'SKILL.md': 1820,  # teto de 2.000 durante o redesenho (test_skill_md); a issue 10 volta à contagem do dia
     'docs/protocol.md': 6289,   # issue 7: "Quadro e publicação" vira registros e ponteiro
-    'docs/security.md': 8112,   # issue 7: "Revisão e sobras"
+    'docs/security.md': 3716,   # redesenho, issue 10: tabela por utilitário, regras da sessão e recusas geradas
     'references/browser-conductor.md': 821,
     'references/browser-testing.md': 4680,
     'references/closeout.md': 1305,

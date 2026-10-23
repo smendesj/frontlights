@@ -309,7 +309,8 @@ class LocalMainTextTests(unittest.TestCase):
         """Revisão da issue 52, B2: o `inspect` aceita `suites` dentro de `homolog`, e o `homolog suite` está entre
         os comandos lidos do config, com o filtro de shell do `checks`, sem shell e com a árvore morta no prazo."""
         security = flat('skills', 'frontlights', 'docs', 'security.md')
-        for phrase in ('dentro de `homolog`, qualquer chave além de `backupDir` e `suites`',
+        # redesenho, issue 10: a recusa das chaves de `homolog` vive na lista gerada de security.md, "Recusas do `inspect`"
+        for phrase in ('`homolog` com chave além de `backupDir` e `suites`',
                        'as suítes da homologação (`homolog suite`)',
                        'blocos `browserTest`, `checks` e `homolog.suites`; no `homolog suite`, também o `--argv` que a '
                        'sessão passa',
@@ -409,8 +410,9 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertNotIn(gone, ' '.join(text.split()))
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         for phrase in ('O Frontlights não instala hook nenhum.',
-                       'A regra de que a main local do projeto, a homologação, nunca é enviada à main remota (o conteúdo dela só '
-                       'sai para o nome da branch da release, pelo push da release) é regra da skill, não barreira.', 'As escritas da skill dentro de `.git/` são duas',
+                       # redesenho, issue 10: "regra da skill, não barreira" é dito uma vez, no topo de security.md
+                       'A main local, a homologação, nunca é enviada à main remota: o conteúdo dela só sai para o nome da '
+                       'branch da release, pelo push da release (regra da skill).', 'As escritas da skill dentro de `.git/` são duas',
                        '`.git/info/exclude`', '`frontlights-serve/ports/`',
                        '**Sincronização da main local (`homolog sync`).**', 'Nunca envia, nunca usa `--force`, `reset` nem `rebase`',
                        'é merge coberto (`references/development.md`, "Standing authorization and the denied operations")'):

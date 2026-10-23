@@ -1383,6 +1383,26 @@ def inspect(config, root, config_path=None, summary=False, offline=False, issue=
     return summarize(result) if summary else result
 
 
+# What `inspect` refuses in a config (exit 1). One line per rule, in Portuguese: the `inspect --help` epilog prints
+# these lines and `docs/security.md`, "Recusas do `inspect`", carries the same lines between its markers;
+# `tests/test_inspect_blocks.py` compares the three (redesign, issue 10).
+INSPECT_REFUSALS = (
+    '`repository` ausente, ou que não é `dono/nome` nem `null`',
+    '`browserTest.users` com login ou senha de menos de 4 caracteres ou com o texto do marcador de máscara',
+    '`health` ou `baseUrl` de `browserTest` e `checks` fora de `127.0.0.1`, `localhost` ou `::1`',
+    'shell embutido nos `argv` de `checks` (cmd, sh, powershell, `.bat`, `&&`, `|`, `python -c`, `env`, `xargs`)',
+    '`{port}` sem um processo de porta `auto`',
+    '`browserTest.isolated` que ainda declara `copyDatabase` ou `dropDatabase` (mesmo `null`)',
+    '`browserTest.isolated` com host que não é local, porta fixa igual à da prévia ou do `serve`, `baseUrl` fixa '
+    'que não é a porta de um processo isolado, ou `cwd` de processo que sai da worktree',
+    '`preview` com worktree fora do `--root`, sem branch, `baseUrl` fora da porta fixa local de um processo dela, '
+    'ou processo com porta `auto` ou `{port}` no argv ou no `cwd`',
+    'porta fixa de `browserTest.processes` ou da `browserTest.baseUrl` igual a uma porta da prévia',
+    '`homolog` com chave além de `backupDir` e `suites`, e `homolog.suites` com chave além de `impact` e `full`',
+    '`homolog.backupDir` relativo, com `..`, `~` ou marcador `{}`',
+)
+
+
 def summarize(result):
     """The `inspect --summary` output: the same keys plus `summary: true`, with the GitHub issues cut to number,
     title, state and acceptance-criteria boxes (`closeout.criteria`, None without that section) and counted, and
@@ -2933,7 +2953,8 @@ def build_parser():
     p.add_argument('--reserve', type=int, required=True)
     p.add_argument('--pending', action='append', default=[], help='open obligation, e.g. teste_assistido; repeatable')
     p.add_argument('--turn', type=int, help='the turn of this report; prints next_report_turn (every 50 turns)')
-    p = sub.add_parser('inspect')
+    p = sub.add_parser('inspect', formatter_class=argparse.RawDescriptionHelpFormatter,
+                       epilog='Recusa (saída 1):\n' + '\n'.join(f'- {line}' for line in INSPECT_REFUSALS))
     p.add_argument('--config', help='default: the .frontlights/config.json of the main worktree')
     p.add_argument('--root', help='default: the main worktree of the current directory')
     p.add_argument('--summary', action='store_true',
