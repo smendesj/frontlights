@@ -134,7 +134,8 @@ class FastSuiteTextTests(unittest.TestCase):
     def test_the_stage_six_reference_says_when_each_run_is_used(self):
         text = section(read('skills', 'frontlights', 'references', 'development.md'),
                        '## Slices in order', '## Dispatch and ownership')
-        for phrase in ('**Which tests run when.**',
+        # redesenho, issue 3: o parágrafo em negrito virou o título "### Which tests run when"
+        for phrase in ('### Which tests run when',
                        'TDD per slice is the default practice',
                        'plus the test modules the slice touches and the type checks',
                        'These tests are evidence, never a gate: no suite holds back the merge into the local main or '
@@ -160,7 +161,7 @@ class FastSuiteTextTests(unittest.TestCase):
 
     def test_the_release_requires_no_suite(self):
         # "The release" é a última seção da referência da etapa 6.
-        text = flat('skills', 'frontlights', 'references', 'development.md').split('## The release')[1]
+        text = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split('\n## The release\n')[1].split())
         self.assertIn('No suite is required for the release (no whole check is: the watched run of each issue is its '
                       'evidence)', text)
         self.assertIn('runs only when the user asks for it', text)

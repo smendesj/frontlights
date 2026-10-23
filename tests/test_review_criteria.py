@@ -10,8 +10,12 @@ Seams: o texto de `references/review.md`, de `references/development.md` ("Revie
 `evals/runbook.md`. É regra da skill, não barreira: nenhum script conta as rodadas nem classifica achados.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -122,7 +126,8 @@ class StopCriterionTests(unittest.TestCase):
                 self.assertIn(phrase, self.review)
 
     def test_the_review_is_done_at_zero_serious_and_zero_medium(self):
-        for phrase in ('**When the review is done.**', 'done at the first round that reports 0 sérios and 0 médios',
+        # redesenho, issue 3: o negrito "When the review is done" virou subtítulo `###` de development.md.
+        for phrase in ('### When the review is done', 'done at the first round that reports 0 sérios and 0 médios',
                        'a new acceptance criterion of the source issue', '"Corrigir os baixos agora"',
                        'There is no limit of rounds to keep', '"Mais uma rodada"', '"Dar destino pela escada"',
                        'a sério or médio without a destination keeps the issue out of the local main by the gate on '
@@ -134,7 +139,7 @@ class StopCriterionTests(unittest.TestCase):
     def test_the_limit_of_rounds_is_gone(self):
         # Decisão de 20/10/2026: a revisão roda só a pedido e não tem mais limite de rodadas, nem a exceção da
         # rodada que só reconfere a base.
-        stage6 = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development'))
+        stage6 = flat(skilltext.stage(6))
         for text in (self.review, stage6):
             for gone in ('Three rounds per issue is the limit', 'three rounds at most', 'stays outside the limit'):
                 with self.subTest(gone=gone):
@@ -163,7 +168,7 @@ class StopCriterionTests(unittest.TestCase):
 
     def test_the_two_blocks_sit_before_the_gate_on_the_findings(self):
         brief = self.review.find("**The reviewer's brief.**")
-        done = self.review.find('**When the review is done.**')
+        done = self.review.find('### When the review is done')
         gate = self.review.find('**Gate on the findings.**')
         self.assertTrue(0 <= brief < done < gate, (brief, done, gate))
 
@@ -184,12 +189,16 @@ class OnlyTheReviewerReadsItTests(unittest.TestCase):
         self.assertIn('references/development.md', naming)
 
     def test_skill_md_lists_the_standard_and_the_stop_criterion_in_stage_6(self):
-        text = read('skills', 'frontlights', 'SKILL.md')
-        self.assertIn("`references/review.md` (the independent reviewer's standard, for a review the user asks for, "
-                      "named only in the reviewer's brief)", flat(text))
-        stage6 = flat(section(text, '6. Bounded development'))
-        self.assertIn('The independent review runs only when the user asks for it, judged by `references/review.md` '
-                      '(development.md, "When the review is done")', stage6)
+        # redesenho, issue 3: a lista do cabeçalho virou a tabela `## Pointers`, e a etapa 6 aponta a seção dos
+        # achados; "a revisão só a pedido, julgada por review.md" vive em development.md.
+        self.assertIn("| references/review.md | only in a requested review's brief |", flat(skilltext.pointers()))
+        self.assertIn('findings, each with a destination ("Review, checkpoints and renewal")', flat(skilltext.stage(6)))
+        development = read('skills', 'frontlights', 'references', 'development.md')
+        review = flat(section(development, 'Review, checkpoints and renewal'))
+        for phrase in ('The independent review runs only when the user asks for one',
+                       '`references/review.md` stays its standard', '### When the review is done'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, review)
 
 
 class DocumentationTests(unittest.TestCase):

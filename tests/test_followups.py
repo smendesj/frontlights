@@ -12,6 +12,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'skills' / 'frontlights' / 'scripts' / 'frontlights.py'
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -183,9 +186,15 @@ class FollowUpsManifestTests(unittest.TestCase):
         self.assertNotIn('--project', text)
 
     def test_existing_families_are_still_read_and_closed_as_before(self):
-        skill = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
-        self.assertIn('subIssuesSummary', skill)
-        self.assertIn('a family that already exists', ' '.join(skill.split()))
+        # redesenho, issue 3: o SKILL.md lê a família pela regra "The issue is the unit"; "a family that already
+        # exists" (lida, trabalhada e fechada como antes, nunca crescida) vive em references/issues.md
+        unit = skilltext.flat(skilltext.rule('The issue is the unit'))
+        self.assertIn('subIssuesSummary', unit)
+        self.assertIn('The scope is the issue and all its open sub-issues', unit)
+        issues = ' '.join(self.issues.split())
+        self.assertIn('A family that already exists (a parent with sub-issues published before the no-new-sub-issue rule)',
+                      issues)
+        self.assertIn('a family that already exists is never grown', issues)
         self.assertIn('parentTicks', (SKILL / 'references' / 'closeout.md').read_text(encoding='utf-8'))
 
     def test_follow_ups_section_covers_late_findings_and_closing(self):
@@ -200,11 +209,18 @@ class FollowUpsManifestTests(unittest.TestCase):
                 self.assertRegex(path.read_text(encoding='utf-8'), r'Follow-ups')
 
     def test_skill_board_rule_is_top_level_only(self):
+        # redesenho, issue 3: a regra do quadro saiu da etapa 5 do SKILL.md, que só aponta para "Project board";
+        # ela vive em references/issues.md
         text = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
-        self.assertIn('every top-level issue joins the configured board with its fields in the same approved write; '
-                      'a sub-issue joins only through its parent', ' '.join(text.split()))
-        self.assertIn('A sub-issue joins only through its parent',
-                      (SKILL / 'references' / 'issues.md').read_text(encoding='utf-8'))
+        self.assertIn('"Project board" before an issue write', skilltext.pointers())
+        # o campo do quadro vai na mesma escrita aprovada da issue (etapa 5)
+        self.assertIn('one write per issue, board fields included', skilltext.flat(skilltext.stage(5)))
+        board = ' '.join(section(self.issues, 'Project board').split())
+        for phrase in ('every top-level issue this stage creates or adopts belongs on that board; never publish one outside it',
+                       'A sub-issue joins only through its parent and takes none of the board writes below',
+                       '`validate-plan --config` refuses the plan while any field is still open'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, board)
         self.assertNotIn('including follow-ups proposed after delivery', text)
 
     def test_issue_template_has_depends_on_without_a_parent_line(self):

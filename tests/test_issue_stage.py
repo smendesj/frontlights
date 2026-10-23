@@ -4,8 +4,12 @@ Seams: o texto da skill, da referência da etapa 4, do modelo de issue e da docu
 texto). O ensaio a seco de `evals/runbook.md` (item 3) é o que prova que a regra é seguida.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -43,17 +47,19 @@ def positions(text, headings):
 
 class IssueStageTests(unittest.TestCase):
     def test_stage_4_writes_the_issue_body_without_a_new_interview(self):
+        # redesenho, issue 3: a etapa 4 virou um item da lista numerada; "goes back there instead of being invented",
+        # "ideally one" e "approval of its exact revision" vivem em references/issue.md (teste seguinte)
         skill = read('skills', 'frontlights', 'SKILL.md')
-        body = flat(section(skill, '4. Issue') or '')
+        body = flat(skilltext.stage(4))
         self.assertNotEqual(body, '')
-        for phrase in ('Read `references/issue.md`', 'without a new interview',
-                       'goes back there instead of being invented or asked here',
-                       'The only question of this stage is the seams', 'ideally one',
-                       'approval of its exact revision', 'field-by-field trace',
-                       'This approval covers the text; the GitHub write is the approval of stage 5'):
+        for phrase in ('Read `references/issue.md`', 'The body comes from the discovery log, no new interview',
+                       'the one question is the seams', 'field-by-field trace', 'text approved by link and stamp'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
-        self.assertIn('`references/issue.md` (stage 4)', skill)
+        self.assertIn('the text (stage 4) and the GitHub write (stage 5) are separate',
+                      flat(skilltext.rule('Show before approval')))
+        self.assertIn('| references/issue.md | stage 4 |', skilltext.pointers())
+        self.assertNotIn('4. **' + RETIRED_WORD, skill)
         self.assertNotIn('## 4. ' + RETIRED_WORD, skill)
 
     def test_the_stage_4_reference_records_decisions_and_asks_only_the_seams(self):

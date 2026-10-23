@@ -6,8 +6,12 @@ Seam: o texto de `SKILL.md`, `references/development.md`, `README.md`, `docs/pro
 continua com os próprios testes (`test_runtime.py`).
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -22,19 +26,16 @@ def flat(*parts):
 
 
 def stage(number):
-    text = read('skills', 'frontlights', 'SKILL.md')
-    return ' '.join(text.split(f'## {number}.')[1].split(f'## {number + 1}.')[0].split())
+    return skilltext.flat(skilltext.stage(number))
 
 
 class StandingAuthorizationTests(unittest.TestCase):
     def test_stage_six_opens_without_the_authorization_question(self):
         text = stage(6)
-        for phrase in ('Stage 6 opens without a question, under the **standing authorization** the user gave '
-                       'permanently and for every project',
-                       '(development.md, "Standing authorization and the denied operations")',
-                       'announces the run in one short block, records the charter',
-                       'the questions of the work itself (the watched run, failures, the findings batch, a new product '
-                       'decision) are still asked'):
+        # redesenho, issue 3: a etapa 6 diz a regra em poucas palavras e aponta a seção; "as perguntas do próprio
+        # trabalho continuam" ficou só em development.md (fixado em test_development_holds_the_charter).
+        for phrase in ('Standing authorization: no opening question, one announcing block',
+                       '`frontlights.py charter new` ("Standing authorization and the denied operations")'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertNotIn('ask the concurrency question and one bounded implementation authorization', text)
@@ -62,7 +63,10 @@ class StandingAuthorizationTests(unittest.TestCase):
                        'the local integration branch of the issue into the local main once its watched run is answered or not needed'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
-        self.assertIn('The merges the run makes on its own are the covered merges of that section', skill)
+        # redesenho, issue 3: a frase dos merges cobertos saiu da etapa 6; a lista vive em development.md, para onde
+        # a etapa aponta.
+        self.assertIn('**Covered merges.** The run makes these merges on its own, and only these:', development)
+        self.assertIn('("Standing authorization and the denied operations")', skill)
         for name in (('skills', 'frontlights', 'docs', 'protocol.md'), ('skills', 'frontlights', 'docs', 'security.md')):
             with self.subTest(file=name[-1]):
                 self.assertIn('"Standing authorization and the denied operations"', flat(*name))
@@ -74,8 +78,9 @@ class StandingAuthorizationTests(unittest.TestCase):
                    'turning on a setting, key or flag in production')
         skill = stage(6)
         development = flat('skills', 'frontlights', 'references', 'development.md')
-        self.assertIn('An operation on the denied list (development.md, "Standing authorization and the denied '
-                      'operations")', skill)
+        # redesenho, issue 3: a etapa 6 nomeia a operação negada e aponta a seção pelo `charter new`.
+        self.assertIn('A denied operation runs only after the "Sim" of its own question naming the exact command.', skill)
+        self.assertIn('("Standing authorization and the denied operations")', skill)
         for phrase in english:
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase.casefold(), development.casefold())
@@ -88,10 +93,10 @@ class StandingAuthorizationTests(unittest.TestCase):
 
     def test_a_denied_operation_runs_only_after_its_own_yes(self):
         skill = stage(6)
-        for phrase in ('**Denied operations are asked one at a time.**',
-                       'which names the exact operation and the exact command', 'each "Sim" covers that one operation'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, skill)
+        # redesenho, issue 3: o parágrafo "Denied operations are asked one at a time" virou uma oração da etapa 6;
+        # "cada Sim cobre aquela operação" vive em development.md (fixado abaixo).
+        self.assertIn('A denied operation runs only after the "Sim" of its own question naming the exact command.', skill)
+        self.assertNotIn('**Denied operations are asked one at a time.**', skill)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('"Sim" first and "Não" second', 'naming the exact operation and the exact command',
                        'Run it only after "Sim"', '"Não", silence or any other answer leaves it undone'):

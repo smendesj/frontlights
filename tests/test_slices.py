@@ -18,6 +18,9 @@ SKILL = ROOT / 'skills' / 'frontlights'
 sys.path.insert(0, str(SKILL / 'scripts'))
 import frontlights
 
+sys.path.insert(0, str(ROOT / 'tests'))
+import skilltext  # noqa: E402
+
 SCRIPT = SKILL / 'scripts' / 'frontlights.py'
 
 
@@ -179,16 +182,24 @@ class SlicesInThePlanTests(unittest.TestCase):
 class SlicesTextTests(unittest.TestCase):
     def test_stage_5_cuts_the_body_into_slices_and_asks_the_quiz_before_the_body(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
-        body = flat(section(skill, '5. Slices') or '')
+        # redesenho, issue 3: a etapa 5 virou um item da lista numerada, em palavras mais curtas
+        body = flat(skilltext.stage(5))
         self.assertNotEqual(body, '')
-        for phrase in ('Read `references/issues.md`', 'tracer bullet', 'one acceptance-criteria box of the issue',
-                       'blockers first', 'Entrega, Seams, Camadas and Depende de', 'every criterion fails at the base commit',
-                       'Prefactoring', 'expand, migrate in batches and contract', 'the numbered list of the slices',
-                       'granularity', 'merge or split', 'what can be demoed', 'one write per issue',
-                       'rereading GitHub', 'only after reading every layer'):
+        for phrase in ('Read `references/issues.md`', 'tracer-bullet slices', 'each a box with',
+                       'blockers first', 'Entrega, Seams, Camadas and Depende de', 'red at the base commit',
+                       'Show the numbered list', 'granularity', 'merge or split', 'one write per issue',
+                       'then reread GitHub', 'after reading every layer'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertNotIn('## 5. Issue-plan approval', skill)
+        # redesenho, issue 3: o prefactoring, o corte expand/migrate/contract e o "what can be demoed" vivem em
+        # issues.md, "Slices as acceptance criteria", para onde a etapa 5 aponta
+        reference = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),
+                                 'Slices as acceptance criteria') or '')
+        for phrase in ('Prefactoring', 'is the first slice and blocks the others', 'expand (add the new form beside the old)',
+                       'contract', 'what can be demoed'):
+            with self.subTest(where='issues.md', phrase=phrase):
+                self.assertIn(phrase, reference)
 
     def test_the_reference_defines_the_box_of_a_slice_and_the_quiz(self):
         text = read('skills', 'frontlights', 'references', 'issues.md')
@@ -246,8 +257,9 @@ class SlicesTextTests(unittest.TestCase):
         """Issue 31, S1: o teto de cinco CAs por issue, o corte do excedente em issues de topo com blocked-by e as
         caixas de pendência fora da conta aparecem na etapa 5, na referência, no modelo, no protocolo, no README e
         no ensaio."""
-        skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '5. Slices') or '')
-        for phrase in ('at most five slices', 'top-level issues', '`--blocked-by`', 'leftover boxes do not count'):
+        skill = flat(skilltext.stage(5))
+        for phrase in ('At most five tracer-bullet slices', 'the sixth becomes a top-level issue', '`--blocked-by`',
+                       'leftover boxes do not count'):
             with self.subTest(where='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         reference = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),

@@ -55,8 +55,10 @@ class TestDataRuleTests(unittest.TestCase):
     def test_the_record_sits_with_the_other_evidence_and_the_rule_is_pointed_to(self):
         self.assertIn('`perfil-original.json` and `dados-de-teste.json`', section(self.reference, 'Evidence'))
         self.assertIn('Test data the run creates', ' '.join(self.reference.split()).split('## Environment')[0])
-        self.assertIn('creates on demand the test users and data its flow needs, which stay for reuse',
-                      flat('skills', 'frontlights', 'SKILL.md'))
+        # redesenho, issue 3: a frase "creates on demand the test users and data its flow needs, which stay for
+        # reuse" saiu do SKILL.md; a regra vive na referência e a etapa 6 aponta para o "Watched run" dela
+        self.assertIn('test data the `Fluxo:` needs to run completely, and keeps it for reuse', ' '.join(self.reference.split()))
+        self.assertIn('(`references/browser-testing.md`, "Watched run")', flat('skills', 'frontlights', 'SKILL.md'))
         self.assertIn('create what the flow needs', flat('skills', 'frontlights', 'references', 'development.md'))
 
     def test_the_data_stays_and_only_the_moved_profile_is_undone(self):

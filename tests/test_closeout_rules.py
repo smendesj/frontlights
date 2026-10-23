@@ -5,8 +5,12 @@ Seam: o texto de `SKILL.md`, `references/closeout.md`, `references/development.m
 `docs/protocol.md`, `docs/security.md` e `README.md`; o script tem os próprios testes (`test_closeout.py`).
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -26,59 +30,74 @@ class SkillTests(unittest.TestCase):
         self.text = (SKILL / 'SKILL.md').read_text(encoding='utf-8')
 
     def test_stage_one_opens_with_the_closeout_question_only_when_there_is_something_to_close(self):
-        stage1 = ' '.join(self.text.split('## 1.')[1].split('## 2.')[0].split())
-        self.assertIn('**Closeout question, the only question at the opening.**', stage1)
-        self.assertIn('closeout.py" candidates', stage1)
-        self.assertIn('Only when `candidates` reports `ask` true', stage1)
-        # review r1 of issue 63 (R1-1): an issue closed by `Closes #n` only counts in `alreadyDone`, so the cleanup
-        # cannot wait for a candidate; and `origin/<base>` is fetched before anything is judged
-        self.assertNotIn('When it finds merged work', stage1)
-        for phrase in ('When the `.frontlights/authorization*.json` records list issue ids, first run '
-                       '`git -C <main worktree> fetch --prune origin`',
-                       'before `closeout.py candidates` and `cleanup.py plan`',
-                       'then always run the cleanup of `references/closeout.md`, step 5, without a question',
-                       '`cleanup.py plan` with `--issues` the `issue_ids` of the authorization records',
-                       'the plan alone judges what is merged'):
+        # redesenho, issue 3: a sequência à mão (`git fetch --prune`, `cleanup.py plan --issues`, `closeout.py
+        # candidates`) virou `frontlights.py open` (busca, planeja a limpeza pelos registros de autorização e lista os
+        # candidatos, sem remover nada) e `cleanup.py run --from-authorizations`, sem pergunta, antes da pergunta.
+        stage1 = skilltext.flat(skilltext.stage(1))
+        self.assertTrue(stage1.startswith('1. **Open and right-size.**'))
+        for phrase in ("With a config naming a `repository`, `frontlights.py open` (slow; failure: one line) fetches, "
+                       'plans the cleanup from the authorization records and lists closeout candidates, removing nothing',
+                       'Then `cleanup.py run --from-authorizations`, unasked',
+                       'a `cleanup.ask` candidate is asked first, then rerun with `--yes <branch>`',
+                       'If `closeout.ask`, the only opening question',
+                       'with the count and numbers, options "Sim, mostrar a lista" and "Não, seguir com o pedido"',
+                       'otherwise silent', 'yes runs stage 7, then back', '`awaiting_release` in one line'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage1)
-        self.assertLess(stage1.index('fetch --prune origin'), stage1.index('`cleanup.py plan` with'))
-        self.assertLess(stage1.index('`cleanup.py plan` with'), stage1.index('closeout.py" candidates'))
-        self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', stage1)
-        self.assertIn('When `ask` is false, say nothing and go on exactly as before, except when an issue is excluded as `awaiting_release`', stage1)
+        # review r1 of issue 63 (R1-1): an issue closed by `Closes #n` only counts in `alreadyDone`, so the cleanup
+        # cannot wait for a candidate; and `origin/<base>` is fetched before anything is judged. The cleanup now takes
+        # its issues from the authorization records (`--from-authorizations`), never from the candidates.
+        self.assertNotIn('When it finds merged work', stage1)
+        self.assertLess(stage1.index('`frontlights.py open`'), stage1.index('`cleanup.py run --from-authorizations`'))
+        self.assertLess(stage1.index('`cleanup.py run --from-authorizations`'),
+                        stage1.index('"Fechar as issues que já têm todos os critérios marcados?"'))
+        self.assertIn('at stage 1, right after `frontlights.py open`, when the authorization records list issue ids',
+                      flat('skills', 'frontlights', 'references', 'closeout.md'))
+        self.assertIn('a closed issue counts in `alreadyDone`', flat('skills', 'frontlights', 'references', 'closeout.md'))
+        for gone in ('closeout.py" candidates', 'cleanup.py plan', 'fetch --prune origin'):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, stage1)
         # 20/10/2026: the closeout never reads the board, so no board remedy is offered at stage 1
         self.assertIn('The closeout never reads the board.', stage1)
         for word in ('board.status', 'done_option_missing', 'project.done', 'gh auth refresh -s project'):
             with self.subTest(gone=word):
                 self.assertNotIn(word, stage1)
-        question = stage1.split('**Closeout question, the only question at the opening.**')[1]
+        question = stage1.split('If `closeout.ask`, the only opening question')[1].split('The closeout never reads')[0]
         for word in ('mover', 'closedUnchecked', 'item-edit'):
             with self.subTest(word=word):
                 self.assertNotIn(word, question)
         self.assertNotIn('Progress question', stage1)  # issue 65: the summary runs on request, never at the opening
-        self.assertLess(stage1.index('Closeout question'), stage1.index('Then choose the lightest path'))
+        self.assertLess(stage1.index('the only opening question'), stage1.index('Choose the lightest path'))
 
     def test_stage_seven_is_its_own_approval_and_never_merges_or_reopens(self):
-        stage7 = ' '.join(self.text.split('## 7.')[1].split())
-        for phrase in ('Closeout of finished issues (its own approval)', 'references/closeout.md',
-                       'Closing (with the tick in a parent, in the same approval) waits for its own '
-                       'approval of the list by link and stamp', 'no implementation authorization, merged PR or green test covers it',
-                       'the cleanup of the merged work (closeout.md, step 5) runs first, without a question'):
+        # redesenho, issue 3: a etapa 7 virou um item da lista; a marcação no pai na mesma aprovação vive em
+        # closeout.md (a pergunta "Fechar estas <N> issues e marcar os itens dos pais?")
+        stage7 = skilltext.flat(skilltext.stage(7))
+        for phrase in ('7. **Closeout.**', 'references/closeout.md',
+                       'closing waits for its own approval by link and stamp',
+                       'no implementation authorization, merged PR or green test covers it',
+                       'The cleanup of the merged work (closeout.md, step 5) runs first, without a question',
+                       '`closeout.py run` writes the stamped list',
+                       '`closeout.py apply --expect <stamp> --answer "<literal>"` checks the stamp itself'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
         for phrase in ('no implementation authorization, no merged PR and no green test stands in for it',
                        'Never close a parent before every one of its children is closed', '**The tick in a parent.**',
+                       '"Fechar estas <N> issues e marcar os itens dos pais?"',
                        'cleanup.py', 'Frontlights does not sync RoadS'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
 
     def test_the_description_and_the_reference_list_mention_the_closeout(self):
-        self.assertIn('`references/closeout.md` (stage 7 and the closeout question of stage 1)', ' '.join(self.text.split()))
+        # redesenho, issue 3: a lista de referências virou a tabela `## Pointers`
+        self.assertIn('| references/closeout.md | stage 7; the stage-1 closeout question |', skilltext.pointers())
         self.assertTrue((SKILL / 'references' / 'closeout.md').is_file())
 
     def test_the_charter_still_forbids_closing_and_points_to_the_closeout(self):
-        stage6 = ' '.join(self.text.split('## 6.')[1].split('## 7.')[0].split())
-        self.assertIn('An operation on the denied list', stage6)
+        # redesenho, issue 3: "An operation on the denied list" virou a última frase da etapa 6
+        stage6 = skilltext.flat(skilltext.stage(6))
+        self.assertIn('A denied operation runs only after the "Sim" of its own question naming the exact command', stage6)
         self.assertIn('closing an issue', flat('skills', 'frontlights', 'references', 'development.md'))
 
 

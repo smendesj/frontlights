@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import checks  # noqa: E402
 import serve  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 SKILL = ROOT / 'skills' / 'frontlights'
 REFERENCE = SKILL / 'references' / 'browser-testing.md'
@@ -98,9 +100,10 @@ class BrowserFlowManifestTests(unittest.TestCase):
                 self.assertIn(kind, section)
 
     def test_skill_stage_6_and_development_point_to_the_reference(self):
-        stage6 = read(SKILL / 'SKILL.md').split('## 6.')[1]
+        stage6 = skilltext.stage(6)
         self.assertIn(POINTER, stage6)
-        self.assertIn('browser-testing.md', read(SKILL / 'SKILL.md').split('## Rules')[0])
+        # redesenho, issue 3: a lista de referências do cabeçalho virou a tabela `## Pointers`.
+        self.assertIn('| references/browser-testing.md |', skilltext.pointers())
         self.assertIn('browser-testing.md', read(SKILL / 'references' / 'development.md'))
 
     def test_pointers_do_not_duplicate_the_reference_text(self):
@@ -113,6 +116,10 @@ class BrowserFlowManifestTests(unittest.TestCase):
             for sentence in sentences:
                 with self.subTest(file=name, sentence=sentence[:50]):
                     self.assertNotIn(sentence, flat)
+            if name == 'SKILL.md':
+                # redesenho, issue 3: a etapa 6 cita os comandos entregues `serve.py window brief` e
+                # `serve.py free-test start`; nenhum outro verbo do `serve.py` sai da referência.
+                text = text.replace('`serve.py window brief`', '').replace('`serve.py free-test start`', '')
             with self.subTest(file=name):
                 self.assertNotIn('serve.py', text)
                 self.assertNotIn('checks.py', text)

@@ -85,6 +85,32 @@ class DescriptionTests(unittest.TestCase):
                         'not a session or project of the same name'):
             self.assertIn(trigger, description)
 
+    def test_the_description_is_the_one_of_before_the_redesign(self):
+        # redesenho, issue 3: o SKILL.md foi reescrito inteiro, e a descrição (gatilho em toda sessão) ficou igual
+        front = (SKILL_DIR / 'SKILL.md').read_text(encoding='utf-8').split('---')[1]
+        self.assertIn('description: Frontlights takes a request or a GitHub issue through discovery, an approved issue, '
+                      'slices and bounded implementation homologated on the local main. Use when the user names '
+                      'frontlights in a sentence, with or without the slash, to start, resume or attack an issue '
+                      '("frontlights, ataque a issue <n>", "ativar frontlights", "vamos usar o frontlights"); there '
+                      '"frontlights" is this skill, not a session or project of the same name.\n', front)
+
+
+class PortugueseFirstTests(unittest.TestCase):
+    """Redesenho, issue 3: a regra Language, no meio de 1.170 palavras de regras, não segurou uma release de 2 h em
+    inglês. A regra do português é a primeira das regras de toda etapa e a primeira frase do arquivo."""
+
+    def test_the_first_rule_is_portuguese(self):
+        text = (SKILL_DIR / 'SKILL.md').read_text(encoding='utf-8')
+        rules = text.split('\n## Rules in every stage\n', 1)[1].split('\n## ', 1)[0]
+        self.assertTrue(rules.strip().startswith('- **Portuguese.** Every word the user reads'))
+        for phrase in ('is Brazilian Portuguese, the "user\'s language" the references name',
+                       'identifiers, commands and quoted output keep their spelling',
+                       'what the user reads stays Portuguese', 'On a drift, say so once and switch back'):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, flat(rules))
+        body = text.split('---', 2)[2].strip()
+        self.assertTrue(body.split('\n\n', 1)[1].startswith('Portuguese to the user;'))
+
 
 class ReleaseAdoptionTextTests(unittest.TestCase):
     """Issue 54, S4: o `protocol.md` descreve `adoptedFrom` da adoção com `--from`. Desde a decisão de 20/10/2026 a

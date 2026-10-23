@@ -10,7 +10,11 @@ README e de `evals/grilling-artifact.md`. É regra da skill, não barreira: nenh
 """
 import re
 import unittest
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -137,24 +141,35 @@ class ReconnaissanceInTheGrillingTests(unittest.TestCase):
 class ReconnaissanceInTheSkillTests(unittest.TestCase):
 
     def test_stage_3_runs_the_reconnaissance_before_the_approaches(self):
-        stage3 = flat(read(SKILL / 'SKILL.md').split('## 3.')[1].split('## 4.')[0])
+        # redesenho, issue 3: a etapa 3 é um item da lista numerada, em palavras mais curtas
+        stage3 = flat(skilltext.stage(3))
         self.assertNotIn('depth', stage3.lower())
-        for phrase in ('run the reconnaissance by trigger', 'the project\'s pitfalls first',
-                       'each probe in a subagent that returns a short fact table',
-                       'an unverified fact never becomes an option',
-                       'asking only product, scope and visual'):
+        for phrase in ('Read `references/grilling.md`', 'reconnaissance by trigger', 'pitfalls first',
+                       'facts in subagents', 'a fact before an option',
+                       'the decision tree asks product, scope and visual only'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
-        self.assertLess(stage3.index('run the reconnaissance by trigger'), stage3.index('at least three'))
+        self.assertLess(stage3.index('reconnaissance by trigger'), stage3.index('at least three'))
+        # redesenho, issue 3: a tabela curta de fatos por sonda e o "fato não verificado não vira opção" vivem em
+        # grilling.md, "Reconnaissance"
+        recon = flat(section(read(GRILLING), 'Reconnaissance'))
+        for phrase in ('Each probe runs in a subagent', 'each returns a short fact table',
+                       'An unverified fact never becomes an option'):
+            with self.subTest(where='grilling.md', phrase=phrase):
+                self.assertIn(phrase, recon)
 
     def test_direct_runs_the_full_reconnaissance_and_records_the_before(self):
-        text = read(SKILL / 'SKILL.md')
-        direct = flat(text.split('- **Direct.**')[1].split('- **Short.**')[0])
-        for phrase in ('runs the full reconnaissance by trigger, even without an issue',
-                       '(`references/grilling.md`, "Reconnaissance")',
-                       'writes its walkthrough with the before recorded before the code'):
+        # redesenho, issue 3: o Direct virou um parêntese da etapa 1 ("keep the full reconnaissance, the before recorded before the code") e o ponteiro para
+        # grilling.md, "Reconnaissance", foi para a tabela de ponteiros
+        stage1 = flat(skilltext.stage(1))
+        direct = stage1.split('**Direct**')[1].split('**Short**')[0]
+        for phrase in ('no open sub-issues: skip 3 to 5, keep the full reconnaissance',
+                       'the before recorded before the code',
+                       '`references/development.md`, "Work without an issue"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, direct)
+        self.assertIn('| references/grilling.md | stage 3; "Reconnaissance" on Direct |', skilltext.pointers())
+        self.assertIn('"Reconnaissance" also on the Direct path', flat(read(GRILLING)))
 
     def test_the_discovery_template_carries_the_trigger_table(self):
         template = read(SKILL / 'templates' / 'discovery.md')
@@ -204,5 +219,9 @@ class FindingsBatchTests(unittest.TestCase):
         self.assertIn('A family runs one reconnaissance', recon)
 
     def test_the_direct_walkthrough_lives_in_the_records_of_the_direct_work(self):
-        text = ' '.join((SKILL / 'SKILL.md').read_text(encoding='utf-8').split())
-        self.assertIn('`.frontlights/direct/<branch, slashes as dashes>/walkthroughs/`', text)
+        # redesenho, issue 3: a pasta de registros do trabalho sem issue vive em development.md, "Work without an
+        # issue", onde "the issue" se lê como esse trabalho (os roteiros vão para `walkthroughs/` dentro dela)
+        development = (SKILL / 'references' / 'development.md').read_text(encoding='utf-8')
+        text = flat(section(development, 'Work without an issue'))
+        self.assertIn('its records live in `.frontlights/direct/<branch, slashes as dashes>/`', text)
+        self.assertIn('In the rules of this stage "the issue" reads as that work', text)

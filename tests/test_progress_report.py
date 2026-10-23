@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 import roads as rs
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -664,14 +666,17 @@ class PluginContractTests(unittest.TestCase):
         return (ROOT.joinpath(*parts)).read_text(encoding='utf-8')
 
     def test_skill_runs_the_summary_on_request_and_never_asks_it_at_the_opening(self):
-        stage1 = ' '.join(self.read('skills', 'frontlights', 'SKILL.md').split('## 1.')[1].split('## 2.')[0].split())
+        # redesenho, issue 3: o parágrafo "Board summary on request" virou uma frase da etapa 1; o gatilho
+        # "/frontlights pode criar/atualizar o resumo" e o "a abertura nada pergunta" vivem na referência
+        stage1 = ' '.join(skilltext.stage(1).split())
         self.assertNotIn('Atualizar também o Resumo para a diretoria no RoadS?', stage1)
         self.assertNotIn('Sim, preparar o resumo agora', stage1)
-        rule = stage1.split('**Board summary on request.**')[1].split('**')[0]
-        self.assertIn('/frontlights pode criar/atualizar o resumo', rule)
-        self.assertIn('progress_report.py" status', rule)
-        self.assertIn('references/progress-report.md', rule)
-        self.assertIn('references/progress-report.md', self.read('skills', 'frontlights', 'SKILL.md').split('## Rules')[0])
+        self.assertIn('"Resumo para a diretoria", any project: `progress_report.py status`, then '
+                      '`references/progress-report.md`', stage1)
+        reference = ' '.join(self.read('skills', 'frontlights', 'references', 'progress-report.md').split())
+        self.assertIn('/frontlights pode criar/atualizar o resumo', reference)
+        self.assertIn('the opening of a session never asks about it (`SKILL.md`, stage 1)', reference)
+        self.assertIn('| references/progress-report.md | the "Resumo para a diretoria" |', skilltext.pointers())
 
     def test_reference_exists_and_covers_every_step(self):
         text = self.read('skills', 'frontlights', 'references', 'progress-report.md')

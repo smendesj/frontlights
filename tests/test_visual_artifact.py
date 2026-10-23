@@ -13,7 +13,11 @@ script monta o artefato.
 """
 import re
 import unittest
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -184,22 +188,27 @@ class ArtifactInTheGrillingTests(unittest.TestCase):
         grilling = read('skills', 'frontlights', 'references', 'grilling.md')
         self.assertNotIn(GONE_OUTCOME, self.artifact())
         self.assertNotIn(GONE_OUTCOME, flat(grilling.split('## Recording')[1]))
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        for stage in (skill.split('## 3.')[1].split('## 4.')[0], skill.split('## 5.')[1].split('## 6.')[0]):
+        for stage in (skilltext.stage(3), skilltext.stage(5)):
+            self.assertNotEqual(stage, '')
             self.assertNotIn(GONE_OUTCOME, flat(stage))
 
     def test_the_skill_names_the_artifact_in_stage_3(self):
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        stage3 = flat(skill.split('## 3.')[1].split('## 4.')[0])
-        for phrase in ('one artifact per grilling', 'the same URL', 'a print of the system running at the base',
-                       'the same print with markings',
-                       'created at the problem round with the before', 'one section per decision question',
-                       '`templates/grilling-section.html`', 'a small edit of the local source',
-                       'real code excerpts with secrets masked, never real data',
-                       'the URL and the source path in the discovery log', '"The artifact"'):
+        # redesenho, issue 3: a etapa 3 diz só "One artifact per grilling, the base print first" e aponta para
+        # grilling.md, "The artifact"; o resto da regra vive lá, nas palavras da referência
+        stage3 = flat(skilltext.stage(3))
+        for phrase in ('One artifact per grilling', 'the base print first', '(`references/grilling.md`, "The artifact")'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage3)
         self.assertNotIn('only fictitious data', stage3)
+        artifact = self.artifact()
+        for phrase in ('one **artifact** per grilling', '**on the same URL**', '**print of the system running at the base**',
+                       '**same print with markings**', 'created at the problem round with the **before**',
+                       'one section per decision question', '`templates/grilling-section.html`',
+                       'added with a small edit of that file', 'replaced by `***`', 'real data never enters',
+                       'The discovery log records the URL and the source path'):
+            with self.subTest(where='grilling.md', phrase=phrase):
+                self.assertIn(phrase, artifact)
+        self.assertNotIn('only fictitious data', artifact)
 
     def test_the_discovery_template_has_the_url_and_source_field(self):
         template = read('skills', 'frontlights', 'templates', 'discovery.md')
@@ -256,8 +265,9 @@ class PrintOfTheBaseTests(unittest.TestCase):
         for gone in ('built from the real template of the component', 'never a free sketch'):
             with self.subTest(gone=gone):
                 self.assertNotIn(gone, artifact)
-        stage3 = flat(read('skills', 'frontlights', 'SKILL.md').split('## 3.')[1].split('## 4.')[0])
-        self.assertIn('a print of the system running at the base, taken with a test account', stage3)
+        # redesenho, issue 3: a etapa 3 diz "the base print first"; a conta de teste está fixada acima, em grilling.md
+        stage3 = flat(skilltext.stage(3))
+        self.assertIn('the base print first (`references/grilling.md`, "The artifact")', stage3)
         self.assertNotIn('built from the real template', stage3)
 
     def test_the_screen_states_are_notes_on_the_marked_print(self):
@@ -360,11 +370,10 @@ class ArtifactInTheSliceQuizTests(unittest.TestCase):
                        'opens with what can be demoed when the slice is done', 'the drawing of the slice is its Visual'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, quiz)
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        stage5 = flat(skill.split('## 5.')[1].split('## 6.')[0])
-        self.assertIn('the section of the artifact with what it delivers', stage5)
-        self.assertIn('on the same URL as the grilling', stage5)
-        self.assertIn('numbered after the grilling\'s sections', stage5)
+        # redesenho, issue 3: a etapa 5 diz "the numbered list with its artifact section"; a mesma URL e a numeração
+        # depois das seções do grilling estão fixadas acima, em issues.md
+        stage5 = flat(skilltext.stage(5))
+        self.assertIn('Show the numbered list with its artifact section', stage5)
         protocol = flat(read('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('cada slice com a seção do artefato que mostra o que ela entrega', protocol)
         self.assertNotIn('sem seção, dito uma vez', protocol)

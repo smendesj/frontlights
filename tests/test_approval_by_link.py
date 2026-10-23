@@ -9,8 +9,12 @@ outros textos apontam para a regra em vez de pedir o texto integral na conversa.
 
 Seam: o texto dos arquivos, achatado pelos espaços (`flat`), como nos outros testes de texto.
 """
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / 'skills' / 'frontlights'
@@ -47,82 +51,86 @@ def skill():
 
 
 def rule():
-    return skill().split('**Show before approval.**', 1)[1].split('**Fan out.**', 1)[0]
+    return ' '.join(skilltext.rule('Show before approval').split())
 
 
 class TheRuleTests(unittest.TestCase):
+    # redesenho, issue 3: a regra virou um item de "Rules in every stage", mais curto; a enumeração dos documentos
+    # cobertos virou "A document, list or table" e a das escritas cobertas, "the write it covers"
     def test_the_document_goes_to_a_file_sent_and_linked(self):
         text = rule()
-        for phrase in ('a document, a list or a table', 'never by pasting the full text into the conversation',
-                       'Write it to a file under `.frontlights/`', "the host's file-sending tool",
-                       'the card reaches the phone', 'a clickable link to the file'):
+        for phrase in ('A document, list or table', 'never as pasted text',
+                       'approved as a stamped file under `.frontlights/`', 'host file card, which reaches the phone',
+                       'clickable link'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        self.assertNotIn('pasting the full text into the conversation', text)
 
     def test_the_file_is_stamped_and_the_question_names_the_stamp(self):
         text = rule()
-        for phrase in ('frontlights.py stamp <file> --root <project> --revision rN', 'the revision',
-                       'a 12-character sha256', 'the bytes', '"Aprova r2 · 6c29ce70c2c7?"'):
+        for phrase in ('frontlights.py stamp <file> --revision rN', 'the revision',
+                       'a 12-character sha256 and the bytes', 'for the question', '"Aprova r2 · 6c29ce70c2c7?"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
     def test_at_most_five_lines_next_to_the_link_and_the_real_diff_from_r2(self):
         text = rule()
-        for phrase in ('at most five lines', 'in the `preview` of the approve option',
-                       'for r1, the sections of the document and the decisions it fixes, each with its section of the artifact',
-                       'from r2 on, the real diff between the stored revisions', 'git diff --no-index --stat',
+        for phrase in ("at most five lines, also in the approve option's `preview`", 'for r1 the sections and their decisions',
+                       'the real diff from the kept revision', 'git diff --no-index --stat', 'changed lines',
                        'never a summary written by the session',
-                       'keep each previous revision as `<name>-r<N>.<ext>` beside the file'):
+                       'Keep the previous revision as `<name>-r<N>.<ext>`'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
     def test_the_approval_is_recorded_and_checked_before_the_write(self):
         text = rule()
-        for phrase in ('--approve --answer "<literal answer>"', '--check', 'exit 1',
-                       'the file changed since the approval', 'nothing is written and the approval is asked again',
-                       'showing the new stamp and what changed', 'the GitHub write', 'the tick', 'the summary push'):
+        for phrase in ('--approve --answer "<literal>"', '--stage N', 'right before the write it covers',
+                       '--check', 'exit 1: show the new stamp and what changed, ask again'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertLess(text.index('--approve'), text.index('--check'))
 
-    def test_the_scope_names_every_document_and_keeps_commands_in_full(self):
+    def test_the_scope_keeps_commands_in_full_and_the_cleanup_asks_nothing(self):
         text = rule()
-        for phrase in ('the issue body of stage 4 and its revisions', 'the plan and the bodies of stage 5',
-                       'the conversion of a family', 'the findings batch and its leftover criteria', 'the batch of new criteria of the free test',
-                       'the closeout list and the RoadS progress-report draft',
-                       'the cleanup of merged work asks nothing',
-                       'Commands are not documents', 'references/browser-testing.md', 'the denied operations',
-                       'stay in full inside the question'):
+        for phrase in ('Commands (test-data SQL, denied operations) go in full inside the question',
+                       'the text (stage 4) and the GitHub write (stage 5) are separate'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        # redesenho, issue 3: "the cleanup of merged work asks nothing" mudou para a etapa 7
+        self.assertIn('The cleanup of the merged work (closeout.md, step 5) runs first, without a question',
+                      ' '.join(skilltext.stage(7).split()))
 
     def test_a_summary_or_a_path_is_still_not_approval(self):
         text = rule()
-        for phrase in ('A summary or a path alone is not approval', 'the approval is of the file with that stamp',
-                       'a decision that is not in the stamped file is not approved', 'every revision is a new approval',
-                       'If the stamp cannot run, or there is neither a file card nor a clickable link, record the '
-                       'approval as pending and stop'):
+        for phrase in ('The approval is of the file with that stamp; a summary or a path is not',
+                       'each revision is a new one',
+                       'Without the stamp or a link, record the approval as pending and stop'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         self.assertNotIn('shown in full in this session', text)
         self.assertNotIn('the host cannot send files', text)
+        # redesenho, issue 3: "a decision that is not in the stamped file is not approved" vive na etapa 4
+        self.assertIn('a decision written into a local revision that is not in the stamped file is not approved',
+                      flat('skills', 'frontlights', 'references', 'issue.md'))
 
     def test_the_file_card_is_sent_when_the_host_has_the_tool(self):
-        step1 = rule().split('1. ', 1)[1].split('2. ', 1)[0]
-        self.assertIn("send the file with the host's file-sending tool when the host has it", step1)
+        # redesenho, issue 3: o passo 1 numerado virou "Send the file (host file card, …, and a clickable link)"
+        self.assertIn('Send the file (host file card, which reaches the phone, and a clickable link)', rule())
 
     def test_the_approve_passes_the_stamp_shown_in_the_question(self):
         text = rule()
-        for phrase in ('--approve --answer "<literal answer>" --expect <the stamp in the question>',
-                       'a refusal means the file changed since the question',
-                       'ask the approval again with the new stamp'):
+        self.assertIn('--approve --answer "<literal>" --expect <stamp>', text)
+        # redesenho, issue 3: a recusa do --expect e o "pergunte de novo" moraram no script
+        script = ' '.join((SKILL_DIR / 'scripts' / 'stamp.py').read_text(encoding='utf-8').split())
+        for phrase in ('--expect with the stamp shown in the question', 'nothing is written and it exits 1',
+                       'the file changed since the question: ask the approval again'):
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+                self.assertIn(phrase, script)
 
     def test_the_rule_lives_once_in_skill_md(self):
         files = sorted(SKILL_DIR.rglob('*.md')) + [ROOT / 'README.md', ROOT / 'CLAUDE.md'] + sorted(
             (ROOT / 'evals').glob('*.md'))
-        for fragment in ('never a summary written by the session', '--approve --answer "<literal answer>"'):
+        for fragment in ('never a summary written by the session', '--approve --answer "<literal>"'):
             with self.subTest(fragment=fragment):
                 homes = [path.relative_to(ROOT).as_posix() for path in files
                          if fragment in ' '.join(path.read_text(encoding='utf-8').split())]
@@ -161,14 +169,15 @@ class TheStagesPointToTheRuleTests(unittest.TestCase):
                 self.assertNotIn('git diff --no-index', text)
 
     def test_the_stage_texts_of_skill_md_point_to_the_rule(self):
-        text = skill()
-        short = text.split('- **Short.**', 1)[1].split('- **Full.**', 1)[0]
-        stage4 = text.split('## 4. Issue', 1)[1].split('## 5.', 1)[0]
-        stage5 = text.split('## 5. Slices and publication', 1)[1].split('Every issue the session creates', 1)[0]
-        stage7 = text.split('## 7.', 1)[1]
-        for name, part in (('Short', short), ('4', stage4), ('5', stage5), ('7', stage7)):
+        # redesenho, issue 3: as etapas 4, 5 e 7 apontam para a regra por "by link and stamp"; o Short da etapa 1 não
+        # pede mais texto integral
+        short = ' '.join(skilltext.stage(1).split()).split('**Short**', 1)[1].split('**Full**', 1)[0]
+        parts = [('Short', short, False)] + [(str(n), ' '.join(skilltext.stage(n).split()), True) for n in (4, 5, 7)]
+        for name, part, points in parts:
             with self.subTest(stage=name):
-                self.assertIn(f'"{POINTER}"', part)
+                self.assertNotEqual(part, '')
+                if points:
+                    self.assertIn('by link and stamp', part)
                 for old in OLD:
                     self.assertNotIn(old, part)
 

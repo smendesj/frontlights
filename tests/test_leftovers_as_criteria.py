@@ -12,6 +12,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -224,14 +227,15 @@ class GateTests(unittest.TestCase):
 
 class SkillAndDevelopmentTests(unittest.TestCase):
     def test_stage_six_makes_the_gate_a_condition_of_the_report_and_of_the_pr(self):
-        stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        for phrase in ('every open finding that came up (the watched run, a review the user asked for, tests that ran) '
-                       'with its destination (the gate of the Follow-ups section of `references/issues.md`)',
-                       'the findings left unfixed with the destination of each'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, stage6)
+        # redesenho, issue 3: a etapa 6 do SKILL.md diz "findings, each with a destination" e aponta para a seção; as
+        # fontes dos achados, o portão e o relatório com o destino de cada um vivem em development.md
+        stage6 = skilltext.flat(skilltext.stage(6))
+        self.assertIn('findings, each with a destination ("Review, checkpoints and renewal")', stage6)
         development = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split())
-        for phrase in ('Before an issue is reported as reviewed or complete, and before the merge into the local main '
+        for phrase in ('every open finding that came up (the watched run, a review the user asked for, tests that ran',
+                       'the gate of the Follow-ups section',
+                       'the findings left unfixed with the destination of each',
+                       'Before an issue is reported as reviewed or complete, and before the merge into the local main '
                        'and before a PR is opened or updated, every open finding',
                        'an acceptance criterion of the source issue', "is dropped by the user's explicit answer",
                        '"cited in the PR" does not pass the gate'):
@@ -239,8 +243,10 @@ class SkillAndDevelopmentTests(unittest.TestCase):
                 self.assertIn(phrase, development)
 
     def test_stage_five_sends_unfixed_findings_to_a_tracked_destination(self):
-        stage5 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 5.')[1].split('## 6.')[0].split())
-        self.assertIn('the Follow-ups ladder of the same file for findings', stage5)
+        # redesenho, issue 3: a escada dos achados saiu da etapa 5; a tabela de ponteiros e a regra "The issue is the
+        # unit" mandam a "Follow-ups" de references/issues.md
+        self.assertIn('| references/issues.md | stage 5; "Follow-ups" for a finding;', skilltext.pointers())
+        self.assertIn('(`references/issues.md`, "Follow-ups")', skilltext.rule('The issue is the unit'))
         self.assertIn('the PR body is never a destination',
                       ' '.join(read('skills', 'frontlights', 'references', 'issues.md').split()))
 

@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import progress_report as pr
 import test_progress_report as base
@@ -291,11 +292,12 @@ class HomeDocumentationTests(unittest.TestCase):
         for phrase in ('operationsRoot', 'home --set', 'registered home', 'explicit yes', 'homeState'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, reference)
-        skill = ' '.join((ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8').split())
-        stage1 = skill.split('## 1.')[1].split('## 2.')[0]
-        for phrase in ('operationsRoot', 'from any project'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, stage1)
+        # redesenho, issue 3: a etapa 1 diz só '"Resumo para a diretoria", any project'; o `operationsRoot` vive na
+        # referência (acima) e o "from any project" também
+        self.assertIn('from any project', reference)
+        stage1 = ' '.join(skilltext.stage(1).split())
+        self.assertIn('"Resumo para a diretoria", any project: `progress_report.py status`, then '
+                      '`references/progress-report.md`', stage1)
 
     def test_the_question_to_register_lives_only_in_the_summary_route(self):
         # issue 65: the registration is asked inside the summary the user asked for, never at the opening

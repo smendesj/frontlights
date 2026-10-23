@@ -26,6 +26,7 @@ import homolog
 import roads as rs
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gitfixture
+import skilltext
 from test_closeout import DONE_ALL, DONE_PARTIAL, FakeGh, node
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,8 +42,12 @@ def flat(*parts):
 
 
 def stage(number):
-    text = read('skills', 'frontlights', 'SKILL.md')
-    return ' '.join(text.split(f'## {number}.')[1].split(f'## {number + 1}.')[0].split())
+    return skilltext.flat(skilltext.stage(number))
+
+
+# redesenho, issue 3: os títulos de development.md ficaram curtos.
+LOCAL_MAIN = '\n## Into the local main\n'
+RELEASE = '\n## The release\n'
 
 
 GREEN = {'browser_gate': 'answered'}
@@ -170,12 +175,16 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_stage_six_cuts_the_branch_from_the_local_main_and_keeps_it_local(self):
         text = stage(6)
-        for phrase in ('one issue branch, created on GitHub from `origin/<base>` by `gh issue develop` and pushed '
-                       'after each slice merge',
-                       'the watched run answered or not needed, without a screen the walkthrough of each box run, `authorize`, the merge, then the bundle',
-                       '(development.md, "Into the local main")', '**Denied operations are asked one at a time.**'):
+        # redesenho, issue 3: a etapa 6 cita os comandos e aponta as seções; `gh issue develop`, o push depois de
+        # cada slice e os passos do merge na main local (portão, passeios sem tela, `authorize`, merge, bundle) vivem
+        # em development.md, fixados abaixo e em test_the_development_reference_has_the_watched_run_section_after_the_review.
+        for phrase in ('slices in order, one issue branch, one worktree per slice: `frontlights.py slice open`',
+                       '`homolog.py merge`, the local main entering the integration branch, never the issue branch '
+                       '("Into the local main")',
+                       'A denied operation runs only after the "Sim" of its own question naming the exact command.'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
+        self.assertNotIn('**Denied operations are asked one at a time.**', text)
         development = flat('skills', 'frontlights', 'references', 'development.md')
         for phrase in ('`gh issue develop <n> --repo <repo> --base <base> --name <branch_prefix>issue-<n>`',
                        '`git fetch origin <branch_prefix>issue-<n>`',
@@ -219,8 +228,8 @@ class LocalMainTextTests(unittest.TestCase):
             with self.subTest(file='development.md', gone=gone):
                 self.assertNotIn(gone, development)
         skill = stage(6)
-        self.assertIn('the local main brought into the local integration branch of the issue (never into the branch '
-                      'of the issue)', skill)
+        # redesenho, issue 3: a mesma regra em palavras novas.
+        self.assertIn('the local main entering the integration branch, never the issue branch', skill)
         self.assertNotIn('the local main brought into the branch of the issue,', skill)
         security = flat('skills', 'frontlights', 'docs', 'security.md')
         self.assertIn('só da worktree de integração da issue (`<prefixo>issue-<n>-integra`, cortada da branch da issue', security)
@@ -254,10 +263,10 @@ class LocalMainTextTests(unittest.TestCase):
 
     def test_the_development_reference_has_the_watched_run_section_after_the_review(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
-        self.assertEqual(text.count('## Into the local main: the watched run'), 1)
+        self.assertEqual(text.count(LOCAL_MAIN), 1)
         self.assertLess(text.index('## Review, checkpoints and renewal'), text.index('## Into the local main'))
         self.assertLess(text.index('## Into the local main'), text.index('## The release'))
-        body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
+        body = ' '.join(text.split(LOCAL_MAIN)[1].split(RELEASE)[0].split())
         for phrase in ('homologation bench', 'refused as the remote main',
                        '**Bring the local main in, on a local integration branch.**',
                        '`git worktree add -b <branch_prefix>issue-<n>-integra <path> <branch_prefix>issue-<n>`',
@@ -268,6 +277,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '`merge_into_local_main`',
                        '`examples/operation-merge-local-main.json`', '`git merge --no-ff <branch_prefix>issue-<n>-integra`',
                        'it never edits the gates to make them pass', '**Record it.**', '"Merge na main local"',
+                       '**Without a screen, the walkthroughs.**', 'running the walkthrough of each box',
                        'a preflight, not a barrier', 'it reads no Git'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
@@ -378,11 +388,11 @@ class LocalMainTextTests(unittest.TestCase):
         sync roda e o que pergunta, que nenhum hook é instalado, e declaram as duas escritas da skill dentro de
         `.git/`."""
         skill = stage(6)
-        self.assertIn('1. **Sync** (development.md, "The start of stage 6"): `homolog sync` brings `origin/<base>` into '
-                      'the local main.', skill)
+        # redesenho, issue 3: o passo "Sync" virou oração com o ponteiro; o que o sync faz vive em development.md.
+        self.assertIn('`homolog sync` and the preview ("The start of stage 6")', skill)
         self.assertNotIn('homolog hook', skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
-        heading = '## The start of stage 6: the sync of the local main'
+        heading = '\n## The start of stage 6\n'
         self.assertLess(text.index(heading), text.index('## Slices in order'))
         body = ' '.join(text.split(heading)[1].split('## Slices in order')[0].split())
         for phrase in ('`homolog sync --root <main worktree> --base <base>', 'never pushes',
@@ -391,7 +401,8 @@ class LocalMainTextTests(unittest.TestCase):
                        'The local main is never pushed to the remote main: its content leaves only under the release '
                        'branch name, by the refspec push of the release ("The release", below), and `origin/<base>` '
                        'stays a denied write.',
-                       '**The sync.**', 'no tracked change pending and no merge in progress',
+                       '**The sync.**', 'is the covered merge of `origin/<base>` into the local main',
+                       'no tracked change pending and no merge in progress',
                        '`git fetch <remote>` and `git merge --no-edit <remote>/<base>`', '`git merge --abort`',
                        'never uses `--force`, `reset` or `rebase`', 'runs again before the release'):
             with self.subTest(file='development.md', phrase=phrase):
@@ -421,9 +432,11 @@ class LocalMainTextTests(unittest.TestCase):
     def test_the_bundle_follows_each_merge_into_the_local_main(self):
         """S3: a skill, a referência, o protocolo, a segurança, o README e o exemplo de config dizem quando o bundle
         é gravado, onde, e que sem a chave nada é gravado."""
-        self.assertIn('the merge, then the bundle', stage(6))
+        # redesenho, issue 3: "o merge, depois o bundle" saiu da etapa 6; a ordem vive nos passos de development.md.
+        self.assertIn('("Into the local main")', stage(6))
         text = read('skills', 'frontlights', 'references', 'development.md')
-        body = ' '.join(text.split('## Into the local main: the watched run')[1].split('## The release')[0].split())
+        body = ' '.join(text.split(LOCAL_MAIN)[1].split(RELEASE)[0].split())
+        self.assertLess(body.index('4. **The check and the merge.**'), body.index('5. **Back it up.**'))
         for phrase in ('5. **Back it up.**', 'homolog bundle --root <main worktree> --config',
                        'the only write the run makes outside the project, and only into that folder',
                        '`homolog.backupDir`', '`git bundle verify`', 'old bundles are never deleted',
@@ -478,18 +491,19 @@ class LocalMainTextTests(unittest.TestCase):
         """S4: a release é oferecida ao fim de cada issue homologada e substitui a espera do merge por issue; os
         textos que diziam "antes do PR" dizem "antes do merge na main local"."""
         skill = stage(6)
-        for phrase in ('8. **The release** (development.md, "The release"), offered at the end of each homologated issue',
-                       "the session then waits for the user's merge"):
-            with self.subTest(file='SKILL.md', phrase=phrase):
-                self.assertIn(phrase, skill)
+        # redesenho, issue 3: o passo 8 virou os comandos da release com o ponteiro; "oferecida ao fim de cada issue
+        # homologada" vive em development.md, "The release" (fixado em
+        # test_the_free_test_sits_between_the_local_main_and_the_release).
+        self.assertIn('`homolog.py release plan`, `release go`, `release status` until the user merges, `release landed` '
+                      '("The release")', skill)
         self.assertIn('before such an issue is merged into the local main, and before a PR is opened or updated',
                       flat('skills', 'frontlights', 'references', 'browser-testing.md'))
         self.assertNotIn("After a PR is opened, wait for the user's merge by default", skill)
         text = read('skills', 'frontlights', 'references', 'development.md')
         self.assertNotIn('## After the pull request', text)
-        self.assertIn('## The release: from the local main to GitHub', text)
+        self.assertIn(RELEASE + '\nFrom the local main to GitHub.', text)
         self.assertIn('## Integrating a family before the local main', text)
-        body = ' '.join(text.split('## The release: from the local main to GitHub')[1].split())
+        body = ' '.join(text.split(RELEASE)[1].split())
         for phrase in ('**Plan it.**', 'homolog release-plan --root <main worktree> --base <base>', '**Offer it.**',
                        '"Lançar a release com as issues #a, #b agora?"', '"Sim, lançar" first and "Agora não" second',
                        '`gh pr create --base <base> --head <release branch>', 'The body follows `templates/pr.md`',
@@ -548,7 +562,8 @@ class LocalMainTextTests(unittest.TestCase):
                 self.assertIn(phrase, protocol)
         self.assertNotIn('| Espera do merge |', protocol)
         closeout = flat('skills', 'frontlights', 'references', 'closeout.md')
-        for phrase in ('when the release of stage 6', 'the issue closes with the release that carries it',
+        # redesenho, issue 3: closeout.md abre dizendo de onde a release a entrega, em palavras novas.
+        for phrase in ('The release of stage 6 (`development.md`, "The release") hands over here', 'the issue closes with the release that carries it',
                        '`contained_in_base_without_pull_request`'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
@@ -569,8 +584,7 @@ class LocalMainTextTests(unittest.TestCase):
         """Issue 69, S3: numa issue com tela, o teste livre abre sem pergunta depois do merge na main local e do
         bundle, e a pergunta da release só vem quando o usuário fecha a janela."""
         text = read('skills', 'frontlights', 'references', 'development.md')
-        local, free, release = ('## Into the local main: the watched run', '## The free test on the local main',
-                                '## The release: from the local main to GitHub')
+        local, free, release = (LOCAL_MAIN, '## The free test on the local main', RELEASE)
         for heading in (local, free, release):
             with self.subTest(heading=heading):
                 self.assertEqual(text.count(heading), 1)
@@ -593,9 +607,10 @@ class LocalMainTextTests(unittest.TestCase):
                       'is closed ("The free test on the local main", above)', offer)
         self.assertNotIn('right after the merge into the local main and the bundle', offer)
         skill = stage(6)
-        six = '6. **Into the local main** (development.md, "Into the local main")'
-        seven = '7. **The free test** (development.md, "The free test on the local main")'
-        eight = '8. **The release** (development.md, "The release")'
+        # redesenho, issue 3: os passos 6 a 8 viraram orações com o comando e o ponteiro, na mesma ordem.
+        six = '`homolog.py merge`'
+        seven = '`serve.py free-test start` ("The free test on the local main")'
+        eight = '`homolog.py release plan`'
         for item in (six, seven, eight):
             with self.subTest(file='SKILL.md', item=item):
                 self.assertIn(item, skill)
@@ -615,7 +630,7 @@ class LocalMainTextTests(unittest.TestCase):
         main local; cada correção vira um CA novo no rascunho local; ao fechar a janela, um lote aprovado por link e
         carimbo é escrito só por acréscimo, e só então vem a release; sem correção, a release vem direto."""
         text = read('skills', 'frontlights', 'references', 'development.md')
-        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        free, release = '## The free test on the local main', RELEASE
         body = ' '.join(text.split(free)[1].split(release)[0].split())
         fix = body.split('- **A fix asked in the free test.**')[1].split('- **Window closed, next step.**')[0]
         for phrase in ('fixes it at once on the branch of the issue',
@@ -659,7 +674,7 @@ class LocalMainTextTests(unittest.TestCase):
                 continue
             with self.subTest(file=path.name):
                 self.assertNotIn(question, ' '.join(path.read_text(encoding='utf-8').split()))
-        free, release = '## The free test on the local main', '## The release: from the local main to GitHub'
+        free, release = '## The free test on the local main', RELEASE
         body = ' '.join(text.split(free)[1].split(release)[0].split())
         terminal = body.split('- **Without a screen, in the terminal.**')[1].split('- **')[0]
         for phrase in ('In an issue whose `browser-gate` said `not_needed`', 'no window opens and no product is served',
@@ -679,8 +694,9 @@ class LocalMainTextTests(unittest.TestCase):
                        'without a screen, only after "Sim, terminei"'):
             with self.subTest(part='closed', phrase=phrase):
                 self.assertIn(phrase, closed)
-        self.assertIn('without a screen, the commands to try the local main in the terminal and a question before '
-                      'the release', stage(6))
+        # redesenho, issue 3: o teste livre sem tela saiu da etapa 6; vive em development.md (fixado acima), para
+        # onde a etapa aponta.
+        self.assertIn('`serve.py free-test start` ("The free test on the local main")', stage(6))
         protocol = flat('skills', 'frontlights', 'docs', 'protocol.md')
         self.assertIn('sem tela, o teste livre acontece no terminal: os comandos para usar a main local e a pergunta '
                       'de fim do teste, e só o "Sim, terminei" leva à release', protocol)
@@ -696,7 +712,9 @@ class LocalMainTextTests(unittest.TestCase):
                        'An `awaiting_release` is said to the user in one line'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
-        self.assertIn('when an issue is excluded as `awaiting_release`', stage(1))
+        # redesenho, issue 3: a etapa 1 diz em palavras novas; a regra inteira vive em closeout.md.
+        self.assertIn('`awaiting_release` in one line', stage(1))
+        self.assertIn('An `awaiting_release` is said to the user in one line, never proposed', closeout)
         self.assertIn('fica fora como `awaiting_release` até a release que a leva ser mesclada',
                       flat('skills', 'frontlights', 'docs', 'protocol.md'))
         self.assertIn('senão `awaiting_release`; as únicas leituras de Git são `rev-parse` e `merge-base`',

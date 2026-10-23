@@ -20,7 +20,11 @@ barreira: nenhum script abre a janela ANTES.
 """
 import re
 import unittest
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -84,8 +88,10 @@ class AntesOpensInTheGrillingTests(unittest.TestCase):
     def test_the_grilling_and_the_skill_point_to_the_window_rule(self):
         grilling = flat(read('skills', 'frontlights', 'references', 'grilling.md'))
         self.assertIn('its ANTES window, which opens here and stays open', grilling)
-        skill = flat(read('skills', 'frontlights', 'SKILL.md'))
-        self.assertIn('the ANTES window of the watched run opens there and stays open', skill)
+        # redesenho, issue 3: a etapa 3 diz a mesma regra em palavras novas e aponta para "Watched run"
+        stage3 = flat(skilltext.stage(3))
+        self.assertIn('with a screen the ANTES window opens here and stays open '
+                      '(`references/browser-testing.md`, "Watched run")', stage3)
         self.assertIn('the ANTES window, open since the grilling, runs the `Fluxo:` of each criterion on the base', DEVELOPMENT)
 
     def test_the_window_rule_lives_only_in_the_reference(self):
@@ -174,8 +180,11 @@ class TestDataStaysTests(unittest.TestCase):
                 self.assertIn('ficam para reuso', text)
                 self.assertNotIn('removido: true', text)
         self.assertIn("creating test data through the product's own endpoints and keeping it for reuse", DEVELOPMENT)
-        self.assertIn('creates on demand the test users and data its flow needs, which stay for reuse',
-                      flat(read('skills', 'frontlights', 'SKILL.md')))
+        # redesenho, issue 3: "creates on demand ... which stay for reuse" saiu da etapa 6 do SKILL.md e vive em
+        # browser-testing.md, "Test data the run creates"; o SKILL.md manda ler essa referência antes de cada passada
+        self.assertIn('creates on demand the test data the `Fluxo:` needs to run completely, and keeps it for reuse',
+                      section(REFERENCE, 'Test data the run creates'))
+        self.assertIn('| references/browser-testing.md | before any pass;', skilltext.pointers())
 
     def test_the_evals_and_acceptance_follow(self):
         eval_text = flat(read('evals', 'test-data-and-summary-prints.md'))

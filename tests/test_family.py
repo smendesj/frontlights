@@ -15,6 +15,9 @@ SKILL = ROOT / 'skills' / 'frontlights'
 sys.path.insert(0, str(ROOT / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 
+sys.path.insert(0, str(ROOT / 'tests'))
+import skilltext  # noqa: E402
+
 
 def member(number, paths, dependencies=(), parent=None):
     item = dict(id=number, title=f'Deliver outcome {number}',
@@ -109,22 +112,31 @@ def labels(text, pattern):
 class FamilyRulesTextTests(unittest.TestCase):
     def test_the_skill_moves_an_issue_with_all_its_open_sub_issues(self):
         text = flat(read('skills', 'frontlights', 'SKILL.md'))
-        for phrase in ('An issue and its sub-issues move together', 'all its open sub-issues',
-                       'subIssuesSummary', 'Work the parent and every open child together',
-                       'only an explicit choice of the user narrows the work',
-                       'does not serialize the work behind a merge', 'the issue has open sub-issues'):
+        # redesenho, issue 3: "An issue and its sub-issues move together" virou a regra "The issue is the unit"
+        unit = flat(skilltext.rule('The issue is the unit'))
+        for phrase in ('**The issue is the unit.**', 'all its open sub-issues', 'subIssuesSummary',
+                       'one grilling, one plan, one run', 'only an explicit choice of the user narrows the work'):
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+                self.assertIn(phrase, unit)
+        self.assertNotIn('An issue and its sub-issues move together', text)
+        # redesenho, issue 3: o caminho Direct diz "no open sub-issues" em vez de "the issue has open sub-issues"
+        self.assertIn('no open sub-issues', flat(skilltext.stage(1)))
+        # redesenho, issue 3: "does not serialize the work behind a merge" vive em development.md, "Stacked branches"
+        development = read('skills', 'frontlights', 'references', 'development.md')
+        stacked = flat(section(development, 'Stacked branches: parent and children without waiting for the merge') or '')
+        self.assertIn('Making children wait for the parent to reach the base serializes the family', stacked)
 
     def test_stage_three_five_and_six_carry_the_family_rules(self):
-        text = read('skills', 'frontlights', 'SKILL.md')
-        stage3 = flat(text.split('## 3.')[1].split('## 4.')[0])
-        stage5 = flat(text.split('## 5.')[1].split('## 6.')[0])
-        stage6 = flat(text.split('## 6.')[1])
+        stage3 = flat(skilltext.stage(3))
+        stage5 = flat(skilltext.stage(5))
+        stage6 = flat(skilltext.stage(6))
         self.assertIn('needs-decision', stage3)
         self.assertIn('own solution round', stage3)
-        self.assertIn('every layer', stage5)
-        self.assertIn('layers analysed', stage5)
+        self.assertIn('layers settled after reading every layer', stage5)
+        # redesenho, issue 3: "layers analysed" (com o motivo de cada camada não tocada) vive em issues.md
+        layers = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),
+                              'The issue and its layers (a family that already exists)') or '')
+        self.assertIn('not touched with the reason', layers)
         self.assertIn('The scope is the whole family', stage6)
         development = flat(read('skills', 'frontlights', 'references', 'development.md'))
         for phrase in ('no stacking question', 'independent children', 'without waiting for the merge'):
@@ -162,9 +174,8 @@ class FamilyRulesTextTests(unittest.TestCase):
                        'no row lacks evidence'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, issues)
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        self.assertIn('field-by-field trace', flat(section(skill, '4. Issue') or ''))
-        self.assertIn('only after reading every layer', flat(section(skill, '5. Slices and publication') or ''))
+        self.assertIn('field-by-field trace', flat(skilltext.stage(4)))
+        self.assertIn('settled after reading every layer', flat(skilltext.stage(5)))
         self.assertIn('trace table', flat(read('skills', 'frontlights', 'references', 'issue.md')))
         self.assertIn('effect in the back and the database', flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
 
@@ -262,7 +273,8 @@ class FamilyConversionTextTests(unittest.TestCase):
 
     def test_the_skill_offers_the_conversion_and_takes_the_batch_request(self):
         skill = flat(read('skills', 'frontlights', 'SKILL.md'))
-        for phrase in ('offers its conversion into one issue with slices', 'a request to tidy a set of issues',
+        # redesenho, issue 3: a oferta está na regra "The issue is the unit" e o pedido em lote é o caminho Conversion
+        for phrase in ('offer its conversion into one issue with slices', '**Conversion** ("arrume as issues',
                        'one approval per family', '"Converting a family"'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, skill)

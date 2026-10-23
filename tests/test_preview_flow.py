@@ -6,10 +6,15 @@ Seam: o texto de `SKILL.md` (etapas 5 e 6), `references/development.md`, `refere
 `docs/protocol.md`, `docs/security.md` e `README.md`. É regra da skill, não barreira: nenhum script abre a aba.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 
 def read(*parts):
@@ -28,19 +33,19 @@ class PreviewInTheFlowTests(unittest.TestCase):
     """Issue 34, S3."""
 
     def test_stage_five_hands_the_preview_to_the_start_of_stage_six(self):
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        stage5 = between(skill, '## 5.', '## 6.')
-        self.assertIn('the preview comes up right after the plan is approved, before the first slice', stage5)
+        # redesenho, issue 3: a etapa 5 diz que a prévia sobe agora e aponta a seção; "antes da primeira slice"
+        # vive em development.md, "The start of stage 6" (fixado em test_development_says_when_the_preview_is_refreshed).
+        stage5 = flat(skilltext.stage(5))
+        self.assertIn('With a `preview` block the preview comes up now (`references/development.md`, "The start of '
+                      'stage 6")', stage5)
 
     def test_stage_six_brings_the_preview_up_refreshes_it_and_stops_it_only_on_request(self):
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        stage6 = between(skill, '## 6.', '## 7.')
-        for phrase in ('2. **The preview** (same section)', 'a `preview` block', 'before the first slice',
-                       'refreshed after each slice is merged into the branch of its issue'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, stage6)
-        self.assertLess(stage6.index('**Sync**'), stage6.index('**The preview**'))
-        self.assertLess(stage6.index('**The preview**'), stage6.index('**Slices in order**'))
+        # redesenho, issue 3: a lista de passos da etapa 6 virou orações com o ponteiro da seção; quando a prévia
+        # sobe e é atualizada vive em development.md ("The start of stage 6" e "Slices in order", abaixo).
+        stage6 = flat(skilltext.stage(6))
+        self.assertIn('`homolog sync` and the preview ("The start of stage 6")', stage6)
+        self.assertLess(stage6.index('`homolog sync`'), stage6.index('the preview'))
+        self.assertLess(stage6.index('the preview'), stage6.index('slices in order'))
         development = read('skills', 'frontlights', 'references', 'development.md')
         start = between(development, '## The start of stage 6', '## Slices in order')
         for phrase in ('`serve preview refresh`', 'a tab of Claude in Chrome', 'stops only when the user asks',
@@ -53,7 +58,7 @@ class PreviewInTheFlowTests(unittest.TestCase):
         development = read('skills', 'frontlights', 'references', 'development.md')
         start = between(development, '## The start of stage 6', '## Slices in order')
         for phrase in ('**The preview.**', 'before the first slice', 'a tab of Claude in Chrome',
-                       'stops only when the user asks'):
+                       'stops only when the user asks', 'without the block, nothing of this runs'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, start)
         slices = between(development, '## Slices in order', '## Dispatch and ownership')

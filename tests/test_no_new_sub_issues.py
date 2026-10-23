@@ -11,6 +11,9 @@ import sys
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
 sys.path.insert(0, str(SKILL / 'scripts'))
@@ -100,10 +103,20 @@ class PublishOrderTests(unittest.TestCase):
 class NoNewSubIssueTextTests(unittest.TestCase):
     def test_the_skill_never_creates_a_sub_issue_and_keeps_reading_existing_families(self):
         skill = flat(read('skills', 'frontlights', 'SKILL.md'))
-        for phrase in ('No new sub-issue is ever created', 'An issue and its sub-issues move together',
-                       'a family that already exists', 'a new acceptance criterion of its source issue or a top-level issue'):
+        # redesenho, issue 3: "An issue and its sub-issues move together" virou a regra "The issue is the unit"; "a
+        # family that already exists" vive em references/issues.md (Follow-ups e "Converting a family")
+        unit = flat(skilltext.rule('The issue is the unit'))
+        for phrase in ('No new sub-issue is ever created, on any path and at any stage',
+                       'The scope is the issue and all its open sub-issues',
+                       'one grilling, one plan, one run; only an explicit choice of the user narrows the work',
+                       'a finding becomes a criterion of its source issue or a top-level issue linked by `--blocked-by`'):
             with self.subTest(phrase=phrase):
-                self.assertIn(phrase, skill)
+                self.assertIn(phrase, unit)
+        issues = flat(read('skills', 'frontlights', 'references', 'issues.md'))
+        for phrase in ('a family that already exists is never grown',
+                       'the destination of a finding is a criterion of its source issue or a top-level issue'):
+            with self.subTest(file='issues.md', phrase=phrase):
+                self.assertIn(phrase, issues)
         self.assertNotIn('a new acceptance criterion of its source issue, a sub-issue or a', skill)
 
     def test_the_ladder_has_three_destinations_and_no_sub_issue_recipe(self):

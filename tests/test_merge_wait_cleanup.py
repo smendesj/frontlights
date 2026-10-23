@@ -8,8 +8,12 @@ Seams: o texto de `SKILL.md`, `references/development.md`, `references/closeout.
 `evals/merge-wait-and-cleanup.md`.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -31,7 +35,8 @@ def section(text, heading, marks='##'):
 class WaitTests(unittest.TestCase):
     def setUp(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
-        self.wait = ' '.join(section(text, 'The release: from the local main to GitHub').split())
+        # redesenho, issue 3: o título perdeu o subtítulo, que virou a primeira linha da seção
+        self.wait = ' '.join(section(text, 'The release').split())
 
     def test_the_wait_is_the_default_and_the_user_can_end_it(self):
         for phrase in ("By default, as soon as the release's pull request is open, the session waits for the user's merge",
@@ -88,12 +93,16 @@ class WaitTests(unittest.TestCase):
 
     def test_the_stacking_rule_points_to_the_wait_and_the_skill_states_it_in_stage_six(self):
         self.assertIn('the family enters the local main as one', flat('skills', 'frontlights', 'references', 'development.md'))
-        stage6 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0].split())
-        self.assertIn('8. **The release** (development.md, "The release"), offered at the end of each homologated issue',
-                      stage6)
+        # redesenho, issue 3: a etapa 6 do SKILL.md virou um item da lista; o passo da release cita os comandos e
+        # aponta para a seção, e o "offered at the end of each homologated issue" vive em development.md
+        stage6 = skilltext.flat(skilltext.stage(6))
+        self.assertIn('`homolog.py release plan`, `release go`, `release status` until the user merges, `release landed` '
+                      '("The release")', stage6)
         release = ' '.join(read('skills', 'frontlights', 'references', 'development.md')
-                           .split('## The release: from the local main to GitHub')[1].split())
-        for phrase in ('"Lançar a release com as issues #a, #b agora?"', '**`Closes #n` only from `closes`.**',
+                           .split('\n## The release\n')[1].split())
+        for phrase in ('From the local main to GitHub.',
+                       'offered by the session at the end of each homologated issue',
+                       '"Lançar a release com as issues #a, #b agora?"', '**`Closes #n` only from `closes`.**',
                        '"Mesclar a PR #<n> em <base>?"', '`git pull --ff-only origin <base>`',
                        'A PR merged into another branch, closed without a merge, or not found is never ready',
                        'offers the release again with everything accumulated'):
@@ -146,7 +155,10 @@ class CloseoutReferenceTests(unittest.TestCase):
         self.flat = ' '.join(self.text.split())
 
     def test_a_merge_is_one_of_the_ways_into_the_closeout(self):
-        for phrase in ('when the release of stage 6', 'finds its pull request merged into the approved base',
+        # redesenho, issue 3: "when the release of stage 6 (…) finds" virou "The release of stage 6 (…) hands over here
+        # when it finds"
+        for phrase in ('The release of stage 6 (`development.md`, "The release") hands over here when it finds',
+                       'finds its pull request merged into the approved base',
                        'pass `--issues` with the rest of what `release-plan` listed',
                        'they skip the question', 'A merge into the local main closes nothing',
                        '`unchecked_criteria` and `no_criteria` with the counts (say which criteria are left'):
@@ -239,15 +251,20 @@ class CloseoutReferenceTests(unittest.TestCase):
 
 class StageSevenAndTemplatesTests(unittest.TestCase):
     def test_stage_seven_names_the_wake_the_tick_and_the_cleanup(self):
-        stage7 = ' '.join(read('skills', 'frontlights', 'SKILL.md').split('## 7.')[1].split())
-        for phrase in ("when the wait of stage 6 finds the release's pull request merged into the approved base",
-                       'the cleanup of the merged work (closeout.md, step 5) runs first, without a question',
-                       "and of remote branches only the released issue's (GitHub deletes the others)",
-                       'Closing (with the tick in a parent, in the same approval) waits for its own'):
+        # redesenho, issue 3: a etapa 7 virou um item da lista que acorda por `release landed`; o despertar pelo merge
+        # na base aprovada, a branch remota só da issue lançada e a marcação no pai na mesma aprovação vivem em
+        # closeout.md
+        stage7 = skilltext.flat(skilltext.stage(7))
+        for phrase in ('after the stage-1 yes, `release landed` or a request',
+                       'The cleanup of the merged work (closeout.md, step 5) runs first, without a question',
+                       'closing waits for its own approval by link and stamp'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, stage7)
         closeout = ' '.join(read('skills', 'frontlights', 'references', 'closeout.md').split())
-        for phrase in ('**The tick in a parent.**', 'scripts/cleanup.py" run', 'with **its own approval**'):
+        for phrase in ('**The tick in a parent.**', 'scripts/cleanup.py" run', 'with **its own approval**',
+                       'hands over here when it finds its pull request merged into the approved base',
+                       'GitHub deletes merged head branches; the released issue branch is the exception',
+                       '"Fechar estas <N> issues e marcar os itens dos pais?"'):
             with self.subTest(file='closeout.md', phrase=phrase):
                 self.assertIn(phrase, closeout)
 

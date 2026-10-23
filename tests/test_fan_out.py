@@ -7,8 +7,12 @@ Seam: o texto de `SKILL.md`, `references/development.md`, `references/grilling.m
 É regra da skill, não barreira: nenhum script muda.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
@@ -34,24 +38,32 @@ def section(text, heading):
 class FanOutRuleTests(unittest.TestCase):
     def test_the_rule_holds_in_every_stage(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
-        rules = flat(section(skill, 'Rules that hold in every stage'))
-        for phrase in ('**Fan out.**', 'one subagent per piece and as many as there are pieces',
-                       'launched in one message', 'the read-only helpers of stages 0 to 2',
-                       'one subagent per area or layer', 'the highest safe number of independent issues',
-                       'the legwork around the open slice', 'Waiting is for a real dependency only',
-                       'an approval not yet given', '`Depende de`', 'a file two pieces would both edit',
-                       'a shared resource', 'run one at a time', 'A piece of a couple of tool calls stays inline',
-                       'report the capacity limit', 'This session is the only coordinator',
-                       'it alone asks (`AskUserQuestion`)', 'Each brief is bounded',
-                       "A worker's report is a claim"):
+        # redesenho, issue 3: a regra virou o item `- **Fan out.**` de "Rules in every stage", em palavras novas
+        rules = flat(skilltext.rule('Fan out'))
+        for phrase in ('**Fan out.**', 'Each stage launches its independent pieces at once',
+                       'one subagent each, in one message', 'two tool calls stay inline',
+                       'Wait only for a real dependency', 'an approval not given', '`Depende de`',
+                       'a file two pieces would edit', 'a shared resource', 'a shared test run',
+                       'This session is the only coordinator', 'it alone asks, approves, writes GitHub, merges',
+                       'Each brief is bounded', 'forbids asking the user, editing outside its paths, writing GitHub',
+                       'its report is a claim until this session reads the diff and reruns the measured commands'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, rules)
-        self.assertLess(skill.index('**Fan out.**'), skill.index('## 0. Update check'))
+        self.assertLess(skill.index('**Fan out.**'), skill.index('## Stages'))
+        # redesenho, issue 3: o teto de issues, o trabalho em volta da slice aberta, o "um de cada vez" e o limite
+        # de capacidade saíram do SKILL.md e vivem em development.md, "Dispatch and ownership"
+        dispatch = flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Dispatch and ownership'))
+        for phrase in ('all eligible non-conflicting issues up to the ceiling', 'the agents around them do not wait',
+                       'runs one at a time', 'report the capacity limitation', 'Do not silently serialize'):
+            with self.subTest(file='development', phrase=phrase):
+                self.assertIn(phrase, dispatch)
 
     def test_slices_stay_in_order_while_the_work_around_them_fans_out(self):
-        skill = read('skills', 'frontlights', 'SKILL.md')
-        stage6 = flat(section(skill, '6. Bounded development'))
-        self.assertIn('independent slices at once, and the legwork around each open slice fanned out', stage6)
+        # redesenho, issue 3: a etapa 6 do SKILL.md só aponta para "Slices in order"; o paralelismo das slices
+        # independentes vive em development.md
+        stage6 = flat(skilltext.stage(6))
+        self.assertIn('slices in order, one issue branch, one worktree per slice', stage6)
+        self.assertIn('("Slices in order";', stage6)
         self.assertNotIn('slice parallelism only between issues', stage6)
         development = read('skills', 'frontlights', 'references', 'development.md')
         slices = flat(section(development, 'Slices in order'))

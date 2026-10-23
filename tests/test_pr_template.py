@@ -9,13 +9,20 @@ e `evals/` (S2: a PR da release usa o modelo, Resumo e Evidência por issue e Ri
 nenhum script monta o corpo da PR.
 """
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills' / 'frontlights'
 
 # Uma palavra de fechamento do GitHub seguida de uma referência de issue fecharia a issue no merge.
+# redesenho, issue 3: o título da seção ficou curto em development.md.
+RELEASE = chr(10) + '## The release' + chr(10)
+
 CLOSING = re.compile(r'(?i)\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b\s*:?\s*(\S+/\S+)?#(\d+|<[^>]+>)')
 
 
@@ -112,7 +119,7 @@ class PullRequestTemplateTests(unittest.TestCase):
                        'ficam quando estas orientações são apagadas', 'com `closes` vazio, apague a linha-modelo'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.flat)
-        release = flat(read('skills', 'frontlights', 'references', 'development.md').split('## The release')[1])
+        release = flat(read('skills', 'frontlights', 'references', 'development.md').split(RELEASE)[1])
         self.assertIn('right before `## Resumo`, plain lines outside any code fence, the place `templates/pr.md` fixes',
                       release)
 
@@ -186,12 +193,12 @@ class LicenseTests(unittest.TestCase):
 
 
 class SkillListsTheTemplateTests(unittest.TestCase):
-    """Issue 35, S1: `SKILL.md` lista o modelo junto das referências, antes das regras de toda etapa."""
+    """Issue 35, S1: `SKILL.md` lista o modelo na tabela de ponteiros, com a licença, para a PR da release."""
 
     def test_the_header_of_the_skill_names_the_template(self):
-        header = flat(read('skills', 'frontlights', 'SKILL.md').split('## Rules that hold in every stage')[0])
-        self.assertIn('`templates/pr.md`', header)
-        self.assertIn("the model of the release's pull request", header)
+        # redesenho, issue 3: a lista de referências do cabeçalho virou a tabela `## Pointers`.
+        pointers = flat(skilltext.pointers())
+        self.assertIn('| templates/pr.md with references/LICENSE-pr.md | the release PR |', pointers)
 
 
 class ReleaseUsesTheTemplateTests(unittest.TestCase):
@@ -200,7 +207,7 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
 
     def setUp(self):
         text = read('skills', 'frontlights', 'references', 'development.md')
-        release = text.split('## The release: from the local main to GitHub')[1]
+        release = text.split(RELEASE)[1]
         self.release = flat(re.split(r'(?m)^## ', release)[0])
 
     def test_the_release_body_follows_the_template_without_a_condition(self):
@@ -240,9 +247,10 @@ class ReleaseUsesTheTemplateTests(unittest.TestCase):
                 self.assertIn(phrase, self.release)
 
     def test_stage_six_of_the_skill_says_the_same(self):
-        stage6 = flat(read('skills', 'frontlights', 'SKILL.md').split('## 6.')[1].split('## 7.')[0])
-        self.assertIn('(development.md, "The release")', stage6)
-        release = flat(read('skills', 'frontlights', 'references', 'development.md').split('## The release')[1])
+        stage6 = flat(skilltext.stage(6))
+        # redesenho, issue 3: a etapa 6 aponta a seção pelo nome entre parênteses, sem repetir "development.md".
+        self.assertIn('`release landed` ("The release")', stage6)
+        release = flat(read('skills', 'frontlights', 'references', 'development.md').split(RELEASE)[1])
         for phrase in ('The body follows `templates/pr.md`', '**Resumo** and **Evidência** once per issue',
                        '**Risco do merge**', '**`Closes #n` only from `closes`.**'):
             with self.subTest(file='development.md', phrase=phrase):

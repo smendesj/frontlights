@@ -17,6 +17,9 @@ SKILL = ROOT / 'skills' / 'frontlights'
 sys.path.insert(0, str(SKILL / 'scripts'))
 import frontlights
 
+sys.path.insert(0, str(ROOT / 'tests'))
+import skilltext  # noqa: E402
+
 SCRIPT = SKILL / 'scripts' / 'frontlights.py'
 
 
@@ -109,12 +112,19 @@ class SliceCheckpointTests(unittest.TestCase):
 class SlicesInOrderTextTests(unittest.TestCase):
     def test_stage_6_works_the_slices_in_order_on_one_branch_merged_into_the_local_main(self):
         skill = read('skills', 'frontlights', 'SKILL.md')
-        body = flat(section(skill, '6. Bounded development') or '')
-        for phrase in ('one issue branch, created on GitHub from `origin/<base>`', 'one worktree per slice',
-                       '(development.md, "Slices in order")'):
+        # redesenho, issue 3: a etapa 6 é um item da lista numerada e aponta para a seção por nome
+        body = flat(skilltext.stage(6))
+        for phrase in ('slices in order, one issue branch, one worktree per slice', '`frontlights.py slice open`',
+                       '("Slices in order";'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, body)
         development = flat(read('skills', 'frontlights', 'references', 'development.md'))
+        # redesenho, issue 3: "created on GitHub from `origin/<base>`" vive em development.md, "Slices in order"
+        slices = flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Slices in order') or '')
+        for phrase in ('One issue branch, one worktree per slice, one merge into the local main per issue.',
+                       'created on GitHub when its work starts', '(`origin/<base>`, never the local main)'):
+            with self.subTest(file='development.md', phrase=phrase):
+                self.assertIn(phrase, slices)
         for phrase in ('gets its own worktree and branch', 'the slices are worked in dependency order',
                        'a family that already exists', 'the order of the slices'):
             with self.subTest(file='development.md', phrase=phrase):
@@ -142,8 +152,12 @@ class SlicesInOrderTextTests(unittest.TestCase):
         """Issue 31, S3: CAs sem `Depende de` entre si e sem arquivo em comum rodam juntas, cada uma na própria
         worktree; a CA que depende de outra ainda aberta é empilhada na branch dela (`base` no charter, `--stacked`
         no browser-gate); o cleanup oferece a branch de CA já na branch da issue; o teste assistido é um por issue."""
-        skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
-        self.assertIn('one per issue, when the last slice that changes the screen closes its loop', skill)
+        # redesenho, issue 3: a etapa 6 diz "one per issue, DEPOIS only, the only gate"; o momento (a última slice que
+        # muda a tela) vive em development.md, "Slices in order"
+        skill = flat(skilltext.stage(6))
+        self.assertIn('the watched run, one per issue, DEPOIS only, the only gate', skill)
+        self.assertIn('one per issue, when the last slice that changes the screen closes its loop',
+                      flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Slices in order') or ''))
         self.assertIn('There is one watched run per issue, never one per slice',
                       flat(read('skills', 'frontlights', 'references', 'browser-testing.md')))
         body = flat(section(read('skills', 'frontlights', 'references', 'development.md'), 'Slices in order') or '')
@@ -162,8 +176,10 @@ class SlicesInOrderTextTests(unittest.TestCase):
         """Issue 31, S2: a worktree e a branch de cada CA, o `slice` no charter, um checkpoint por worktree e o
         merge da CA pronta na branch da issue entre os merges cobertos, nos quatro documentos, no handoff e no
         exemplo de autorização."""
-        skill = flat(section(read('skills', 'frontlights', 'SKILL.md'), '6. Bounded development') or '')
-        for phrase in ('merged into the branch of the issue when its loop closes', '(TDD by default, never a gate'):
+        # redesenho, issue 3: a etapa 6 cita o comando entregue (`slice merge`); a frase "merged into the branch of the
+        # issue when its loop closes" segue fixada em development.md, logo abaixo
+        skill = flat(skilltext.stage(6))
+        for phrase in ('`frontlights.py slice merge`', 'TDD by default, never a gate'):
             with self.subTest(where='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         development = read('skills', 'frontlights', 'references', 'development.md')

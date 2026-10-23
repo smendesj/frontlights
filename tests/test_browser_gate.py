@@ -829,8 +829,10 @@ class GateDocumentationTests(unittest.TestCase):
         for phrase in ('browser-gate', 'before an independent review', 'teste_assistido'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
+        # redesenho, issue 3: a pendência `teste_assistido` saiu do SKILL.md e vive em development.md (acima); a
+        # etapa 6 nomeia o teste assistido como o único portão e o comando do gate
         skill = self.flat('skills', 'frontlights', 'SKILL.md')
-        for phrase in ('browser-gate', 'teste_assistido'):
+        for phrase in ('frontlights.py browser-gate --answer', 'the watched run, one per issue, DEPOIS only, the only gate'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, skill)
         self.assertIn('browser-gate', self.flat('skills', 'frontlights', 'templates', 'handoff.md'))

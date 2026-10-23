@@ -11,6 +11,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'skills' / 'frontlights' / 'scripts'))
 import frontlights
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import skilltext  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -39,10 +42,11 @@ class ReleaseManifestTests(unittest.TestCase):
     def test_the_opening_asks_only_the_closeout_question(self):
         # issue 65: the session opens with no RoadS question; the summary runs when the user asks for it
         text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
-        stage1 = ' '.join(text.split('## 1.')[1].split('## 2.')[0].split())
-        opening = stage1.split('Then choose the lightest path')[0]
-        self.assertEqual(opening.count('AskUserQuestion'), 1)
-        self.assertIn('"Fechar as issues que já têm todos os critérios marcados?"', opening)
+        # redesenho, issue 3: a etapa 1 é um item da lista numerada; a pergunta única se diz "the only opening question"
+        stage1 = skilltext.flat(skilltext.stage(1))
+        opening = stage1.split('Choose the lightest path')[0]
+        self.assertEqual(opening.count('question'), 1)
+        self.assertIn('the only opening question: "Fechar as issues que já têm todos os critérios marcados?"', opening)
         for gone in ('roads.py" status', 'Completar no GitHub as issues que o RoadS mostra?',
                      'Atualizar também o Resumo para a diretoria no RoadS?',
                      'Registrar o projeto que guarda o bloco do Resumo para a diretoria?',
@@ -53,16 +57,15 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertNotIn('roadmap_sync', text)
 
     def test_the_summary_runs_when_the_user_asks_for_it_from_any_project(self):
-        text = (ROOT / 'skills' / 'frontlights' / 'SKILL.md').read_text(encoding='utf-8')
-        stage1 = ' '.join(text.split('## 1.')[1].split('## 2.')[0].split())
-        rule = stage1.split('**Board summary on request.**')[1].split('**')[0]
-        for phrase in ('only when the user asks for it', 'from any project', 'progress_report.py" status',
-                       'references/progress-report.md', '`--root <operationsRoot>`'):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, rule)
-        self.assertLess(stage1.index('**Board summary on request.**'), stage1.index('Then choose the lightest path'))
+        # redesenho, issue 3: o "**Board summary on request.**" virou uma frase da etapa 1; o "só a pedido" e o
+        # `--root <operationsRoot>` vivem em references/progress-report.md
+        stage1 = skilltext.flat(skilltext.stage(1))
+        rule = '"Resumo para a diretoria", any project: `progress_report.py status`, then `references/progress-report.md`.'
+        self.assertIn(rule, stage1)
+        self.assertLess(stage1.index(rule), stage1.index('Choose the lightest path'))
         reference = ' '.join((ROOT / 'skills' / 'frontlights' / 'references' / 'progress-report.md')
                              .read_text(encoding='utf-8').split())
+        self.assertIn('--root <operationsRoot>`', reference)
         self.assertIn('runs only when the user asks for the summary', reference)
         self.assertIn('Registrar o projeto que guarda o bloco do Resumo para a diretoria?', reference)
         self.assertNotIn('stage 1 question', reference)
@@ -83,7 +86,7 @@ class ReleaseManifestTests(unittest.TestCase):
     def test_session_start_never_looks_for_remote_control(self):
         skill = ROOT / 'skills' / 'frontlights'
         text = (skill / 'SKILL.md').read_text(encoding='utf-8')
-        stage0 = text.split('## 0.')[1].split('## 1.')[0]
+        stage0 = skilltext.stage(0)
         self.assertIn('update-check', stage0)
         for banned in ('monitoring', 'claude rc', 'Remote Control'):
             self.assertNotIn(banned, stage0)
@@ -99,8 +102,12 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('The existing pattern is the default.', grilling)
         self.assertIn('Never decide alone that the interview is over.', grilling)
         self.assertLess(grilling.index('## 2. Project conventions'), grilling.index('## 3. Solution round'))
-        stage3 = (skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0]
-        self.assertIn('still runs the solution round', stage3)
+        # redesenho, issue 3: a etapa 3 diz "at least three approaches with their pattern fit"; "an issue ... still
+        # runs the solution round" vive em grilling.md ("it never removes the solution round", acima)
+        stage3 = skilltext.flat(skilltext.stage(3))
+        self.assertIn('at least three approaches with their pattern fit', stage3)
+        self.assertIn('Starting from an issue shortens the problem round; it never removes the solution round.',
+                      ' '.join(grilling.split()))
         for template, heading in (('discovery.md', 'onventions'), ('issue.md', 'Decisões de implementação')):
             with self.subTest(template=template):
                 self.assertIn(heading, (ROOT / 'skills' / 'frontlights' / 'templates' / template).read_text(encoding='utf-8'))
@@ -142,8 +149,8 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('do not re-ask settled decisions unless new evidence invalidates them', closing)
         recording = flat.split('## Recording')[1]
         self.assertIn('Record everything in `templates/discovery.md`: conventions', recording)
-        stage3 = ' '.join((skill / 'SKILL.md').read_text(encoding='utf-8').split('## 3.')[1].split('## 4.')[0].split())
-        self.assertIn('Read `references/grilling.md`. Confirm the problem', stage3)
+        stage3 = skilltext.flat(skilltext.stage(3))
+        self.assertIn('Read `references/grilling.md`. One problem question', stage3)
 
     def test_readme_says_each_decision_question_has_its_explaining_section(self):
         flat = ' '.join((ROOT / 'README.md').read_text(encoding='utf-8').split())
@@ -192,7 +199,7 @@ class ReleaseManifestTests(unittest.TestCase):
         skill = ROOT / 'skills' / 'frontlights'
         text = (skill / 'SKILL.md').read_text(encoding='utf-8')
         self.assertIn('.frontlights/issues/<n>/', text)
-        self.assertIn('Never mint `GT-NNNN`', text)
+        self.assertIn('never mint `GT-NNNN`', skilltext.rule('The issue is the unit'))
         for path in (skill / 'references').glob('*.md'):
             with self.subTest(path=path.name):
                 self.assertNotRegex(path.read_text(encoding='utf-8'), r'\bGTs?\b')
