@@ -327,6 +327,13 @@ class HomologMergeTests(Stage6Case):
         result = self.homolog_merge(body=BODY.replace('[x]', '[ ]'))
         self.assertEqual((result['exitCode'], result['reason'], result['open']), (1, 'open_boxes', ['S1']))
 
+    def test_an_issue_without_criteria_boxes_says_so(self):
+        # Teste num clone real (23/10/2026): uma issue sem seção de critérios dava "tem 0 caixa(s) aberta(s)...
+        # marque-as", uma recusa que se contradiz.
+        result = self.homolog_merge(body='# Uma issue antiga\n\nSem critérios em caixas.\n')
+        self.assertEqual((result['exitCode'], result['reason']), (1, 'no_criteria'))
+        self.assertNotIn('0 caixa(s)', result['message'])
+
     def test_a_dirty_main_worktree_is_refused(self):
         (self.root / 'src' / 'app.py').write_text('print(2)\n', encoding='utf-8')
         result = self.homolog_merge()

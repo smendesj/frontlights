@@ -1505,7 +1505,11 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     body = issue_body(root, record.get('repository'), number, gh)
     counted = closeout.criteria(body) or (0, 0)
     boxes = closeout.slice_boxes(body)
-    if counted[1] == 0 or counted[0] != counted[1]:
+    if counted[1] == 0:
+        return {'exitCode': 1, 'reason': 'no_criteria', 'criteria': {'checked': 0, 'total': 0},
+                'message': f'a issue #{number} não tem caixas na seção de critérios de aceitação: o merge na main local '
+                           'conta as caixas marcadas com evidência; escreva os critérios na issue (etapa 5) antes'}
+    if counted[0] != counted[1]:
         opened = [b['label'] for b in boxes if not b['ticked']]
         return {'exitCode': 1, 'reason': 'open_boxes', 'criteria': {'checked': counted[0], 'total': counted[1]},
                 'open': opened, 'message': f'a issue #{number} tem {counted[1] - counted[0]} caixa(s) aberta(s) nos '
