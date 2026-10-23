@@ -259,26 +259,41 @@ def emit(text, verb, full=False, tree=None):
 LEGACY_PREFIX = 'claude/'   # the one place it is named: what a record without `branch_prefix` meant before
 
 
-def config_prefix(config):
-    """`branchPrefix` of a config (a dict, or the path of the file), or None."""
+def config_prefix_entry(config):
+    """(prefix, source, warning) of a config (a dict, or the path of the file): `branchPrefix` with source `config`,
+    else the older snake_case `branch_prefix` with source `config:branch_prefix`; (None, None, None) without either.
+    `warning` (`branch_prefix_conflict`) only when both are set and differ: `branchPrefix` wins."""
     if not isinstance(config, dict):
         try:
             config = json.loads(Path(config).read_text(encoding='utf-8-sig')) if config else None
         except (OSError, ValueError):
             config = None
-    value = config.get('branchPrefix') if isinstance(config, dict) else None
-    return value if isinstance(value, str) and value.strip() else None
+    if not isinstance(config, dict):
+        return None, None, None
+    camel, snake = (config.get(key) for key in ('branchPrefix', 'branch_prefix'))
+    camel = camel if isinstance(camel, str) and camel.strip() else None
+    snake = snake if isinstance(snake, str) and snake.strip() else None
+    if camel:
+        warning = (f'branch_prefix_conflict: o config tem branchPrefix {camel} e branch_prefix {snake}; vale '
+                   f'branchPrefix, apague a outra chave' if snake and snake != camel else None)
+        return camel, 'config', warning
+    return (snake, 'config:branch_prefix', None) if snake else (None, None, None)
+
+
+def config_prefix(config):
+    """The prefix of a config by `config_prefix_entry`, or None."""
+    return config_prefix_entry(config)[0]
 
 
 def branch_prefix(explicit=None, config=None, record=None):
-    """(prefix, prefixSource) by the chain `--prefix` > `config.branchPrefix` > the `branch_prefix` of the
-    authorization record: `argument`, `config`, `authorization`, or `legacy` for a record without the key (read as
-    the prefix it meant then); (None, None) when none of the three names one."""
+    """(prefix, prefixSource) by the chain `--prefix` > the prefix of the config (`config_prefix_entry`) > the
+    `branch_prefix` of the authorization record: `argument`, `config`, `config:branch_prefix`, `authorization`, or
+    `legacy` for a record without the key (read as the prefix it meant then); (None, None) when none names one."""
     if isinstance(explicit, str) and explicit.strip():
         return explicit, 'argument'
-    named = config_prefix(config)
+    named, source, _ = config_prefix_entry(config)
     if named:
-        return named, 'config'
+        return named, source
     if isinstance(record, dict):
         if 'branch_prefix' in record:
             return record['branch_prefix'], 'authorization'

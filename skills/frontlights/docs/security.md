@@ -69,8 +69,10 @@ Em vigor desde 23/10/2026:
 - Rode os scripts de dentro da worktree do trabalho, sem `--root`, `--config` nem `--issue`; numa recusa, passe o
   que o `hint` pede. Nunca adivinhe uma flag: o `--help` é a lista.
 - De uma saída resumida (`summary: true`), leia de `full` só a chave que a etapa precisa; `--full` imprime tudo.
-- Prefixo: `--prefix`, senão `branchPrefix` do config, senão `branch_prefix` do charter; um registro antigo sem a
-  chave é lido com `prefixSource: legacy`.
+- Prefixo: `--prefix`, senão `branchPrefix` do config (na falta dela, o `branch_prefix` antigo do config, com
+  `prefixSource: config:branch_prefix`; as duas divergentes: vale `branchPrefix`, com aviso
+  `branch_prefix_conflict`), senão `branch_prefix` do charter; um registro antigo sem a chave é lido com
+  `prefixSource: legacy`.
 - Antes de cada escrita pelo `gh`, o script confere de novo a conta e o repositório; `account_mismatch` ou
   `repository_mismatch` viram a pergunta "Trocar para <conta> com `gh auth switch --user <conta>` e repetir" ou
   "Parar". A troca é do usuário.
@@ -161,7 +163,7 @@ rede. O caminho real nunca entra neste repositório; sem a chave, nada é gravad
 
 O registro é auditoria, não credencial: pode ser editado e não prova quem o escreveu. Confira worktree, remotos e
 branch logo antes de agir, e edite só os caminhos que ele nomeia. O prefixo segue a cadeia `--prefix` >
-`branchPrefix` > `branch_prefix`, sem padrão (registro antigo sem a chave: `claude/` com `prefixSource: legacy`), e é
+prefixo do config > `branch_prefix` do registro, sem padrão (registro antigo sem a chave: `claude/` com `prefixSource: legacy`), e é
 recusado quando coincide com uma branch protegida ou o espaço dela (`release/*` impede `release/`). Com `repository:
 null`, a autorização fica presa ao caminho da worktree; confira `git remote -v`.
 

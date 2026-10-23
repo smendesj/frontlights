@@ -436,16 +436,17 @@ def write_bundle(root, folder, refs):
 def bundle_prefixes(prefix, records, config=None):
     """(prefixes, source, skipped): `[prefix]` and `argument` when one is given; otherwise the sorted union of the
     `branchPrefix` of the config and the `branch_prefix` of the valid records (`legacy` for a record without the key)
-    under `records`, with the source of the chain of `_cli.branch_prefix` (`config`, `authorization` or `legacy`);
+    under `records`, with the source of the chain of `_cli.branch_prefix` (`config`, `config:branch_prefix`,
+    `authorization` or `legacy`);
     `[]` and None without any, and then only the base goes into the bundle; `skipped` counts the records left out
     (issue 44)."""
     if prefix is not None:
         return [branch_prefix(prefix)], 'argument', 0
     found, skipped = record_prefixes(records)
-    named = _cli.config_prefix(config)
+    named, named_source, _ = _cli.config_prefix_entry(config)
     prefixes = sorted({entry['prefix'] for entry in found} | ({branch_prefix(named)} if named else set()))
     if named:
-        return prefixes, 'config', skipped
+        return prefixes, named_source, skipped
     if found:
         legacy = all(entry['source'] == 'legacy' for entry in found)
         return prefixes, 'legacy' if legacy else 'authorization', skipped
@@ -640,14 +641,14 @@ def instant(value):
 
 def release_prefix(prefix, records, config=None):
     """(prefix, source) by the chain of `_cli.branch_prefix`: `prefix` and `argument` when one is given; else the
-    `branchPrefix` of the config and `config`; else the `branch_prefix` of the record with the newest `issued_at`
-    (records without a valid instant rank last, then by file name) and `authorization` (`legacy` for a record
-    without the key); (None, None) without any: the plan is still read, with no release branch name (issue 44)."""
+    prefix of the config and its source (`_cli.config_prefix_entry`); else the `branch_prefix` of the record with
+    the newest `issued_at` (records without a valid instant rank last, then by file name) and `authorization`
+    (`legacy` for a record without the key); (None, None) without any: the plan is still read, with no release branch name (issue 44)."""
     if prefix is not None:
         return branch_prefix(prefix), 'argument'
-    named = _cli.config_prefix(config)
+    named, named_source, _ = _cli.config_prefix_entry(config)
     if named:
-        return branch_prefix(named), 'config'
+        return branch_prefix(named), named_source
     found, _ = record_prefixes(records)
     if not found:
         return None, None

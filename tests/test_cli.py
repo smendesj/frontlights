@@ -150,6 +150,32 @@ class PrefixTests(unittest.TestCase):
         self.assertEqual(_cli.branch_prefix(None, {}, record), ('dev/', 'authorization'))
         self.assertEqual(_cli.branch_prefix(None, None, None), (None, None))
 
+    def test_the_config_also_names_it_by_the_snake_case_key(self):
+        record = {'branch_prefix': 'dev/'}
+        self.assertEqual(_cli.branch_prefix(None, {'branch_prefix': 'PREFIX/'}, record), ('PREFIX/', 'config:branch_prefix'))
+        self.assertEqual(_cli.config_prefix({'branch_prefix': 'PREFIX/'}), 'PREFIX/')
+        self.assertEqual(_cli.config_prefix_entry({'branch_prefix': 'PREFIX/'}), ('PREFIX/', 'config:branch_prefix', None))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'config.json'
+            path.write_text(json.dumps({'repository': 'OWNER/REPOSITORY', 'branch_prefix': 'PREFIX/'}), encoding='utf-8')
+            self.assertEqual(_cli.config_prefix(path), 'PREFIX/')
+
+    def test_branchprefix_wins_over_branch_prefix_with_a_warning(self):
+        config = {'branchPrefix': 'PREFIX/', 'branch_prefix': 'OTHER/'}
+        self.assertEqual(_cli.branch_prefix(None, config), ('PREFIX/', 'config'))
+        prefix, source, warning = _cli.config_prefix_entry(config)
+        self.assertEqual((prefix, source), ('PREFIX/', 'config'))
+        self.assertIn('branch_prefix_conflict', warning)
+        self.assertIsNone(_cli.config_prefix_entry({'branchPrefix': 'PREFIX/', 'branch_prefix': 'PREFIX/'})[2])
+
+    def test_release_plan_reads_the_snake_case_key_of_the_config(self):
+        import homolog
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(homolog.release_prefix(None, folder, {'branch_prefix': 'PREFIX/'}),
+                             ('PREFIX/', 'config:branch_prefix'))
+            self.assertEqual(homolog.bundle_prefixes(None, folder, {'branch_prefix': 'PREFIX/'}),
+                             (['PREFIX/'], 'config:branch_prefix', 0))
+
     def test_an_old_record_without_the_key_reads_as_legacy(self):
         prefix, source = _cli.branch_prefix(record={'issue_ids': [1]})
         self.assertEqual(source, 'legacy')

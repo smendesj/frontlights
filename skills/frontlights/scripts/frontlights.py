@@ -1515,7 +1515,8 @@ def setup_warnings(config, root):
     """The setup gaps of a project, one `code: text` line each: `legacy_workflows_dir`, `browser_test_missing`
     (no key at all; `null` declares a project without a screen), `project_unresolved` (a repository and no `project`
     key; `null` declares no board) and, inside a Git work tree, `frontlights_not_ignored` and `branch_prefix_missing`
-    (neither `branchPrefix` in the config nor `branch_prefix` in the charter). Reads files and local Git only."""
+    (no prefix in the config, `_cli.config_prefix_entry`, nor `branch_prefix` in the charter), plus its
+    `branch_prefix_conflict`. Reads files and local Git only."""
     warnings, base = [], Path(root)
     if (base / '.workflows').is_dir():
         warnings.append('legacy_workflows_dir: ' + (
@@ -1533,7 +1534,10 @@ def setup_warnings(config, root):
             warnings.append('frontlights_not_ignored: o Git não ignora .frontlights/; acrescente a linha '
                             '/.frontlights/ em .git/info/exclude')
         record = _cli.read_charter(root)
-        if _cli.config_prefix(config) is None and not (isinstance(record, dict) and record.get('branch_prefix')):
+        named, _, conflict = _cli.config_prefix_entry(config)
+        if conflict:
+            warnings.append(conflict)
+        if named is None and not (isinstance(record, dict) and record.get('branch_prefix')):
             warnings.append(f'branch_prefix_missing: nem branchPrefix no config nem branch_prefix na autorização; o '
                             f'charter recusa sem prefixo; {SETUP}')
     return warnings
@@ -2068,6 +2072,7 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
         return {'ok': True, 'exitCode': 0, 'action': 'add', 'charter': str(path), 'added': ids, 'dryRun': checked,
                 'announcement': announcement(record, 'authorization')}
     chosen, source = _cli.branch_prefix(prefix, config, None)
+    conflict = _cli.config_prefix_entry(config)[2] if source and source.startswith('config') else None
     if not chosen:
         raise Stage6Refusal('no_prefix', 'sem prefixo das branches: nem --prefix, nem branchPrefix no config',
                             hint='declare "branchPrefix" no .frontlights/config.json do projeto ou passe --prefix '
@@ -2102,7 +2107,8 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
     kept = keep_previous(root)
     write_json_file(path, record)
     return {'ok': True, 'exitCode': 0, 'action': 'new', 'charter': str(path), 'kept': str(kept) if kept else None,
-            'prefix': chosen, 'prefixSource': source, 'dryRun': checked, 'announcement': announcement(record, source)}
+            'prefix': chosen, 'prefixSource': source, 'dryRun': checked, 'announcement': announcement(record, source),
+            **({'warnings': [conflict]} if conflict else {})}
 
 def read_charter_record(root):
     path = Path(root) / CHARTER_FILE

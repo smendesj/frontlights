@@ -124,6 +124,17 @@ class CharterNewTests(CharterCase):
         result = self.charter()
         self.assertEqual((result['ok'], result['reason']), (False, 'no_prefix'))
 
+    def test_a_config_with_the_snake_case_key_names_the_prefix(self):
+        self.config.write_text(json.dumps({'repository': REPO, 'branch_prefix': 'PREFIX/'}), encoding='utf-8')
+        result = self.charter()
+        self.assertTrue(result['ok'], result)
+        self.assertEqual((self.record()['branch_prefix'], result['prefixSource']), ('PREFIX/', 'config:branch_prefix'))
+        self.assertNotIn('warnings', result)
+        self.write_config(branch_prefix='OTHER/')
+        result = self.charter()
+        self.assertEqual((self.record()['branch_prefix'], result['prefixSource']), ('PREFIX/', 'config'))
+        self.assertTrue(any(w.startswith('branch_prefix_conflict') for w in result['warnings']), result)
+
     def test_the_previous_charter_is_kept_never_deleted(self):
         self.charter()
         first = (self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8')
