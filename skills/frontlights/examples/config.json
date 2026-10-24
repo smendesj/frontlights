@@ -27,6 +27,16 @@
       }
     }
   },
+  "sliceMerge": {
+    "broadSuite": {
+      "paths": [
+        "MIGRATIONS_DIR/**"
+      ],
+      "contains": [
+        "TABLE_NAME"
+      ]
+    }
+  },
   "roadmapSync": {
     "enabled": false,
     "endpoint": "https://roads.example.com/api/frontlights",

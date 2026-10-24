@@ -507,8 +507,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '**`Closes #n` only from `closes`.**', '**Wait for the merge.**',
                        '**Offer the merge when the PR is ready.**', '**At the merge.**', '`release landed`',
                        'act only on `release status`',
-                       'No suite is required for the release (no whole check is: the watched run of each issue is its '
-                       'evidence)'):
+                       '`go` refuses (`full_suite`) until `homolog suite --release --mode full` is green'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
@@ -1251,7 +1250,7 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
         self.assertEqual(result['fullSuite']['status'], 'missing')
         self.assertIn('Release pronta', result['message'])
-        self.assertIn('Suíte inteira (opcional, não exigida pela release): missing.', result['message'])
+        self.assertIn('Suíte inteira (exigida pelo `release go`): missing.', result['message'])
         self.assertNotIn('homolog suite --release --mode full', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
@@ -1296,7 +1295,7 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.full_suite(fail=True)
         code, result = self.plan()
         self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'red'), result)
-        self.assertIn('Suíte inteira (opcional, não exigida pela release): red.', result['message'])
+        self.assertIn('Suíte inteira (exigida pelo `release go`): red.', result['message'])
 
     def test_a_delivery_after_the_whole_suite_makes_it_stale(self):
         self.deliver(1)

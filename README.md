@@ -47,7 +47,7 @@ decisão, para você comparar as opções antes de escolher.
 **A janela do Chrome.** Numa issue com tela, o Frontlights abre um Chrome visível, pelo Playwright, com
 perfil descartável e uma faixa no topo que diz o que está na tela. Você assiste, a sessão grava os prints,
 e no fim escolhe: **Assistir de novo**, **Aprovado**, **Precisa de alteração** ou **Pode prosseguir**. Esse
-teste, um por issue, é o único portão.
+teste, um por issue, é o único portão até a main local; a release exige ainda a suíte inteira verde.
 
 ```mermaid
 flowchart LR

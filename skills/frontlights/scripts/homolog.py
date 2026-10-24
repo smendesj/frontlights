@@ -37,8 +37,8 @@ Operations (each prints one JSON object on stdout):
          `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped). `fullSuite` is information only (the whole suite is not a requirement of the
-         release; the only gate of stage 6 is the watched run): it judges `.frontlights/release/suite.json` at the
+         no issue branch mapped). `fullSuite` never changes the plan's `ready`, but `release go` requires it
+         `current` (retro 1123/1124): it judges `.frontlights/release/suite.json` at the
          tip of the local base the way `suite-gate --release` does, `current`, `missing`, `stale`, `red`, or
          `elsewhere` when the main worktree is not on that tip, with `recordPath`, `recordedHead` and what changed,
          and never changes `ready` or the exit code. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
@@ -731,16 +731,49 @@ def release_closes(root, config_path, base, release, issues, gh=None):
                           'As outras seguem a pergunta de fechamento da etapa 7.')
 
 
+def base_protection(root, config_path, base, gh=None):
+    """The review rule of `base` on GitHub, read only and failing soft: {'requiredReviews': n or None, 'manualMerge':
+    True, False or None, 'message'}. A required approval means a manual merge: the author never approves the own
+    pull request, so another reviewer (or the user on GitHub) approves or merges it."""
+    unknown = {'requiredReviews': None, 'manualMerge': None,
+               'message': ' A regra de revisão da base não foi lida (gh, conta ou acesso): o merge pode ser manual.'}
+    path = Path(config_path) if config_path else Path(root, '.frontlights', 'config.json')
+    try:
+        import closeout   # noqa: PLC0415
+        repository = load_config(path).get('repository')
+        owner, name = repository.split('/')
+        ref = f'refs/heads/{base}'
+        data = closeout.rs.graphql(gh or closeout.rs.gh_default, (
+            'query { repository(owner: "%s", name: "%s") { ref(qualifiedName: "%s") { branchProtectionRule { '
+            'requiredApprovingReviewCount } rules(first: 50) { nodes { type parameters { ... on '
+            'PullRequestParameters { requiredApprovingReviewCount } } } } } } }') % (owner, name, ref))
+        found = (data.get('repository') or {}).get('ref')
+    except Exception:   # noqa: BLE001  (no read only leaves the rule unknown)
+        return unknown
+    if not isinstance(found, dict):
+        return unknown
+    counts = [((found.get('branchProtectionRule') or {}).get('requiredApprovingReviewCount') or 0)]
+    for rule in ((found.get('rules') or {}).get('nodes') or []):
+        if isinstance(rule, dict) and rule.get('type') == 'PULL_REQUEST':
+            counts.append((rule.get('parameters') or {}).get('requiredApprovingReviewCount') or 0)
+    required = max(c for c in counts if isinstance(c, int))
+    if required <= 0:
+        return {'requiredReviews': 0, 'manualMerge': False, 'message': ''}
+    return {'requiredReviews': required, 'manualMerge': True,
+            'message': f' A base `{base}` exige {required} aprovação(ões) de revisão e o autor não aprova a própria '
+                       'PR: o merge será manual (outro revisor ou o usuário no GitHub).'}
+
+
 def suite_sentence(suite):
-    """What the release message says of the whole suite: information only, never a requirement of the release."""
+    """What the release message says of the whole suite: the plan stays ready, `release go` requires it."""
     if suite.get('status') == 'current':
         return skipped_sentence(suite.get('covered'))
-    return f' Suíte inteira (opcional, não exigida pela release): {suite.get("status")}.'
+    return f' Suíte inteira (exigida pelo `release go`): {suite.get("status")}.'
 
 
 def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=None):
     """What the release would carry. `ready` and the exit code depend only on the local base being ahead, not
-    behind, with an issue or a direct work in it; `fullSuite` is reported as information and never blocks."""
+    behind, with an issue or a direct work in it; `fullSuite` never blocks the plan (`release go` requires it); `baseProtection` reads the review rule."""
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
@@ -761,6 +794,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
               'prefixSource': source, 'skipped': skipped, 'fullSuite': release_suite(root, base), 'ready': False}
     closes, reason, closes_message = release_closes(root, config_path, base, release, issues, gh)
     result.update(closes=closes, closesReason=reason, closesMessage=closes_message)
+    result['baseProtection'] = base_protection(root, config_path, base, gh) if release or release_direct else None
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
                                           'antes do release-plan.')
@@ -784,7 +818,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
         result.update(ready=True, exitCode=0,
                       message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
                               f'ainda fora de {remote}/{base}; {named}'
-                              f'{suite_sentence(result["fullSuite"])}')
+                              f'{suite_sentence(result["fullSuite"])}{result["baseProtection"]["message"]}')
     return result
 
 
@@ -1806,6 +1840,14 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         require(not missing, f'sem teste assistido registrado para {", ".join(f"#{n}" for n in missing)}: a release '
                              'espera o portão de cada issue')
         require(plan.get('releaseBranch'), 'sem prefixo das branches, a release não tem nome: declare branchPrefix')
+        suite = plan.get('fullSuite') or {}
+        if suite.get('status') != 'current':
+            return {'exitCode': 1, 'reason': 'full_suite', 'fullSuite': suite,
+                    'commands': [['python', str(HERE / 'homolog.py'), 'suite', '--release', '--mode', 'full',
+                                  '--root', str(root)]],
+                    'message': f'A suíte inteira não está verde na ponta da {base} local, a árvore que a release '
+                               f'leva ({suite.get("status")}): rode `homolog suite --release --mode full` nela e '
+                               'repita o `release go`; nada foi gravado.'}
         require(body and Path(body).is_file(), 'go precisa de --body <arquivo do corpo da PR> (templates/pr.md)')
         problems = body_problems(Path(body).read_text(encoding='utf-8-sig'), plan.get('closes', []))
         if problems:
@@ -1888,16 +1930,70 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
     os.replace(path, release_folder(root) / f'current-{stamp}.json')
     verify = ['python', str(HERE / 'closeout.py'), 'verify', '--issues', ','.join(str(n) for n in current.get('closes', []))]
     commands = list((plan or {}).get('commands', []))
+    handoffs = landed_handoffs(root, issues, current['pr'], landing_base, stamp)
+    leftovers = leftover_worktrees(root, issues, commands)
     release_branch = current.get('branch')
     if pruned and release_branch and rev(root, f'refs/remotes/{remote}/{release_branch}'):
         # the repository does not delete the head branch on merge: its removal is covered cleanup of the release
         commands.append({'kind': 'delete_remote_branch', 'item': release_branch,
                          'argv': ['git', '-C', str(root), 'push', remote, '--delete', release_branch]})
     return {'exitCode': 0, 'pr': current['pr'], 'before': before, 'after': landed['after'], 'pruned': pruned,
-            'cleanup': plan, 'commands': commands,
+            'cleanup': plan, 'commands': commands, 'handoffs': handoffs, 'leftoverWorktrees': leftovers,
             'verify': verify if current.get('closes') else None,
             'message': f'A {landing_base} local avançou por fast-forward até o merge da PR #{current["pr"]}. Rode a '
-                       'limpeza de `commands` (sem pergunta, só o que o plano oferece) e depois o `verify`.'}
+                       'limpeza de `commands` (sem pergunta, só o que o plano oferece) e depois o `verify`; '
+                       f'{len(handoffs)} handoff(s) atualizado(s)'
+                       + (f'; {len(leftovers)} worktree(s) fora do plano em `leftoverWorktrees`: mostre ao usuário'
+                          if leftovers else '') + '.'}
+
+
+def landed_handoffs(root, issues, pr, base, stamp):
+    """Rewrite the `Release` and `Próximo passo` lines of `.frontlights/issues/<n>/handoff.md` of every issue of the
+    release (appended when missing), so no handoff still asks for a closeout the release session runs; the paths."""
+    done = []
+    for number in issues:
+        path = Path(root) / '.frontlights' / 'issues' / str(number) / 'handoff.md'
+        if not path.is_file():
+            continue
+        lines = {'- Release:': f'- Release: PR #{pr} mesclada em {base} (`release/landed-{stamp}.json`)',
+                 '- Próximo passo:': '- Próximo passo: nenhum nesta issue; a sessão da release roda o `verify` e a '
+                                     'limpeza de todas as issues da PR'}
+        text = path.read_text(encoding='utf-8-sig').splitlines()
+        for head, line in lines.items():
+            at = [i for i, item in enumerate(text) if item.startswith(head)]
+            if at:
+                text[at[0]] = line
+            else:
+                text.append(line)
+        path.write_text('\n'.join(text) + '\n', encoding='utf-8')
+        done.append(str(path))
+    return done
+
+
+def leftover_worktrees(root, issues, commands):
+    """The worktrees of `git worktree list` whose folder or branch names an issue of the release (the number not
+    inside a longer one) and that no command of the cleanup plan names: [{issue, path, branch}], listed, never
+    removed here."""
+    code, out, _ = git(root, 'worktree', 'list', '--porcelain')
+    if code != 0:
+        return []
+    planned = ' '.join(str(a) for c in commands for a in (c.get('argv', []) if isinstance(c, dict) else c))
+    folded = os.path.normcase(planned.replace('\\', '/'))
+    main = os.path.normcase(str(Path(root).resolve()).replace('\\', '/'))
+    found = []
+    for block in out.split('\n\n'):
+        fields = dict(line.split(' ', 1) for line in block.splitlines() if ' ' in line)
+        path = fields.get('worktree')
+        branch = fields.get('branch', '').removeprefix('refs/heads/')
+        if not path or os.path.normcase(str(Path(path).resolve()).replace('\\', '/')) == main:
+            continue
+        if os.path.normcase(path.replace('\\', '/')) in folded or (branch and branch in planned):
+            continue
+        for number in issues:
+            if re.search(rf'(?<!\d){number}(?!\d)', f'{Path(path).name} {branch}'):
+                found.append({'issue': number, 'path': path, 'branch': branch or None})
+                break
+    return found
 
 
 def default_cleanup_plan(root, config_path, issues, base):

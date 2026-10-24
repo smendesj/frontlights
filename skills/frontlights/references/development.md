@@ -130,8 +130,10 @@ that slice's branch instead (stacked: `--stacked-on`, `"base": "<slice-branch>"`
 merged into the branch of the issue after the slice it depends on.
 
 Each slice is one TDD loop at its own seams and one `checkpoint --slice <id>` (`checkpoint-<id>.json`). When its loop
-closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests, then the slice is merged into the
-branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
+closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests (all
+`verification_commands` on a `sliceMerge.broadSuite` match, `references/setup.md`; scripts only under the project,
+as `.frontlights/issues/<n>/verify/`), then the slice is merged into
+the branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
 issue's worktree and shown in its diff. A box without a screen runs the walkthrough of its box ("Into the local
 main"), and the `.md` is the evidence of the tick; a box with a screen waits for the "Aprovado" of the watched run;
 then comes the tick of its box: the `next.tick` argv (`closeout.py tick --box S<k>`, with `closeout.py tick-check`
@@ -147,12 +149,11 @@ when the user asks for them. Stacking children on a parent applies only to a fam
 ### Which tests run when
 
 TDD per slice is the default practice: its own tests at its seams, plus the test modules the slice touches and the
-type checks. These tests are evidence, never a gate: no suite holds back the merge into the local main or the
-release. When the user asks to implement "só com teste assistido", the session writes and runs no tests in that run
+type checks. These tests are evidence, never a gate: no suite holds back the merge into the local main; only the
+release requires one. When the user asks to implement "só com teste assistido", the session writes and runs no tests in that run
 (`slice merge --watched-only`), and the watched run is the evidence. A broader suite runs only when the user asks for
 one, through the optional tools (`homolog suite --mode impact|full`, judged by `homolog suite-gate`); its command, count and exit code go to the
-handoff, and a red one is a finding. No whole check is required anywhere: a project's CI, when there is one, is
-neither expected nor a gate, and the watched run of each issue is the evidence.
+handoff, and a red one is a finding. A project's CI is neither expected nor a gate.
 
 **A parked slice.** When a slice waits for something the session cannot do (a decision, a credential, another team's
 endpoint), write the line `- Bloqueada: <what is missing and from whom>` as the last sub-item of its box, more
@@ -163,7 +164,7 @@ meanwhile: a sub-item without a box is never a criterion.
 
 ### After the loop
 
-Run the type checks the repository really has (never assume npm scripts; without a type checker, say so and record the
+Run the type checks the repository really has (without one, say so and record the
 syntax or build checks), and inspect the vertical behavior, the diff and the acceptance coverage; an unexpected effect
 stops the issue. When anything the issue changes is visible on the screen (its `## Navegador e testes ligados` says so,
 or `browser-gate` finds it in the diff), the watched run belongs to the issue as a whole: its ANTES ran from the
@@ -223,10 +224,10 @@ is open the issue is not in the `closes` of `release-plan`, so the PR cites it w
 and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
-watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Thresholds: `docs/protocol.md`, "Contexto e conclusão".
+watched run is due, `--slice <id>`); `frontlights.py resume` lists those first.
 
-Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home;
-while a watched run is due and unanswered, pass `--pending teste_assistido`. If the host cannot enforce renewal,
+Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home.
+If the host cannot enforce renewal,
 explicitly report that hard-cap AFK acceptance is unproven.
 
 The session may tick an acceptance criterion in the issue body only with evidence for it, because the closeout trusts the ticks; a
@@ -273,13 +274,13 @@ artifact roteiro --issue <n> --content <file>` adds the last section of the arti
 `Fluxo:` in plain words, the account by its label, what the screen should show), republished on the same URL; each
 free-test fix adds its group. Then its `window.commands`: a window on the local main and the local development
 database (the homologation one), already logged in (`references/browser-testing.md`, "The free test window"). One line
-says the window is theirs until they close it, with the link to the roteiro at the end of the artifact.
+says the window is theirs until they close it, with the link to the roteiro.
 
 - **Without a screen, in the terminal.** When `browser-gate` said `not_needed`, no window opens and no product is
   served: give the commands of `serve.py free-test commands`, each in its own code block, then ask
   "Terminou de testar a main local?", "Sim, terminei" first and "Ainda testando", which leaves it pending; never answer
   it for the user.
-- **The user leads.** The roteiro guides and binds nothing: no print and no time limit; the session helps on request.
+- **The user leads.** No print and no time limit; the session helps on request.
 - **One free test per homologated issue.** After an "Agora não" to the release, the next issue's free test covers
   everything accumulated in the local main. Closing the window right away is how the user skips it.
 - **A fix asked in the free test.** Fix it at once on the branch of the issue, TDD by default, push it (covered), then
@@ -300,8 +301,8 @@ window of its free test is closed; on "Agora não" the work stays in the local m
 offers the release again with everything accumulated.
 
 - **Plan it.** `homolog sync`, then `homolog.py release plan`: the issues and slugs to release, the branch name, and
-  `closes` (every box ticked, no open sub-issue). No suite is required for the release (no whole check is: the watched
-  run of each issue is its evidence).
+  `closes` (every box ticked, no open sub-issue). `baseProtection` warns upfront of a manual merge (a
+  required review the author cannot give). One session releases all its issues.
 - **Offer it.** "Lançar a release com as issues #a, #b agora?", "Sim, lançar" first and "Agora não" second.
 - **Branch and pull request (covered).** The body follows `templates/pr.md` (the model of the pull request), checked
   by `release body-check`: **Resumo** and **Evidência** once per issue, from records that exist (a print by its file
@@ -309,7 +310,8 @@ offers the release again with everything accumulated.
   the release. **`Closes #n` only from `closes`.** One line per issue of `closes`, copied from that list, never counted
   by hand; every other issue is cited by number without a closing keyword, in the body and in the commits; the body of
   the pull request is never the destination of a finding. `release go --body <file>` prints the refspec push and `gh
-  pr create`: run them, then `release go --record --pr <n>`. A refused refspec push asks "Lançar pelo caminho antigo,
+  pr create`: run them, then `release go --record --pr <n>`. `go` refuses (`full_suite`) until `homolog suite
+  --release --mode full` is green at the tip of the local main, the tree released. A refused refspec push asks "Lançar pelo caminho antigo,
   com a branch local <release branch>?" (`--legacy-branch`).
 - **Wait for the merge.** The merge is the user's step. One line to the user says which pull request the session
   waits for; the handoff's `Release` line records it. A background monitor runs `release status --since <state>
@@ -321,5 +323,6 @@ offers the release again with everything accumulated.
   branch goes by GitHub's automatic deletion of merged head branches). On "Não", the wait goes on unchanged.
 - **At the merge.** `release landed` pulls the local main (if it does not fast-forward, stop and ask instead of
   merging or resetting) and lists the cleanup of `references/closeout.md`, step 5, run without a question, plus the
-  `git push origin --delete` of the release branch when GitHub kept it (covered cleanup). A PR merged
+  `git push origin --delete` of the release branch when GitHub kept it (covered cleanup). It updates every released
+  issue's handoff and lists their other worktrees (`leftoverWorktrees`). A PR merged
   into another branch, closed without a merge, or not found is never ready.

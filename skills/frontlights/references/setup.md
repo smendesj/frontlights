@@ -23,3 +23,7 @@ skipped gate, the closing inside its options (`references/browser-testing.md`, "
 The new block is approved by link and stamp as a draft under `.frontlights/`, every
 `browserTest.users[].password` shown as `***`. The real value goes only into the final config, after the approval,
 and is never printed.
+
+## The sliceMerge block
+
+Optional; its shape is in `examples/config.json`, its rule in `references/development.md`, "Slices in order".
