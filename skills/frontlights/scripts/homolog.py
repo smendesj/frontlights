@@ -1699,6 +1699,7 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
 # ---------------------------------------------------------------- release by command (redesign, issue 4)
 
 RELEASE_ACTIONS = ('plan', 'body-check', 'go', 'status', 'landed')
+SUITE_RUN, SUITE_WAIVE = 'Rodar a suíte inteira', 'Lançar sem a suíte inteira'
 UNCHANGED = 4                                    # `release status --since`: the state did not change
 GREEN_GATES = ('answered', 'not_needed')
 CLOSING_WORD = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[\w.-]+/[\w.-]+)?#\d+', re.I)
@@ -1824,7 +1825,7 @@ def current_release(root):
 
 def op_release(action, root, base='main', remote='origin', config_path=None, prefix=None, records=None, body=None,
                closes=None, record=False, pr=None, legacy=False, answer=None, since=None, gh=None, update_check=None,
-               planner=None):
+               planner=None, without_suite=None):
     """`release plan|body-check|go|status|landed` (see the module's docstring)."""
     worktree(root)
     root = Path(os.path.abspath(root))   # the returned argv never depends on the folder it is run from
@@ -1870,14 +1871,21 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         require(not missing, f'sem teste assistido registrado para {", ".join(f"#{n}" for n in missing)}: a release '
                              'espera o portão de cada issue')
         require(plan.get('releaseBranch'), 'sem prefixo das branches, a release não tem nome: declare branchPrefix')
-        suite = plan.get('fullSuite') or {}
-        if suite.get('status') != 'current':
+        suite = dict(plan.get('fullSuite') or {})
+        # the release aims at the whole suite green; only the user's literal answer waives it
+        require(without_suite in (None, SUITE_WAIVE), f'--without-full-suite só com a resposta literal "{SUITE_WAIVE}"')
+        if without_suite:
+            suite['waived'] = without_suite
+        elif suite.get('status') != 'current':
             return {'exitCode': 1, 'reason': 'full_suite', 'fullSuite': suite,
+                    'question': f'A suíte inteira não está verde na ponta da {base} local. Rodar antes da release?',
+                    'options': [SUITE_RUN, SUITE_WAIVE],
                     'commands': [['python', str(HERE / 'homolog.py'), 'suite', '--release', '--mode', 'full',
                                   '--root', str(root)]],
                     'message': f'A suíte inteira não está verde na ponta da {base} local, a árvore que a release '
                                f'leva ({suite.get("status")}): rode `homolog suite --release --mode full` nela e '
-                               'repita o `release go`; nada foi gravado.'}
+                               'repita o `release go`, ou pergunte e passe `--without-full-suite` com a resposta literal; nada foi '
+                               'gravado.'}
         require(body and Path(body).is_file(), 'go precisa de --body <arquivo do corpo da PR> (templates/pr.md)')
         problems = body_problems(Path(body).read_text(encoding='utf-8-sig'), plan.get('closes', []))
         if problems:
@@ -1898,7 +1906,7 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         pending = {'branch': name, 'base': base, 'remote': remote, 'issues': plan.get('release', []),
                    'directs': plan.get('releaseDirect', []), 'closes': plan.get('closes', []), 'title': title,
                    'body': str(body), 'legacy': bool(legacy), 'answer': answer if legacy else None,
-                   'localMain': plan.get('localMain'), 'at': zoned_now().isoformat(timespec='seconds')}
+                   'localMain': plan.get('localMain'), 'fullSuite': suite, 'at': zoned_now().isoformat(timespec='seconds')}
         write_json(folder / 'pending.json', pending)
         update = (update_check or __import__('frontlights').update_check)()
         return {'exitCode': 0, 'commands': commands, 'release': pending, 'skillUpdate': update,
@@ -2055,7 +2063,7 @@ def run(operation, root, base='main', remote='origin', config=None, prefix=None,
             result = op_release(release_args.get('action'), root, base, remote, config, prefix, records,
                                 release_args.get('body'), release_args.get('closes'), release_args.get('record'),
                                 release_args.get('pr'), release_args.get('legacy'), release_args.get('answer'),
-                                release_args.get('since'))
+                                release_args.get('since'), without_suite=release_args.get('without_suite'))
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -2099,6 +2107,8 @@ def build_parser():
     release.add_argument('--legacy-branch', dest='legacy', action='store_true',
                          help='go: the old path with a local release branch, only with --answer "Sim"')
     release.add_argument('--answer', help='go --legacy-branch: the literal answer of the question')
+    release.add_argument('--without-full-suite', dest='without_suite',
+                         help=f'go: the literal answer "{SUITE_WAIVE}" that waives the whole suite')
     release.add_argument('--since', help='status: exit 0 only when the state is no longer this one (4 otherwise)')
     release.add_argument('--quiet', action='store_true', help='status --since: one line on a change, nothing otherwise')
     for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):

@@ -301,8 +301,7 @@ window of its free test is closed; on "Agora não" the work stays in the local m
 offers the release again with everything accumulated.
 
 - **Plan it.** `homolog sync`, then `homolog.py release plan`: the issues and slugs to release, the branch name, and
-  `closes` (every box ticked, no open sub-issue). `baseProtection` warns upfront of a manual merge.
-  One session releases all its issues.
+  `closes` (every box ticked, no open sub-issue). `baseProtection` warns of a manual merge.
 - **Offer it.** "Lançar a release com as issues #a, #b agora?", "Sim, lançar" first and "Agora não" second.
 - **Branch and pull request (covered).** The body follows `templates/pr.md` (the model of the pull request), checked
   by `release body-check`: **Resumo** and **Evidência** once per issue, from records that exist (a print by its file
@@ -311,7 +310,8 @@ offers the release again with everything accumulated.
   by hand; every other issue is cited by number without a closing keyword, in the body and in the commits; the body of
   the pull request is never the destination of a finding. `release go --body <file>` prints the refspec push and `gh
   pr create`: run them, then `release go --record --pr <n>`. `go` refuses (`full_suite`) until `homolog suite
-  --release --mode full` is green at the tip of the local main, the tree released. A refused refspec push asks "Lançar pelo caminho antigo,
+  --release --mode full` is green at the tip of the local main, or the user waives it (its `question`,
+  `--without-full-suite`). A refused refspec push asks "Lançar pelo caminho antigo,
   com a branch local <release branch>?" (`--legacy-branch`).
 - **Wait for the merge.** The merge is the user's step. One line to the user says which pull request the session
   waits for; the handoff's `Release` line records it. A background monitor runs `release status --since <state>

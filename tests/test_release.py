@@ -157,6 +157,14 @@ class GoTests(ReleaseCase):
         self.assertEqual((result['exitCode'], result['reason']), (1, 'full_suite'), result)
         self.assertIn('--release', result['commands'][0])
         self.assertFalse((self.root / '.frontlights' / 'release' / 'pending.json').exists())
+        self.assertEqual(result['options'], [homolog.SUITE_RUN, homolog.SUITE_WAIVE])
+
+    def test_the_user_may_waive_the_whole_suite_with_the_literal_answer(self):
+        self.commit(self.root, 'src/depois.py', message='a main local andou depois da suíte')
+        self.assertEqual(self.release('go', body=self.body(), without_suite='Sim')['exitCode'], 1)
+        result = self.release('go', body=self.body(), without_suite=homolog.SUITE_WAIVE)
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['release']['fullSuite']['waived'], 'Lançar sem a suíte inteira')
 
     def test_a_relative_root_becomes_absolute_in_the_returned_git_commands(self):
         # Reverificação real (23/10/2026): `release go --root .` imprimia `git -C .`, que depende da pasta.
