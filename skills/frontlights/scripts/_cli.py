@@ -5,9 +5,13 @@ Imported by every script; there is no dispatcher. What it gives them:
   defaults   `--root` is the main worktree (config and records), from `git rev-parse --git-common-dir`; `--tree` is
              the worktree of the current directory (where checks, suite, stamp, checkpoint, evidence and
              browser-gate act); `--config` is `<root>/.frontlights/config.json`; `--issue` comes only from the entry
-             of the charter (`<root>/.frontlights/authorization.json`, `worktrees`) whose path is the tree, else it
-             is refused with a `hint` that lists the issues of the charter: it never chooses one. Outside Git both
-             root and tree are the folder itself.
+             of a charter (`charter_files`, `worktrees`) whose path is the tree, else it is refused with a `hint`
+             that lists the issues of the charters: it never chooses one. Outside Git both root and tree are the
+             folder itself.
+  charters   one charter per issue, `<root>/.frontlights/authorization/<n>.json` (`direct-<slug>.json` for work
+             without an issue), so writing one never erases another. The legacy single `authorization.json` is
+             still read, never written: for an issue without a file of its own, the legacy record narrowed to it
+             (`narrow`) is its charter, and the first write of that issue moves it to its own file.
   usage      `JsonParser`: a usage mistake raises `UsageError` (message and `hint`), which the script prints as one
              JSON object (`ok: false`, `error: "usage"`, `message`, `hint`), never argparse's text and exit 2 alone.
   streams    `utf8_streams()`: stdout and stderr in UTF-8, called first by every `main`.
@@ -32,7 +36,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CONFIG = Path('.frontlights') / 'config.json'
-CHARTER = Path('.frontlights') / 'authorization.json'
+CHARTER = Path('.frontlights') / 'authorization.json'   # the legacy single charter: read, never written
+CHARTERS = Path('.frontlights') / 'authorization'       # one charter per issue (charter_name)
 OUT = Path('.frontlights') / 'out'
 ZONE = 'America/Sao_Paulo'
 SUMMARY_BYTES = 4096     # past this many bytes of output, a summary is printed
@@ -137,12 +142,85 @@ def same_path(a, b):
         return False
 
 
-def read_charter(root):
+def charter_name(key):
+    """The file name of the charter of an issue (`12.json`) or of a work without an issue (`direct-<slug>.json`)."""
+    key = str(key)
+    return f'{int(key)}.json' if key.isdigit() else f'direct-{key}.json'
+
+
+def charter_path(root, key):
+    return Path(root) / CHARTERS / charter_name(key)
+
+
+def charter_files(root):
+    """The active charters: every `.frontlights/authorization/*.json` by name, then the legacy `authorization.json`."""
     try:
-        data = json.loads((Path(root) / CHARTER).read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
+        files = sorted(p for p in (Path(root) / CHARTERS).glob('*.json') if p.is_file())
+    except OSError:
+        files = []
+    legacy = Path(root) / CHARTER
+    return files + ([legacy] if legacy.is_file() else [])
+
+
+def record_files(root):
+    """Every authorization record: `.frontlights/authorization*.json` by name (the legacy charter and the kept
+    copies), then the per-issue charters by name, so the current charter of an issue is read last."""
+    try:
+        kept = sorted(p for p in (Path(root) / '.frontlights').glob('authorization*.json') if p.is_file())
+    except OSError:
+        kept = []
+    return kept + [p for p in charter_files(root) if p.parent.name == CHARTERS.name]
+
+
+def read_record(path):
+    try:
+        data = json.loads(Path(path).read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError, RecursionError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def charter_keys(record):
+    """The ids a charter names: its issues as text, then its works without an issue."""
+    issues = record.get('issue_ids') if isinstance(record.get('issue_ids'), list) else []
+    directs = record.get('direct_ids') if isinstance(record.get('direct_ids'), list) else []
+    return ([str(n) for n in issues if type(n) is int and n > 0]
+            + [d for d in directs if isinstance(d, str) and d])
+
+
+def narrow(record, key):
+    """The record of a (legacy, shared) charter restricted to one issue or work: its id, ownership and worktrees."""
+    key = str(key)
+    issue = key.isdigit()
+    field = 'issue' if issue else 'direct'
+    value = int(key) if issue else key
+    ownership = record.get('ownership') if isinstance(record.get('ownership'), dict) else {}
+    entries = record.get('worktrees') if isinstance(record.get('worktrees'), list) else []
+    return dict(record, issue_ids=[value] if issue else [], direct_ids=[] if issue else [value],
+                ownership={key: list(ownership.get(key) or [])} if key in ownership else {},
+                worktrees=[e for e in entries if isinstance(e, dict) and e.get(field) == value])
+
+
+def read_charters(root):
+    """[(path, record)] of every readable active charter (`charter_files`), the legacy one last."""
+    found = []
+    for path in charter_files(root):
+        data = read_record(path)
+        if data is not None:
+            found.append((path, data))
+    return found
+
+
+def read_charter(root, key):
+    """The charter of issue (or work) `key`: its own file, else the legacy `authorization.json` narrowed to it when
+    it names it; None when neither does."""
+    own = read_record(charter_path(root, key))
+    if own is not None:
+        return own
+    legacy = read_record(Path(root) / CHARTER)
+    if legacy is not None and str(key).lstrip('#') in charter_keys(legacy):
+        return narrow(legacy, str(key).lstrip('#'))
+    return None
 
 
 def issue_number(value, tree, root):
@@ -154,15 +232,16 @@ def issue_number(value, tree, root):
             raise UsageError(f'--issue precisa ser um número de issue, não {str(value)[:40]!r}',
                              hint='passe --issue <n>, como --issue 12')
         return int(text)
-    charter = read_charter(root)
-    entries = charter.get('worktrees') if charter else None
-    for entry in entries if isinstance(entries, list) else []:
-        if isinstance(entry, dict) and isinstance(entry.get('path'), str) and same_path(entry['path'], tree):
-            if type(entry.get('issue')) is int and entry['issue'] > 0:
-                return entry['issue']
-            break
-    ids = charter.get('issue_ids') if charter else None
-    listed = ', '.join(str(n) for n in ids if type(n) is int) if isinstance(ids, list) else ''
+    charters = read_charters(root)
+    for _, charter in charters:
+        entries = charter.get('worktrees')
+        for entry in entries if isinstance(entries, list) else []:
+            if isinstance(entry, dict) and isinstance(entry.get('path'), str) and same_path(entry['path'], tree):
+                if type(entry.get('issue')) is int and entry['issue'] > 0:
+                    return entry['issue']
+                break
+    ids = sorted({int(k) for _, charter in charters for k in charter_keys(charter) if k.isdigit()})
+    listed = ', '.join(str(n) for n in ids)
     where = f'issues do charter: {listed}' if listed else 'nenhum charter com issues na worktree principal'
     raise UsageError(f'a worktree {Path(tree).name} não é de uma issue do charter e a issue não é escolhida: passe '
                      '--issue <n>',

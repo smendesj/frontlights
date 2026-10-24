@@ -4,7 +4,7 @@ Escrita em `.frontlights/issues/<n>/handoff.md` da worktree principal a cada fro
 `frontlights.py checkpoint`. Só ponteiros: o que já está na issue, num commit ou num registro vai pelo caminho. Segredos mascarados. O GitHub vence esta passagem.
 
 - Issue: <URL>
-- Charter: `.frontlights/authorization.json` (validade, operações, `branch_prefix`)
+- Charter: `.frontlights/authorization/<n>.json` (validade, operações, `branch_prefix`)
 - Checkpoints: `.frontlights/issues/<n>/checkpoint*.json`; a janela nova roda `frontlights.py resume --issue <n>`
 - Branch, worktree e HEAD: <branch da issue>, <pasta>, <sha curto>
 - Janela ANTES: `.frontlights/issues/<n>/browser/window.json` aberta (`serve.py window attach`) ou "fechada"

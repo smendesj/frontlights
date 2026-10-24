@@ -27,15 +27,15 @@ a prévia, em "The start of stage 6"; as slices de cada issue em ordem, numa bra
 partir da `origin/<base>`, e com uma worktree por slice, em "Slices in order"; o portão do merge na main local (o
 teste assistido) e o bundle depois dele, em "Into the local main"; o teste livre na main local, em "The free test on the local main"; a release, em "The release".
 
-**O registro do charter** (`.frontlights/authorization.json`) é gravado por `frontlights.py charter new|renew|add`,
-nunca à mão, com todo campo que o `authorize` lê: `repository`, `issue_ids` e `direct_ids`, `operations` (`edit`,
+**O charter**, um por issue (`authorization/<n>.json`; o `authorization.json` antigo só é lido), é gravado por
+`frontlights.py charter new|add|own|renew`, nunca à mão, com todo campo que o `authorize` lê: `repository`,
+`issue_ids` e `direct_ids`, `operations` (`edit`,
 `test`, `checkpoint`, `merge_into_local_main`), `protected_branches` (`main` e `master` sempre), `stop_conditions`,
 `base` (`branch`, a main local; `issues.from` = `origin/<base>`; `direct.from` = a main local), `issued_at` e
 `expires_at` (fuso de São Paulo, no máximo 24 horas), `approved_by`, `confirmed_by`, `approval_reference`,
 `monitoring`, `concurrency`, `branch_prefix`, `ownership` (obrigatória, nunca só `*`), `verification_commands` e
 `worktrees` (`issue` ou `direct`, `path`, `branch`, `ownership`; `slice` e `base` numa slice). O exemplo é
-`examples/authorization.json`. Em `monitoring`, `phone_connected: true` vale só pela afirmação do usuário na sessão
-atual; o Frontlights não detecta o celular.
+`examples/authorization.json`. `phone_connected: true` só pela afirmação do usuário na sessão atual.
 
 Uma slice estacionada ganha, como último sub-item da caixa aberta, a linha `- Bloqueada: <o que falta e de quem>`
 (só acréscimo, diferença conferida), apagada ao destravar: a única remoção permitida no corpo de uma issue além da
@@ -85,7 +85,7 @@ ele trabalha num projeto consumidor.
   stamps.json              gravado por `frontlights.py stamp --revision`: a revisão e o carimbo mostrados na
                            pergunta, por caminho; o `--approve` sem `--revision` leva essa revisão
   plan.json
-  authorization.json
+  authorization/<n>.json   charter de cada issue (direct-<slug>.json)
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, nunca apagados
   pitfalls.md              uma linha por critério que entrou depois da aprovação, só acréscimo
   publish/<carimbo>.json   estado do publish-issue por aprovação (o --resume lê daqui); <carimbo>-<id>.md, o corpo
@@ -122,7 +122,7 @@ Regras que nenhum script expressa:
 - `approvals.json` e as revisões `-r<N>`: a aprovação vale para os bytes daquele carimbo; um arquivo mudado pede
   aprovação nova.
 - `pitfalls.md`: formato em `references/issues.md`, "A pitfall line"; o reconhecimento o lê primeiro.
-- `authorization*.json`: release-plan, bundle, closeout e cleanup leem todos, não só o atual.
+- `authorization*.json`, `authorization/*.json`: release-plan, bundle, closeout e cleanup leem todos.
 - `browser/result.json`: um por issue (numa família que já existe, na pasta da líder); `pastaDosPrints` diz onde
   estão os prints da rodada.
 - `issues/<n>/suite.json` fica na worktree da issue; `release/suite.json`, na principal; com `homolog suite --release

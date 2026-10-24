@@ -336,12 +336,9 @@ def read_record(path):
 
 
 def authorization_records(root):
-    """The .frontlights/authorization*.json files of the project, oldest name first (the newest record is the
-    last one, as homolog reads them)."""
-    try:
-        return sorted((Path(root) / '.frontlights').glob('authorization*.json'))
-    except OSError:
-        return []
+    """The authorization records of the project (`_cli.record_files`: the .frontlights/authorization*.json files,
+    oldest name first, then the per-issue charters), so the newest record is the last one, as homolog reads them."""
+    return _cli.record_files(root)
 
 
 def record_numbers(root, repository=None):

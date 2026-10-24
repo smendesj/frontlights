@@ -50,7 +50,7 @@ class Stage6Case(unittest.TestCase):
         self.assertTrue(result['ok'], result)
 
     def charter(self):
-        return json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8'))
+        return json.loads((self.root / '.frontlights' / 'authorization' / '12.json').read_text(encoding='utf-8'))
 
     def open(self, *slices, **options):
         options.setdefault('directory', str(self.wt))
@@ -152,7 +152,7 @@ class SliceMergeTests(Stage6Case):
     def test_without_any_test_the_merge_is_refused_unless_watched_only(self):
         record = self.charter()
         record['verification_commands'] = []
-        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(record), encoding='utf-8')
+        (self.root / '.frontlights' / 'authorization' / '12.json').write_text(json.dumps(record), encoding='utf-8')
         self.assertEqual(self.merge()['reason'], 'no_tests')
         result = self.merge(watched_only=True)
         self.assertTrue(result['ok'], result)
@@ -437,8 +437,9 @@ class FreeTestTests(unittest.TestCase):
         self.assertEqual((result['batch']['total'], result['batch']['ticked'], result['batch']['open']), (2, 1, 1))
 
     def test_without_a_screen_the_commands_and_the_question_come_from_the_charter(self):
+        # o authorization.json antigo, único, segue lido para a issue sem charter próprio
         (self.root / '.frontlights' / 'authorization.json').write_text(
-            json.dumps({'verification_commands': [['python', '-m', 'unittest', 'discover', '-s', 'tests']]}),
+            json.dumps({'issue_ids': [12], 'verification_commands': [['python', '-m', 'unittest', 'discover', '-s', 'tests']]}),
             encoding='utf-8')
         done = subprocess.run([sys.executable, str(SCRIPTS / 'serve.py'), 'free-test', 'commands', '--issue', '12',
                                '--root', str(self.root)], capture_output=True, text=True, encoding='utf-8')

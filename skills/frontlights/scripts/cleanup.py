@@ -251,10 +251,7 @@ def authorized_worktrees(root, issues):
     branch names those authorizations declare, and the branch prefixes they use: the `branchPrefix` of the config
     and the `branch_prefix` of each record (the legacy prefix of `_cli.branch_prefix` for a record without it)."""
     found = []
-    try:
-        files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
-    except OSError:
-        files = []
+    files = _cli.record_files(root)
     protected, prefixes = [], set()
     named = _cli.config_prefix(Path(root) / '.frontlights' / 'config.json')
     if named and PREFIX.fullmatch(named) and '..' not in named:

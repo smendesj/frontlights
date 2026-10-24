@@ -12,7 +12,7 @@ retro is never a gate: nothing waits on its answer.
 
 The records of each issue of the release, never the transcript: `.frontlights/issues/<n>/` (the handoff and its
 rounds, `checkpoint*.json`, `browser/result.json`, `review.json` when a review ran, `walkthroughs/`, `notes/`), the
-charter in `.frontlights/authorization.json`, the `merge-local-main*.json`, the summaries under `.frontlights/out/`,
+charter in `.frontlights/authorization/<n>.json`, the `merge-local-main*.json`, the summaries under `.frontlights/out/`,
 the issue on GitHub (criteria that entered after the approval) and the release PR. A fact the records do not hold
 is not a finding.
 

@@ -30,11 +30,12 @@ and `message` (a refusal adds `reason` and `hint`); its flags are in its `--help
 
 The user decided, permanently and for every project, that stage 6 opens without a question: there is no
 concurrency question, no stacking question and no implementation authorization question. `frontlights.py charter
-new --issue <n> --ownership <paths>` records the charter after a dry run of `authorize` (the user in
+new --issue <n> --ownership <paths>` writes that issue's own charter after a dry run of `authorize` (the user in
 `approved_by`, `confirmed_by` and `monitoring.confirmed_by`, `"autorização permanente (docs/security.md)"` in
-`approval_reference`, an `expires_at` at most 24 hours ahead, the previous charter kept), and the session announces
+`approval_reference`, an `expires_at` at most 24 hours ahead), and the session announces
 it in one short block, in the user's language: its `announcement`, with the branch and the order of the slices;
-`charter add` brings in an issue, `charter renew` extends it. Its `monitoring` block is `mode: "local"`;
+`charter add` brings in another issue, `charter own` widens its ownership by amendment, `charter renew` extends it.
+Its `monitoring` block is `mode: "local"`;
 `phone_connected: true` only when the user states,
 unprompted in this session, that the phone received and answered. A change the user asks for goes back through
 `AskUserQuestion`. The questions of the work itself (the watched run, failures, the findings batch, a new product
@@ -169,8 +170,7 @@ stops the issue. When anything the issue changes is visible on the screen (its `
 or `browser-gate` finds it in the diff), the watched run belongs to the issue as a whole: its ANTES ran from the
 grilling, and its DEPOIS ("pronto para assistir?", `references/browser-testing.md`) comes once the last slice that
 changes the screen has closed its loop and every closed slice is merged into the branch of the issue, and before an
-independent review of any of them. Once that question is due and until it is answered, it is the `teste_assistido`
-pending of the checkpoint.
+independent review of any of them.
 
 ## Dispatch and ownership
 
@@ -180,6 +180,10 @@ start all eligible non-conflicting issues up to the ceiling, all launched in one
 `references/worker.md`. Without concurrent agents, report the capacity limitation. Do not silently serialize for
 convenience. With a `path_risk` of `inspect` other than `ok`, give `slice open` a short `--dir`. A worker's report is a
 claim: read the diff and rerun the commands it names.
+
+**Ownership between issues.** Two issues never own one path: `charter new`, `add` and `own` refuse an overlap, and
+`charter check` runs before parallel sessions open; ask the refusal's `question` with `AskUserQuestion` (one owner, in
+series, or subfolders). Each session reads `charter map` (issue → worktrees, ports).
 
 **Fan out inside an issue.** The independent slices go at once, one implementer per open slice, in its own worktree, and the agents around them do not
 wait: dispatch in the same message read-only workers that prepare the next slice (each writes its note, `references/worker.md`), and the checks that share no
@@ -218,19 +222,16 @@ main and before a PR is opened or updated, every open finding that came up (the 
 for, tests that ran, a live check, any other verification pass) has a destination GitHub tracks, or is fixed, or is
 shown as not a defect with its evidence, or is dropped by the user's explicit answer: the gate of the Follow-ups
 section. A line in the PR body, a comment or the chat is never a destination, so "cited in the PR" does not pass the
-gate. Most often a finding left unfixed becomes an acceptance criterion of the source issue. While such a criterion
-is open the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing keyword, in its body
-and in the commit messages.
+gate. While a criterion born from a finding is open the issue is not in the `closes` of `release-plan`, so the PR cites
+it without a closing keyword, in its body and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
-watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Thresholds: `docs/protocol.md`, "Contexto e conclusão".
+watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Check context with `context` by the
+thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home. If the host cannot enforce renewal, report
+that hard-cap AFK acceptance is unproven.
 
-Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home;
-while a watched run is due and unanswered, pass `--pending teste_assistido`. If the host cannot enforce renewal,
-explicitly report that hard-cap AFK acceptance is unproven.
-
-The session may tick an acceptance criterion in the issue body only with evidence for it, because the closeout trusts the ticks; a
-criterion born from a finding is ticked the same way. Closing an issue is never part of this: it has its own approval.
+The session ticks an acceptance criterion only with evidence for it; a criterion born from a finding is ticked the
+same way. Closing an issue is never part of this: it has its own approval.
 Report each issue's state, branch/PR, the watched run, the walkthroughs run without a screen, the tests and the review
 when they ran, the findings left unfixed with the destination of each, the count of its lines in
 `.frontlights/pitfalls.md` (criteria that entered after the approval: `references/issues.md`, "A pitfall line"), and

@@ -1,6 +1,8 @@
 """Etapa 6 por comando, S1 (redesenho, issue 4): `frontlights.py charter new|renew|add` grava todos os campos que o
 `authorize` lê, com a posse (ownership) obrigatória, o prefixo pela cadeia, o charter anterior guardado, o anúncio
-em português e o dry-run do `authorize` antes de gravar.
+em português e o dry-run do `authorize` antes de gravar. Retro das issues 1123 e 1124 (23/10/2026): um charter por
+issue em `.frontlights/authorization/<n>.json`, `own` amplia a posse por emenda, a posse cruzada entre issues é
+recusada (`check` também a mede), `map` deriva issue → worktrees e portas, e o `authorization.json` antigo segue lido.
 
 Seams: `frontlights.charter_cli` e a entrada `frontlights.py charter`.
 """
@@ -61,8 +63,11 @@ class CharterCase(unittest.TestCase):
         options.setdefault('approved_by', 'OWNER-LOGIN')
         return frontlights.charter_cli(action, str(self.root), str(self.config), **options)
 
-    def record(self):
-        return json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8'))
+    def path(self, key='12'):
+        return self.root / '.frontlights' / 'authorization' / (f'{key}.json' if key.isdigit() else f'direct-{key}.json')
+
+    def record(self, key='12'):
+        return json.loads(self.path(key).read_text(encoding='utf-8'))
 
 
 class CharterNewTests(CharterCase):
@@ -105,12 +110,13 @@ class CharterNewTests(CharterCase):
                 result = self.charter(ownership=ownership)
                 self.assertFalse(result['ok'])
                 self.assertEqual(result['reason'], 'ownership_required')
-                self.assertFalse((self.root / '.frontlights' / 'authorization.json').exists())
+                self.assertFalse(self.path().exists())
 
     def test_ownership_by_issue_for_a_batch(self):
         result = self.charter(issues=['12', '13'], ownership=['12=src/app.py', '13=docs,tests'])
         self.assertTrue(result['ok'], result)
-        self.assertEqual(self.record()['ownership'], {'12': ['src/app.py'], '13': ['docs', 'tests']})
+        self.assertEqual(self.record()['ownership'], {'12': ['src/app.py']})
+        self.assertEqual((self.record('13')['ownership'], self.record('13')['issue_ids']), ({'13': ['docs', 'tests']}, [13]))
         result = self.charter(issues=['12', '13'], ownership=['12=src/app.py'])
         self.assertEqual((result['ok'], result['reason']), (False, 'ownership_required'))
 
@@ -135,18 +141,26 @@ class CharterNewTests(CharterCase):
         self.assertEqual((self.record()['branch_prefix'], result['prefixSource']), ('PREFIX/', 'config'))
         self.assertTrue(any(w.startswith('branch_prefix_conflict') for w in result['warnings']), result)
 
-    def test_the_previous_charter_is_kept_never_deleted(self):
+    def test_the_previous_charter_of_the_same_issue_is_kept_never_deleted(self):
         self.charter()
-        first = (self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8')
-        result = self.charter(issues=['13'])
+        first = self.path().read_text(encoding='utf-8')
+        result = self.charter(ownership=['src'])
         self.assertTrue(result['ok'], result)
         kept = sorted((self.root / '.frontlights').glob('authorization-*-issue-12*.json'))
         self.assertEqual(len(kept), 1)
         self.assertEqual(kept[0].read_text(encoding='utf-8'), first)
-        self.assertEqual(result['kept'], str(kept[0]))
-        self.assertEqual(self.record()['issue_ids'], [13])
-        self.charter(issues=['14'])
-        self.assertEqual(len(list((self.root / '.frontlights').glob('authorization-*.json'))), 2)
+        self.assertEqual(result['kept'], [str(kept[0])])
+        self.assertEqual(self.record()['ownership'], {'12': ['src']})
+
+    def test_new_of_one_issue_never_erases_another(self):
+        """Retro 1123/1124, item 1: o `charter new` da #1124 apagou a #1123 do charter compartilhado."""
+        self.charter()
+        before = self.path().read_text(encoding='utf-8')
+        result = self.charter(issues=['13'], ownership=['docs'])
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['kept'], [])
+        self.assertEqual(self.path().read_text(encoding='utf-8'), before)
+        self.assertEqual(self.record('13')['issue_ids'], [13])
 
     def test_the_announcement_is_in_portuguese(self):
         result = self.charter()
@@ -167,7 +181,7 @@ class CharterNewTests(CharterCase):
     def test_direct_work_has_the_local_main_as_base(self):
         result = self.charter(issues=[], directs=['melhoria-x'], ownership=['src'])
         self.assertTrue(result['ok'], result)
-        record = self.record()
+        record = self.record('melhoria-x')
         self.assertEqual((record['issue_ids'], record['direct_ids']), ([], ['melhoria-x']))
         self.assertEqual(record['base']['direct']['from'], 'main')
         self.assertNotIn('issues', record['base'])
@@ -179,7 +193,7 @@ class CharterRenewAddTests(CharterCase):
         record = self.record()
         record['expires_at'] = '2000-01-01T00:00:00+00:00'
         record['worktrees'] = [{'issue': 12, 'path': 'x', 'branch': 'PREFIX/issue-12', 'ownership': ['src']}]
-        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(record), encoding='utf-8')
+        self.path().write_text(json.dumps(record), encoding='utf-8')
         result = frontlights.charter_cli('renew', str(self.root), str(self.config))
         self.assertTrue(result['ok'], result)
         renewed = self.record()
@@ -191,15 +205,17 @@ class CharterRenewAddTests(CharterCase):
         result = frontlights.charter_cli('renew', str(self.root), str(self.config))
         self.assertEqual((result['ok'], result['reason']), (False, 'no_charter'))
 
-    def test_add_puts_an_issue_with_its_ownership_in_the_charter(self):
-        self.charter()
+    def test_add_writes_the_charter_of_the_new_issue_from_the_shared_fields(self):
+        self.charter(prefix='OTHER/')
         result = self.charter('add', issues=['13'], ownership=['docs'])
         self.assertTrue(result['ok'], result)
-        record = self.record()
-        self.assertEqual(record['issue_ids'], [12, 13])
-        self.assertEqual(record['ownership']['13'], ['docs'])
+        record = self.record('13')
+        self.assertEqual((record['issue_ids'], record['ownership'], record['branch_prefix']),
+                         ([13], {'13': ['docs']}, 'OTHER/'))
+        self.assertEqual(self.record()['issue_ids'], [12])
         again = self.charter('add', issues=['13'], ownership=['docs'])
         self.assertEqual((again['ok'], again['reason']), (False, 'already_in_charter'))
+        self.assertIn('charter own', again['hint'])
 
 
     def test_add_announces_the_base_origin_has_now_not_the_one_of_new(self):
@@ -216,8 +232,98 @@ class CharterRenewAddTests(CharterCase):
         fresh = gitfixture.git(other, 'rev-parse', 'HEAD').stdout.strip()
         result = self.charter('add', issues=['13'], ownership=['docs'])
         self.assertTrue(result['ok'], result)
-        self.assertEqual(self.record()['base']['issues']['commit'], fresh)
+        self.assertEqual(self.record('13')['base']['issues']['commit'], fresh)
         self.assertIn(f'origin/main ({fresh[:7]})', result['announcement'])
+
+
+class CharterPerIssueTests(CharterCase):
+    def test_own_widens_the_ownership_by_amendment(self):
+        self.charter()
+        record = self.record()
+        record['worktrees'] = [{'issue': 12, 'path': str(self.root), 'branch': 'PREFIX/issue-12',
+                                'ownership': ['src/app.py', 'tests']}]
+        self.path().write_text(json.dumps(record), encoding='utf-8')
+        result = self.charter('own', ownership=['docs'])
+        self.assertTrue(result['ok'], result)
+        amended = self.record()
+        self.assertEqual(amended['ownership'], {'12': ['src/app.py', 'tests', 'docs']})
+        self.assertEqual(amended['worktrees'][0]['ownership'], ['src/app.py', 'tests', 'docs'])
+        self.assertEqual(amended['issued_at'], record['issued_at'])
+        self.assertEqual(list((self.root / '.frontlights').glob('authorization-*.json')), [])
+
+    def test_an_overlap_with_another_issue_is_refused_with_the_three_outcomes(self):
+        """Retro 1123/1124, item 5: a #1124 era dona de uma pasta que contém as da #1123."""
+        self.charter(ownership=['api/tests'])
+        for action, ownership in (('new', ['api/tests/profiles']), ('add', ['api']), ('new', ['api/tests'])):
+            with self.subTest(action=action, ownership=ownership):
+                result = self.charter(action, issues=['13'], ownership=ownership)
+                self.assertEqual((result['ok'], result['reason']), (False, 'ownership_overlap'))
+                self.assertEqual(result['conflicts'][0]['issues'], ['#12', '#13'])
+                self.assertEqual(result['conflicts'][0]['paths'], [['api/tests', ownership[0]]])
+                self.assertEqual(len(result['question']['options']), 3)
+                self.assertIn('AskUserQuestion', result['hint'])
+                self.assertFalse(self.path('13').exists())
+        self.assertTrue(self.charter('new', issues=['13'], ownership=['api/testsx'])['ok'])
+        result = self.charter('own', issues=['13'], ownership=['api/tests/area'])
+        self.assertEqual((result['ok'], result['reason']), (False, 'ownership_overlap'))
+        self.assertEqual(self.record('13')['ownership'], {'13': ['api/testsx']})
+
+    def test_an_expired_charter_without_worktrees_no_longer_owns(self):
+        self.charter(ownership=['api'])
+        record = self.record()
+        record['expires_at'] = '2000-01-01T00:00:00+00:00'
+        self.path().write_text(json.dumps(record), encoding='utf-8')
+        self.assertTrue(self.charter(issues=['13'], ownership=['api/x'])['ok'])
+        result = frontlights.charter_cli('check', str(self.root), str(self.config))
+        self.assertEqual((result['ok'], result['retired']), (True, ['#12']))
+
+    def test_check_compares_every_live_charter_and_a_proposal(self):
+        self.charter(ownership=['web/settings'])
+        self.charter(issues=['13'], ownership=['api'])
+        result = frontlights.charter_cli('check', str(self.root), str(self.config))
+        self.assertEqual((result['ok'], result['ownership']), (True, {'#12': ['web/settings'], '#13': ['api']}))
+        result = frontlights.charter_cli('check', str(self.root), str(self.config), issues=['14'],
+                                         ownership=['web/settings/area'])
+        self.assertEqual((result['ok'], result['reason'], result['exitCode']), (False, 'ownership_overlap', 1))
+        self.assertEqual(result['conflicts'][0]['issues'], ['#12', '#14'])
+        self.assertFalse(self.path('14').exists())
+
+    def test_map_derives_issue_to_worktrees_and_ports(self):
+        self.charter(ownership=['web'])
+        record = self.record()
+        record['worktrees'] = [{'issue': 12, 'path': str(self.root), 'branch': 'PREFIX/issue-12', 'ownership': ['web']}]
+        self.path().write_text(json.dumps(record), encoding='utf-8')
+        serve_dir = self.root / '.frontlights' / 'serve'
+        serve_dir.mkdir()
+        (serve_dir / '12.json').write_text(json.dumps({'issue': 12, 'processes': [
+            {'name': 'api', 'pid': 1, 'port': 5001, 'url': 'http://localhost:5001/health'}]}), encoding='utf-8')
+        result = frontlights.charter_cli('map', str(self.root), str(self.config))
+        self.assertTrue(result['ok'], result)
+        item = result['issues'][0]
+        self.assertEqual((item['issue'], item['ownership'], item['worktrees'][0]['branch']), (12, ['web'], 'PREFIX/issue-12'))
+        self.assertEqual(item['processes'], [{'name': 'api', 'port': 5001, 'url': 'http://localhost:5001/health'}])
+        self.assertEqual(result['conflicts'], [])
+        self.assertEqual(list((self.root / '.frontlights' / 'authorization').glob('*.json')), [self.path()])
+
+    def test_a_legacy_shared_charter_is_still_read_and_moves_on_the_first_write(self):
+        self.charter(issues=['12', '13'], ownership=['12=src', '13=docs'])
+        legacy = dict(self.record(), issue_ids=[12, 13], ownership={'12': ['src'], '13': ['docs']},
+                      worktrees=[{'issue': 13, 'path': str(self.root), 'branch': 'PREFIX/issue-13', 'ownership': ['docs']}])
+        for key in ('12', '13'):
+            self.path(key).unlink()
+        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(legacy), encoding='utf-8')
+        import _cli  # noqa: PLC0415
+        self.assertEqual(_cli.read_charter(self.root, 13)['worktrees'], legacy['worktrees'])
+        self.assertEqual(_cli.read_charter(self.root, 12)['ownership'], {'12': ['src']})
+        result = self.charter('new', issues=['14'], ownership=['docs/x'])
+        self.assertEqual((result['ok'], result['reason']), (False, 'ownership_overlap'))
+        result = self.charter('own', issues=['13'], ownership=['tests'])
+        self.assertTrue(result['ok'], result)
+        moved = self.record('13')
+        self.assertEqual((moved['issue_ids'], moved['ownership']), ([13], {'13': ['docs', 'tests']}))
+        self.assertEqual(moved['worktrees'][0]['ownership'], ['docs', 'tests'])
+        self.assertEqual(json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8')),
+                         legacy)
 
 
 class CharterCommandLineTests(CharterCase):
