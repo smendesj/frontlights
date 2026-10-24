@@ -170,7 +170,7 @@ class SlicesInOrderTextTests(unittest.TestCase):
         security = flat(read('skills', 'frontlights', 'docs', 'security.md'))
         self.assertIn('O teste é um por issue', security)
         self.assertIn('uma vez por issue e antes da revisão independente', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))
-        self.assertIn('Esse teste, um por issue, é o único portão.', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
+        self.assertIn('Esse teste, um por issue, é o único portão', flat(read('README.md')))  # issue 12 do redesenho: o README virou guia curto; a regra vive na skill
 
     def test_each_slice_has_its_own_worktree_cut_from_the_issue_branch(self):
         """Issue 31, S2: a worktree e a branch de cada CA, o `slice` no charter, um checkpoint por worktree e o

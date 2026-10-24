@@ -223,7 +223,7 @@ class SkillAndDevelopmentTests(unittest.TestCase):
         for phrase in ('**Gate on the findings.**', 'a new slice of the source issue first',
                        'is never a destination, so "cited in the PR" does not pass the gate',
                        'any other verification pass', "or is dropped by the user's explicit answer",
-                       'tick an acceptance criterion in the issue body only with evidence for it',
+                       'ticks an acceptance criterion only with evidence for it',
                        'a criterion born from a finding is ticked the same way',
                        'the findings left unfixed with the destination of each'):
             with self.subTest(phrase=phrase):

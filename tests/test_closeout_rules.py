@@ -201,7 +201,7 @@ class ReferenceTests(unittest.TestCase):
 class RulesInOtherDocsTests(unittest.TestCase):
     def test_development_ticks_only_with_evidence_and_leaves_closing_to_the_closeout(self):
         text = flat('skills', 'frontlights', 'references', 'development.md')
-        self.assertIn('tick an acceptance criterion in the issue body only with evidence for it', text)
+        self.assertIn('ticks an acceptance criterion only with evidence for it', text)
         self.assertIn('Closing an issue is never part of this: it has its own approval', text)
         self.assertNotIn('moving its card', text)
 
