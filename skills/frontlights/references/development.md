@@ -131,9 +131,8 @@ that slice's branch instead (stacked: `--stacked-on`, `"base": "<slice-branch>"`
 merged into the branch of the issue after the slice it depends on.
 
 Each slice is one TDD loop at its own seams and one `checkpoint --slice <id>` (`checkpoint-<id>.json`). When its loop
-closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests (all
-`verification_commands` on a `sliceMerge.broadSuite` match, `references/setup.md`; scripts only under the project,
-as `.frontlights/issues/<n>/verify/`), then the slice is merged into the
+closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests (all on a
+`sliceMerge.broadSuite` match, `references/setup.md`; scripts under `.frontlights/issues/<n>/verify/`), then the slice is merged into the
 branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
 issue's worktree and shown in its diff. A box without a screen, or one the watched run skips, runs its
 walkthrough ("Into the local main"), the evidence of its tick; any other waits for the "Aprovado" of the run that
@@ -183,8 +182,8 @@ convenience. With a `path_risk` of `inspect` other than `ok`, give `slice open` 
 claim: read the diff and rerun the commands it names.
 
 **Ownership between issues.** Two issues never own one path: `charter new`, `add` and `own` refuse an overlap, and
-`charter check` runs before parallel sessions open; ask the refusal's `question` with `AskUserQuestion` (one owner, in
-series, or subfolders). Each session reads `charter map` (issue → worktrees, ports).
+`charter check` runs before parallel sessions; ask the refusal's `question` with `AskUserQuestion`. Each session
+reads `charter map`.
 
 **Fan out inside an issue.** The independent slices go at once, one implementer per open slice, in its own worktree, and the agents around them do not
 wait: dispatch in the same message read-only workers that prepare the next slice (each writes its note, `references/worker.md`), and the checks that share no
@@ -247,8 +246,7 @@ merge --issue <n>`:
 
 1. **The checks.** Refuses a dirty main worktree, a slice outside the branch of the issue, an open box.
 2. **The gate, the watched run.** Merges the branch of the issue and the local main into a local
-   `<branch_prefix>issue-<n>-integra` (the branch of the issue never receives the local main; a conflict stays there,
-   `files`: resolve, commit, rerun); `browser-gate` measures it, the branch merged, as the issue branch, by its
+   `<branch_prefix>issue-<n>-integra` (a conflict stays there, `files`: resolve, commit, rerun); `browser-gate` measures it, the branch merged, as the issue branch, by its
    diff (a moved main keeps the answer). Not green is exit code 2 with its question and `answerFlags`.
 3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box or one the run did not walk, running
    the walkthrough of each box (its `Roteiro:` lines, `references/issues.md`) is a condition of the merge into the
@@ -303,8 +301,8 @@ window of its free test is closed; on "Agora não" the work stays in the local m
 offers the release again with everything accumulated.
 
 - **Plan it.** `homolog sync`, then `homolog.py release plan`: the issues and slugs to release, the branch name, and
-  `closes` (every box ticked, no open sub-issue). `baseProtection` warns upfront of a manual merge (a
-  required review the author cannot give). One session releases all its issues.
+  `closes` (every box ticked, no open sub-issue). `baseProtection` warns upfront of a manual merge.
+  One session releases all its issues.
 - **Offer it.** "Lançar a release com as issues #a, #b agora?", "Sim, lançar" first and "Agora não" second.
 - **Branch and pull request (covered).** The body follows `templates/pr.md` (the model of the pull request), checked
   by `release body-check`: **Resumo** and **Evidência** once per issue, from records that exist (a print by its file
