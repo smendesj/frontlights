@@ -54,12 +54,13 @@ Operations (each prints one JSON object on stdout):
          it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   merge  the issue into the local base in one command (references/development.md, "Into the local main"; only the
          coordinating session runs it): refuses (exit 1) a main worktree off the base, dirty or mid-merge, a slice of
-         the charter that is not an ancestor of the branch of the issue, an open box of the criteria (GitHub, read
-         only, or the local record), and a box without a screen without its walkthrough in format; runs
-         `browser-gate` on the worktree of the issue (not green: exit 2 with the `question` and `options`); cuts
-         `<prefix>issue-<n>-integra` from the branch of the issue (its own charter entry, local, never pushed) and
-         merges the branch of the issue and the local base into it (a conflict stays there for the session: exit 2
-         with `files`); writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
+         the charter that is not an ancestor of the branch of the issue and an open box of the criteria (GitHub, read
+         only, or the local record); cuts `<prefix>issue-<n>-integra` from the branch of the issue (its own charter
+         entry, local, never pushed) and merges the branch of the issue and the local base into it (a conflict stays
+         there for the session: exit 2 with `files`); runs `browser-gate` on that integration worktree, the branch it
+         merges, under the label of the issue branch (`--as`; not green: exit 2 with the `question`, the `options` and
+         `answerFlags`, the flags that record the answer on the same root); refuses a box without a screen without its
+         walkthrough in format; writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
          runs `authorize`, `git merge --no-ff` of the integration branch into the local base (a conflict is
          aborted), `bundle` and the `update-check` of the skill, all kept in that record. `--free-test-fix` skips the
          gate only with the result.json answered and a previous merge record with `scope_check: pass`, and records
@@ -1415,7 +1416,7 @@ GATE_QUESTIONS = {
     'pending': ('O teste assistido da issue #{n} ainda não foi respondido. Rodar agora?',
                 ['Rodar o teste assistido agora', 'Parar']),
     'stale': ('O código da issue #{n} mudou depois do teste assistido. Assistir de novo?',
-              ['Assistir de novo', 'Parar']),
+              ['Assistir de novo', 'Manter a decisão anterior', 'Parar']),
     'contradiction': ('O diff da issue #{n} muda a tela, e o plano diz que não toca o frontend. Rodar o teste '
                       'assistido?', ['Rodar o teste assistido', 'Parar']),
     'unconfigured': ('A issue #{n} muda a tela e o projeto não tem browserTest. Como verificar?',
@@ -1519,8 +1520,45 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     folder = root / '.frontlights' / 'issues' / str(number)
     record_path = folder / 'browser' / 'result.json'
     result = {'issue': number, 'issueBranch': issue_branch, 'integration': integra, 'base': base}
+    import browser_gate   # noqa: PLC0415
+    present = rev(root, f'refs/heads/{integra}')
+    entry = next((e for e in entries if e.get('branch') == integra), None)
+    path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'
+
+    def measured(gate_root, labels):
+        """The gate over the root that is merged (the integration worktree, labelled as the issue branch)."""
+        try:
+            gate, code = browser_gate.run_cli([str(gate_root)], base, config_path, toca,
+                                              str(record_path) if record_path.is_file() else None, labels=labels)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            raise Refusal(f'o browser-gate não respondeu: {str(error)[:200]}')
+        if code == 0:
+            return gate, None
+        text, options = GATE_QUESTIONS.get(gate.get('status'), GATE_QUESTIONS['pending'])
+        flags = ['--root', str(gate_root), *(['--as', labels[0]] if labels else []), '--record', str(record_path)]
+        return gate, {'exitCode': 2, 'reason': 'gate', 'gate': gate, 'question': text.format(n=number),
+                      'options': options, 'answerFlags': flags,
+                      'message': f'o portão da issue #{number} não está verde ({gate.get("status")}): pergunte antes '
+                                 'do merge e grave a resposta literal com `browser-gate --answer` e `answerFlags`'}
+
+    def walkthroughs(gate):
+        need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
+        walks, missing = {}, []
+        for label in need:
+            walk = folder / 'walkthroughs' / f'{label}.md'
+            problems = (closeout.walkthrough_problems(walk.read_text(encoding='utf-8-sig')) if walk.is_file()
+                        else ['ausente'])
+            walks[label] = {'path': str(walk), 'problems': problems}
+            if problems:
+                missing.append(label)
+        refusal = None if not missing else dict(
+            result, gate=gate, walkthroughs=walks, exitCode=1, reason='walkthroughs', missing=missing,
+            message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e grave '
+                    'walkthroughs/S<k>.md antes do merge na main local')
+        return walks, refusal
+
+    alias = [f'{integra}={issue_branch}']
     if free_test_fix:
-        import browser_gate   # noqa: PLC0415
         answered = read_record(record_path) if record_path.is_file() else None
         situation = browser_gate.situation(answered) if answered else None
         require(situation in browser_gate.ANSWERED, f'--free-test-fix exige o result.json da issue respondido (está '
@@ -1528,40 +1566,20 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
         previous = previous_merge_passed(folder)
         require(previous, '--free-test-fix exige um merge anterior desta issue na main local com o authorize em pass')
         gate = {'status': 'answered', 'evidence': 'teste livre', 'previous': str(previous)}
-    else:
-        import browser_gate   # noqa: PLC0415
-        try:
-            gate, code = browser_gate.run_cli([own['path']], base, config_path, toca,
-                                              str(record_path) if record_path.is_file() else None)
-        except (ValueError, OSError, subprocess.SubprocessError) as error:
-            raise Refusal(f'o browser-gate não respondeu: {str(error)[:200]}')
-        if code != 0:
-            text, options = GATE_QUESTIONS.get(gate.get('status'), GATE_QUESTIONS['pending'])
-            return {'exitCode': 2, 'reason': 'gate', 'gate': gate, 'question': text.format(n=number),
-                    'options': options, 'message': f'o portão da issue #{number} não está verde '
-                                                   f'({gate.get("status")}): pergunte antes do merge'}
-    result['gate'] = gate
-    need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
-    walks, missing = {}, []
-    for label in need:
-        path = folder / 'walkthroughs' / f'{label}.md'
-        problems = closeout.walkthrough_problems(path.read_text(encoding='utf-8-sig')) if path.is_file() else ['ausente']
-        walks[label] = {'path': str(path), 'problems': problems}
-        if problems:
-            missing.append(label)
-    result['walkthroughs'] = walks
-    if missing:
-        return dict(result, exitCode=1, reason='walkthroughs', missing=missing,
-                    message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e '
-                            'grave walkthroughs/S<k>.md antes do merge na main local')
-    present = rev(root, f'refs/heads/{integra}')
-    entry = next((e for e in entries if e.get('branch') == integra), None)
-    path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'
     if dry_run:
+        if not free_test_fix:
+            ready = present is not None and path.is_dir()
+            gate, refusal = measured(path if ready else own['path'], alias if ready else [])
+            if refusal:
+                return refusal
+        walks, refusal = walkthroughs(gate)
+        if refusal:
+            return refusal
         steps = ([f'git worktree add -b {integra} {path} {issue_branch}'] if present is None else
-                 [f'git merge {issue_branch} (em {path})']) + [f'git merge {base} (em {path})', 'authorize',
-                                                                 f'git merge --no-ff {integra} (na principal)', 'bundle']
-        return dict(result, exitCode=0, dryRun=True, steps=steps, written=False,
+                 [f'git merge {issue_branch} (em {path})']) + [f'git merge {base} (em {path})', 'browser-gate',
+                                                                 'authorize', f'git merge --no-ff {integra} (na principal)',
+                                                                 'bundle']
+        return dict(result, gate=gate, walkthroughs=walks, exitCode=0, dryRun=True, steps=steps, written=False,
                     message=f'Dry-run: a issue #{number} entra na main local por {integra}; nada foi gravado.')
     if present is None:
         require(not path.exists(), f'a pasta {path} já existe; a worktree de integração não é criada por cima')
@@ -1589,6 +1607,15 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
         return dict(result, exitCode=2, conflict=True, files=files, worktree=str(path),
                     message=f'conflito ao trazer a {base} local para {integra} em: {", ".join(files)}; resolva e '
                             'commite na worktree de integração e repita `homolog merge`')
+    if not free_test_fix:
+        gate, refusal = measured(path, alias)
+        if refusal:
+            return refusal
+    result['gate'] = gate
+    walks, refusal = walkthroughs(gate)
+    if refusal:
+        return refusal
+    result['walkthroughs'] = walks
     stamp = zoned_now().strftime('%Y%m%d-%H%M%S')
     operation = {'repository': record.get('repository'), 'issue': number, 'kind': 'merge_into_local_main',
                  'worktree': str(path), 'branch': integra, 'target': base,
