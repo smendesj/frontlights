@@ -133,12 +133,12 @@ merged into the branch of the issue after the slice it depends on.
 Each slice is one TDD loop at its own seams and one `checkpoint --slice <id>` (`checkpoint-<id>.json`). When its loop
 closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests (all
 `verification_commands` on a `sliceMerge.broadSuite` match, `references/setup.md`; scripts only under the project,
-as `.frontlights/issues/<n>/verify/`), then the slice is merged into
-the branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
-issue's worktree and shown in its diff. A box without a screen runs the walkthrough of its box ("Into the local
-main"), and the `.md` is the evidence of the tick; a box with a screen waits for the "Aprovado" of the watched run;
-then comes the tick of its box: the `next.tick` argv (`closeout.py tick --box S<k>`, with `closeout.py tick-check`
-before and after the write) and a short comment with the commit and the commands.
+as `.frontlights/issues/<n>/verify/`), then the slice is merged into the
+branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
+issue's worktree and shown in its diff. A box without a screen, or one the watched run skips, runs its
+walkthrough ("Into the local main"), the evidence of its tick; any other waits for the "Aprovado" of the run that
+walked it. Then the `next.tick` argv (`closeout.py tick --box S<k>`, or `--box S5,S6` in one write): its comment
+opens with the evidence read from that record, then the commit and the commands.
 
 The handoff names the slice in progress and its worktree; a fresh session resumes at the first open box. Slices run in
 parallel inside an issue and between issues. Meanwhile the ANTES window, open since the grilling, runs the `Fluxo:` of
@@ -208,13 +208,12 @@ the issue, its base and, after round one, the previous tip and findings, and the
 Bind each round to `frontlights.py evidence` in `.frontlights/issues/<n>/review.json`; `frontlights.py review-gate`
 runs before reporting an issue as reviewed. Any commit, edit or new file after the review makes it stale, and
 whether to review again is the user's call. Each axis stops by "When the review is done"; findings take the
-destination ladder (`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.
+destination ladder (`issues.md`, "Follow-ups"), a new slice of the source issue first.
 
 ### When the review is done
 
 A round is one dispatch of the reviewer on the current tip. The review is done at the first round that reports 0
-sérios and 0 médios; the baixos still open go to the findings batch, each as a new acceptance criterion of the source
-issue, and the batch also offers "Corrigir os baixos agora". There is no limit of rounds to keep: after a round with a
+sérios and 0 médios; the baixos still open go to the findings batch, each as a new slice of the source issue, and the batch also offers "Corrigir os baixos agora". There is no limit of rounds to keep: after a round with a
 sério or médio, ask "Mais uma rodada" or "Dar destino pela escada"; a sério or médio without a destination keeps the
 issue out of the local main by the gate on the findings. The handoff records each round: its HEAD and its counts.
 
@@ -223,8 +222,9 @@ main and before a PR is opened or updated, every open finding that came up (the 
 for, tests that ran, a live check, any other verification pass) has a destination GitHub tracks, or is fixed, or is
 shown as not a defect with its evidence, or is dropped by the user's explicit answer: the gate of the Follow-ups
 section. A line in the PR body, a comment or the chat is never a destination, so "cited in the PR" does not pass the
-gate. While a criterion born from a finding is open the issue is not in the `closes` of `release-plan`, so the PR cites
-it without a closing keyword, in its body and in the commit messages.
+gate. Most often a finding left unfixed becomes a new slice of the source issue. While such a criterion
+is open the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing keyword, in its body
+and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
 watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Check context with `context` by the
@@ -250,7 +250,7 @@ merge --issue <n>`:
    `<branch_prefix>issue-<n>-integra` (the branch of the issue never receives the local main; a conflict stays there,
    `files`: resolve, commit, rerun); `browser-gate` measures it, the branch merged, as the issue branch, by its
    diff (a moved main keeps the answer). Not green is exit code 2 with its question and `answerFlags`.
-3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box, running
+3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box or one the run did not walk, running
    the walkthrough of each box (its `Roteiro:` lines, `references/issues.md`) is a condition of the merge into the
    local main, with no new question. It runs when its slice closes: `.frontlights/issues/<n>/walkthroughs/S<k>.md`,
    with a header (the issue, the box, the persona, the date, the steps, the base and the commit it ran on), `## Antes`
@@ -286,10 +286,10 @@ says the window is theirs until they close it, with the link to the roteiro.
 - **One free test per homologated issue.** After an "Agora não" to the release, the next issue's free test covers
   everything accumulated in the local main. Closing the window right away is how the user skips it.
 - **A fix asked in the free test.** Fix it at once on the branch of the issue, TDD by default, push it (covered), then
-  `homolog.py merge --issue <n> --free-test-fix`: the free test itself is the evidence of the fix, and the watched run
-  is not rerun. When the product needs a restart, the user reloads the page and the window stays open. Each fix is a box of `teste-livre-cas.md`, a leftover box
-  (`references/issues.md`, "A leftover as an acceptance criterion"), ticked only when the user checked it, otherwise
-  with `Evidência que fecha:`.
+  `homolog.py merge --issue <n> --free-test-fix`: the free test itself is the evidence of the merge, and the watched run
+  is not rerun. When the product needs a restart, the user reloads the page and the window stays open. Each fix is a
+  new slice in `teste-livre-cas.md` (`references/issues.md`, "A finding as a new slice"), ticked by its walkthrough,
+  never by a word in the chat.
 - **Window closed, next step.** On the holder's exit (or "Sim, terminei") run `serve.py free-test stop`. With fixes,
   the batch before the release: the draft approved by link and stamp (`SKILL.md`, "Show before approval"), one
   approval for the whole file, and written by the write rule of the leftover (body captured, append only, difference

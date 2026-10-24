@@ -322,22 +322,30 @@ class PlanPathTests(unittest.TestCase):
 
 
 class TickBoxTests(unittest.TestCase):
-    BODY = ('## Critérios de aceitação\n\n- [ ] **S1.** primeira\n- [ ] **S2.** segunda\n'
-            '- [ ] Pendência (achado da revisão): algo. Evidência que fecha: um teste\n'
-            '- [ ] Pendência (do teste ao vivo): outra. Evidência que fecha: o print\n')
+    # retro de 23/10/2026 (GeoCloud #1123): a caixa é achada pelo rótulo, seja qual for o texto depois dele
+    BODY = ('## Critérios de aceitação\n\n- [ ] **S1.** primeira\n- [ ] **S2** segunda\n'
+            '- [ ] S9 Correção do filtro (do teste livre)\n- [ ] S10 — outra\n- [ ] S11: mais uma\n'
+            '- [ ] S1x não é rótulo\n')
 
-    def test_the_box_is_read_in_every_form(self):
+    def test_the_box_is_found_by_its_label_whatever_follows(self):
         import closeout
-        for given, line in (('S2', 4), ('s2', 4), ('2', 4), ('P1', 5), ('p2', 6)):
+        for given, line in (('S1', 3), ('S2', 4), ('s2', 4), ('2', 4), ('S9', 5), ('S10', 6), ('S11', 7)):
             with self.subTest(box=given):
-                kind, box = closeout.parse_box(given)
-                self.assertEqual(closeout.find_box(self.BODY, box, None, kind)[0], line)
+                self.assertEqual(closeout.find_box(self.BODY, closeout.parse_box(given), None)[0], line)
+        self.assertEqual([b['label'] for b in closeout.slice_boxes(self.BODY)], ['S1', 'S2', 'S9', 'S10', 'S11'])
 
-    def test_a_missing_leftover_box_is_refused(self):
+    def test_there_is_no_p_label_and_a_missing_box_is_refused(self):
         import closeout
-        kind, box = closeout.parse_box('P3')
+        for given in ('P1', 'p2', 'S0', 'S2.'):
+            with self.subTest(box=given), self.assertRaises(closeout.Refusal):
+                closeout.parse_box(given)
         with self.assertRaises(closeout.TickRefusal):
-            closeout.find_box(self.BODY, box, None, kind)
+            closeout.find_box(self.BODY, 3, None)
+
+    def test_several_boxes_come_from_repeated_or_comma_values(self):
+        import closeout
+        self.assertEqual(closeout.parse_boxes(['S5', 'S6,s7', '5']), [5, 6, 7])
+        self.assertEqual(closeout.parse_boxes('S5'), [5])
 
 
 class CheckpointByNumberTests(Fixture):

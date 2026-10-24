@@ -59,8 +59,8 @@ Operations (each prints one JSON object on stdout):
          entry, local, never pushed) and merges the branch of the issue and the local base into it (a conflict stays
          there for the session: exit 2 with `files`); runs `browser-gate` on that integration worktree, the branch it
          merges, under the label of the issue branch (`--as`; not green: exit 2 with the `question`, the `options` and
-         `answerFlags`, the flags that record the answer on the same root); refuses a box without a screen without its
-         walkthrough in format; writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
+         `answerFlags`, the flags that record the answer on the same root); refuses a box without a screen, or one the watched run did
+         not walk (its `criterios`), without its walkthrough in format; writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
          runs `authorize`, `git merge --no-ff` of the integration branch into the local base (a conflict is
          aborted), `bundle` and the `update-check` of the skill, all kept in that record. `--free-test-fix` skips the
          gate only with the result.json answered and a previous merge record with `scope_check: pass`, and records
@@ -1575,7 +1575,11 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
                                  'do merge e grave a resposta literal com `browser-gate --answer` e `answerFlags`'}
 
     def walkthroughs(gate):
-        need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
+        # every slice has its evidence: the watched run that walked it, or its walkthrough (a box without a screen,
+        # and any box the run did not walk, as a migration slice or a slice born from a finding)
+        walked = closeout.watched_boxes(read_record(record_path)) if record_path.is_file() else None
+        need = [b['label'] for b in boxes
+                if gate['status'] == 'not_needed' or b['semTela'] or (walked is not None and b['label'] not in walked)]
         walks, missing = {}, []
         for label in need:
             walk = folder / 'walkthroughs' / f'{label}.md'
@@ -1586,7 +1590,7 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
                 missing.append(label)
         refusal = None if not missing else dict(
             result, gate=gate, walkthroughs=walks, exitCode=1, reason='walkthroughs', missing=missing,
-            message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e grave '
+            message=f'sem o roteiro no formato das caixas sem tela ou que o teste assistido não percorreu {", ".join(missing)}: rode o roteiro e grave '
                     'walkthroughs/S<k>.md antes do merge na main local')
         return walks, refusal
 

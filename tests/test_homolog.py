@@ -605,10 +605,11 @@ class LocalMainTextTests(unittest.TestCase):
         # redesenho, issue 5: o novo merge é `homolog.py merge --free-test-fix`, e `free-test start` cria o rascunho.
         for phrase in ('Fix it at once on the branch of the issue', 'TDD by default', 'push it (covered)',
                        '`homolog.py merge --issue <n> --free-test-fix`',
-                       'the free test itself is the evidence of the fix, and the watched run is not rerun',
-                       'the user reloads the page and the window stays open', 'Each fix is a box of `teste-livre-cas.md`',
-                       'a leftover box (`references/issues.md`, "A leftover as an acceptance criterion")',
-                       'ticked only when the user checked it', 'otherwise with `Evidência que fecha:`'):
+                       'the free test itself is the evidence of the merge, and the watched run is not rerun',
+                       'the user reloads the page and the window stays open',
+                       # retro de 23/10/2026: toda correção do teste livre entra como slice nova, nunca caixa P
+                       'Each fix is a new slice in `teste-livre-cas.md` (`references/issues.md`, "A finding as a new '
+                       'slice")', 'ticked by its walkthrough, never by a word in the chat'):
             with self.subTest(part='fix', phrase=phrase):
                 self.assertIn(phrase, fix)
         closed = body.split('- **Window closed, next step.**')[1]
@@ -916,6 +917,22 @@ class HomologBundleTests(HomologCli, unittest.TestCase):
 
     def written_files(self):
         return sorted(path.name for path in self.backup.iterdir())
+
+    def test_the_message_survives_a_console_that_is_not_utf8(self):
+        # retro de 23/10/2026: "n�o h�" no bundle. O stdout do homolog é JSON só em ASCII (os acentos vão como \u),
+        # então nenhum leitor, nem um console cp1252, quebra a mensagem; o registro do merge é UTF-8. O acento quebrado
+        # veio de um `python -c` da sessão que imprimiu a mensagem em cp1252, fora do Frontlights.
+        accented = self.base / 'Códigos'
+        accented.mkdir()
+        for block, expected in ((None, 'não há pasta de backup configurada'), ({'backupDir': str(accented)}, 'Códigos')):
+            with self.subTest(configured=block is not None):
+                config = self.config(**({'homolog': block} if block else {}), branchPrefix='claude/')
+                done = subprocess.run([sys.executable, str(HOMOLOG), 'bundle', '--root', str(self.work), '--config',
+                                       str(config)], capture_output=True, env=dict(self.env, PYTHONIOENCODING='cp1252',
+                                                                                   PYTHONUTF8='0'),
+                                      stdin=subprocess.DEVNULL, timeout=180)
+                self.assertTrue(done.stdout.isascii(), done.stdout[:200])
+                self.assertIn(expected, json.loads(done.stdout.decode('ascii'))['message'])
 
     def test_bundle_writes_a_verifiable_file_with_the_base_and_the_work_branches(self):
         # the real `homolog.py bundle` process

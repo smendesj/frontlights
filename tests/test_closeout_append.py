@@ -24,7 +24,9 @@ REPO = 'OWNER/REPOSITORY'
 BODY = ('# Uma issue\n\n## Critérios de aceitação\n\n- [x] S1. Salvar\n  - Entrega: salvar\n'
         '- [ ] S2. Editar\n  - Entrega: editar\n  - Depende de: S1\n\nSlice estacionada: último sub-item.\n\n'
         '## Camadas da fatia\n\n| Camada | Situação |\n')
-ITEMS = '- [ ] Pendência (achado da revisão): o erro diz o campo. Evidência que fecha: teste do formulário\n'
+# a finding enters as the next slice (retro de 23/10/2026: nunca caixa P nem "Correção (do teste livre)")
+ITEMS = ('- [ ] S3. O erro diz o campo (achado da revisão)\n  - Entrega: o aviso do campo\n'
+         '  - Roteiro: conta 1 · salvar vazio\n    → antes: salva; depois: avisa\n')
 PITFALL = '- 2026-10-23 · #12 · campo vazio salvo sem aviso · sonda: estados da tela\n'
 
 
@@ -105,8 +107,20 @@ class ItemsTests(AppendCase):
         gh = FakeGh(body=BODY.replace('\n', '\r\n'))
         result = self.append(gh, items=str(self.file('lote-r1.md', ITEMS)))
         self.assertTrue(result['ok'], result)
-        self.assertIn('S1\r\n- [ ] Pendência', gh.body)
+        self.assertIn('S1\r\n- [ ] S3. O erro', gh.body)
         self.assertNotIn('\n', gh.body.replace('\r\n', ''))
+
+    def test_an_item_that_is_not_the_next_slice_is_refused_and_nothing_is_written(self):
+        for text in ('- [ ] Pendência (achado da revisão): o erro diz o campo. Evidência que fecha: teste\n',
+                     '- [ ] Correção (do teste livre): o filtro limpa\n', '- [ ] P1. o filtro limpa\n',
+                     '- [ ] S2. de novo\n', '- [ ] S4. pulou a S3\n', ITEMS + '- [ ] S3. repetida\n'):
+            with self.subTest(text=text[:30]):
+                gh = FakeGh()
+                result = self.append(gh, items=str(self.file('lote-r1.md', text)))
+                self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'not_a_new_slice', []))
+        gh = FakeGh()
+        two = ITEMS + '- [ ] **S4** Correção do filtro (do teste livre)\n'
+        self.assertTrue(self.append(gh, items=str(self.file('lote-r1.md', two)))['ok'])
 
     def test_without_the_approval_nothing_is_read_or_written(self):
         gh = FakeGh()

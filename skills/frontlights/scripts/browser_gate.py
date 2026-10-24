@@ -126,7 +126,7 @@ PASSES = ('antes', 'depois')
 FAILURE_KINDS = ('infraestrutura', 'produto', 'config')
 ACCOUNTS = {'conta1': 'conta 1', 'conta2': 'conta 2'}
 ORIGINS = {'back-real': 'back real', 'interceptada': 'interceptada'}
-CRITERION = re.compile(r'S[1-9][0-9]?')
+CRITERION = re.compile(r'S[1-9][0-9]{0,2}')   # the slice label S<k>, as `slice open` and `closeout tick` take it
 HEAD = re.compile(r'[0-9a-f]{7,64}')
 CASE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,39}')
 # the option of the three questions (and of the gate's own) -> situacao; None keeps the decision

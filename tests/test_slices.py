@@ -221,7 +221,7 @@ class SlicesTextTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertRegex(criteria, r'(?m)^' + re.escape(line))
         for phrase in ('uma caixa por slice', 'bloqueadoras primeiro', 'falha no commit de partida', 'Prefactoring',
-                       'expandir', 'contrair', 'Pendência (achado da revisão)'):
+                       'expandir', 'contrair', '(achado da revisão)`', 'a slice de um achado não conta'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, flat(criteria))
         self.assertNotIn('## Verificação da fatia vertical', template)
@@ -261,17 +261,17 @@ class SlicesTextTests(unittest.TestCase):
         no ensaio."""
         skill = flat(skilltext.stage(5))
         for phrase in ('At most five tracer-bullet slices', 'the sixth becomes a top-level issue', '`--blocked-by`',
-                       'leftover boxes do not count'):
+                       'finding slices do not count'):
             with self.subTest(where='SKILL.md', phrase=phrase):
                 self.assertIn(phrase, skill)
         reference = flat(section(read('skills', 'frontlights', 'references', 'issues.md'),
                                  'Slices as acceptance criteria') or '')
-        for phrase in ('at most five slices', 'sixth', 'top-level issues', '`--blocked-by`', 'Leftover boxes do not count',
+        for phrase in ('at most five slices', 'sixth', 'top-level issues', '`--blocked-by`', 'Slices born from findings do not count',
                        '`validate-plan` refuses the sixth'):
             with self.subTest(where='issues.md', phrase=phrase):
                 self.assertIn(phrase, reference)
         template = flat(section(read('skills', 'frontlights', 'templates', 'issue.md'), 'Critérios de aceitação') or '')
-        for phrase in ('no máximo cinco', 'issues de topo', 'pendência não conta'):
+        for phrase in ('no máximo cinco', 'issues de topo', 'a slice de um achado não conta'):
             with self.subTest(where='templates/issue.md', phrase=phrase):
                 self.assertIn(phrase, template)
         self.assertIn('até cinco por issue', flat(read('skills', 'frontlights', 'docs', 'protocol.md')))

@@ -13,9 +13,9 @@ Expected, in this order:
    destination. (b) is the only one that may stay as text, said as "não é defeito" with the
    command and what it returned. "Cited in the PR body" is refused as a destination for (a)
    and (c), with the reason (PR text is not tracked and is out of sight after the merge).
-2. (a) and (c) become acceptance criteria of the source issue, inside its acceptance-criteria
-   section, never in a section of their own. The batch file, approved by link and stamp (`SKILL.md`, "Show before approval"), holds the exact text of each
-   (`- [ ] Pendência (achado da revisão): ... Evidência que fecha: ...`) and the question offers one option
+2. (a) and (c) become new slices of the source issue (S4 and S5), inside its acceptance-criteria
+   section, never in a section of their own nor as `P<k>` boxes. The batch file, approved by link and stamp (`SKILL.md`, "Show before approval"), holds the exact text of each
+   (`- [ ] S4. ... (achado da revisão)` with its sub-items and walkthrough) and the question offers one option
    that approves the proposed destinations; nothing is written before the answer, and the
    user's answer is recorded verbatim.
 3. The write saves the previous body, adds only the new items after the last criterion and
@@ -24,8 +24,8 @@ Expected, in this order:
    and the issue as `unchecked_criteria`, so the stage 1 closeout question does not list it.
 4. The PR body may repeat the items as context, citing the criteria that track them.
 5. The handoff carries "Achados sem correção e destino de cada um" with the three findings.
-6. After the work behind a criterion is done, it is ticked only with evidence (a test, a
-   measured result, a reviewed diff); once the five are ticked, the issue becomes a
+6. After the work behind a slice is done, it is ticked only with its recorded evidence (the
+   watched run that walked it, or its walkthrough); once the five are ticked, the issue becomes a
    candidate in the closeout list.
 
 Legacy case: an issue body that keeps "## Pendências conhecidas" outside the acceptance
@@ -36,8 +36,8 @@ items into the criteria is available. Nothing is moved unless the user asks; the
 a write of its own with its text approved first by link and stamp, whose only differences are the
 added criteria and the removed legacy items.
 
-Reject: a finding reported as "cited in the PR" and nothing else; a leftover written in a
-section of its own, outside the criteria; a write before the batch answer; a body overwritten
+Reject: a finding reported as "cited in the PR" and nothing else; a finding written in a
+section of its own, outside the criteria, or as a `P<k>` box; a write before the batch answer; a body overwritten
 without the saved copy or without the difference check; a criterion ticked without evidence
 or only to get the issue closed; one top-level issue per finding; a defect called "não é
 defeito" without evidence; the issue reported as reviewed or complete, or the PR opened,

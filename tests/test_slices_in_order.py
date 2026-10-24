@@ -138,8 +138,8 @@ class SlicesInOrderTextTests(unittest.TestCase):
         self.assertNotEqual(body, '')
         for phrase in ('one issue branch', 'delivered by one merge into the local main', 'its own worktree and branch',
                        'in dependency order: independent slices run at once',
-                       'one TDD loop', '`checkpoint --slice <id>`', 'first open box', 'tick of its box',
-                       '`closeout.py tick-check` before and after the write', 'one per issue, when the last slice',
+                       'one TDD loop', '`checkpoint --slice <id>`', 'first open box', 'Then the `next.tick` argv',
+                       '`--box S5,S6` in one write', 'one per issue, when the last slice',
                        'it is the only gate of the merge into the local main',
                        'a broader suite and an independent review run only when the user asks for them',
                        'a family that already exists'):
