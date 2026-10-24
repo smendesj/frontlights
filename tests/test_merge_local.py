@@ -172,6 +172,52 @@ class SliceMergeTests(Stage6Case):
         self.assertEqual((result['ok'], result['reason'], result['exitCode']), (False, 'local_main_commit', 3))
         self.assertEqual(result['commits'][0], git(self.root, 'rev-parse', 'main'))
 
+    def test_a_commit_already_on_another_remote_branch_is_not_of_the_local_main_only(self):
+        """Retro 1123/1124, item 8: commits of the local main already pushed in another issue's branch."""
+        self.commit(self.root, 'src/main_only.py', message='já na branch remota de outra issue')
+        git(self.root, 'push', '-q', 'origin', 'main:refs/heads/PREFIX/issue-99')
+        git(self.issue_wt, 'merge', '-q', '--no-edit', 'main')
+        result = self.merge()
+        self.assertTrue(result['ok'], result)
+
+    def broad(self, rule):
+        config = json.loads(self.config.read_text(encoding='utf-8'))
+        config['sliceMerge'] = rule
+        self.config.write_text(json.dumps(config), encoding='utf-8')
+
+    def test_a_migration_naming_a_listed_table_runs_the_whole_verification_not_the_filter(self):
+        """Retro 1123/1124, item 3: `sliceMerge.broadSuite` troca o `--test` da slice pelo `verification_commands`."""
+        self.broad({'broadSuite': {'paths': ['db/migrations/*'], 'contains': ['TABLE_A']}})
+        self.commit(self.s1, 'db/migrations/001.sql', 'ALTER TABLE table_a ADD c INT;\n', 'migration')
+        result = self.merge(tests=[json.dumps(RED)])
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['broadSuite']['files'], ['db/migrations/001.sql'])
+        self.assertEqual([r['argv'] for r in result['tests']['ran']], [GREEN])
+
+    def test_a_migration_of_another_table_keeps_the_filter_of_the_slice(self):
+        self.broad({'broadSuite': {'paths': ['db/migrations/*'], 'contains': ['TABLE_A']}})
+        self.commit(self.s1, 'db/migrations/001.sql', 'ALTER TABLE table_ab ADD c INT;\n', 'migration')
+        result = self.merge(tests=[json.dumps(RED)])
+        self.assertEqual((result['ok'], result['reason']), (False, 'red'))
+        self.assertNotIn('broadSuite', result)
+
+    def test_a_malformed_slice_merge_block_is_refused(self):
+        self.broad({'broadSuite': {'paths': []}})
+        self.assertEqual(self.merge()['reason'], 'config_invalid')
+
+    def test_a_verification_script_outside_the_project_root_is_refused(self):
+        """Retro 1123/1124, item 9: o script vive versionado em .frontlights/issues/<n>/verify/, nunca num scratchpad."""
+        outside = self.tmp / 'scratchpad' / 's1-verify.py'
+        inside = self.root / '.frontlights' / 'issues' / '12' / 'verify' / 's1-verify.py'
+        for script in (outside, inside):
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text('raise SystemExit(0)\n', encoding='utf-8')
+        result = self.merge(tests=[json.dumps([sys.executable, str(outside)])])
+        self.assertEqual((result['ok'], result['reason']), (False, 'verify_outside'))
+        self.assertIn('.frontlights/issues/12/verify/', result['hint'])
+        result = self.merge(tests=[json.dumps([sys.executable, str(inside)])])
+        self.assertTrue(result['ok'], result)
+
     def test_a_conflict_is_exit_2_with_the_files_and_the_rerun_goes_on(self):
         self.commit(self.issue_wt, 'src/feature.py', 'x = 2\n', 'na issue')
         result = self.merge()

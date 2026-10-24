@@ -2552,12 +2552,10 @@ def suite_from(source, tree):
 
 def local_main_only(root, issue_branch, base):
     """The commits the push of the branch of the issue would send that are only in the local main (never pushed
-    before the release): in `<issue> ^origin/<base> ^origin/<issue>` and in `<base> ^origin/<base>`."""
-    excluded = [f'^refs/remotes/origin/{base}']
-    if git_rev(root, f'refs/remotes/origin/{issue_branch}'):
-        excluded.append(f'^refs/remotes/origin/{issue_branch}')
-    code, pushed, _ = git_call(root, 'rev-list', f'refs/heads/{issue_branch}', *excluded)
-    code2, local, _ = git_call(root, 'rev-list', f'refs/heads/{base}', f'^refs/remotes/origin/{base}')
+    before the release): in `<issue> --not --remotes` and in `<base> --not --remotes`. A commit already on any
+    remote-tracking branch (another issue's pushed branch, say) is never counted."""
+    code, pushed, _ = git_call(root, 'rev-list', f'refs/heads/{issue_branch}', '--not', '--remotes')
+    code2, local, _ = git_call(root, 'rev-list', f'refs/heads/{base}', '--not', '--remotes')
     if code != 0 or code2 != 0:
         return []
     only = set(local.split())
@@ -2612,6 +2610,65 @@ def refresh_preview(root, config_path, base):
             'message': answer.get('message') or answer.get('error') if isinstance(answer, dict) else None}
 
 
+SCRIPT_SUFFIXES = ('.sh', '.bash', '.ps1', '.py', '.cmd', '.bat', '.js', '.mjs', '.cjs', '.ts', '.rb', '.pl')
+
+
+def broad_suite_rule(config_path):
+    """The `sliceMerge.broadSuite` of the config, {'paths': [globs], 'contains': [terms]}, or None without it: a slice
+    whose diff touches a file of `paths` with a changed line naming a term of `contains` (every changed line when
+    `contains` is empty) runs the charter's whole `verification_commands`, never its own filter."""
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    block = config.get('sliceMerge') if isinstance(config, dict) else None
+    if block is None:
+        return None
+    rule = block.get('broadSuite') if isinstance(block, dict) and set(block) <= {'broadSuite'} else False
+    if rule is None:
+        return None
+    paths = rule.get('paths') if isinstance(rule, dict) and set(rule) <= {'paths', 'contains'} else None
+    contains = rule.get('contains', []) if isinstance(rule, dict) else None
+    if not (strings(paths) and paths and isinstance(contains, list) and all(nonempty(t) for t in contains)):
+        raise Stage6Refusal('config_invalid', 'sliceMerge precisa ser {"broadSuite": {"paths": [globs], "contains": '
+                            '[termos]}} (paths não vazio)', hint='references/setup.md, "The sliceMerge block"')
+    return {'paths': paths, 'contains': contains}
+
+
+def broad_suite_hits(root, issue_branch, branch, rule):
+    """The files of the slice's diff (from its merge base with the branch of the issue) that call for the whole
+    verification under `rule`; [] when none does."""
+    span = f'refs/heads/{issue_branch}...refs/heads/{branch}'
+    code, names, _ = git_call(root, 'diff', '--name-only', span)
+    if code != 0:
+        return []
+    files = [n for n in names.splitlines() if any(fnmatch.fnmatchcase(n, g) for g in rule['paths'])]
+    if not rule['contains']:
+        return files
+    terms = re.compile('|'.join(r'\b' + re.escape(t) + r'\b' for t in rule['contains']), re.IGNORECASE)
+    hits = []
+    for name in files:
+        _, diff, _ = git_call(root, 'diff', span, '--', name)
+        changed = [line[1:] for line in diff.splitlines() if line[:1] in '+-' and line[:3] not in ('+++', '---')]
+        if any(terms.search(line) for line in changed):
+            hits.append(name)
+    return hits
+
+
+def scripts_outside(argvs, cwd, roots):
+    """The script paths (by suffix) of `argvs` that resolve outside every folder of `roots`: a verification script
+    lives versioned under the project (`.frontlights/issues/<n>/verify/`), never in a scratchpad."""
+    allowed = [os.path.normcase(str(Path(r).resolve())) for r in roots]
+    found = []
+    for argv in argvs:
+        for item in argv:
+            if not item.lower().endswith(SCRIPT_SUFFIXES):
+                continue
+            text = re.sub(r'^/([A-Za-z])/', r'\1:/', item) if os.name == 'nt' else item
+            path = Path(os.path.expanduser(text))
+            full = os.path.normcase(str((path if path.is_absolute() else Path(cwd) / path).resolve()))
+            if not any(full == a or full.startswith(a.rstrip('\\/') + os.sep) for a in allowed):
+                found.append(item)
+    return found
+
+
 def slice_merge(root, config_path, issue, label, source=None, tests=(), watched_only=False, comment_file=None):
     root = Path(root)
     _, record, number = issue_charter(root, issue)
@@ -2639,12 +2696,23 @@ def slice_merge(root, config_path, issue, label, source=None, tests=(), watched_
     if not already:
         stamp = _cli.sao_paulo_now().strftime('%Y%m%d-%H%M%S')
         log = root / '.frontlights' / 'issues' / str(number) / f'slice-merge-{label}-{stamp}.log'
+        rule = broad_suite_rule(config_path)
+        hits = broad_suite_hits(root, issue_branch, branch, rule) if rule else []
+        if hits:
+            result['broadSuite'] = {'files': hits[:20], 'reason': 'sliceMerge.broadSuite: a verificação inteira do '
+                                    'charter, não o filtro da slice'}
+            source, watched_only, tests = None, False, ()
         if source:
             result['tests'] = suite_from(source, piece['path'])
         elif watched_only:
             result['tests'] = {'skipped': 'só com teste assistido: nenhum teste escrito nem rodado'}
         else:
             argvs = verification_argv(tests) or record.get('verification_commands') or []
+            outside = scripts_outside(argvs, piece['path'], (root, piece['path'], own['path']))
+            if outside:
+                raise Stage6Refusal('verify_outside', f'script de verificação fora da raiz do projeto: '
+                                    f'{", ".join(outside[:5])}; nada foi rodado nem mesclado',
+                                    hint=f'versione-o em .frontlights/issues/{number}/verify/ e passe esse caminho')
             if not argvs:
                 raise Stage6Refusal('no_tests', 'sem testes para rerrodar: o coordenador rerroda os testes da slice '
                                     'antes do merge', hint="passe --test '<argv JSON>' (os testes dos seams), --from "

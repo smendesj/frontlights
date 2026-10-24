@@ -135,16 +135,15 @@ class FastSuiteTextTests(unittest.TestCase):
         for phrase in ('### Which tests run when',
                        'TDD per slice is the default practice',
                        'plus the test modules the slice touches and the type checks',
-                       'These tests are evidence, never a gate: no suite holds back the merge into the local main or '
-                       'the release.',
+                       'These tests are evidence, never a gate: no suite holds back the merge into the local main; '
+                       'only the release requires one.',
                        'When the user asks to implement "só com teste assistido", the session writes and runs no tests '
                        'in that run',
                        # redesenho, issue 5: as flags da suíte estão no --help; o runner do repositório, no README.
                        'A broader suite runs only when the user asks for one, through the optional tools',
                        '`homolog suite --mode impact|full`', 'judged by `homolog suite-gate`',
                        'a red one is a finding',
-                       "No whole check is required anywhere: a project's CI, when there is one, is neither expected "
-                       'nor a gate, and the watched run of each issue is the evidence.'):
+                       "A project's CI is neither expected nor a gate."):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
         for old in ('with or without CI in the project', 'The CI of this repository stays the full check',
@@ -153,11 +152,12 @@ class FastSuiteTextTests(unittest.TestCase):
             with self.subTest(old=old):
                 self.assertNotIn(old, text)
 
-    def test_the_release_requires_no_suite(self):
+    def test_the_release_go_requires_the_whole_suite(self):
         # "The release" é a última seção da referência da etapa 6.
         text = ' '.join(read('skills', 'frontlights', 'references', 'development.md').split('\n## The release\n')[1].split())
-        self.assertIn('No suite is required for the release (no whole check is: the watched run of each issue is its '
-                      'evidence)', text)
+        # retro 1123/1124: o `release go` exige a suíte inteira verde na ponta da main local
+        self.assertIn('`go` refuses (`full_suite`) until `homolog suite --release --mode full` is green at the tip of '
+                      'the local main', text)
         self.assertNotIn("This run is the release's only whole check", text)
         self.assertNotIn("The CI of the release's pull request stays the full check", text)
 
