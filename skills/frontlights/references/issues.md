@@ -34,7 +34,7 @@ with Entrega (what can be demoed when it is done), Seams (public interfaces), Ca
 The persona is a label (`conta 1`, `conta 2`, a test user the run creates, `sem tela`), never a login; the before is
 recorded by the reconnaissance (`references/grilling.md`, "Reconnaissance"). Every criterion fails at the base commit.
 **A short issue holds at most five slices**: the sixth goes into top-level issues linked by `--blocked-by`, never a
-sub-issue. Leftover boxes do not count. In `plan.json`, `slices` carry `id`, `title`, `delivers`, `seams`, `layers`,
+sub-issue. Slices born from findings do not count. In `plan.json`, `slices` carry `id`, `title`, `delivers`, `seams`, `layers`,
 `depends_on`, `depends_why`, `files` and `walkthrough` (`persona`, `steps`, `before` and `after`); `validate-plan`
 refuses the sixth slice, a missing field, a later dependency, a dependency without its fact, and a slice without
 `files`, without `walkthrough` or with an empty `before`; it prints the `waves` ("Waves"). `frontlights.py
@@ -135,11 +135,9 @@ pass that belong to an issue never become one new issue each. Classify every fin
 by the first of the three destinations that fits:
 
 1. Fix it in the issue branch (the same PR, at the release), when it is inside the issue's approved scope and ownership.
-2. A new acceptance criterion in the source issue, written as a checklist item
-   (`- [ ] ...`) inside its acceptance-criteria section, for a leftover that belongs to
-   that outcome (recipe: "A leftover as an acceptance criterion", below). The issue is
-   done only when the leftover is treated, completed and ticked with evidence, like any
-   other criterion; it is one more box, worked in order like a slice. It also leaves
+2. A new slice of the source issue, the next box `S<k>` of its acceptance criteria, for a
+   finding that belongs to that outcome (recipe: "A finding as a new slice", below), done
+   like any other slice. It also leaves
    one line in the project's pitfalls (`.frontlights/pitfalls.md`), in the same approval as the
    batch and with no question of its own ("A pitfall line", below).
 3. A top-level issue only for new scope or for a problem that crosses several issues;
@@ -171,23 +169,23 @@ closed issue takes no new criterion): never reopen, delete or archive an issue y
 and close one only through the closeout approval of `references/closeout.md`. An
 issue that was only merged and is still open follows the ladder above like any other.
 
-### A leftover as an acceptance criterion
+### A finding as a new slice
 
-A leftover is not an appendix: it is one more acceptance criterion, never into a section of its own, because the
-criteria section is the only one `scripts/closeout.py` counts: kept anywhere else, the issue could be proposed for
-closing with it still open. A source issue that has no such section, or is closed, cannot take destination 2: use a
-top-level issue that cites it and say why.
+A finding kept in its issue (a free-test fix, a review's baixo) is one more slice, never a section of its own nor
+another kind of box (`P<k>`, `Pendência`, `Correção (do teste livre)`): the criteria section is the only one
+`scripts/closeout.py` counts, and every tool finds a box by its label `S<k>`: kept anywhere else, the issue could be
+proposed for closing with it still open. A source issue that has no such
+section, or is closed, cannot take destination 2: use a top-level issue that cites it and say why.
 
-- **Text.** One objective, observable item that names the evidence that will close it, in the user's language:
-  `- [ ] Pendência (achado da revisão): <what must be true>. Evidência que fecha: <evidence>` (`do teste ao vivo`,
-  `dos testes` or `da conferência`). It has no `S<n>`: label it `P1`, `P2` for `checkpoint --slice`, in the handoff.
+- **Text.** The box of "Slices as acceptance criteria", numbered after the last, in the user's language, its origin
+  in the title: `- [ ] S<k>. <what must be true> (achado da revisão)` (or `do teste livre`).
 - **Approval.** Like any update of a published issue, it keeps what is there and is approved before it is written:
   the exact text, in the stamped file of the batch, approved in that single question. Nothing is written before the answer.
-- **Write.** `closeout.py append --issue <n> --items <stamped file> [--pitfall <file>]`: it captures the body byte for
-  byte, inserts after the last item of the section, captures again right before writing (someone edited it: it stops),
+- **Write.** `closeout.py append --issue <n> --items <stamped file> [--pitfall <file>]`: it refuses an item without
+  the next label, captures the body byte for byte, inserts after the last item of the section, captures again right before writing (someone edited it: it stops),
   rereads and prints `criteria.total` before and after. A divergence is shown; restoring the saved body is a write of
   its own and needs its own approval. The handoff keeps the text, the literal answer and the files `append` printed.
-- **Treat it.** Tick it only with evidence, never to get the issue closed. While one is open the issue is not in the
+- **Treat it.** Tick it only with its recorded evidence, never to get the issue closed. While one is open the issue is not in the
   `closes` of `release-plan`, so the PR cites it without a closing keyword (`Closes`, `Fixes`, `Resolves`), in its body
   and in the commit messages, because the merge would close the issue with the criterion unticked.
 

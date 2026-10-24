@@ -60,11 +60,14 @@ class DevelopmentTests(unittest.TestCase):
 
     def test_slices_in_order_runs_the_walkthrough_before_the_tick(self):
         slices = section(self.text, 'Slices in order')
-        for phrase in ('runs the walkthrough of its box', 'the `.md` is the evidence of the tick',
-                       'waits for the "Aprovado" of the watched run'):
+        # retro de 23/10/2026: a caixa que o teste assistido não percorre também tem roteiro; a evidência do tick sai
+        # do registro, nunca digitada
+        for phrase in ('A box without a screen, or one the watched run skips, runs its walkthrough',
+                       'the evidence of its tick', 'waits for the "Aprovado" of the run that walked it',
+                       '`--box S5,S6` in one write', 'opens with the evidence read from that record'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, slices)
-        self.assertLess(slices.index('runs the walkthrough of its box'), slices.index('then comes the tick of its box'))
+        self.assertLess(slices.index('runs its walkthrough'), slices.index('Then the `next.tick` argv'))
 
     def test_the_report_lists_the_walkthroughs(self):
         review = section(self.text, 'Review, checkpoints and renewal')

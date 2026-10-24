@@ -12,6 +12,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1666,6 +1667,77 @@ class TickTests(CloseoutCase):
     def test_a_lower_case_box_is_read_as_upper_case(self):
         result, _ = self.tick(box='s2')
         self.assertEqual((result['ok'], result['box']), (True, 'S2'))
+
+    def test_several_boxes_are_ticked_in_one_write(self):
+        # retro de 23/10/2026 (GeoCloud #1123): quatro caixas marcadas em quatro PATCHes, uma a uma por --line
+        for box in (['S1', 'S2'], 'S1,S2', ['S1,S2', 's1']):
+            with self.subTest(box=box):
+                result, gh = self.tick(box=box)
+                self.assertTrue(result['ok'], result['message'])
+                self.assertEqual((result['box'], result['lines'], len(gh.edits)), (['S1', 'S2'], [5, 7], 1))
+                self.assertEqual(gh.body, TICK_BODY.replace('- [ ] S1.', '- [x] S1.').replace('- [ ] S2.', '- [x] S2.'))
+                self.assertEqual(result['message'], 'As caixas S1, S2 (linhas 5, 7) da issue #12 foram marcadas, e a '
+                                                    'releitura confere.')
+                shutil.rmtree(self.root / '.frontlights' / 'issues')
+
+    def test_one_box_without_evidence_holds_the_whole_write(self):
+        record = Path(self.tmp.name) / 'result-s1.json'
+        record.write_text(json.dumps({'situacao': 'aprovado', 'criterios': ['S1']}), encoding='utf-8')
+        gh = FakeIssueGh()
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=gh.edit, issue='12', box=['S1', 'S2'],
+                              line=None, record=str(record))
+        self.assertEqual((result['ok'], result['reason'], gh.reads, gh.edits), (False, 'no_evidence', [], []))
+        self.assertIn('não passou pela S2', result['message'])
+
+    def test_the_evidence_is_written_from_the_record_with_the_time_of_sao_paulo(self):
+        record = Path(self.tmp.name) / 'result-aprovado.json'
+        record.write_text(json.dumps({'situacao': 'aprovado', 'criterios': ['S1', 'S2'],
+                                      'pergunta': {'resposta': 'Aprovado', 'em': '2026-10-23T22:10:00+00:00'}}),
+                          encoding='utf-8')
+        comment = Path(self.tmp.name) / 'comentario.md'
+        comment.write_text('Commit abc1234; testes: python -m unittest\n', encoding='utf-8')
+        gh = FakeIssueGh()
+        posted = []
+        edit = lambda argv: posted.append(Path(argv[-1]).read_text(encoding='utf-8')) if argv[1] == 'comment' else gh.edit(argv)
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=edit, issue='12', box='S2', line=None,
+                              record=str(record), comment_file=str(comment))
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(result['evidence']['text'], 'conferido no DEPOIS assistido, aprovado pelo usuário em '
+                                                     '23/10/2026 19:10 (result-aprovado.json)')
+        self.assertEqual(posted, ['Evidência registrada:\n- S2: conferido no DEPOIS assistido, aprovado pelo usuário em '
+                                  '23/10/2026 19:10 (result-aprovado.json)\n\nCommit abc1234; testes: python -m unittest\n'])
+
+    def test_a_walked_run_or_the_walkthrough_is_the_evidence_of_a_box(self):
+        record = Path(self.tmp.name) / 'result-depois.json'
+        record.write_text(json.dumps({'situacao': 'aprovado', 'passadas': {'depois': {'criterios': {'S1': {}}}}}),
+                          encoding='utf-8')
+        self.assertEqual(closeout.slice_evidence(self.root, 12, 'S1', str(record))['kind'], 'teste assistido')
+        with self.assertRaises(closeout.TickRefusal):
+            closeout.slice_evidence(self.root, 12, 'S2', str(record))
+        walk = self.root / '.frontlights' / 'issues' / '12' / 'walkthroughs'
+        walk.mkdir(parents=True)
+        (walk / 'S2.md').write_text('# S2 sem tela\n\n## Antes\n\n```\nx\n```\n\n## Depois\n\n```\ny\n```\n',
+                                    encoding='utf-8')
+        self.assertEqual(closeout.slice_evidence(self.root, 12, 'S2', str(record))['text'],
+                         'roteiro da caixa rodado e gravado em walkthroughs/S2.md')
+
+    def test_a_criterion_without_a_label_needs_recorded_evidence_too(self):
+        gh = FakeIssueGh()
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=gh.edit, issue='12', box=None, line='9',
+                              record=str(Path(self.tmp.name) / 'absent.json'))
+        self.assertEqual((result['ok'], result['reason'], gh.edits), (False, 'no_evidence', []))
+        log = self.root / '.frontlights' / 'issues' / '12' / 'suite.log'
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text('OK\n', encoding='utf-8')
+        outside = Path(self.tmp.name) / 'fora.log'
+        outside.write_text('OK\n', encoding='utf-8')
+        refused = closeout.run('tick', self.config, self.root, gh=gh, edit=gh.edit, issue='12', box=None, line='9',
+                               record=str(Path(self.tmp.name) / 'absent.json'), evidence=str(outside))
+        self.assertEqual(refused['reason'], 'no_evidence')
+        result = closeout.run('tick', self.config, self.root, gh=gh, edit=gh.edit, issue='12', box=None, line='9',
+                              record=str(Path(self.tmp.name) / 'absent.json'), evidence=str(log))
+        self.assertTrue(result['ok'], result['message'])
+        self.assertEqual(result['evidence']['text'], 'evidência registrada em suite.log')
 
     def test_the_repository_and_the_records_folder_are_checked_first(self):
         for repository in (None, 'not a repository', 'owner/name; rm'):

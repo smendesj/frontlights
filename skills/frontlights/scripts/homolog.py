@@ -55,7 +55,8 @@ Operations (each prints one JSON object on stdout):
   merge  the issue into the local base in one command (references/development.md, "Into the local main"; only the
          coordinating session runs it): refuses (exit 1) a main worktree off the base, dirty or mid-merge, a slice of
          the charter that is not an ancestor of the branch of the issue, an open box of the criteria (GitHub, read
-         only, or the local record), and a box without a screen without its walkthrough in format; runs
+         only, or the local record), and a box without a screen, or one the watched run did not walk (its
+         `criterios`), without its walkthrough in format; runs
          `browser-gate` on the worktree of the issue (not green: exit 2 with the `question` and `options`); cuts
          `<prefix>issue-<n>-integra` from the branch of the issue (its own charter entry, local, never pushed) and
          merges the branch of the issue and the local base into it (a conflict stays there for the session: exit 2
@@ -1541,7 +1542,11 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
                     'options': options, 'message': f'o portão da issue #{number} não está verde '
                                                    f'({gate.get("status")}): pergunte antes do merge'}
     result['gate'] = gate
-    need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
+    # every slice has its evidence: the watched run that walked it, or its walkthrough (a box without a screen, and
+    # any box the run did not walk, as a migration slice or a slice born from a finding)
+    walked = closeout.watched_boxes(read_record(record_path)) if record_path.is_file() else None
+    need = [b['label'] for b in boxes
+            if gate['status'] == 'not_needed' or b['semTela'] or (walked is not None and b['label'] not in walked)]
     walks, missing = {}, []
     for label in need:
         path = folder / 'walkthroughs' / f'{label}.md'
@@ -1552,8 +1557,9 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     result['walkthroughs'] = walks
     if missing:
         return dict(result, exitCode=1, reason='walkthroughs', missing=missing,
-                    message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e '
-                            'grave walkthroughs/S<k>.md antes do merge na main local')
+                    message=f'sem o roteiro no formato das caixas sem tela ou que o teste assistido não percorreu '
+                            f'{", ".join(missing)}: rode o roteiro e grave walkthroughs/S<k>.md antes do merge na main '
+                            'local')
     present = rev(root, f'refs/heads/{integra}')
     entry = next((e for e in entries if e.get('branch') == integra), None)
     path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'

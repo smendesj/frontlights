@@ -1896,8 +1896,9 @@ def free_test_start(config_file, root, issue):
     with io_guard('gravar o rascunho dos CAs do teste livre'):
         draft.parent.mkdir(parents=True, exist_ok=True)
         if not draft.exists():
-            draft.write_text(f'# CAs do teste livre da issue #{issue}\n\nUma caixa por correção pedida no teste livre, '
-                             'na língua do usuário (references/development.md, "The free test on the local main").\n\n',
+            draft.write_text(f'# CAs do teste livre da issue #{issue}\n\nUma slice nova (S<k>, a seguinte à última da '
+                             'issue) por correção pedida no teste livre, na língua do usuário (references/issues.md, '
+                             '"A finding as a new slice").\n\n',
                              encoding='utf-8')
     base_url = block.get('baseUrl') if isinstance(block.get('baseUrl'), str) else None
     here = Path(__file__).resolve()

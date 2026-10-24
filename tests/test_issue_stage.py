@@ -105,7 +105,8 @@ class IssueStageTests(unittest.TestCase):
         flat_template = flat(template)
         for kept in ('## Propriedade', 'Caminhos que a issue pode tocar', '- [ ] S1. <resultado observável',
                      '`- Bloqueada: <o que falta e de quem>`', '- Fluxo: <telas e ações', 'Depends on: none',
-                     '`- [ ] Pendência (achado da revisão): <resultado observável>. Evidência que fecha:'):
+                     # retro de 23/10/2026: o achado entra como slice nova, nunca caixa P nem "Pendência"
+                     '`- [ ] S<k>. <resultado observável> (achado da revisão)`'):
             with self.subTest(kept=kept):
                 self.assertIn(kept, flat_template)
         for gone in ('## Pontos de evidência', '## Propriedade e contenção', 'As seções até "Fora de escopo" são a spec'):

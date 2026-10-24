@@ -58,8 +58,12 @@ Operations (each prints one JSON object on stdout):
           item. No `--force`, ever, and no `git push`: a candidate with `delete_remote_branch` leaves that command and
           the rest of its item in `sessionCommands`, for the session to run in order. A candidate with `ask: true`
           runs only when --yes names its `key` (its branch, or `out`), after the user's yes in its own question.
-          --integration takes only the worktree of an `-integra` entry of the records. A locked worktree, or one a
-          process holds (the removal fails with "permission denied" or the like), goes to `excluded` as `in_use`.
+          --integration takes only the worktree of an `-integra` entry of the records. Before `git worktree remove`
+          the shells and agents standing in the worktree are ended (`processesEnded`; ENDABLE names them, never this
+          process or its ancestors; anything else, an editor, is only reported): POSIX sees them by their cwd, Windows
+          only by a path of the worktree on their command line or executable (`Win32_Process` has no cwd), so a shell
+          that merely stands in it is not seen there. A removal refused as in use is retried REMOVE_RETRIES times. A
+          locked worktree, or one a process still holds, goes to `excluded` as `in_use`, with the `holders` seen.
           `verify` runs at the end on what was removed; `.frontlights/cleanup-<AAAAMMDD-HHMMSS>.json` (S√£o Paulo time)
           keeps the result as evidence. Exit 1 when an item failed or the verify did not pass.
   unlink  remove the saved outputs of --out (a `.frontlights/out` folder of a worktree of this repository): only the
@@ -1105,6 +1109,108 @@ def execute(argv):
     return done.returncode, done.stdout, done.stderr
 
 
+# ---------------------------------------------------------------- processes inside a worktree (retro of 23/10/2026:
+# a slice's worktree stayed behind because shells of its agents still stood in it)
+
+# only these are ended: the shells and agents a session leaves in a worktree; anything else (an editor) is reported
+ENDABLE = frozenset({'bash', 'sh', 'zsh', 'dash', 'powershell', 'pwsh', 'cmd', 'conhost', 'node', 'python', 'python3',
+                     'py', 'dotnet', 'claude', 'npm', 'npx', 'ng', 'git', 'ssh-agent', 'esbuild'})
+REMOVE_RETRIES = 3
+RETRY_SECONDS = 1.0
+PROCESS_LIMIT = 40       # holders named in a result
+
+
+def process_table():
+    """[{pid, ppid, name, cwd, commandLine}] of the processes this user can see. POSIX reads /proc (the cwd included);
+    Windows asks `Get-CimInstance Win32_Process`, which gives the command line and the executable but never the cwd:
+    a shell that only stands in the folder, with no path of it on its command line, cannot be seen there."""
+    table = []
+    if os.name == 'nt':
+        script = ('Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine,'
+                  'ExecutablePath | ConvertTo-Json -Compress')
+        try:
+            done = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60,
+                                  stdin=subprocess.DEVNULL)
+            rows = json.loads(done.stdout or '[]')
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            return None
+        for row in rows if isinstance(rows, list) else [rows]:
+            if isinstance(row, dict) and isinstance(row.get('ProcessId'), int):
+                text = ' '.join(str(row.get(k) or '') for k in ('ExecutablePath', 'CommandLine'))
+                table.append({'pid': row['ProcessId'], 'ppid': row.get('ParentProcessId'),
+                              'name': str(row.get('Name') or ''), 'cwd': None, 'commandLine': text})
+        return table
+    proc = Path('/proc')
+    if not proc.is_dir():
+        return None
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            fields = (entry / 'stat').read_text(errors='replace').rsplit(')', 1)[1].split()
+            line = (entry / 'cmdline').read_bytes().replace(b'\0', b' ').decode('utf-8', 'replace')
+            name = (entry / 'comm').read_text(errors='replace').strip()
+            try:
+                cwd = os.readlink(entry / 'cwd')
+            except OSError:
+                cwd = None
+            table.append({'pid': int(entry.name), 'ppid': int(fields[1]), 'name': name, 'cwd': cwd, 'commandLine': line})
+        except (OSError, IndexError, ValueError):
+            continue
+    return table
+
+
+def inside(text, folder):
+    """Whether the path `folder` appears in `text` (a cwd, an executable or a command line), in either slash form."""
+    if not text:
+        return False
+    low = text.replace('\\', '/').casefold()
+    for spelling in {str(folder), norm(folder)}:   # as given and real (a short 8.3 name, a link)
+        base = spelling.replace('\\', '/').casefold().rstrip('/')
+        for at in [m.start() for m in re.finditer(re.escape(base), low)]:
+            if low[at + len(base):at + len(base) + 1] in ('', '/', '"', "'", ' '):
+                return True
+    return False
+
+
+def holders(folder, table=None):
+    """The processes standing in `folder` (cwd inside it) or naming it (executable or command line), never this
+    process nor its ancestors; None when the process table cannot be read."""
+    table = process_table() if table is None else table
+    if table is None:
+        return None
+    parents = {p['pid']: p.get('ppid') for p in table}
+    mine = set()
+    for pid in (os.getpid(), os.getppid()):   # this process and its ancestors (the session that runs it among them)
+        while pid and pid not in mine:
+            mine.add(pid)
+            pid = parents.get(pid)
+    found = []
+    for process in table:
+        if process['pid'] in mine:
+            continue
+        if inside(process.get('cwd'), folder) or inside(process.get('commandLine'), folder):
+            stem = Path(process['name']).stem.casefold() if process['name'] else ''
+            found.append({'pid': process['pid'], 'name': rs.clean(process['name'], 60) or '?',
+                          'endable': stem in ENDABLE})
+    return found[:PROCESS_LIMIT]
+
+
+def end_process(pid):
+    """End one process and its children (Windows `taskkill /T /F`; POSIX SIGTERM). Whether the call went through."""
+    try:
+        if os.name == 'nt':
+            done = subprocess.run(['taskkill', '/PID', str(pid), '/T', '/F'], capture_output=True, timeout=30,
+                                  stdin=subprocess.DEVNULL)
+            return done.returncode == 0
+        import signal  # noqa: PLC0415
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def undo_junctions(worktree):
     """Undo the junctions (and directory symlinks) at the first JUNCTION_DEPTH levels of `worktree` with `os.rmdir`,
     which removes the link and never what it points at, so `git worktree remove` cannot reach through one. Never
@@ -1165,9 +1271,10 @@ def evidence_path(main):
 
 
 def op_run(config, root='.', issues=None, base=None, integrations=(), yes=(), gh=None, from_authorizations=False,
-           runner=None):
-    """Plan again in this process and run only the commands of that fresh plan (see the module's docstring)."""
-    runner = runner or execute
+           runner=None, finder=None, ender=None, pause=None):
+    """Plan again in this process and run only the commands of that fresh plan (see the module's docstring).
+    `finder`, `ender` and `pause` (holders, end_process, time.sleep) are replaced by the tests."""
+    runner, finder, ender, pause = runner or execute, finder or holders, ender or end_process, pause or time.sleep
     require(from_authorizations or not (issues is None or issues == '' or issues == []),
             'run needs --from-authorizations (or --issues 12,13)')
     listing = list_worktrees(root)
@@ -1222,12 +1329,23 @@ def op_run(config, root='.', issues=None, base=None, integrations=(), yes=(), gh
                     require(outcome['ok'], outcome['message'])
                 elif kind == 'remove_worktree':
                     step['junctionsUndone'] = undo_junctions(argv[-1])
+                    found = finder(argv[-1])   # the shells and agents still standing in it go first
+                    step['processesEnded'] = [h for h in found or [] if h['endable'] and ender(h['pid'])]
+                    if found is None:
+                        step['processesUnknown'] = True
                     code, _, err = runner(argv)
+                    for _attempt in range(REMOVE_RETRIES if code != 0 and IN_USE.search(err or '') else 0):
+                        pause(RETRY_SECONDS)   # a process just ended may still hold a handle for a moment
+                        code, _, err = runner(argv)
+                        if code == 0 or not IN_USE.search(err or ''):
+                            break
                     step['exitCode'] = code
                     if code != 0:
                         if Path(argv[-1]).exists() and IN_USE.search(err or ''):
+                            held = finder(argv[-1]) or []
                             excluded.append({'issue': candidate['issue'], 'path': rs.clean(argv[-1], 300),
-                                             'branch': candidate['branch'], 'reasons': ['in_use'], 'inUse': 'busy'})
+                                             'branch': candidate['branch'], 'reasons': ['in_use'], 'inUse': 'busy',
+                                             'holders': [{'pid': h['pid'], 'name': h['name']} for h in held]})
                             step['inUse'] = True
                         raise Refusal(f'git worktree remove failed (exit {code})')
                     removed.append(argv[-1])
@@ -1287,12 +1405,12 @@ ALIASES = {'plan': 'cleanup.py plan segue por um ciclo como alias: a abertura l√
 
 def run(operation, config, root='.', issues=None, base=None, worktrees=(), branches=(), gh=None, integrations=(),
         records=(), source=None, destination=None, remote_branches=(), from_authorizations=False, page=1, yes=(),
-        runner=None, out=None):
+        runner=None, out=None, finder=None, ender=None, pause=None):
     try:
         if operation == 'plan':
             result = op_plan(config, root, issues, base, worktrees, integrations, gh, from_authorizations, page)
         elif operation == 'run':
-            result = op_run(config, root, issues, base, integrations, yes, gh, from_authorizations, runner)
+            result = op_run(config, root, issues, base, integrations, yes, gh, from_authorizations, runner, finder, ender, pause)
         elif operation == 'unlink':
             result = op_unlink(out)
         elif operation == 'verify':

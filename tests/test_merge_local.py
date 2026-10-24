@@ -235,12 +235,15 @@ class TickGuardTests(unittest.TestCase):
         (folder / 'S2.md').write_text(self.WALK, encoding='utf-8')
         result, _ = self.tick()
         self.assertTrue(result['verified'], result)
-        self.assertEqual(result['evidence']['kind'], 'roteiro sem tela')
+        self.assertEqual(result['evidence']['kind'], 'roteiro')
 
     def test_a_line_on_a_slice_box_is_guarded_and_a_line_on_another_criterion_is_not(self):
         result, _ = self.tick(box=None, line='7')
         self.assertEqual(result['reason'], 'no_evidence')
-        result, _ = self.tick(box=None, line='9')
+        result, _ = self.tick(box=None, line='9')   # retro de 23/10/2026: sem evidência registrada, nenhum tick
+        self.assertEqual(result['reason'], 'no_evidence')
+        (self.records / 'suite.log').write_text('OK\n', encoding='utf-8')
+        result, _ = self.tick(box=None, line='9', evidence=str(self.records / 'suite.log'))
         self.assertTrue(result['verified'], result)
 
     def test_the_comment_goes_with_the_tick(self):
@@ -258,7 +261,10 @@ class TickGuardTests(unittest.TestCase):
         result = closeout.run('tick', str(self.config), str(self.root), gh=gh, edit=edit, issue='12', box='S2',
                               line=None, comment_file=str(note))
         self.assertTrue(result['commented'], result)
-        self.assertEqual(calls[-1], ['issue', 'comment', '12', '--repo', REPO, '--body-file', str(note)])
+        self.assertEqual(calls[-1][:6], ['issue', 'comment', '12', '--repo', REPO, '--body-file'])
+        posted = Path(calls[-1][6]).read_text(encoding='utf-8')   # the evidence first, made from the record
+        self.assertTrue(posted.startswith('Evidência registrada:\n- S2: roteiro da caixa rodado e gravado em '
+                                          'walkthroughs/S2.md\n\nS2 entregue'), posted)
         self.assertIn('- [x] S2.', gh.body)
 
 
@@ -313,6 +319,20 @@ class HomologMergeTests(Stage6Case):
                          ('merge_into_local_main', {'browser_gate': 'not_needed'}, False))
         self.assertEqual(saved['skillUpdate'], {'status': 'current'})
         self.assertEqual(git(self.root, 'ls-remote', 'origin', 'PREFIX/issue-12-integra'), '')
+
+    def test_a_box_the_watched_run_did_not_walk_needs_its_walkthrough(self):
+        # GeoCloud #1123, 23/10/2026: walkthroughs/S6.md (a migration, no screen) was promised and never written
+        self.walk()
+        (self.records / 'browser').mkdir(parents=True)
+        (self.records / 'browser' / 'result.json').write_text(
+            json.dumps({'situacao': 'aprovado', 'criterios': ['S1']}), encoding='utf-8')
+        self.assertEqual(self.homolog_merge()['exitCode'], 0)
+        self.commit(self.issue_wt, 'src/fix.py', 'y = 1\n', 'correção do teste livre')
+        body = BODY + '- [x] S2 Migration (do teste livre)\n'
+        result = self.homolog_merge(body=body, free_test_fix=True)
+        self.assertEqual((result['exitCode'], result['reason'], result['missing']), (1, 'walkthroughs', ['S2']))
+        self.walk('S2')
+        self.assertEqual(self.homolog_merge(body=body, free_test_fix=True)['exitCode'], 0)
 
     def test_dry_run_writes_nothing(self):
         self.walk()
@@ -429,8 +449,8 @@ class FreeTestTests(unittest.TestCase):
             self.serve.free_test_start(str(self.config), str(self.root), 12)
         started.assert_called_once_with(str(self.config), str(self.root), 12)
         with self.draft.open('a', encoding='utf-8') as draft:
-            draft.write('- [x] Correção (do teste livre): a lista ordena. Evidência: abc1234\n'
-                        '- [ ] Correção (do teste livre): o filtro limpa. Evidência que fecha: teste livre\n')
+            draft.write('- [x] S3. A lista ordena (do teste livre)\n'
+                        '- [ ] S4. O filtro limpa (do teste livre)\n')
         with unittest.mock.patch.object(self.serve, 'stop', return_value={'ok': True}) as stopped:
             result = self.serve.free_test_stop(str(self.config), str(self.root), 12)
         stopped.assert_called_once_with(str(self.root), 12)

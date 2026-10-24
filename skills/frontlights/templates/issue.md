@@ -30,7 +30,7 @@ Só comportamento observável pela interface pública; só os seams acima recebe
 
 ## Critérios de aceitação
 
-As slices: uma caixa por slice, em ordem de dependência, bloqueadoras primeiro; no máximo cinco `S<n>` (a sexta vira issues de topo ligadas por `--blocked-by`, nunca sub-issue; a caixa de pendência não conta). Prefactoring é a primeira slice; refatoração larga é expandir, migrar por lotes e contrair, um passo por slice. Todo critério falha no commit de partida. No roteiro, a persona é rótulo (`conta 1`, `conta 2`, usuário de teste criado ou `sem tela`), nunca login, e o antes é o que o reconhecimento gravou no commit de partida.
+As slices: uma caixa por slice, em ordem de dependência, bloqueadoras primeiro; no máximo cinco `S<n>` (a sexta vira issues de topo ligadas por `--blocked-by`, nunca sub-issue; a slice de um achado não conta). Prefactoring é a primeira slice; refatoração larga é expandir, migrar por lotes e contrair, um passo por slice. Todo critério falha no commit de partida. No roteiro, a persona é rótulo (`conta 1`, `conta 2`, usuário de teste criado ou `sem tela`), nunca login, e o antes é o que o reconhecimento gravou no commit de partida.
 
 - [ ] S1. <resultado observável de ponta a ponta desta slice>
   - Entrega: <o que dá para demonstrar quando ela termina>
@@ -40,7 +40,7 @@ As slices: uma caixa por slice, em ordem de dependência, bloqueadoras primeiro;
   - Roteiro: <persona> · <passos>
     → antes: <o que os passos mostram no commit de partida>; depois: <o que mostram quando a slice entra>
 
-Slice estacionada: último sub-item `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, só nela (o RoadS lê qualquer caixa aberta com ele como bloqueada). Achado não corrigido no PR: `- [ ] Pendência (achado da revisão): <resultado observável>. Evidência que fecha: <teste, medição ou diff revisado>`, nunca numa seção à parte; só esta seção conta para fechar a issue, e uma pendência fecha quando está tratada, concluída e marcada com evidência.
+Slice estacionada: último sub-item `- Bloqueada: <o que falta e de quem>`, apagado ao destravar, só nela (o RoadS lê qualquer caixa aberta com ele como bloqueada). Achado não corrigido no PR: uma slice nova, `- [ ] S<k>. <resultado observável> (achado da revisão)`, nunca numa seção à parte nem caixa `P<k>`; só esta seção conta para fechar a issue, e a slice fecha quando está tratada, concluída e marcada com evidência.
 
 ## Camadas da fatia
 

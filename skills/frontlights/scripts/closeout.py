@@ -53,23 +53,27 @@ Operations (each prints one JSON object on stdout):
               items on --lines turned into `[x]`. It checks the body of a parent that was edited to tick the
               item that cites a closed sub-issue; the edit itself is the session's. Line endings and empty lines at
               the end of either file are not compared (a reread through `--jq .body` or a redirect adds one).
-  tick        the whole cycle of ticking one box of --issue: --box S<k> (also s<k> or <k>: the one item of the criteria
-              section whose text starts with `S<k>.`), --box P<k> (the k-th leftover item of that section, the one
-              whose text starts with `Pendência`, in order) or --line <N> (any item of that section, a criterion without a slice label included). It captures the
+  tick        the whole cycle of ticking boxes of --issue: --box S<k> (also s<k> or <k>: the one item of the criteria
+              section whose text starts with the label `S<k>`, whatever follows it: `S9.`, `**S9**`, `S9 —`), several
+              in one write (--box S5 --box S6 or --box S5,S6), or --line <N> (any item of that section, a criterion
+              without a slice label included). There is no P label: a finding is a new slice. It captures the
               body with `gh issue view --json body`, keeps it as .frontlights/issues/<n>/body-before-<stamp>.md under
-              --root, builds body-new-<stamp>.md with only that `[ ]` turned into `[x]`, runs the tick-check, writes
+              --root, builds body-new-<stamp>.md with only those `[ ]` turned into `[x]`, runs the tick-check, writes
               it with `gh issue edit --body-file`, rereads it into body-after-<stamp>.md and runs the tick-check
               again (`verified`). A box already ticked answers ok and writes nothing; a box that still has its
               `- Bloqueada:` sub-item is refused (that line is removed first, by the session). No shell, the
               repository is the validated `owner/name` of the configuration, and only line numbers are printed.
-              A slice box (`S<k>.`, by --box or by --line) is ticked only with its evidence (redesign, issue 4):
-              the record of the watched run approved (`situacao: aprovado` in .frontlights/issues/<n>/browser/
-              result.json under --root, or --record for the lead issue of a family) or, for a box without a
-              screen, .frontlights/issues/<n>/walkthroughs/S<k>.md in its format (a header, `## Antes` and
-              `## Depois`, each with a fenced block); without either it is refused (`no_evidence`) before the
-              body is read. A leftover box and a criterion without a label keep the evidence the session cites.
-              --comment-file posts that file as a comment on the issue (`gh issue comment --body-file`) once the
-              tick checks; `evidence` and `commented` say what happened.
+              A slice box (by --box or by --line) is ticked only with its evidence (redesign, issue 4): the record
+              of the watched run approved (`situacao: aprovado` in .frontlights/issues/<n>/browser/result.json
+              under --root, or --record for the lead issue of a family) that walked the box (its `criterios` or the
+              criteria of its DEPOIS pass; a record that names none covers every box), or
+              .frontlights/issues/<n>/walkthroughs/S<k>.md in its format (a header, `## Antes` and `## Depois`, each
+              with a fenced block); without either it is refused (`no_evidence`) before the body is read. A
+              criterion without a label needs recorded evidence too: the approved watched run, or --evidence, a file
+              under .frontlights/issues/<n>/. `evidence.text` is the sentence made from that record (the time of
+              the approval in America/Sao_Paulo, or the walkthrough's path), never text written by hand; with
+              --comment-file the comment posted (`gh issue comment --body-file`) is those sentences followed by the
+              file, kept as body-comment-<stamp>.md. `evidence` and `commented` say what happened.
 
 An open issue is a candidate only when its body has an acceptance-criteria section with at least one
 checklist item and every item checked, and every sub-issue is closed or a candidate in the same batch. A
@@ -142,9 +146,9 @@ PR_VIEW = ('number state merged mergedAt url baseRefName headRefName headRefOid 
            'reviewDecision isDraft')
 BLOCKING_REVIEW = ('CHANGES_REQUESTED', 'REVIEW_REQUIRED')   # reviewDecision that keeps a PR from merging
 BLOCKING_STATE = ('BLOCKED', 'DIRTY', 'BEHIND')                # mergeStateStatus that keeps a PR from merging
-BOX = re.compile(r'([SsPp]?)([1-9][0-9]{0,2})')                # --box S2, s2, 2 or P1 (a leftover box)
-LEFTOVER = re.compile(r'(?:\*\*|__)?Pend[eê]ncia\b', re.IGNORECASE)   # the text of a leftover box: `Pendência (...)`
-BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})\.')     # the text of a slice box: `S2.`, `**S2.**`
+BOX = re.compile(r'[Ss]?([1-9][0-9]{0,2})')                    # --box S2, s2 or 2
+# a slice box is found by its label whatever follows it: `S2.`, `**S2.**`, `**S2**`, `S2 —`, `S2: x`, `S2 Correção`
+BOX_LABEL = re.compile(r'(?:\*\*|__)?S([1-9][0-9]{0,2})(?![0-9A-Za-z_])')
 LIST_ITEM = re.compile(r'^[ \t]*(?:[-*+]|[0-9]{1,9}[.)])[ \t]')
 BLOCKED = re.compile(r'bloqueada[\W_]*:')               # `Bloqueada:`, `**Bloqueada**:`, `__Bloqueada__:`, `Bloqueada :`
 
@@ -1075,18 +1079,34 @@ def indentation(text):
 
 
 def parse_box(value):
-    """(kind, number) of --box: `S2`, `s2` and `2` are the slice box S2; `P1` (or `p1`) the first leftover box."""
+    """The number of --box: `S2`, `s2` and `2` are the slice box S2. There is no other kind: a finding is a new slice
+    (references/issues.md, "A finding as a new slice"), and an old box without a label is ticked by --line."""
     match = BOX.fullmatch(str(value).strip())
-    require(match is not None, 'the box is the slice label or the leftover label, as in --box S2, 2 or P1')
-    return (match.group(1) or 'S').upper(), int(match.group(2))
+    require(match is not None, 'the box is a slice label, as in --box S2 or 2 (several: --box S5,S6 or --box S5 '
+                               '--box S6); a criterion without a label is ticked by --line')
+    return int(match.group(1))
 
 
-def find_box(body, box, line, kind='S'):
+def parse_boxes(values):
+    """The slice numbers of one or more --box values, each possibly a comma list (`S5,S6`), in order, no repeats."""
+    values = [values] if isinstance(values, (str, int)) else list(values)
+    numbers = []
+    for value in values:
+        for part in str(value).split(','):
+            require(part.strip(), 'an empty --box value: pass --box S5,S6 or --box S5 --box S6')
+            number = parse_box(part)
+            if number not in numbers:
+                numbers.append(number)
+    require(numbers, 'tick needs --box S<k> or --line <N>')
+    return numbers
+
+
+def find_box(body, box, line):
     """(line number, ticked) of the one checklist item of the acceptance-criteria section to tick: the one whose
-    text starts with `S<box>.`, the `box`-th one whose text starts with `Pendência` (kind `P`), or the one on
-    `line`. Fenced code and HTML comments never count."""
+    text starts with the label `S<box>` (whatever follows it), or the one on `line`. Fenced code and HTML comments
+    never count."""
     visible = list(sections(body))
-    found, leftovers = [], 0
+    found, kind = [], 'S'
     for number, text, section, heading in visible:
         item = ITEM.match(text) if section == 'criteria' and not heading else None
         if not item:
@@ -1096,12 +1116,6 @@ def find_box(body, box, line, kind='S'):
                 found.append((number, item))
             continue
         rest = text[item.end():].lstrip(' \t')
-        if kind == 'P':
-            if LEFTOVER.match(rest):
-                leftovers += 1
-                if leftovers == box:
-                    found.append((number, item))
-            continue
         label = BOX_LABEL.match(rest)
         if label and int(label.group(1)) == box:
             found.append((number, item))
@@ -1215,18 +1229,59 @@ def slice_boxes(body):
     return [box for box in boxes if box['label']]
 
 
-def slice_evidence(root, number, label, record=None):
-    """The evidence that lets slice box `label` (S<k>) be ticked, or a TickRefusal: the watched run approved, or the
-    walkthrough of the box without a screen in its format."""
-    folder = Path(root) / '.frontlights' / 'issues' / str(number)
-    result_file = Path(record) if record else folder / 'browser' / 'result.json'
-    walkthrough = folder / 'walkthroughs' / f'{label}.md'
+def watched_boxes(data):
+    """The boxes the watched run of record `data` walked (its `criterios` and the criteria of its DEPOIS pass), or
+    None for a record that names none (one written before the criteria were recorded): then it covers every box."""
+    if not isinstance(data, dict):
+        return None
+    names = {n for n in data.get('criterios') or [] if isinstance(n, str)}
+    depois = ((data.get('passadas') or {}).get('depois') or {}) if isinstance(data.get('passadas'), dict) else {}
+    if isinstance(depois, dict) and isinstance(depois.get('criterios'), dict):
+        names |= set(depois['criterios'])
+    return names or None
+
+
+def sao_paulo_text(stamp):
+    """`23/10/2026 19:10` for an ISO time of a record, in America/Sao_Paulo; None when it is not a time."""
+    try:
+        when = dt.datetime.fromisoformat(str(stamp))
+    except ValueError:
+        return None
+    if when.tzinfo is not None:
+        try:
+            import zoneinfo  # noqa: PLC0415
+            when = when.astimezone(zoneinfo.ZoneInfo(_cli.ZONE))
+        except (KeyError, OSError, ValueError):
+            when = when.astimezone(dt.timezone(dt.timedelta(hours=-3)))
+    return when.strftime('%d/%m/%Y %H:%M')
+
+
+def approved_run(result_file):
+    """(record, situacao, evidence or None): the watched run of `result_file` when the user answered "Aprovado"."""
     data = read_record(result_file) if result_file.is_file() else None
     seen = None
     if isinstance(data, dict):
         seen = data.get('situacao') if data.get('situacao') is not None else data.get('aprovacao')
-        if seen in SLICE_EVIDENCE_APPROVED:
-            return {'kind': 'teste assistido', 'path': str(result_file), 'situacao': seen}
+    if seen not in SLICE_EVIDENCE_APPROVED:
+        return data, seen, None
+    asked = data.get('pergunta') if isinstance(data.get('pergunta'), dict) else {}
+    when = sao_paulo_text(asked.get('em') or data.get('registradoEm'))
+    text = f'conferido no DEPOIS assistido, aprovado pelo usuário' + (f' em {when}' if when else '')
+    return data, seen, {'kind': 'teste assistido', 'path': str(result_file), 'situacao': seen, 'at': when,
+                        'text': f'{text} ({result_file.name})'}
+
+
+def slice_evidence(root, number, label, record=None):
+    """The evidence that lets slice box `label` (S<k>) be ticked, or a TickRefusal: the watched run approved that
+    walked the box, or the walkthrough of the box in its format. `text` is the sentence the comment carries, made
+    from the record, never written by hand."""
+    folder = Path(root) / '.frontlights' / 'issues' / str(number)
+    result_file = Path(record) if record else folder / 'browser' / 'result.json'
+    walkthrough = folder / 'walkthroughs' / f'{label}.md'
+    data, seen, run = approved_run(result_file)
+    walked = watched_boxes(data)
+    if run and (walked is None or label in walked):
+        return run
     problems = None
     if walkthrough.is_file():
         try:
@@ -1234,29 +1289,68 @@ def slice_evidence(root, number, label, record=None):
         except (OSError, UnicodeDecodeError):
             problems = ['ilegível']
         if not problems:
-            return {'kind': 'roteiro sem tela', 'path': str(walkthrough)}
+            return {'kind': 'roteiro', 'path': str(walkthrough),
+                    'text': f'roteiro da caixa rodado e gravado em walkthroughs/{label}.md'}
     detail = f'; o roteiro {walkthrough.name} está fora do formato: {"; ".join(problems)}' if problems else ''
+    missed = (f', mas ele não passou pela {label} (passou por {", ".join(sorted(walked, key=str))})'
+              if run and walked is not None else '')
     raise TickRefusal('no_evidence',
-                      f'A caixa {label} da issue #{number} só é marcada com o teste assistido aprovado '
-                      f'({result_file.name}: {seen or "sem registro"}) ou, sem tela, com '
+                      f'A caixa {label} da issue #{number} só é marcada com o teste assistido aprovado que passou por '
+                      f'ela ({result_file.name}: {seen or "sem registro"}{missed}) ou com '
                       f'walkthroughs/{label}.md no formato{detail}; nada foi escrito.',
-                      hint='caixa com tela: espere o "Aprovado" do teste assistido; sem tela: rode o roteiro da caixa '
-                           'e grave walkthroughs/S<k>.md (cabeçalho, ## Antes, ## Depois, cada um com a saída num '
-                           'bloco de código)')
+                      hint='caixa com tela: espere o "Aprovado" do teste assistido que a percorre; sem tela, ou caixa '
+                           'que o teste não percorreu: rode o roteiro da caixa e grave walkthroughs/S<k>.md '
+                           '(cabeçalho, ## Antes, ## Depois, cada um com a saída num bloco de código)')
 
 
-def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, record=None, comment_file=None):
-    """Tick one box of an issue's acceptance criteria and check the reread (see the module's docstring). `account`,
-    given by the command line, checks the gh login and repository against the config before anything is read
-    (`_cli.gh_account`: `account_mismatch` or `repository_mismatch`, with the question to ask)."""
+def line_evidence(root, number, record=None, evidence=None):
+    """The evidence of a criterion without a slice label (an old body): the watched run approved, or `evidence`, a
+    file the tools recorded under .frontlights/issues/<n>/ (a walkthrough, a suite log, a merge record). Without
+    either the tick is refused: a tick never rests on text written by hand."""
+    folder = Path(root) / '.frontlights' / 'issues' / str(number)
+    if evidence is not None:
+        path = Path(evidence)
+        try:
+            inside = path.resolve().is_relative_to(folder.resolve()) and path.is_file()
+        except (OSError, ValueError):
+            inside = False
+        if not inside:
+            raise TickRefusal('no_evidence', f'--evidence precisa ser um arquivo gravado em .frontlights/issues/{number}/ '
+                              '(um roteiro, um log de suíte, um registro de merge); nada foi escrito.')
+        return {'kind': 'registro', 'path': str(path),
+                'text': f'evidência registrada em {path.resolve().relative_to(folder.resolve()).as_posix()}'}
+    result_file = Path(record) if record else folder / 'browser' / 'result.json'
+    _, seen, run = approved_run(result_file)
+    if run:
+        return run
+    raise TickRefusal('no_evidence', f'O critério da issue #{number} só é marcado com evidência registrada: o teste '
+                      f'assistido aprovado ({result_file.name}: {seen or "sem registro"}) ou --evidence <arquivo de '
+                      f'.frontlights/issues/{number}/>; nada foi escrito.')
+
+
+def comment_with_evidence(folder, stamp, proofs, comment_file):
+    """The comment the tick posts: the evidence of each box, made from what was recorded, then the session's file."""
+    lines = ['Evidência registrada:'] + [f'- {name}: {proof["text"]}' for name, proof in proofs.items()]
+    text = '\n'.join(lines) + '\n\n' + Path(comment_file).read_bytes().decode('utf-8-sig')
+    return save_body(folder, 'comment', stamp, text)   # body-comment-<stamp>.md, never overwritten
+
+
+def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, record=None, comment_file=None,
+            evidence=None):
+    """Tick one or more boxes of an issue's acceptance criteria in one write and check the reread (see the module's
+    docstring). `box` is one --box value or a list of them (`S5`, `S5,S6`). `account`, given by the command line,
+    checks the gh login and repository against the config before anything is read (`_cli.gh_account`:
+    `account_mismatch` or `repository_mismatch`, with the question to ask)."""
     require(isinstance(issue, (str, int)) and NUMBER.fullmatch(str(issue).strip()) and valid_number(int(str(issue).strip())),
             'tick needs one issue number: pass --issue 12')
     number = int(str(issue).strip())
-    require((box is None) != (line is None), 'tick needs exactly one of --box S<k> (a slice box) or --line <N> (any '
+    box = None if box in (None, [], ()) else box
+    require((box is None) != (line is None), 'tick needs exactly one of --box S<k> (slice boxes) or --line <N> (any '
                                              'criterion of the section)')
-    kind = 'S'
+    require(evidence is None or box is None, '--evidence goes with --line: a slice box has its own evidence')
+    numbers = None
     if box is not None:
-        kind, box = parse_box(box)
+        numbers = parse_boxes(box)
     else:
         require(NUMBER.fullmatch(str(line).strip()) and int(str(line).strip()) > 0,
                 'the line is a positive line number of the body, as in --line 14')
@@ -1273,39 +1367,63 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
     if comment_file is not None:
         require(Path(comment_file).is_file(), f'--comment-file {rs.clean(str(comment_file), 200)} is not a file')
     gh, edit = gh or rs.gh_default, edit or gh_write
-    label = None if box is None else f'{kind}{box}'
-    result = {'repository': repository, 'issue': number, 'box': label, 'line': line, 'written': False,
-              'alreadyTicked': False, 'verified': False, 'files': {}}
+    labels = None if numbers is None else [f'S{n}' for n in numbers]
+    result = {'repository': repository, 'issue': number, 'box': labels[0] if labels and len(labels) == 1 else labels,
+              'line': line, 'written': False, 'alreadyTicked': False, 'verified': False, 'files': {}}
+    targets = []   # (label or None, line, ticked, evidence)
     try:
-        if kind == 'S' and box is not None:   # a slice box is ticked only with its evidence, before any read
-            result['evidence'] = slice_evidence(root, number, label, record)
+        found = {}
+        for label in labels or []:   # a slice box is ticked only with its evidence, before any read
+            found[label] = slice_evidence(root, number, label, record)
         before = read_issue_body(gh, repository, number)
-        line, ticked = find_box(before, box, line, kind)
-        if box is None:   # a line: the guard holds when that line is a slice box
-            raw = re.split(r'\r\n|\r|\n', before)[line - 1]
+        if labels:
+            for label in labels:
+                at, ticked = find_box(before, int(label[1:]), None)
+                targets.append((label, at, ticked, found[label]))
+        else:
+            at, ticked = find_box(before, None, line)
+            raw = re.split(r'\r\n|\r|\n', before)[at - 1]
             item = ITEM.match(raw)
             named = BOX_LABEL.match(raw[item.end():].lstrip(' \t')) if item else None
-            if named and not ticked:
-                result['evidence'] = slice_evidence(root, number, f'S{named.group(1)}', record)
+            proof = None
+            if not ticked:   # a line that is a slice box keeps the slice's evidence; any other, recorded evidence
+                proof = (slice_evidence(root, number, f'S{int(named.group(1))}', record) if named
+                         else line_evidence(root, number, record, evidence))
+            targets.append((None, at, ticked, proof))
     except TickRefusal as refusal:
         failure = {**result, **refusal.extra, 'ok': False, 'exitCode': 1, 'reason': refusal.reason,
                    'message': str(refusal)}
         if refusal.hint:
             failure['hint'] = refusal.hint
         return failure
-    result['line'] = line
-    name = f'caixa {label} (linha {line})' if label else f'linha {line}'
-    if ticked:
+    open_ones = [t for t in targets if not t[2]]
+    lines = [t[1] for t in open_ones]
+    proofs = {(t[0] or f'linha {t[1]}'): t[3] for t in open_ones}
+    result['line'] = targets[0][1] if len(targets) == 1 else [t[1] for t in targets]
+    result['lines'] = [t[1] for t in targets]
+    if len(proofs) == 1:
+        result['evidence'] = next(iter(proofs.values()))
+    elif proofs:
+        result['evidence'] = proofs
+    if len(targets) == 1:
+        name = f'caixa {labels[0]} (linha {targets[0][1]})' if labels else f'linha {targets[0][1]}'
+        done, already = f'A {name} da issue #{number} foi marcada', f'A {name} da issue #{number} já estava marcada'
+    else:
+        name = f'caixas {", ".join(labels)} (linhas {", ".join(str(t[1]) for t in targets)})'
+        done, already = f'As {name} da issue #{number} foram marcadas', f'As {name} da issue #{number} já estavam marcadas'
+    if not open_ones:
         counts = criteria(before)
         return {**result, 'ok': True, 'exitCode': 0, 'alreadyTicked': True,
                 'criteria': {'checked': counts[0], 'total': counts[1]},
-                'message': f'A {name} da issue #{number} já estava marcada; nada foi escrito.'}
+                'message': f'{already}; nada foi escrito.'}
+    result['alreadyTickedBoxes'] = [t[0] for t in targets if t[2] and t[0]]
     parts = re.split(r'(\r\n|\r|\n)', before)
-    raw = parts[2 * (line - 1)]
-    item = ITEM.match(raw)
-    parts[2 * (line - 1)] = raw[:item.start(1)] + 'x' + raw[item.end(1):]
+    for at in lines:
+        raw = parts[2 * (at - 1)]
+        item = ITEM.match(raw)
+        parts[2 * (at - 1)] = raw[:item.start(1)] + 'x' + raw[item.end(1):]
     new = ''.join(parts)
-    check = compare_ticks(before, new, [line])
+    check = compare_ticks(before, new, lines)
     require(check['ok'], f'tick built a body that is not the saved one with just the {name} ticked; nothing was written')
     folder = records / 'issues' / str(number)
     folder.mkdir(parents=True, exist_ok=True)
@@ -1323,8 +1441,9 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
     except Refusal as error:
         return {**result, 'ok': False, 'exitCode': 1, 'written': None if failure else True,
                 'message': f'{failure + "; " if failure else ""}a releitura falhou ({error}): capture o corpo de novo e '
-                           f'rode o tick-check contra {files["before"]} com --lines {line} antes de qualquer outra coisa.'}
-    check = compare_ticks(before, after, [line])
+                           f'rode o tick-check contra {files["before"]} com --lines {",".join(map(str, lines))} antes '
+                           'de qualquer outra coisa.'}
+    check = compare_ticks(before, after, lines)
     counts = criteria(after) or (0, 0)
     result['criteria'] = {'checked': counts[0], 'total': counts[1]}
     try:
@@ -1338,13 +1457,15 @@ def op_tick(config, root, issue, box, line, gh=None, edit=None, account=None, re
         result['commented'] = None
         if comment_file is not None:   # the comment goes with the tick (covered: commenting on the issue)
             try:
-                edit(['issue', 'comment', str(number), '--repo', repository, '--body-file', str(comment_file)])
+                posted = comment_with_evidence(folder, stamp, proofs, comment_file)
+                files['comment'] = str(posted)
+                edit(['issue', 'comment', str(number), '--repo', repository, '--body-file', str(posted)])
                 result['commented'] = True
-            except Refusal as error:
+            except (Refusal, OSError) as error:
                 result['commented'] = False
                 note += f' O comentário não foi publicado ({error}); publique-o de novo com gh issue comment.'
         return {**result, 'ok': True, 'exitCode': 0, 'written': True, 'verified': True,
-                'message': f'A {name} da issue #{number} foi marcada, e a releitura confere.{note}{kept}'}
+                'message': f'{done}, e a releitura confere.{note}{kept}'}
     if failure and body_lines(after) == body_lines(before):
         return {**result, 'ok': False, 'exitCode': 1,
                 'message': f'{failure}. O GitHub ainda tem o corpo guardado, nada mudou; tente de novo.{kept}'}
@@ -1789,6 +1910,23 @@ def items_from_file(text):
     return lines, tops
 
 
+def new_slice_labels(lines, boxes):
+    """A finding enters as a new slice (references/issues.md, "A finding as a new slice"): each top item of --items
+    carries the next label `S<k>` after the last of the body, in order; anything else is refused."""
+    last = max([int(label[1:]) for _, label, _, _ in boxes if label] or [0])
+    for line in lines:
+        item = ITEM.match(line)
+        if not item or indentation(line) != 0:
+            continue
+        label = BOX_LABEL.match(line[item.end():].lstrip(' \t'))
+        last += 1
+        if not label or int(label.group(1)) != last:
+            raise TickRefusal('not_a_new_slice', f'cada critério novo é uma slice nova, com o rótulo S{last} (o seguinte '
+                              f'ao último do corpo): {line[:80]!r}; nada foi escrito',
+                              hint=f'- [ ] S{last}. <resultado observável> (references/issues.md, "A finding as a new '
+                                   'slice")')
+
+
 def approval_of(path, root, what):
     """frontlights.stamp_check, as a refusal of append when the file has no approval that matches."""
     try:
@@ -1867,6 +2005,7 @@ def op_append(config, root, issue, items=None, spec=None, walkthrough=None, pitf
             if heading is None:
                 raise TickRefusal('no_criteria_section', f'a issue #{number} não tem a seção de critérios de aceitação: '
                                   'a sobra vira issue de topo que a cita; nada foi escrito')
+            new_slice_labels(lines, boxes)
             last = item_end(before, boxes[-1][0]) if boxes else heading
             insertions = [(last, lines)]
         elif mode == 'spec':
@@ -1956,7 +2095,7 @@ def run(operation, config=None, root='.', issues=None, all_flag=False, gh=None, 
         elif operation == 'tick':
             result = op_tick(config, root, options.get('issue'), options.get('box'), options.get('line'), gh,
                              options.get('edit'), options.get('account'), options.get('record'),
-                             options.get('comment_file'))
+                             options.get('comment_file'), options.get('evidence'))
         elif operation == 'run':
             result = op_run(config, root, issues, all_flag, gh, options.get('base'), options.get('remote'))
         elif operation == 'capture':
@@ -2021,8 +2160,11 @@ def build_parser():
                                          '(default: the main worktree of the current directory)')
     tick.add_argument('--issue', help='the issue number, such as 12 (default: the issue of the charter entry of the '
                                       'worktree of the current directory)')
-    tick.add_argument('--box', help='the box to tick: the slice box S2 (also s2 or 2), or the leftover box P1')
+    tick.add_argument('--box', action='append', help='the slice box to tick, S2 (also s2 or 2); several in one write: '
+                                                     '--box S5 --box S6 or --box S5,S6')
     tick.add_argument('--line', help='or the line of any criterion of the section, such as 14')
+    tick.add_argument('--evidence', help='with --line, for a criterion without a slice label: a file the tools '
+                                         'recorded under .frontlights/issues/<n>/')
     tick.add_argument('--record', help="the result.json of the watched run (default: .frontlights/issues/<n>/browser/"
                                        "result.json under --root; the lead issue's for a family)")
     tick.add_argument('--comment-file', help='a comment posted on the issue once the tick checks')
@@ -2072,6 +2214,7 @@ def main(argv=None):
                      expect=getattr(args, 'expect', None), answer=getattr(args, 'answer', None),
                      only=getattr(args, 'only', None),
                      record=getattr(args, 'record', None), comment_file=getattr(args, 'comment_file', None),
+                     evidence=getattr(args, 'evidence', None),
                      items=getattr(args, 'items', None), spec=getattr(args, 'spec', None),
                      walkthrough=getattr(args, 'walkthrough', None), pitfall=getattr(args, 'pitfall', None),
                      # checked at every write, never cached: the login and the repository against the config

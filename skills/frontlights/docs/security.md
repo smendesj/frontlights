@@ -189,7 +189,7 @@ branch, diff e arquivos iguais aos da evidência), não quem a fez.
 As escritas no corpo de uma issue saem só de comandos que conferem o `stamp --check` do aprovado (`SKILL.md`, "Show
 before approval") e a conta antes de cada escrita: `frontlights.py publish-issue` (numa adotada, só labels,
 blocked-by e quadro); `closeout.py append`, só acréscimo, com captura de novo logo antes (outra edição no meio: nada
-escrito) e releitura; `closeout.py tick`, uma caixa. Uma pendência não corrigida vira critério novo na issue de
+escrito) e releitura; `closeout.py tick`, as caixas pedidas. Um achado não corrigido vira slice na issue de
 origem ou issue de topo, nunca uma sub-issue nova (`references/issues.md`, "Follow-ups"). A conversão de uma família
 (`references/family.md`, "Converting a family") é a única exceção ao só acréscimo: uma aprovação por família, o corpo
 anterior fica guardado, e fechar filhas ou mexer no quadro seguem negadas. O Frontlights não impede a sessão de

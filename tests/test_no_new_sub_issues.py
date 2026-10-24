@@ -122,7 +122,7 @@ class NoNewSubIssueTextTests(unittest.TestCase):
     def test_the_ladder_has_three_destinations_and_no_sub_issue_recipe(self):
         text = read('skills', 'frontlights', 'references', 'issues.md')
         followups = section(text, 'Follow-ups') or ''
-        positions = [followups.find(step) for step in ('same PR', 'checklist', 'top-level issue')]
+        positions = [followups.find(step) for step in ('same PR', 'A new slice of the source issue', 'top-level issue')]
         self.assertNotIn(-1, positions)
         self.assertEqual(positions, sorted(positions))
         self.assertIn('three destinations', flat(followups))

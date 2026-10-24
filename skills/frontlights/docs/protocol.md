@@ -60,7 +60,7 @@ roda.
 Projeto sem remoto é suportado: `repository: null` no config, no plano e na autorização, e o `publish-issue` grava
 `issues/<n>/issue.json` com `source: "local"`. As regras vivem em `references/issues.md`. "Project board": toda issue de topo entra no quadro; sub-issue entra só pelo pai; o `publish-issue` publica os valores que o
 `validate-plan` resolveu, com as dependências nativas por `--blocked-by`, e relê o GitHub (`blockedBy` incluído).
-"Follow-ups": corrigir no PR, critério de aceitação novo na issue de origem (nunca numa seção à parte) ou issue de
+"Follow-ups": corrigir no PR, slice nova na issue de origem (nunca numa seção à parte) ou issue de
 topo, nunca uma sub-issue nova; "citado no corpo do PR" nunca é destino. A conversão de família que já existe
 (`references/family.md`, "Converting a family") é uma aprovação por família.
 
@@ -99,8 +99,8 @@ ele trabalha num projeto consumidor.
     review.json            evidência da revisão a pedido (`review-gate`)
     merge-local-main-<data-hora>.json   operação do merge na main local, conferida pelo `authorize`
     *-r<k>.json            registros de uma rodada anterior, renomeados por `frontlights.py archive`
-    walkthroughs/S<k>.md   roteiro rodado de uma caixa sem tela
-    teste-livre-cas.md     rascunho dos CAs novos do teste livre
+    walkthroughs/S<k>.md   roteiro rodado de uma caixa que o teste assistido não percorre
+    teste-livre-cas.md     rascunho das slices novas do teste livre
     body-<tipo>-<carimbo>.md   capturas do corpo (capture, append, tick)
     browser/result.json, browser/window.json, browser/perfil-original.json, browser/brief-<passada>.md
     checks/, suite.json, suite-report-<data-hora>.json, suite-<modo>-<data-hora>.log
@@ -242,4 +242,4 @@ baixos estão numa fonte só, `references/development.md`, "When the review is d
 compara a evidência salva em `issues/<n>/review.json` com a atual: `stale` quer dizer que houve mudança depois, e a
 issue não é relatada como revisada com ela; o portão do merge na main local (o teste assistido) está em
 `references/development.md`, "Into the local main". Nenhum achado fica sem destino: o handoff traz a linha "Achados
-sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de origem.
+sem correção e destino de cada um", e um achado vira slice da issue de origem.
