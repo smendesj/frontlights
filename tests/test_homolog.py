@@ -262,7 +262,7 @@ class LocalMainTextTests(unittest.TestCase):
         # redesenho, issue 5: os passos viraram `homolog.py merge`; o texto diz o que o comando faz e o que é da
         # sessão, e o docstring do homolog.py traz a mecânica.
         for phrase in ('homologation bench', 'refuses `origin/main` as the remote main', '`homolog.py merge --issue <n>`',
-                       '**Record it.**', 'the branch of the issue never receives the local main',
+                       '**Record it.**', 'a conflict stays there, `files`: resolve, commit, rerun',
                        '`git merge main`', 'The watched run is the only gate of stage 6: no impact suite and no '
                        'review is required.', '**The gate, the watched run.**', '**The check and the merge.**',
                        'it never edits the gates to make them pass', '"Merge na main local"',

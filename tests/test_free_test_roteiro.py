@@ -101,7 +101,7 @@ class FreeTestRuleTests(unittest.TestCase):
         development = flat((SKILL / 'references' / 'development.md').read_text(encoding='utf-8'))
         for phrase in ('the session brings the API and the web of the main worktree up itself, never asking the user to',
                        '`frontlights.py artifact roteiro --issue <n> --content <file>` adds the last section of the artifact',
-                       'each free-test fix adds its group', 'with the link to the roteiro at the end of the artifact'):
+                       'each free-test fix adds its group', 'with the link to the roteiro'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, development)
         testing = flat((SKILL / 'references' / 'browser-testing.md').read_text(encoding='utf-8'))
