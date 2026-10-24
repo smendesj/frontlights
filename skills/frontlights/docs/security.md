@@ -40,7 +40,7 @@ Nenhum script roda shell. Os limites longos estão nas seções abaixo.
 | `frontlights.py open` | o do `cleanup.py plan` e do `closeout.py candidates` | nada | `git fetch --prune`, `gh` | — |
 | `frontlights.py init-config` | remotos, `gh project list` | o primeiro config (nunca `project`) | `gh` | o quadro certo |
 | `frontlights.py authorize` | charter, operação | nada | nada | o Git |
-| `frontlights.py charter new\|renew\|add` | config, charter | `authorization.json` e a cópia do anterior | nada | — |
+| `frontlights.py charter new\|add\|own\|renew\|check\|map` | config, charters, portas | `authorization/<n>.json`, o anterior copiado | nada | — |
 | `frontlights.py slice open\|merge` | charter, Git | branch e worktrees; merge `--no-ff` na worktree da issue | `git fetch`; imprime `gh issue develop` e o push | o teste certo |
 | `frontlights.py artifact init\|section\|choose` | o template | só a fonte `artifact.html` | nada | o conteúdo |
 | `frontlights.py publish-issue` | plano, aprovado (`stamp --check`) | issues e quadro; `publish/`; move `notes/` para a issue | `gh`, conta conferida a cada escrita | a intenção |

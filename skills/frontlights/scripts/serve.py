@@ -450,10 +450,7 @@ def authorization_records(root):
     """(file name, object) of every readable `<root>/.frontlights/authorization*.json`, in name order. A file that is
     missing, unreadable, larger than `MAX_AUTHORIZATION_BYTES`, nested too deep for json or not an object is
     skipped: these records are read only to refuse more, never to allow."""
-    try:
-        files = sorted((Path(root) / '.frontlights').glob('authorization*.json'))
-    except OSError:
-        files = []
+    files = _cli.record_files(root)
     records = []
     for path in files:
         try:
@@ -1940,11 +1937,7 @@ def free_test_stop(config_file, root, issue):
 
 def free_test_commands(config_file, root, issue):
     import shlex   # noqa: PLC0415  (only the display of the commands)
-    charter = Path(root) / '.frontlights' / 'authorization.json'
-    try:
-        data = json.loads(charter.read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
-        data = {}
+    data = _cli.read_charter(root, issue) or {}
     argvs = data.get('verification_commands') if isinstance(data, dict) else None
     argvs = [a for a in argvs if isinstance(a, list) and a and all(isinstance(x, str) for x in a)] if isinstance(
         argvs, list) else []

@@ -489,11 +489,9 @@ def read_record(path):
 
 
 def record_files(folder):
-    """The `.frontlights/authorization*.json` files under `folder`, sorted by name; [] when the folder is unreadable."""
-    try:
-        return sorted(Path(folder, '.frontlights').glob('authorization*.json'))
-    except OSError:
-        return []
+    """The authorization records under `folder` (`_cli.record_files`: `.frontlights/authorization*.json` by name, then
+    the per-issue charters of `.frontlights/authorization/`); [] when the folder is unreadable."""
+    return _cli.record_files(folder)
 
 
 def record_prefixes(folder):
@@ -1423,12 +1421,13 @@ GATE_QUESTIONS = {
 }
 
 
-def charter_of(root):
-    path = Path(root) / '.frontlights' / 'authorization.json'
-    data = read_record(path) if path.is_file() else None
-    require(isinstance(data, dict), 'não há charter legível em .frontlights/authorization.json; rode `frontlights.py '
-                                    'charter new` antes')
-    return path, data
+def charter_of(root, number):
+    """(the path of the issue's own charter, its record): the legacy `authorization.json` narrowed to the issue when
+    it has no file of its own, so the write moves it there (`_cli.read_charter`)."""
+    data = _cli.read_charter(root, number)
+    require(isinstance(data, dict), f'não há charter legível da issue #{number} em .frontlights/authorization/; rode '
+                                    '`frontlights.py charter new` antes')
+    return _cli.charter_path(root, number), data
 
 
 def issue_body(root, repository, number, gh=None):
@@ -1481,7 +1480,7 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     worktree(root)
     root = Path(root)
     number = issue_number(str(issue))
-    charter_path, record = charter_of(root)
+    charter_path, record = charter_of(root, number)
     require(number in record.get('issue_ids', []), f'a issue #{number} não está no charter')
     prefix = _cli.branch_prefix(record=record)[0]
     require(is_prefix(prefix), 'o charter não tem branch_prefix válido')
