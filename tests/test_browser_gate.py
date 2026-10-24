@@ -917,6 +917,87 @@ class AnswerTests(GateTestCase):
         self.assertEqual(json.loads(done.stdout)['status'], 'answered')
 
 
+class FingerprintTests(GateTestCase):
+    """Retro das issues 1123 e 1124 (23/10/2026): a impressão digital mede só o diff da própria raiz (`patch-id`),
+    então a base que andou não invalida o teste; o portão mede a branch que será mesclada sob o rótulo da issue
+    (`--as`); a resposta fica gravada como o usuário a escolheu (`--option`)."""
+
+    answer = AnswerTests.answer
+
+    def setUp(self):
+        super().setUp()
+        self.config_file = Path(self.tmp.name) / 'config.json'
+        self.config_file.write_text(json.dumps(self.config), encoding='utf-8')
+
+    LINES = ''.join(f'linha {i}\n' for i in range(30))
+
+    def long_screen(self):
+        """A screen file of 30 lines on main, so the slice and main can change it far apart."""
+        self.write(self.main, SCREEN, self.LINES)
+        self.git(self.main, 'commit', '-qam', 'tela longa')
+        return self.LINES.splitlines(keepends=True)
+
+    def test_the_base_that_moved_under_the_same_diff_keeps_the_decision(self):
+        lines = self.long_screen()
+        loud = self.slice('slice-loud')
+        self.write(loud, SCREEN, ''.join(lines[:25] + ['da issue\n'] + lines[26:]))
+        self.git(loud, 'commit', '-qam', 'issue')
+        self.assertEqual(self.answer(loud, 'Aprovado').returncode, 0)
+        before = json.loads(self.record.read_text(encoding='utf-8'))['lote']
+        self.assertTrue(before['roots']['slice-loud'].startswith('patch-id:'))
+        self.write(self.main, SCREEN, ''.join(lines[:2] + ['de outra issue\n'] + lines[3:]))
+        self.git(self.main, 'commit', '-qam', 'outra issue na main')
+        self.git(loud, 'merge', '-q', '--no-edit', 'main')
+        result = self.gate([loud])
+        self.assertEqual((result['status'], result['base_moved']), ('answered', True))
+        self.assertEqual(result['roots'], before['roots'])
+        self.assertNotEqual(result['bases'], before['bases'])
+        self.write(loud, SCREEN, ''.join(lines[:2] + ['de outra issue\n'] + lines[3:25] + ['mudou\n'] + lines[26:]))
+        self.assertEqual(self.gate([loud])['status'], 'stale')   # the issue's own diff changed
+
+    def test_the_branch_merged_is_measured_under_the_label_of_the_issue(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        self.assertEqual(self.answer(loud, 'Aprovado').returncode, 0)
+        self.git(self.main, 'commit', '-q', '--allow-empty', '-m', 'main andou')
+        integra = Path(self.tmp.name) / 'integra'
+        self.git(self.main, 'worktree', 'add', '-q', '-b', 'slice-loud-integra', str(integra), 'slice-loud')
+        self.git(integra, 'merge', '-q', '--no-edit', 'main')
+        self.assertEqual(self.gate([integra])['status'], 'stale')    # another label: nothing recorded for it
+        result = self.gate([integra], labels={'slice-loud-integra': 'slice-loud'})
+        self.assertEqual((result['status'], list(result['roots']), result['base_moved']), ('answered', ['slice-loud'], True))
+        done = self.cli([integra], '--config', str(self.config_file), '--toca', 'sim', '--record', str(self.record),
+                        '--as', 'slice-loud-integra=slice-loud')
+        self.assertEqual(done.returncode, 0, done.stderr)
+        with self.assertRaises(ValueError):
+            self.gate([integra], labels={'outra': 'slice-loud'})
+
+    def test_a_record_of_the_older_format_is_measured_again_the_old_way(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        top = str(loud.resolve())
+        older = browser_gate.digest(top, [SCREEN])
+        self.record.write_text(json.dumps({'situacao': 'aprovado', 'lote': {'roots': {'slice-loud': older}}}),
+                               encoding='utf-8')
+        result = self.gate([loud])
+        self.assertEqual((result['status'], result['older_format']), ('answered', ['slice-loud']))
+        self.edit(loud, SCREEN)
+        self.assertEqual(self.gate([loud])['status'], 'stale')
+
+    def test_the_literal_of_another_question_is_recorded_as_the_user_chose_it(self):
+        loud = self.slice('slice-loud', **{SCREEN: 'x\n'})
+        self.answer(loud, 'Aprovado')
+        self.edit(loud, SCREEN)
+        refused = self.answer(loud, 'Registrar e mesclar')
+        self.assertEqual(refused.returncode, 1)
+        self.assertEqual(json.loads(self.record.read_text(encoding='utf-8'))['pergunta']['resposta'], 'Aprovado')
+        self.assertEqual(self.answer(loud, 'Registrar e mesclar', '--option', 'Assistir de novo').returncode, 1)
+        self.assertEqual(self.answer(loud, 'Aprovado', '--option', 'Ainda não').returncode, 1)   # they disagree
+        done = self.answer(loud, 'Registrar e mesclar', '--option', 'Manter a decisão anterior')
+        self.assertEqual(json.loads(done.stdout)['status'], 'answered', done.stderr)
+        record = json.loads(self.record.read_text(encoding='utf-8'))
+        self.assertEqual((record['situacao'], record['pergunta']['resposta'], record['pergunta']['opcao']),
+                         ('aprovado', 'Registrar e mesclar', 'Manter a decisão anterior'))
+
+
 class RecordPassTests(GateTestCase):
     """Issue 8, S2: `browser-gate record` grava um critério de uma passada; os campos são os de protocol.md."""
 

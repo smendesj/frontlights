@@ -1002,7 +1002,7 @@ class HandoffTemplateTests(unittest.TestCase):
         self.assertLessEqual(len(text.split()), 260)
         flat = ' '.join(text.split())
         for phrase in ('# Passagem da issue #<n>', 'Só ponteiros', 'O GitHub vence esta passagem', '- Issue:',
-                       '- Charter: `.frontlights/authorization.json`', '- Checkpoints:',
+                       '- Charter: `.frontlights/authorization/<n>.json`', '- Checkpoints:',
                        '`frontlights.py resume --issue <n>`', '`.frontlights/issues/<n>/browser/window.json`',
                        '`serve.py window attach`', '- Plano resumido:', '- Slices fechadas:', '- Release:',
                        'Achados sem correção e destino de cada um', '- Pergunta pendente e resposta literal:',

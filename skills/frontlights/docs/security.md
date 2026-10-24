@@ -40,7 +40,7 @@ Nenhum script roda shell. Os limites longos estão nas seções abaixo.
 | `frontlights.py open` | o do `cleanup.py plan` e do `closeout.py candidates` | nada | `git fetch --prune`, `gh` | — |
 | `frontlights.py init-config` | remotos, `gh project list` | o primeiro config (nunca `project`) | `gh` | o quadro certo |
 | `frontlights.py authorize` | charter, operação | nada | nada | o Git |
-| `frontlights.py charter new\|renew\|add` | config, charter | `authorization.json` e a cópia do anterior | nada | — |
+| `frontlights.py charter new\|add\|own\|renew\|check\|map` | config, charters, portas | `authorization/<n>.json`, o anterior copiado | nada | — |
 | `frontlights.py slice open\|merge` | charter, Git | branch e worktrees; merge `--no-ff` na worktree da issue | `git fetch`; imprime `gh issue develop` e o push | o teste certo |
 | `frontlights.py artifact init\|section\|choose` | o template | só a fonte `artifact.html` | nada | o conteúdo |
 | `frontlights.py publish-issue` | plano, aprovado (`stamp --check`) | issues e quadro; `publish/`; move `notes/` para a issue | `gh`, conta conferida a cada escrita | a intenção |
@@ -189,7 +189,7 @@ branch, diff e arquivos iguais aos da evidência), não quem a fez.
 As escritas no corpo de uma issue saem só de comandos que conferem o `stamp --check` do aprovado (`SKILL.md`, "Show
 before approval") e a conta antes de cada escrita: `frontlights.py publish-issue` (numa adotada, só labels,
 blocked-by e quadro); `closeout.py append`, só acréscimo, com captura de novo logo antes (outra edição no meio: nada
-escrito) e releitura; `closeout.py tick`, uma caixa. Uma pendência não corrigida vira critério novo na issue de
+escrito) e releitura; `closeout.py tick`, as caixas pedidas. Um achado não corrigido vira slice na issue de
 origem ou issue de topo, nunca uma sub-issue nova (`references/issues.md`, "Follow-ups"). A conversão de uma família
 (`references/family.md`, "Converting a family") é a única exceção ao só acréscimo: uma aprovação por família, o corpo
 anterior fica guardado, e fechar filhas ou mexer no quadro seguem negadas. O Frontlights não impede a sessão de

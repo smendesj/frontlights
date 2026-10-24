@@ -1600,12 +1600,76 @@ class RunTests(CleanupCase):
     RELEASE = MergedWorkTests.RELEASE
     released = MergedWorkTests.released
 
-    def run_cleanup(self, info, yes=(), runner=no_fetch, integrations=()):
+    def run_cleanup(self, info, yes=(), runner=no_fetch, integrations=(), finder=None, ender=None):
         gh = FakeGh(info)
+        self.ended, self.paused = [], []
         result = cleanup.run('run', self.config, self.root, None, None, (), (), gh, integrations=integrations,
-                             from_authorizations=True, yes=yes, runner=runner)
+                             from_authorizations=True, yes=yes, runner=runner,
+                             finder=finder or (lambda path: []),   # the real process table is its own test, below
+                             ender=ender or (lambda pid: self.ended.append(pid) or True),
+                             pause=self.paused.append)
         self.assertEqual(gh.violations, [])
         return result
+
+    def test_the_shells_and_agents_in_a_worktree_are_ended_before_its_removal(self):
+        # GeoCloud #1123, 23/10/2026: a slice's worktree stayed behind because shells still stood in it
+        path, branch, tip = self.worktree('wt12')
+        order = []
+
+        def finder(folder):
+            order.append(('find', Path(folder).name))
+            return [{'pid': 4101, 'name': 'bash.exe', 'endable': True}, {'pid': 4102, 'name': 'Code.exe', 'endable': False}]
+
+        def runner(argv):
+            if 'remove' in argv:
+                order.append(('remove', self.ended[:]))
+            return no_fetch(argv)
+        result = self.run_cleanup({branch: merged(tip)}, runner=runner, finder=finder)
+        self.assertTrue(result['ok'], result)
+        self.assertFalse(path.exists())
+        self.assertEqual(order, [('find', 'wt12'), ('remove', [4101])])   # the editor is never ended
+        step = next(r for r in result['ran'] if r['kind'] == 'remove_worktree')
+        self.assertEqual(step['processesEnded'], [{'pid': 4101, 'name': 'bash.exe', 'endable': True}])
+
+    def test_a_removal_still_held_is_retried_then_names_its_holders(self):
+        path, branch, tip = self.worktree('wt12')
+        tries = []
+
+        def busy(argv):
+            if 'remove' in argv:
+                tries.append(1)
+                return (1, '', "error: failed to delete 'x': Permission denied")
+            return no_fetch(argv)
+        result = self.run_cleanup({branch: merged(tip)}, runner=busy,
+                                  finder=lambda folder: [{'pid': 77, 'name': 'Code.exe', 'endable': False}])
+        self.assertEqual(len(tries), 1 + cleanup.REMOVE_RETRIES)
+        self.assertEqual(self.paused, [cleanup.RETRY_SECONDS] * cleanup.REMOVE_RETRIES)
+        self.assertEqual([e.get('holders') for e in result['excluded']], [[{'pid': 77, 'name': 'Code.exe'}]])
+        self.assertEqual(self.ended, [])
+        self.assertTrue(path.exists())
+
+    def test_holders_sees_the_cwd_or_the_command_line_and_never_this_process(self):
+        folder = str(self.base / 'wt12')
+        table = [{'pid': os.getpid(), 'ppid': 1, 'name': 'python', 'cwd': folder, 'commandLine': ''},
+                 {'pid': 9001, 'ppid': 1, 'name': 'bash', 'cwd': folder + '/web', 'commandLine': 'bash'},
+                 {'pid': 9002, 'ppid': 1, 'name': 'node.exe', 'cwd': None,
+                  'commandLine': f'node "{folder.replace("/", chr(92))}\\node_modules\\ng" serve'},
+                 {'pid': 9003, 'ppid': 1, 'name': 'node.exe', 'cwd': None, 'commandLine': f'node {folder}-integra\\x.js'},
+                 {'pid': 9004, 'ppid': 1, 'name': 'Code.exe', 'cwd': None, 'commandLine': f'Code.exe {folder}'}]
+        found = cleanup.holders(folder, table)
+        self.assertEqual([(h['pid'], h['endable']) for h in found], [(9001, True), (9002, True), (9004, False)])
+
+    @unittest.skipUnless(os.name == 'nt' or Path('/proc').is_dir(), 'needs a readable process table')
+    def test_a_real_process_naming_the_worktree_is_found_and_ended(self):
+        folder = self.base / 'held'
+        folder.mkdir()
+        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', str(folder)],
+                                 cwd=str(folder), stdin=subprocess.DEVNULL)
+        self.addCleanup(lambda: child.poll() is None and child.kill())
+        found = cleanup.holders(str(folder))
+        self.assertIn(child.pid, [h['pid'] for h in found or []])
+        self.assertTrue(cleanup.end_process(child.pid))
+        child.wait(timeout=30)
 
     def test_the_merged_work_goes_and_the_remote_delete_is_left_to_the_session(self):
         (issue_path, issue_branch), (s1_path, s1_branch), info = self.released()

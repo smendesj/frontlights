@@ -30,11 +30,12 @@ and `message` (a refusal adds `reason` and `hint`); its flags are in its `--help
 
 The user decided, permanently and for every project, that stage 6 opens without a question: there is no
 concurrency question, no stacking question and no implementation authorization question. `frontlights.py charter
-new --issue <n> --ownership <paths>` records the charter after a dry run of `authorize` (the user in
+new --issue <n> --ownership <paths>` writes that issue's own charter after a dry run of `authorize` (the user in
 `approved_by`, `confirmed_by` and `monitoring.confirmed_by`, `"autorização permanente (docs/security.md)"` in
-`approval_reference`, an `expires_at` at most 24 hours ahead, the previous charter kept), and the session announces
+`approval_reference`, an `expires_at` at most 24 hours ahead), and the session announces
 it in one short block, in the user's language: its `announcement`, with the branch and the order of the slices;
-`charter add` brings in an issue, `charter renew` extends it. Its `monitoring` block is `mode: "local"`;
+`charter add` brings in another issue, `charter own` widens its ownership by amendment, `charter renew` extends it.
+Its `monitoring` block is `mode: "local"`;
 `phone_connected: true` only when the user states,
 unprompted in this session, that the phone received and answered. A change the user asks for goes back through
 `AskUserQuestion`. The questions of the work itself (the watched run, failures, the findings batch, a new product
@@ -130,12 +131,13 @@ that slice's branch instead (stacked: `--stacked-on`, `"base": "<slice-branch>"`
 merged into the branch of the issue after the slice it depends on.
 
 Each slice is one TDD loop at its own seams and one `checkpoint --slice <id>` (`checkpoint-<id>.json`). When its loop
-closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests, then the slice is merged into the
+closes, `frontlights.py slice merge --issue <n> --slice S<k>` reruns its tests (all on a
+`sliceMerge.broadSuite` match, `references/setup.md`; scripts under `.frontlights/issues/<n>/verify/`), then the slice is merged into the
 branch of the issue and the preview refreshed; run the push in its `commands`. A conflict (`files`) is resolved in the
-issue's worktree and shown in its diff. A box without a screen runs the walkthrough of its box ("Into the local
-main"), and the `.md` is the evidence of the tick; a box with a screen waits for the "Aprovado" of the watched run;
-then comes the tick of its box: the `next.tick` argv (`closeout.py tick --box S<k>`, with `closeout.py tick-check`
-before and after the write) and a short comment with the commit and the commands.
+issue's worktree and shown in its diff. A box without a screen, or one the watched run skips, runs its
+walkthrough ("Into the local main"), the evidence of its tick; any other waits for the "Aprovado" of the run that
+walked it. Then the `next.tick` argv (`closeout.py tick --box S<k>`, or `--box S5,S6` in one write): its comment
+opens with the evidence read from that record, then the commit and the commands.
 
 The handoff names the slice in progress and its worktree; a fresh session resumes at the first open box. Slices run in
 parallel inside an issue and between issues. Meanwhile the ANTES window, open since the grilling, runs the `Fluxo:` of
@@ -147,12 +149,11 @@ when the user asks for them. Stacking children on a parent applies only to a fam
 ### Which tests run when
 
 TDD per slice is the default practice: its own tests at its seams, plus the test modules the slice touches and the
-type checks. These tests are evidence, never a gate: no suite holds back the merge into the local main or the
-release. When the user asks to implement "só com teste assistido", the session writes and runs no tests in that run
+type checks. These tests are evidence, never a gate: no suite holds back the merge into the local main; only the
+release requires one. When the user asks to implement "só com teste assistido", the session writes and runs no tests in that run
 (`slice merge --watched-only`), and the watched run is the evidence. A broader suite runs only when the user asks for
 one, through the optional tools (`homolog suite --mode impact|full`, judged by `homolog suite-gate`); its command, count and exit code go to the
-handoff, and a red one is a finding. No whole check is required anywhere: a project's CI, when there is one, is
-neither expected nor a gate, and the watched run of each issue is the evidence.
+handoff, and a red one is a finding. A project's CI is neither expected nor a gate.
 
 **A parked slice.** When a slice waits for something the session cannot do (a decision, a credential, another team's
 endpoint), write the line `- Bloqueada: <what is missing and from whom>` as the last sub-item of its box, more
@@ -163,14 +164,13 @@ meanwhile: a sub-item without a box is never a criterion.
 
 ### After the loop
 
-Run the type checks the repository really has (never assume npm scripts; without a type checker, say so and record the
+Run the type checks the repository really has (without one, say so and record the
 syntax or build checks), and inspect the vertical behavior, the diff and the acceptance coverage; an unexpected effect
 stops the issue. When anything the issue changes is visible on the screen (its `## Navegador e testes ligados` says so,
 or `browser-gate` finds it in the diff), the watched run belongs to the issue as a whole: its ANTES ran from the
 grilling, and its DEPOIS ("pronto para assistir?", `references/browser-testing.md`) comes once the last slice that
 changes the screen has closed its loop and every closed slice is merged into the branch of the issue, and before an
-independent review of any of them. Once that question is due and until it is answered, it is the `teste_assistido`
-pending of the checkpoint.
+independent review of any of them.
 
 ## Dispatch and ownership
 
@@ -180,6 +180,10 @@ start all eligible non-conflicting issues up to the ceiling, all launched in one
 `references/worker.md`. Without concurrent agents, report the capacity limitation. Do not silently serialize for
 convenience. With a `path_risk` of `inspect` other than `ok`, give `slice open` a short `--dir`. A worker's report is a
 claim: read the diff and rerun the commands it names.
+
+**Ownership between issues.** Two issues never own one path: `charter new`, `add` and `own` refuse an overlap, and
+`charter check` runs before parallel sessions; ask the refusal's `question` with `AskUserQuestion`. Each session
+reads `charter map`.
 
 **Fan out inside an issue.** The independent slices go at once, one implementer per open slice, in its own worktree, and the agents around them do not
 wait: dispatch in the same message read-only workers that prepare the next slice (each writes its note, `references/worker.md`), and the checks that share no
@@ -203,13 +207,12 @@ the issue, its base and, after round one, the previous tip and findings, and the
 Bind each round to `frontlights.py evidence` in `.frontlights/issues/<n>/review.json`; `frontlights.py review-gate`
 runs before reporting an issue as reviewed. Any commit, edit or new file after the review makes it stale, and
 whether to review again is the user's call. Each axis stops by "When the review is done"; findings take the
-destination ladder (`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.
+destination ladder (`issues.md`, "Follow-ups"), a new slice of the source issue first.
 
 ### When the review is done
 
 A round is one dispatch of the reviewer on the current tip. The review is done at the first round that reports 0
-sérios and 0 médios; the baixos still open go to the findings batch, each as a new acceptance criterion of the source
-issue, and the batch also offers "Corrigir os baixos agora". There is no limit of rounds to keep: after a round with a
+sérios and 0 médios; the baixos still open go to the findings batch, each as a new slice of the source issue, and the batch also offers "Corrigir os baixos agora". There is no limit of rounds to keep: after a round with a
 sério or médio, ask "Mais uma rodada" or "Dar destino pela escada"; a sério or médio without a destination keeps the
 issue out of the local main by the gate on the findings. The handoff records each round: its HEAD and its counts.
 
@@ -218,19 +221,17 @@ main and before a PR is opened or updated, every open finding that came up (the 
 for, tests that ran, a live check, any other verification pass) has a destination GitHub tracks, or is fixed, or is
 shown as not a defect with its evidence, or is dropped by the user's explicit answer: the gate of the Follow-ups
 section. A line in the PR body, a comment or the chat is never a destination, so "cited in the PR" does not pass the
-gate. Most often a finding left unfixed becomes an acceptance criterion of the source issue. While such a criterion
+gate. Most often a finding left unfixed becomes a new slice of the source issue. While such a criterion
 is open the issue is not in the `closes` of `release-plan`, so the PR cites it without a closing keyword, in its body
 and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
-watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Thresholds: `docs/protocol.md`, "Contexto e conclusão".
+watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Check context with `context` by the
+thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home, with the same `--pending`. If the host cannot enforce renewal, report
+that hard-cap AFK acceptance is unproven.
 
-Check context with `context` by the thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home;
-while a watched run is due and unanswered, pass `--pending teste_assistido`. If the host cannot enforce renewal,
-explicitly report that hard-cap AFK acceptance is unproven.
-
-The session may tick an acceptance criterion in the issue body only with evidence for it, because the closeout trusts the ticks; a
-criterion born from a finding is ticked the same way. Closing an issue is never part of this: it has its own approval.
+The session ticks an acceptance criterion only with evidence for it; a criterion born from a finding is ticked the
+same way. Closing an issue is never part of this: it has its own approval.
 Report each issue's state, branch/PR, the watched run, the walkthroughs run without a screen, the tests and the review
 when they ran, the findings left unfixed with the destination of each, the count of its lines in
 `.frontlights/pitfalls.md` (criteria that entered after the approval: `references/issues.md`, "A pitfall line"), and
@@ -244,18 +245,18 @@ is the only gate of stage 6: no impact suite and no review is required. Once the
 merge --issue <n>`:
 
 1. **The checks.** Refuses a dirty main worktree, a slice outside the branch of the issue, an open box.
-2. **The gate, the watched run.** `browser-gate` not green is exit code 2 with its question, never the merge.
-3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box, running
+2. **The gate, the watched run.** Merges the branch of the issue and the local main into a local
+   `<branch_prefix>issue-<n>-integra` (a conflict stays there, `files`: resolve, commit, rerun); `browser-gate` measures it, the branch merged, as the issue branch, by its
+   diff (a moved main keeps the answer). Not green is exit code 2 with its question and `answerFlags`.
+3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box or one the run did not walk, running
    the walkthrough of each box (its `Roteiro:` lines, `references/issues.md`) is a condition of the merge into the
    local main, with no new question. It runs when its slice closes: `.frontlights/issues/<n>/walkthroughs/S<k>.md`,
    with a header (the issue, the box, the persona, the date, the steps, the base and the commit it ran on), `## Antes`
    and `## Depois`, the output masked in a code block, one row of the handoff table each. A `## Depois` that differs
    from the box's `depois:` sends the slice back; a box without its file keeps the issue out of the local main.
-4. **The check and the merge.** Merges the branch of the issue and the local main into a local
-   `<branch_prefix>issue-<n>-integra` (the branch of the issue never receives the local main; a conflict stays there,
-   `files`: resolve, commit, rerun), records the operation with `gates` `{"browser_gate": "answered"}` (or
-   `not_needed`), the only gate, runs `authorize` and merges into the local main. On a refusal the session asks the
-   user with `AskUserQuestion` instead of merging; it never edits the gates to make them pass.
+4. **The check and the merge.** Records the operation with `gates` `{"browser_gate": "answered"}` (or `not_needed`),
+   the only gate, runs `authorize` and merges into the local main. On a refusal the session asks the user with
+   `AskUserQuestion` instead of merging; it never edits the gates to make them pass.
 5. **Back it up.** `homolog bundle` and `update-check`; `configured: false` is one line, "sem backup configurado".
 6. **Record it.** The handoff's "Merge na main local" takes the watched run, or the walkthroughs run without a screen,
    the record and the bundle.
@@ -273,20 +274,20 @@ artifact roteiro --issue <n> --content <file>` adds the last section of the arti
 `Fluxo:` in plain words, the account by its label, what the screen should show), republished on the same URL; each
 free-test fix adds its group. Then its `window.commands`: a window on the local main and the local development
 database (the homologation one), already logged in (`references/browser-testing.md`, "The free test window"). One line
-says the window is theirs until they close it, with the link to the roteiro at the end of the artifact.
+says the window is theirs until they close it, with the link to the roteiro.
 
 - **Without a screen, in the terminal.** When `browser-gate` said `not_needed`, no window opens and no product is
   served: give the commands of `serve.py free-test commands`, each in its own code block, then ask
   "Terminou de testar a main local?", "Sim, terminei" first and "Ainda testando", which leaves it pending; never answer
   it for the user.
-- **The user leads.** The roteiro guides and binds nothing: no print and no time limit; the session helps on request.
+- **The user leads.** No print and no time limit; the session helps on request.
 - **One free test per homologated issue.** After an "Agora não" to the release, the next issue's free test covers
   everything accumulated in the local main. Closing the window right away is how the user skips it.
 - **A fix asked in the free test.** Fix it at once on the branch of the issue, TDD by default, push it (covered), then
-  `homolog.py merge --issue <n> --free-test-fix`: the free test itself is the evidence of the fix, and the watched run
-  is not rerun. When the product needs a restart, the user reloads the page and the window stays open. Each fix is a box of `teste-livre-cas.md`, a leftover box
-  (`references/issues.md`, "A leftover as an acceptance criterion"), ticked only when the user checked it, otherwise
-  with `Evidência que fecha:`.
+  `homolog.py merge --issue <n> --free-test-fix`: the free test itself is the evidence of the merge, and the watched run
+  is not rerun. When the product needs a restart, the user reloads the page and the window stays open. Each fix is a
+  new slice in `teste-livre-cas.md` (`references/issues.md`, "A finding as a new slice"), ticked by its walkthrough,
+  never by a word in the chat.
 - **Window closed, next step.** On the holder's exit (or "Sim, terminei") run `serve.py free-test stop`. With fixes,
   the batch before the release: the draft approved by link and stamp (`SKILL.md`, "Show before approval"), one
   approval for the whole file, and written by the write rule of the leftover (body captured, append only, difference
@@ -300,8 +301,7 @@ window of its free test is closed; on "Agora não" the work stays in the local m
 offers the release again with everything accumulated.
 
 - **Plan it.** `homolog sync`, then `homolog.py release plan`: the issues and slugs to release, the branch name, and
-  `closes` (every box ticked, no open sub-issue). No suite is required for the release (no whole check is: the watched
-  run of each issue is its evidence).
+  `closes` (every box ticked, no open sub-issue). `baseProtection` warns of a manual merge.
 - **Offer it.** "Lançar a release com as issues #a, #b agora?", "Sim, lançar" first and "Agora não" second.
 - **Branch and pull request (covered).** The body follows `templates/pr.md` (the model of the pull request), checked
   by `release body-check`: **Resumo** and **Evidência** once per issue, from records that exist (a print by its file
@@ -309,7 +309,9 @@ offers the release again with everything accumulated.
   the release. **`Closes #n` only from `closes`.** One line per issue of `closes`, copied from that list, never counted
   by hand; every other issue is cited by number without a closing keyword, in the body and in the commits; the body of
   the pull request is never the destination of a finding. `release go --body <file>` prints the refspec push and `gh
-  pr create`: run them, then `release go --record --pr <n>`. A refused refspec push asks "Lançar pelo caminho antigo,
+  pr create`: run them, then `release go --record --pr <n>`. `go` refuses (`full_suite`) until `homolog suite
+  --release --mode full` is green at the tip of the local main, or the user waives it (its `question`,
+  `--without-full-suite`). A refused refspec push asks "Lançar pelo caminho antigo,
   com a branch local <release branch>?" (`--legacy-branch`).
 - **Wait for the merge.** The merge is the user's step. One line to the user says which pull request the session
   waits for; the handoff's `Release` line records it. A background monitor runs `release status --since <state>
@@ -321,5 +323,6 @@ offers the release again with everything accumulated.
   branch goes by GitHub's automatic deletion of merged head branches). On "Não", the wait goes on unchanged.
 - **At the merge.** `release landed` pulls the local main (if it does not fast-forward, stop and ask instead of
   merging or resetting) and lists the cleanup of `references/closeout.md`, step 5, run without a question, plus the
-  `git push origin --delete` of the release branch when GitHub kept it (covered cleanup). A PR merged
+  `git push origin --delete` of the release branch when GitHub kept it (covered cleanup). It updates every released
+  issue's handoff and lists their other worktrees (`leftoverWorktrees`). A PR merged
   into another branch, closed without a merge, or not found is never ready.

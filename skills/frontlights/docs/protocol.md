@@ -27,15 +27,15 @@ a prévia, em "The start of stage 6"; as slices de cada issue em ordem, numa bra
 partir da `origin/<base>`, e com uma worktree por slice, em "Slices in order"; o portão do merge na main local (o
 teste assistido) e o bundle depois dele, em "Into the local main"; o teste livre na main local, em "The free test on the local main"; a release, em "The release".
 
-**O registro do charter** (`.frontlights/authorization.json`) é gravado por `frontlights.py charter new|renew|add`,
-nunca à mão, com todo campo que o `authorize` lê: `repository`, `issue_ids` e `direct_ids`, `operations` (`edit`,
+**O charter**, um por issue (`authorization/<n>.json`; o `authorization.json` antigo só é lido), é gravado por
+`frontlights.py charter new|add|own|renew`, nunca à mão, com todo campo que o `authorize` lê: `repository`,
+`issue_ids` e `direct_ids`, `operations` (`edit`,
 `test`, `checkpoint`, `merge_into_local_main`), `protected_branches` (`main` e `master` sempre), `stop_conditions`,
 `base` (`branch`, a main local; `issues.from` = `origin/<base>`; `direct.from` = a main local), `issued_at` e
 `expires_at` (fuso de São Paulo, no máximo 24 horas), `approved_by`, `confirmed_by`, `approval_reference`,
 `monitoring`, `concurrency`, `branch_prefix`, `ownership` (obrigatória, nunca só `*`), `verification_commands` e
 `worktrees` (`issue` ou `direct`, `path`, `branch`, `ownership`; `slice` e `base` numa slice). O exemplo é
-`examples/authorization.json`. Em `monitoring`, `phone_connected: true` vale só pela afirmação do usuário na sessão
-atual; o Frontlights não detecta o celular.
+`examples/authorization.json`. `phone_connected: true` só pela afirmação do usuário na sessão atual.
 
 Uma slice estacionada ganha, como último sub-item da caixa aberta, a linha `- Bloqueada: <o que falta e de quem>`
 (só acréscimo, diferença conferida), apagada ao destravar: a única remoção permitida no corpo de uma issue além da
@@ -60,7 +60,7 @@ roda.
 Projeto sem remoto é suportado: `repository: null` no config, no plano e na autorização, e o `publish-issue` grava
 `issues/<n>/issue.json` com `source: "local"`. As regras vivem em `references/issues.md`. "Project board": toda issue de topo entra no quadro; sub-issue entra só pelo pai; o `publish-issue` publica os valores que o
 `validate-plan` resolveu, com as dependências nativas por `--blocked-by`, e relê o GitHub (`blockedBy` incluído).
-"Follow-ups": corrigir no PR, critério de aceitação novo na issue de origem (nunca numa seção à parte) ou issue de
+"Follow-ups": corrigir no PR, slice nova na issue de origem (nunca numa seção à parte) ou issue de
 topo, nunca uma sub-issue nova; "citado no corpo do PR" nunca é destino. A conversão de família que já existe
 (`references/family.md`, "Converting a family") é uma aprovação por família.
 
@@ -85,7 +85,7 @@ ele trabalha num projeto consumidor.
   stamps.json              gravado por `frontlights.py stamp --revision`: a revisão e o carimbo mostrados na
                            pergunta, por caminho; o `--approve` sem `--revision` leva essa revisão
   plan.json
-  authorization.json
+  authorization/<n>.json   charter de cada issue (direct-<slug>.json)
   authorization-<AAAA-MM-DD>-issue-<n>.json   charters anteriores, nunca apagados
   pitfalls.md              uma linha por critério que entrou depois da aprovação, só acréscimo
   publish/<carimbo>.json   estado do publish-issue por aprovação (o --resume lê daqui); <carimbo>-<id>.md, o corpo
@@ -99,8 +99,8 @@ ele trabalha num projeto consumidor.
     review.json            evidência da revisão a pedido (`review-gate`)
     merge-local-main-<data-hora>.json   operação do merge na main local, conferida pelo `authorize`
     *-r<k>.json            registros de uma rodada anterior, renomeados por `frontlights.py archive`
-    walkthroughs/S<k>.md   roteiro rodado de uma caixa sem tela
-    teste-livre-cas.md     rascunho dos CAs novos do teste livre
+    walkthroughs/S<k>.md   roteiro rodado de uma caixa que o teste assistido não percorre
+    teste-livre-cas.md     rascunho das slices novas do teste livre
     body-<tipo>-<carimbo>.md   capturas do corpo (capture, append, tick)
     browser/result.json, browser/window.json, browser/perfil-original.json, browser/brief-<passada>.md
     checks/, suite.json, suite-report-<data-hora>.json, suite-<modo>-<data-hora>.log
@@ -122,7 +122,7 @@ Regras que nenhum script expressa:
 - `approvals.json` e as revisões `-r<N>`: a aprovação vale para os bytes daquele carimbo; um arquivo mudado pede
   aprovação nova.
 - `pitfalls.md`: formato em `references/issues.md`, "A pitfall line"; o reconhecimento o lê primeiro.
-- `authorization*.json`: release-plan, bundle, closeout e cleanup leem todos, não só o atual.
+- `authorization*.json`, `authorization/*.json`: release-plan, bundle, closeout e cleanup leem todos.
 - `browser/result.json`: um por issue (numa família que já existe, na pasta da líder); `pastaDosPrints` diz onde
   estão os prints da rodada.
 - `issues/<n>/suite.json` fica na worktree da issue; `release/suite.json`, na principal; com `homolog suite --release
@@ -144,21 +144,20 @@ assistir?": a ANTES, aberta no grilling, e no fim, só a DEPOIS. A pergunta de f
 O `frontlights.py browser-gate` lê o diff e devolve `not_needed`, `answered`, `pending`, `stale`, `contradiction` ou
 `unconfigured` (saída 0 nos dois primeiros, 2 nos demais). Três comandos gravam o registro, e nenhum julga: `serve.py
 window open|attach|hold|shot|close|brief` (o `shot` grava o `print` do critério e a janela guarda `cdpUrl`, `pid` e
-`profileDir` em `browser/window.json`); `browser-gate ... --answer "<literal>"` (`situacao`, `lote.roots`,
-`pergunta.resposta` e, para `aprovado`, `prosseguir` ou `alteracao`, `aprovacao`); `browser-gate record --pass
-antes|depois --criterion S<n> --head <sha>`. Antes de a issue ter número, janela e prints ficam em
+`profileDir` em `browser/window.json`); `browser-gate ... --answer "<literal>"` (`situacao`, `aprovacao`,
+`pergunta`, `lote`); `browser-gate record --pass antes|depois --criterion S<n> --head <sha>`. Antes de a issue ter número, janela e prints ficam em
 `evidencias-pendentes/` e vão para a pasta da issue no primeiro comando com `--issue <n>`. A pendência
 `teste_assistido` atravessa janelas por `checkpoint --pending` e `resume`.
 
-Campos do `result.json` (esta é a única descrição; `browser_gate.py` e `serve.py window` leem e gravam só estes, e um
-teste os compara com o código):
+Campos do `result.json` (esta é a única descrição; um teste os compara com o código):
 
 - no topo: `situacao`, `aprovacao`, `pergunta`, `lote`, `assistido`, `rodadas`, `pastaDosPrints`, `criterios`, `passadas`, `registradoEm`;
 - em cada passada (`passadas.antes`, `passadas.depois`): `branch`, `head`, `repeticoes`, `criterios`;
 - em cada critério (`passadas.<passada>.criterios.S<n>`): `head`, `print`, `casos`, `tipoDeFalha`, `conta`, `perfil`, `origem`, `registradoEm`.
 
 `situacao` é `pendente`, `ainda-nao`, `aprovado`, `prosseguir`, `sem-assistir`, `dispensado` ou `alteracao`;
-`pergunta` traz `resposta` (literal), `opcao` e `em`; `lote` traz `issues` e `roots`; `criterios` no topo lista as
+`pergunta` traz `resposta` (literal), `opcao` e `em`; `lote` traz `issues`, `roots` (`patch-id:` do diff da
+raiz; o formato antigo é remedido) e `bases` (a origem de cada medida); `criterios` no topo lista as
 caixas da rodada; `casos` mapeia cada caso a `ok` ou `falha: <o que aconteceu>`; `tipoDeFalha` é `infraestrutura`,
 `produto` ou `config`; `conta` é `conta 1` ou `conta 2` (nunca login nem senha); `perfil` é só `campo`, `antes` e
 `depois`; `origem` é `back real` ou `interceptada`; os instantes são de São Paulo, com o fuso. Os códigos de `checks`
@@ -242,4 +241,4 @@ baixos estão numa fonte só, `references/development.md`, "When the review is d
 compara a evidência salva em `issues/<n>/review.json` com a atual: `stale` quer dizer que houve mudança depois, e a
 issue não é relatada como revisada com ela; o portão do merge na main local (o teste assistido) está em
 `references/development.md`, "Into the local main". Nenhum achado fica sem destino: o handoff traz a linha "Achados
-sem correção e destino de cada um", e uma pendência vira critério de aceitação da issue de origem.
+sem correção e destino de cada um", e um achado vira slice da issue de origem.

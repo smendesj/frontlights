@@ -272,7 +272,7 @@ class DeliveredDriverTextTests(unittest.TestCase):
     guarda as frases pinadas e as três perguntas, e só encolhe; o brief do condutor e a linha da janela em
     security.md acompanham."""
 
-    BUDGET = 4750   # catraca: a contagem do dia (issue 8), que só desce
+    BUDGET = 4736   # catraca: a contagem do dia (issue 8), que só desce; 4736 na retro do GeoCloud #1123
 
     @classmethod
     def setUpClass(cls):

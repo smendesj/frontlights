@@ -357,6 +357,52 @@ class BriefTests(WindowCase):
         self.assertIn('not open: step 1 opens it', text)
         self.assertEqual(out['window'], 'fechada')
 
+    def test_the_depois_brief_takes_its_strip_from_the_pass_not_from_the_antes_window(self):
+        # GeoCloud #1123: o brief da DEPOIS herdou "ANTES: origin/main" da janela anterior
+        _, opened = self.window('open', '--issue', '12', '--strip', 'ANTES: origin/main')
+        with mock.patch.object(_window, 'tree_branch', lambda tree: 'PREFIX/issue-12'):
+            code, out = self.window('brief', '--issue', '12', '--pass', 'depois', '--criteria', 'S1')
+        self.assertEqual(code, 0, out)
+        text = Path(out['brief']).read_text(encoding='utf-8')
+        self.assertIn('Strip: "DEPOIS: branch PREFIX/issue-12"', text)
+        self.assertNotIn('ANTES: origin/main', text)
+        self.assertNotIn(opened['cdpUrl'], text)
+        self.assertEqual(out['window'], 'fechada')
+
+    def test_a_strip_of_the_other_pass_or_a_detached_tree_is_refused(self):
+        code, out = self.window('brief', '--issue', '12', '--pass', 'depois', '--criteria', 'S1',
+                                '--strip', 'ANTES: origin/main')
+        self.assertEqual((code, out['category']), (1, 'uso'))
+        with mock.patch.object(_window, 'tree_branch', lambda tree: None):
+            code, out = self.window('brief', '--issue', '12', '--pass', 'depois', '--criteria', 'S1')
+        self.assertEqual((code, out['category']), (1, 'uso'))
+        self.assertIn('--strip "DEPOIS: branch', out['error'])
+
+    def test_a_role_picks_the_user_with_that_role_and_a_missing_one_is_refused(self):
+        config = json.loads(json.dumps(CONFIG))
+        config['browserTest']['users'] = [
+            {'login': 'usuario1@exemplo.test', 'password': 'senha-ficticia', 'role': 'dono-conta-1'},
+            {'login': 'usuario2@exemplo.test', 'password': 'senha-ficticia', 'role': 'dono-conta-2'},
+            {'login': 'usuario3@exemplo.test', 'password': 'senha-ficticia', 'role': 'convidado-restrito'}]
+        self.write_config(config)
+        code, out = self.window('brief', '--issue', '12', '--pass', 'antes', '--criteria', 'S1',
+                                '--role', 'convidado-restrito')
+        self.assertEqual(code, 0, out)
+        text = Path(out['brief']).read_text(encoding='utf-8')
+        self.assertIn('Account: conta 3 (papel convidado-restrito)', text)
+        self.assertIn('--account 3', text)
+        self.assertNotIn('senha-ficticia', text)
+        code, out = self.window('open', '--issue', '12', '--strip', 'ANTES: origin/main', '--role', 'convidado-restrito')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.driver.calls[-1][2]['FRONTLIGHTS_WINDOW_USER'], 'usuario3@exemplo.test')
+        code, out = self.window('brief', '--issue', '12', '--pass', 'antes', '--criteria', 'S1', '--role', 'admin')
+        self.assertEqual((code, out['category']), (1, 'uso'))
+        self.assertIn('"admin"', out['error'])
+        self.assertIn('convidado-restrito', out['error'])
+        code, out = self.window('brief', '--issue', '12', '--pass', 'antes', '--criteria', 'S1', '--role',
+                                'dono-conta-1', '--account', '1')
+        self.assertEqual((code, out['category']), (1, 'uso'))
+
     def test_criteria_are_required(self):
         code, out = self.window('brief', '--issue', '12', '--pass', 'antes')
         self.assertEqual((code, out['category']), (1, 'uso'))

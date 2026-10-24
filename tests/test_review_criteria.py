@@ -128,7 +128,7 @@ class StopCriterionTests(unittest.TestCase):
     def test_the_review_is_done_at_zero_serious_and_zero_medium(self):
         # redesenho, issue 3: o negrito "When the review is done" virou subtítulo `###` de development.md.
         for phrase in ('### When the review is done', 'done at the first round that reports 0 sérios and 0 médios',
-                       'a new acceptance criterion of the source issue', '"Corrigir os baixos agora"',
+                       'a new slice of the source issue', '"Corrigir os baixos agora"',
                        'There is no limit of rounds to keep', '"Mais uma rodada"', '"Dar destino pela escada"',
                        'a sério or médio without a destination keeps the issue out of the local main by the gate on '
                        'the findings',
@@ -158,7 +158,7 @@ class StopCriterionTests(unittest.TestCase):
         # 1ª revisão, médio 2: a escada manda corrigir na branch o que cabe no escopo; os baixos de uma revisão
         # fechada em 0 sérios e 0 médios têm o critério novo como proposta padrão, e a correção vira opção do lote.
         self.assertIn('Each axis stops by "When the review is done"; findings take the destination ladder '
-                      '(`issues.md`, "Follow-ups"), a new acceptance criterion in the source issue first.', self.review)
+                      '(`issues.md`, "Follow-ups"), a new slice of the source issue first.', self.review)
         follow_ups = flat(section(read('skills', 'frontlights', 'references', 'issues.md'), 'Follow-ups'))
         for phrase in ('The baixos left by a review that ends at 0 sérios and 0 médios',
                        'take destination 2 as the proposed default, with destination 1 offered in the same batch as '

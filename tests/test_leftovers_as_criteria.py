@@ -38,8 +38,10 @@ def section(text, heading, marks='##'):
 
 
 ISSUES = ('skills', 'frontlights', 'references', 'issues.md')
-LEFTOVER = ('- [ ] Pendência (achado da revisão): a exportação mantém o filtro depois de recarregar. '
-            'Evidência que fecha: o teste da exportação no seam passa\n')
+# retro de 23/10/2026 (GeoCloud #1123): todo achado entra como slice nova, nunca caixa P nem "Pendência"
+LEFTOVER = '- [ ] S2. A exportação mantém o filtro depois de recarregar (achado da revisão)\n'
+LEGACY = ('- [ ] Pendência (achado da revisão): a exportação mantém o filtro depois de recarregar. '
+          'Evidência que fecha: o teste da exportação no seam passa\n')
 
 
 class LadderTests(unittest.TestCase):
@@ -47,11 +49,11 @@ class LadderTests(unittest.TestCase):
         self.followups = section(read(*ISSUES), 'Follow-ups')
         self.ladder = ' '.join(self.followups.split('No finding becomes')[0].split())
 
-    def test_destination_two_is_a_new_criterion_inside_the_criteria_section(self):
+    def test_destination_two_is_a_new_slice_inside_the_criteria_section(self):
         two = self.ladder.split('2. ', 1)[1].split(' 3. ')[0]
-        for phrase in ('A new acceptance criterion in the source issue', 'checklist item (`- [ ] ...`)',
-                       'inside its acceptance-criteria section', 'for a leftover that belongs to that outcome',
-                       'treated, completed and ticked with evidence'):
+        for phrase in ('A new slice of the source issue', 'the next box `S<k>` of its acceptance criteria',
+                       'for a finding that belongs to that outcome', '"A finding as a new slice"',
+                       'done like any other slice'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, two)
         self.assertNotIn("in the source issue's body", self.ladder)
@@ -74,15 +76,17 @@ class LadderTests(unittest.TestCase):
 class RecipeTests(unittest.TestCase):
     def setUp(self):
         self.followups = section(read(*ISSUES), 'Follow-ups')
-        self.recipe = ' '.join(section(self.followups, 'A leftover as an acceptance criterion', '###').split())
+        self.recipe = ' '.join(section(self.followups, 'A finding as a new slice', '###').split())
 
     def test_the_recipe_exists_inside_the_follow_ups_section(self):
         self.assertTrue(self.recipe)
-        self.assertIn('### A leftover as an acceptance criterion', self.followups)
+        self.assertIn('### A finding as a new slice', self.followups)
 
-    def test_the_leftover_is_one_more_criterion_in_the_counted_section_never_a_section_of_its_own(self):
-        for phrase in ('it is one more acceptance criterion', 'never into a section of its own',
-                       'the only one `scripts/closeout.py` counts', 'proposed for closing with it still open'):
+    def test_the_finding_is_one_more_slice_never_a_section_of_its_own_nor_another_kind_of_box(self):
+        for phrase in ('(a free-test fix, a review\'s baixo) is one more slice', 'never a section of its own',
+                       'another kind of box (`P<k>`, `Pendência`, `Correção (do teste livre)`)',
+                       'the only one `scripts/closeout.py` counts', 'every tool finds a box by its label `S<k>`',
+                       'proposed for closing with it still open'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
@@ -92,10 +96,10 @@ class RecipeTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
-    def test_the_text_is_objective_observable_with_evidence_and_an_origin_prefix(self):
-        for phrase in ('One objective, observable item that names the evidence that will close it',
-                       'in the user\'s language', 'Pendência (achado da revisão)', 'Evidência que fecha',
-                       'do teste ao vivo', 'dos testes', 'da conferência'):
+    def test_the_text_is_the_slice_box_numbered_after_the_last_with_its_origin(self):
+        for phrase in ('The box of "Slices as acceptance criteria", numbered after the last',
+                       'in the user\'s language', '`- [ ] S<k>. <what must be true> (achado da revisão)`',
+                       '`do teste livre`', 'it refuses an item without the next label'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.recipe)
 
@@ -123,7 +127,7 @@ class RecipeTests(unittest.TestCase):
         self.assertIn('The handoff keeps the text, the literal answer and the files `append` printed', self.recipe)
 
     def test_the_criterion_is_ticked_only_with_evidence_and_never_to_get_the_issue_closed(self):
-        self.assertIn('Tick it only with evidence', self.recipe)
+        self.assertIn('Tick it only with its recorded evidence', self.recipe)
         self.assertIn('never to get the issue closed', self.recipe)
 
     def test_the_pr_cites_the_issue_without_a_closing_keyword_while_a_leftover_is_open(self):
@@ -201,7 +205,7 @@ class SkillAndDevelopmentTests(unittest.TestCase):
                        'the findings left unfixed with the destination of each',
                        'Before an issue is reported as reviewed or complete, and before the merge into the local main '
                        'and before a PR is opened or updated, every open finding',
-                       'an acceptance criterion of the source issue', "is dropped by the user's explicit answer",
+                       'becomes a new slice of the source issue', "is dropped by the user's explicit answer",
                        '"cited in the PR" does not pass the gate'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, development)
@@ -216,10 +220,10 @@ class SkillAndDevelopmentTests(unittest.TestCase):
 
     def test_development_has_the_gate_and_still_ticks_only_with_evidence(self):
         text = flat('skills', 'frontlights', 'references', 'development.md')
-        for phrase in ('**Gate on the findings.**', 'a new acceptance criterion in the source issue',
+        for phrase in ('**Gate on the findings.**', 'a new slice of the source issue first',
                        'is never a destination, so "cited in the PR" does not pass the gate',
                        'any other verification pass', "or is dropped by the user's explicit answer",
-                       'tick an acceptance criterion in the issue body only with evidence for it',
+                       'ticks an acceptance criterion only with evidence for it',
                        'a criterion born from a finding is ticked the same way',
                        'the findings left unfixed with the destination of each'):
             with self.subTest(phrase=phrase):
@@ -231,7 +235,8 @@ class TemplateAndCloseoutTests(unittest.TestCase):
     def test_the_issue_template_tells_where_the_leftovers_go_without_adding_a_criterion(self):
         template = read('skills', 'frontlights', 'templates', 'issue.md')
         note = ' '.join(section(template, 'Critérios de aceitação').split())
-        for phrase in ('Pendência (achado da revisão)', 'Evidência que fecha', 'nunca numa seção à parte',
+        for phrase in ('uma slice nova, `- [ ] S<k>. <resultado observável> (achado da revisão)`',
+                       'nunca numa seção à parte nem caixa `P<k>`',
                        'só esta seção conta para fechar a issue', 'tratada, concluída e marcada com evidência'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, note)
@@ -243,13 +248,14 @@ class TemplateAndCloseoutTests(unittest.TestCase):
         self.assertIn(box, template)   # the slice box of the template is the one a session ticks
         body = template.replace(box, '- [x] S1. Behavior\n' + LEFTOVER)
         self.assertEqual(closeout.scan(body), ((1, 2), 0))
-        self.assertEqual(closeout.scan(body.replace('- [ ] Pendência', '- [x] Pendência')), ((2, 2), 0))
-        # the prefix the recipe tells the session to write is the one the template shows
-        self.assertIn('Pendência (achado da revisão)', read('skills', 'frontlights', 'templates', 'issue.md'))
-        self.assertIn('Pendência (achado da revisão)', read(*ISSUES))
+        self.assertEqual(closeout.scan(body.replace('- [ ] S2.', '- [x] S2.')), ((2, 2), 0))
+        self.assertEqual([b['label'] for b in closeout.slice_boxes(body)], ['S1', 'S2'])   # a slice like any other
+        # the origin the recipe tells the session to write is the one the template shows
+        self.assertIn('(achado da revisão)`', read('skills', 'frontlights', 'templates', 'issue.md'))
+        self.assertIn('(achado da revisão)`', read(*ISSUES))
 
     def test_the_leftover_kept_in_a_section_of_its_own_is_the_one_the_closeout_warns_about(self):
-        body = '## Acceptance criteria\n- [x] Behavior\n\n## Pendências conhecidas\n' + LEFTOVER
+        body = '## Acceptance criteria\n- [x] Behavior\n\n## Pendências conhecidas\n' + LEGACY
         self.assertEqual(closeout.scan(body), ((1, 1), 1))
 
     def test_the_closeout_reference_shows_the_warning_and_recommends_choosing(self):
@@ -267,7 +273,7 @@ class TemplateAndCloseoutTests(unittest.TestCase):
 class DocsAndEvalsTests(unittest.TestCase):
     def test_the_documents_carry_the_rule(self):
         cases = {
-            ('skills', 'frontlights', 'docs', 'protocol.md'): ('critério de aceitação novo na issue de origem', 'nunca numa seção à parte',
+            ('skills', 'frontlights', 'docs', 'protocol.md'): ('slice nova na issue de origem', 'nunca numa seção à parte',
                                       '"citado no corpo do PR" nunca é destino', 'Achados sem correção e destino de cada um'),
             ('skills', 'frontlights', 'docs', 'security.md'): ('O Frontlights não impede a sessão de encerrar com o achado só no texto do PR',
                                       '`pending_outside_criteria`', '`pendingOutside`'),

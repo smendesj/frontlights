@@ -418,7 +418,7 @@ def slices_of(issue):
     label = issue['id']
     require(isinstance(slices, list) and slices, f'{label}: slices precisa ser uma lista com ao menos uma slice')
     # A short issue: the sixth slice is cut out into top-level issues linked by --blocked-by (issue 31, S1).
-    # Leftover boxes (P1, P2) are added later, outside the plan, so they never count here.
+    # Slices born from findings are added later, outside the plan, so they never count here.
     require(len(slices) <= SLICES_MAX,
             f'{label}: {len(slices)} slices: uma issue tem no máximo {SLICES_MAX}; o excedente vira issues de topo '
             f'ligadas por --blocked-by (nunca uma sub-issue nova)')
@@ -976,7 +976,7 @@ def checkpoint_candidates(tree, main, number, slice_id=None):
     """Where `resume --issue <n>` looks for the checkpoint: the worktree it runs in, the main worktree (the next
     window opens at the project root) and every worktree the charter gives to the issue."""
     folders = [Path(tree), Path(main)]
-    charter = _cli.read_charter(main) or {}
+    charter = _cli.read_charter(main, number) or {}
     for entry in charter.get('worktrees') or []:
         if isinstance(entry, dict) and entry.get('issue') == number and isinstance(entry.get('path'), str):
             folders.append(Path(entry['path']))
@@ -1564,11 +1564,10 @@ def setup_warnings(config, root):
         if not git_ok(root, 'check-ignore', '-q', '.frontlights/'):
             warnings.append('frontlights_not_ignored: o Git não ignora .frontlights/; acrescente a linha '
                             '/.frontlights/ em .git/info/exclude')
-        record = _cli.read_charter(root)
         named, _, conflict = _cli.config_prefix_entry(config)
         if conflict:
             warnings.append(conflict)
-        if named is None and not (isinstance(record, dict) and record.get('branch_prefix')):
+        if named is None and not any(record.get('branch_prefix') for _, record in _cli.read_charters(root)):
             warnings.append(f'branch_prefix_missing: nem branchPrefix no config nem branch_prefix na autorização; o '
                             f'charter recusa sem prefixo; {SETUP}')
     return warnings
@@ -1817,7 +1816,6 @@ APPROVAL_REFERENCE = 'autorização permanente (docs/security.md)'
 STOP_CONDITIONS = ['decisão nova de produto', 'teste vermelho que a slice não explica',
                    'conflito de merge que a sessão não resolve', 'operação negada sem o "Sim" da pergunta própria',
                    'pedido do usuário']
-CHARTER_FILE = Path('.frontlights') / 'authorization.json'
 SLICE_LABEL = re.compile(r'[Ss]([1-9][0-9]{0,2})')
 TEST_TIMEOUT = 1800
 
@@ -1966,12 +1964,13 @@ def dry_run(record, root, ids):
     return answers
 
 
-def keep_previous(root):
-    """Copy the current charter to `authorization-<YYYY-MM-DD>-issue-<n>.json` (never overwritten: `-2`, `-3`), the
-    records release-plan, bundle, closeout and cleanup still read. None when there is no charter."""
-    current = Path(root) / CHARTER_FILE
+def keep_previous(path):
+    """Copy the charter at `path` to `.frontlights/authorization-<YYYY-MM-DD>-issue-<n>.json` (never overwritten:
+    `-2`, `-3`), the records release-plan, bundle, closeout and cleanup still read. None when there is no charter."""
+    current = Path(path)
     if not current.is_file():
         return None
+    folder = current.parent.parent if current.parent.name == _cli.CHARTERS.name else current.parent
     data = current.read_bytes()
     try:
         old = json.loads(data.decode('utf-8-sig'))
@@ -1988,7 +1987,7 @@ def keep_previous(root):
     directs = old.get('direct_ids') if isinstance(old.get('direct_ids'), list) else []
     tag = f'issue-{ids[0]}' if ids else f'direct-{directs[0]}' if directs else 'sem-issue'
     for attempt in range(1, 100):
-        path = current.with_name(f'authorization-{day}-{tag}' + ('' if attempt == 1 else f'-{attempt}') + '.json')
+        path = folder / (f'authorization-{day}-{tag}' + ('' if attempt == 1 else f'-{attempt}') + '.json')
         if path.is_file() and path.read_bytes() == data:
             return path
         try:
@@ -1998,6 +1997,85 @@ def keep_previous(root):
         except FileExistsError:
             continue
     raise Stage6Refusal('keep_failed', 'sem nome livre para guardar o charter anterior; nada foi gravado')
+
+
+def id_label(key):
+    return f'#{key}' if str(key).isdigit() else str(key)
+
+
+def charter_live(record):
+    """A charter counts in the cross-issue check while it is valid (`expires_at` ahead) or a worktree it names is
+    still on disk: an expired one whose worktrees the cleanup removed belongs to finished work."""
+    try:
+        expiry = dt.datetime.fromisoformat(record.get('expires_at') or '')
+    except (TypeError, ValueError):
+        expiry = None
+    if expiry is not None and expiry.tzinfo is not None and expiry > dt.datetime.now(dt.timezone.utc):
+        return True
+    entries = record.get('worktrees') if isinstance(record.get('worktrees'), list) else []
+    return any(isinstance(e, dict) and isinstance(e.get('path'), str) and e['path'] and Path(e['path']).is_dir()
+               for e in entries)
+
+
+def active_charters(root):
+    """({id: (charter path, record narrowed to it)} of every live charter, [ids of the retired ones]): the
+    per-issue file of an id wins over the legacy `authorization.json` that also names it."""
+    live, retired, seen = {}, [], set()
+    for path, record in _cli.read_charters(root):
+        for key in _cli.charter_keys(record):
+            if key in seen:
+                continue
+            seen.add(key)
+            own = _cli.narrow(record, key)
+            if charter_live(own):
+                live[key] = (path, own)
+            else:
+                retired.append(key)
+    return live, retired
+
+
+def ownership_conflicts(owned, involving=None):
+    """[{issues, paths}] for each pair of ids of `owned` ({id: paths}) whose paths overlap (equal, or one inside
+    the other; `*` owns nothing), only the pairs with an id of `involving` when it is given."""
+    found, keys = [], list(owned)
+    for index, first in enumerate(keys):
+        for second in keys[index + 1:]:
+            if involving is not None and first not in involving and second not in involving:
+                continue
+            pairs = []
+            for a in owned[first]:
+                for b in owned[second]:
+                    try:
+                        if '*' not in (a, b) and overlap(a, b):
+                            pairs.append([a, b])
+                    except ValueError:
+                        continue
+            if pairs:
+                found.append({'issues': [id_label(first), id_label(second)], 'paths': pairs})
+    return found
+
+
+OVERLAP_QUESTION = {'text': 'Duas issues querem a mesma pasta. Como seguir?',
+                    'options': ['Uma só fica dona da pasta', 'As duas rodam em série',
+                                'Dividir a pasta em subpastas, uma por issue']}
+
+
+def overlap_refusal(conflicts):
+    named = '; '.join(f'{c["issues"][0]} e {c["issues"][1]} em ' + ', '.join(f'{a} ↔ {b}' for a, b in c['paths'])
+                      for c in conflicts)
+    return Stage6Refusal('ownership_overlap', f'posse em comum entre issues: {named}; nada foi gravado',
+                         hint='pergunte com AskUserQuestion a `question` (uma só dona, em série, ou subpastas) e '
+                              'repita com a posse decidida', conflicts=conflicts, question=dict(OVERLAP_QUESTION))
+
+
+def cross_check(root, proposed):
+    """Refuse (`ownership_overlap`) when the ownership `proposed` ({id: paths}, in place of those ids' own) overlaps
+    another live charter or another proposed id."""
+    live, _ = active_charters(root)
+    owned = {k: list((r.get('ownership') or {}).get(k) or []) for k, (_, r) in live.items() if k not in proposed}
+    conflicts = ownership_conflicts({**owned, **proposed}, involving=set(proposed))
+    if conflicts:
+        raise overlap_refusal(conflicts)
 
 
 def announcement(record, prefix_source):
@@ -2041,12 +2119,78 @@ def verification_argv(values):
 
 def charter_cli(action, root, config_path, issues=(), directs=(), ownership=(), prefix=None, concurrency=None,
                 protect=(), base=None, approved_by=None, verify=(), hours=CHARTER_HOURS):
-    """`charter new|renew|add`; the result dict, `ok: false` with `reason` on a refusal (nothing written)."""
+    """`charter new|renew|add|own|check|map`; the result dict, `ok: false` with `reason` on a refusal (nothing
+    written)."""
     try:
+        if action == 'map':
+            return charter_map(Path(root))
+        if action == 'check':
+            return charter_check(Path(root), issues, directs, ownership)
         return charter_action(action, Path(root), config_path, issues, directs, ownership, prefix, concurrency,
                               protect, base, approved_by, verify, hours)
     except Stage6Refusal as refusal:
         return refusal.result()
+
+
+def charter_check(root, issues=(), directs=(), ownership=()):
+    """`charter check`: the ownership of every live charter, pair by pair (with `--issue`/`--direct` and
+    `--ownership`, that ownership in place of the id's own), before parallel sessions open."""
+    ids = charter_ids(issues, directs)
+    proposed = parse_ownership(ownership, ids) if ids else {}
+    live, retired = active_charters(root)
+    owned = {k: list((r.get('ownership') or {}).get(k) or []) for k, (_, r) in live.items()}
+    owned.update(proposed)
+    conflicts = ownership_conflicts(owned)
+    if conflicts:
+        raise overlap_refusal(conflicts)
+    return {'ok': True, 'exitCode': 0, 'action': 'check', 'ownership': {id_label(k): v for k, v in owned.items()},
+            'retired': [id_label(k) for k in retired], 'conflicts': [],
+            'message': f'Nenhuma posse em comum entre as {len(owned)} issue(s) ativas.'}
+
+
+def charter_map(root):
+    """`charter map`: issue → charter, branch, worktrees, ownership, ports and processes, derived on every read
+    from the charters and the port reservations and process records of serve.py; nothing is written."""
+    import serve  # noqa: PLC0415  (the reservations and the process records of serve.py)
+    live, retired = active_charters(root)
+    reservations = {}
+    folder = serve.ports_location(root)[0]
+    try:
+        files = sorted(folder.glob('*.json'))
+    except OSError:
+        files = []
+    for path in files:
+        data = serve.read_reservation(path)
+        if data is not None and serve.reservation_live(path) and str(data.get('issue')).isdigit():
+            reservations.setdefault(str(data['issue']), []).append(
+                {'port': int(path.stem) if path.stem.isdigit() else path.stem, 'process': data.get('process')})
+    items = []
+    for key, (path, record) in live.items():
+        registry = _cli.read_record(serve.registry_path(root, key)) if key.isdigit() else None
+        processes = registry.get('processes') if isinstance(registry, dict) else None
+        items.append({
+            'issue' if key.isdigit() else 'direct': int(key) if key.isdigit() else key,
+            'charter': str(path), 'expires_at': record.get('expires_at'),
+            'ownership': list((record.get('ownership') or {}).get(key) or []),
+            'worktrees': [{k: e.get(k) for k in ('path', 'branch', 'slice') if e.get(k) is not None}
+                          for e in record.get('worktrees') or [] if isinstance(e, dict)],
+            'ports': reservations.get(key, []),
+            'processes': [{k: p.get(k) for k in ('name', 'port', 'url')} for p in processes or []
+                          if isinstance(p, dict)],
+            'database': registry.get('database') if isinstance(registry, dict) else None})
+    return {'ok': True, 'exitCode': 0, 'action': 'map', 'issues': items, 'retired': [id_label(k) for k in retired],
+            'conflicts': ownership_conflicts({k: list((r.get('ownership') or {}).get(k) or [])
+                                              for k, (_, r) in live.items()}),
+            'message': f'{len(items)} issue(s) ativas no mapa.'}
+
+
+def newest_charter(root):
+    """The newest live charter (`issued_at`), the template `charter add` takes the shared fields from."""
+    live, _ = active_charters(root)
+    if not live:
+        raise Stage6Refusal('no_charter', 'não há charter ativo para o add',
+                            hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
+    return max((r for _, r in live.values()), key=lambda r: str(r.get('issued_at') or ''))
 
 
 def charter_action(action, root, config_path, issues, directs, ownership, prefix, concurrency, protect, base,
@@ -2055,23 +2199,22 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
         raise Stage6Refusal('hours', f'--hours {hours!r}: o charter vale no máximo {CHARTER_HOURS} horas',
                             hint=f'passe --hours entre 1 e {CHARTER_HOURS}')
     config = load_config_file(config_path)
-    path = root / CHARTER_FILE
     now = _cli.sao_paulo_now().replace(microsecond=0)
     expires = (now + dt.timedelta(hours=hours)).isoformat()
-    existing = None
-    if action in ('renew', 'add'):
-        if not path.is_file():
-            raise Stage6Refusal('no_charter', f'não há charter em {CHARTER_FILE.as_posix()} para {action}',
-                                hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
-        existing = load(path)
-        if not isinstance(existing, dict):
-            raise Stage6Refusal('no_charter', 'o charter atual não é um objeto JSON', hint='rode `charter new`')
     if action == 'renew':
-        record = dict(existing, expires_at=expires, renewed_at=now.isoformat())
-        ids = [str(n) for n in record.get('issue_ids', [])] + list(record.get('direct_ids', []))
-        checked = dry_run(record, root, [k for k in ids if record.get('ownership', {}).get(k)])
-        write_json_file(path, record)
-        return {'ok': True, 'exitCode': 0, 'action': 'renew', 'charter': str(path), 'expires_at': expires,
+        keys = charter_ids(issues, directs) or list(dict.fromkeys(
+            k for _, record in _cli.read_charters(root) for k in _cli.charter_keys(record)))
+        if not keys:
+            raise Stage6Refusal('no_charter', 'não há charter para renovar',
+                                hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
+        written, checked = [], []
+        for key in keys:
+            path, record = read_charter_record(root, key)
+            record = dict(record, expires_at=expires, renewed_at=now.isoformat())
+            checked += dry_run(record, root, [key] if (record.get('ownership') or {}).get(key) else [])
+            write_json_file(path, record)
+            written.append(str(path))
+        return {'ok': True, 'exitCode': 0, 'action': 'renew', 'charters': written, 'expires_at': expires,
                 'dryRun': checked,
                 'message': f'Charter renovado: vale até {sao_paulo_text(dt.datetime.fromisoformat(expires))} '
                            '(São Paulo).'}
@@ -2080,88 +2223,122 @@ def charter_action(action, root, config_path, issues, directs, ownership, prefix
         raise Stage6Refusal('no_issue', 'o charter precisa de ao menos uma issue ou um trabalho sem issue',
                             hint='passe --issue <n> (repetível) ou --direct <slug>')
     owned = parse_ownership(ownership, ids)
+    if action == 'own':
+        records = {}
+        for key in ids:
+            path, record = read_charter_record(root, key)
+            paths = list((record.get('ownership') or {}).get(key) or [])
+            paths += [p for p in owned[key] if p not in paths]
+            record = dict(record, ownership=dict(record.get('ownership') or {}, **{key: paths}))
+            field, value = ('issue', int(key)) if key.isdigit() else ('direct', key)
+            for entry in record.get('worktrees') or []:
+                if isinstance(entry, dict) and entry.get(field) == value and not entry.get('slice'):
+                    entry['ownership'] = paths + [p for p in entry.get('ownership') or [] if p not in paths]
+            records[key] = (path, record)
+        cross_check(root, {k: (r.get('ownership') or {}).get(k) for k, (_, r) in records.items()})
+        checked = [answer for key, (_, record) in records.items() for answer in dry_run(record, root, [key])]
+        for path, record in records.values():
+            write_json_file(path, record)
+        return {'ok': True, 'exitCode': 0, 'action': 'own', 'charters': [str(p) for p, _ in records.values()],
+                'ownership': {id_label(k): (r.get('ownership') or {}).get(k) for k, (_, r) in records.items()},
+                'dryRun': checked, 'message': 'Posse ampliada por emenda do charter de cada issue; nada foi refeito.'}
     if action == 'add':
-        present = {str(n) for n in existing.get('issue_ids', [])} | set(existing.get('direct_ids', []))
-        repeated = [k for k in ids if k in present]
+        repeated = [id_label(k) for k in ids if _cli.read_charter(root, k) is not None]
         if repeated:
-            raise Stage6Refusal('already_in_charter', f'já está no charter: {", ".join(repeated)}',
-                                hint='use `charter renew` para estender o prazo; a posse muda com `charter new`')
-        record = dict(existing)
-        record['issue_ids'] = list(existing.get('issue_ids', [])) + [int(k) for k in ids if k.isdigit()]
-        new_directs = [k for k in ids if not k.isdigit()]
-        record['direct_ids'] = list(existing.get('direct_ids', [])) + new_directs
-        record['ownership'] = dict(existing.get('ownership', {}), **owned)
-        branch = record.get('base', {}).get('branch', 'main')
+            raise Stage6Refusal('already_in_charter', f'já tem charter: {", ".join(repeated)}',
+                                hint='use `charter renew` para estender o prazo e `charter own` para ampliar a posse')
+        template = newest_charter(root)
+        branch = (template.get('base') or {}).get('branch', 'main')
         new_issues = any(k.isdigit() for k in ids)
         if new_issues and has_remote(root):
             # the announcement names the base the new issue starts from: origin/<base> as it is now, not as `new` read it
             git_call(root, 'fetch', '--quiet', 'origin', branch)
-        extra = charter_base(root, branch, new_issues, bool(new_directs))
-        record['base'] = {**record.get('base', {}), **extra}
-        checked = dry_run(record, root, ids)
+        shared = dict(template, base={**(template.get('base') or {}),
+                                      **charter_base(root, branch, new_issues, any(not k.isdigit() for k in ids))})
+        source = 'authorization'
+    else:
+        chosen, source = _cli.branch_prefix(prefix, config, None)
+        conflict = _cli.config_prefix_entry(config)[2] if source and source.startswith('config') else None
+        if not chosen:
+            raise Stage6Refusal('no_prefix', 'sem prefixo das branches: nem --prefix, nem branchPrefix no config',
+                                hint='declare "branchPrefix" no .frontlights/config.json do projeto ou passe --prefix '
+                                     '<nome>/')
+        if concurrency is not None and (type(concurrency) is not int or concurrency < 1):
+            raise Stage6Refusal('concurrency', '--concurrency precisa ser um inteiro positivo',
+                                hint='como --concurrency 2')
+        who = approver(root, approved_by)
+        shared = {
+            'repository': config.get('repository'),
+            'operations': list(CHARTER_OPERATIONS),
+            'protected_branches': [str(p) for p in protect or ()],
+            'stop_conditions': list(STOP_CONDITIONS),
+            'base': charter_base(root, base or 'main', any(k.isdigit() for k in ids),
+                                 any(not k.isdigit() for k in ids)),
+            'issued_at': now.isoformat(),
+            'expires_at': expires,
+            'approved_by': who,
+            'confirmed_by': who,
+            'approval_reference': APPROVAL_REFERENCE,
+            'monitoring': {'mode': 'local', 'confirmed_by': who, 'at': now.isoformat()},
+            'concurrency': concurrency or 2,
+            'branch_prefix': chosen,
+            'verification_commands': verification_argv(verify),
+        }
+        if not repository_or_local(shared['repository']):
+            raise Stage6Refusal('repository', 'o repository do config não é owner/name nem null',
+                                hint='confira "repository" no .frontlights/config.json')
+    cross_check(root, owned)
+    records = []
+    for key in ids:
+        record = dict(shared, issue_ids=[int(key)] if key.isdigit() else [],
+                      direct_ids=[] if key.isdigit() else [key], ownership={key: owned[key]}, worktrees=[])
+        records.append((key, _cli.charter_path(root, key), record))
+    checked = [answer for key, _, record in records for answer in dry_run(record, root, [key])]
+    kept = []
+    for key, path, record in records:
+        previous = keep_previous(path) if action == 'new' else None
+        kept += [str(previous)] if previous else []
         write_json_file(path, record)
-        return {'ok': True, 'exitCode': 0, 'action': 'add', 'charter': str(path), 'added': ids, 'dryRun': checked,
-                'announcement': announcement(record, 'authorization')}
-    chosen, source = _cli.branch_prefix(prefix, config, None)
-    conflict = _cli.config_prefix_entry(config)[2] if source and source.startswith('config') else None
-    if not chosen:
-        raise Stage6Refusal('no_prefix', 'sem prefixo das branches: nem --prefix, nem branchPrefix no config',
-                            hint='declare "branchPrefix" no .frontlights/config.json do projeto ou passe --prefix '
-                                 '<nome>/')
-    if concurrency is not None and (type(concurrency) is not int or concurrency < 1):
-        raise Stage6Refusal('concurrency', '--concurrency precisa ser um inteiro positivo', hint='como --concurrency 2')
-    who = approver(root, approved_by)
-    record = {
-        'repository': config.get('repository'),
-        'issue_ids': [int(k) for k in ids if k.isdigit()],
-        'direct_ids': [k for k in ids if not k.isdigit()],
-        'operations': list(CHARTER_OPERATIONS),
-        'protected_branches': [str(p) for p in protect or ()],
-        'stop_conditions': list(STOP_CONDITIONS),
-        'base': charter_base(root, base or 'main', any(k.isdigit() for k in ids), any(not k.isdigit() for k in ids)),
-        'issued_at': now.isoformat(),
-        'expires_at': expires,
-        'approved_by': who,
-        'confirmed_by': who,
-        'approval_reference': APPROVAL_REFERENCE,
-        'monitoring': {'mode': 'local', 'confirmed_by': who, 'at': now.isoformat()},
-        'concurrency': concurrency or 2,
-        'branch_prefix': chosen,
-        'ownership': owned,
-        'verification_commands': verification_argv(verify),
-        'worktrees': [],
-    }
-    if not repository_or_local(record['repository']):
-        raise Stage6Refusal('repository', 'o repository do config não é owner/name nem null',
-                            hint='confira "repository" no .frontlights/config.json')
-    checked = dry_run(record, root, ids)
-    kept = keep_previous(root)
-    write_json_file(path, record)
-    return {'ok': True, 'exitCode': 0, 'action': 'new', 'charter': str(path), 'kept': str(kept) if kept else None,
-            'prefix': chosen, 'prefixSource': source, 'dryRun': checked, 'announcement': announcement(record, source),
-            **({'warnings': [conflict]} if conflict else {})}
-
-def read_charter_record(root):
-    path = Path(root) / CHARTER_FILE
-    if not path.is_file():
-        raise Stage6Refusal('no_charter', f'não há charter em {CHARTER_FILE.as_posix()}',
-                            hint='rode `charter new --issue <n> --ownership <caminhos>` primeiro')
-    record = load(path)
-    if not isinstance(record, dict):
-        raise Stage6Refusal('no_charter', 'o charter não é um objeto JSON', hint='rode `charter new`')
-    return path, record
+    joined = dict(shared, issue_ids=[int(k) for k in ids if k.isdigit()], direct_ids=[k for k in ids if not k.isdigit()],
+                  ownership=owned)
+    result = {'ok': True, 'exitCode': 0, 'action': action, 'charters': [str(p) for _, p, _ in records],
+              'dryRun': checked, 'announcement': announcement(joined, source)}
+    if action == 'add':
+        return dict(result, added=ids)
+    return dict(result, kept=kept, prefix=shared['branch_prefix'], prefixSource=source,
+                **({'warnings': [conflict]} if conflict else {}))
 
 
-def charter_issue(record, issue):
+def read_charter_record(root, key):
+    """(the path of the charter of issue or work `key`, its record): its own file, or the legacy `authorization.json`
+    narrowed to it, whose write moves it to its own file (`_cli.read_charter`)."""
+    key = str(key).strip().lstrip('#')
+    record = _cli.read_charter(root, key)
+    if record is None:
+        raise Stage6Refusal('no_charter', f'não há charter de {id_label(key)} em {_cli.CHARTERS.as_posix()}/',
+                            hint=f'rode `charter new` (ou `charter add`) --issue {key} --ownership <caminhos> primeiro')
+    return _cli.charter_path(root, key), record
+
+
+def charter_issue(issue):
     text = str(issue).strip().lstrip('#') if issue is not None else ''
     if not text.isdigit() or int(text) < 1:
         raise Stage6Refusal('issue_invalid', '--issue precisa ser um número de issue', hint='passe --issue <n>')
-    number = int(text)
+    return int(text)
+
+
+def issue_charter(root, issue):
+    """(path, record, number) of the charter of an issue; `unapproved_issue` when it has none."""
+    number = charter_issue(issue)
+    try:
+        path, record = read_charter_record(root, number)
+    except Stage6Refusal as refusal:
+        raise Stage6Refusal('unapproved_issue', f'a issue #{number} não tem charter ({refusal})',
+                            hint='acrescente-a com `charter add --issue <n> --ownership <caminhos>`') from None
     if number not in record.get('issue_ids', []):
-        listed = ', '.join(f'#{n}' for n in record.get('issue_ids', [])) or 'nenhuma'
-        raise Stage6Refusal('unapproved_issue', f'a issue #{number} não está no charter (issues: {listed})',
-                            hint='acrescente-a com `charter add --issue <n> --ownership <caminhos>`')
-    return number
+        raise Stage6Refusal('unapproved_issue', f'o charter de #{number} não a lista em issue_ids',
+                            hint='refaça-o com `charter new --issue <n> --ownership <caminhos>`')
+    return path, record, number
 
 
 def slice_label(value):
@@ -2245,8 +2422,7 @@ def slice_ownership(values, labels, default):
 
 def slice_open(root, config_path, issue, slices, stacked_on=None, ownership=(), directory=None):
     root = Path(root)
-    path, record = read_charter_record(root)
-    number = charter_issue(record, issue)
+    path, record, number = issue_charter(root, issue)
     prefix = record_prefix(record)
     labels = [slice_label(value) for value in slices or ()]
     if not labels:
@@ -2376,12 +2552,10 @@ def suite_from(source, tree):
 
 def local_main_only(root, issue_branch, base):
     """The commits the push of the branch of the issue would send that are only in the local main (never pushed
-    before the release): in `<issue> ^origin/<base> ^origin/<issue>` and in `<base> ^origin/<base>`."""
-    excluded = [f'^refs/remotes/origin/{base}']
-    if git_rev(root, f'refs/remotes/origin/{issue_branch}'):
-        excluded.append(f'^refs/remotes/origin/{issue_branch}')
-    code, pushed, _ = git_call(root, 'rev-list', f'refs/heads/{issue_branch}', *excluded)
-    code2, local, _ = git_call(root, 'rev-list', f'refs/heads/{base}', f'^refs/remotes/origin/{base}')
+    before the release): in `<issue> --not --remotes` and in `<base> --not --remotes`. A commit already on any
+    remote-tracking branch (another issue's pushed branch, say) is never counted."""
+    code, pushed, _ = git_call(root, 'rev-list', f'refs/heads/{issue_branch}', '--not', '--remotes')
+    code2, local, _ = git_call(root, 'rev-list', f'refs/heads/{base}', '--not', '--remotes')
     if code != 0 or code2 != 0:
         return []
     only = set(local.split())
@@ -2436,10 +2610,68 @@ def refresh_preview(root, config_path, base):
             'message': answer.get('message') or answer.get('error') if isinstance(answer, dict) else None}
 
 
+SCRIPT_SUFFIXES = ('.sh', '.bash', '.ps1', '.py', '.cmd', '.bat', '.js', '.mjs', '.cjs', '.ts', '.rb', '.pl')
+
+
+def broad_suite_rule(config_path):
+    """The `sliceMerge.broadSuite` of the config, {'paths': [globs], 'contains': [terms]}, or None without it: a slice
+    whose diff touches a file of `paths` with a changed line naming a term of `contains` (every changed line when
+    `contains` is empty) runs the charter's whole `verification_commands`, never its own filter."""
+    config = load(config_path) if config_path and Path(config_path).is_file() else {}
+    block = config.get('sliceMerge') if isinstance(config, dict) else None
+    if block is None:
+        return None
+    rule = block.get('broadSuite') if isinstance(block, dict) and set(block) <= {'broadSuite'} else False
+    if rule is None:
+        return None
+    paths = rule.get('paths') if isinstance(rule, dict) and set(rule) <= {'paths', 'contains'} else None
+    contains = rule.get('contains', []) if isinstance(rule, dict) else None
+    if not (strings(paths) and paths and isinstance(contains, list) and all(nonempty(t) for t in contains)):
+        raise Stage6Refusal('config_invalid', 'sliceMerge precisa ser {"broadSuite": {"paths": [globs], "contains": '
+                            '[termos]}} (paths não vazio)', hint='references/setup.md, "The sliceMerge block"')
+    return {'paths': paths, 'contains': contains}
+
+
+def broad_suite_hits(root, issue_branch, branch, rule):
+    """The files of the slice's diff (from its merge base with the branch of the issue) that call for the whole
+    verification under `rule`; [] when none does."""
+    span = f'refs/heads/{issue_branch}...refs/heads/{branch}'
+    code, names, _ = git_call(root, 'diff', '--name-only', span)
+    if code != 0:
+        return []
+    files = [n for n in names.splitlines() if any(fnmatch.fnmatchcase(n, g) for g in rule['paths'])]
+    if not rule['contains']:
+        return files
+    terms = re.compile('|'.join(r'\b' + re.escape(t) + r'\b' for t in rule['contains']), re.IGNORECASE)
+    hits = []
+    for name in files:
+        _, diff, _ = git_call(root, 'diff', span, '--', name)
+        changed = [line[1:] for line in diff.splitlines() if line[:1] in '+-' and line[:3] not in ('+++', '---')]
+        if any(terms.search(line) for line in changed):
+            hits.append(name)
+    return hits
+
+
+def scripts_outside(argvs, cwd, roots):
+    """The script paths (by suffix) of `argvs` that resolve outside every folder of `roots`: a verification script
+    lives versioned under the project (`.frontlights/issues/<n>/verify/`), never in a scratchpad."""
+    allowed = [os.path.normcase(str(Path(r).resolve())) for r in roots]
+    found = []
+    for argv in argvs:
+        for item in argv:
+            if not item.lower().endswith(SCRIPT_SUFFIXES):
+                continue
+            text = re.sub(r'^/([A-Za-z])/', r'\1:/', item) if os.name == 'nt' else item
+            path = Path(os.path.expanduser(text))
+            full = os.path.normcase(str((path if path.is_absolute() else Path(cwd) / path).resolve()))
+            if not any(full == a or full.startswith(a.rstrip('\\/') + os.sep) for a in allowed):
+                found.append(item)
+    return found
+
+
 def slice_merge(root, config_path, issue, label, source=None, tests=(), watched_only=False, comment_file=None):
     root = Path(root)
-    _, record = read_charter_record(root)
-    number = charter_issue(record, issue)
+    _, record, number = issue_charter(root, issue)
     label = slice_label(label)
     own, piece = entry_of(record, number), entry_of(record, number, label)
     if own is None or piece is None:
@@ -2464,12 +2696,23 @@ def slice_merge(root, config_path, issue, label, source=None, tests=(), watched_
     if not already:
         stamp = _cli.sao_paulo_now().strftime('%Y%m%d-%H%M%S')
         log = root / '.frontlights' / 'issues' / str(number) / f'slice-merge-{label}-{stamp}.log'
+        rule = broad_suite_rule(config_path)
+        hits = broad_suite_hits(root, issue_branch, branch, rule) if rule else []
+        if hits:
+            result['broadSuite'] = {'files': hits[:20], 'reason': 'sliceMerge.broadSuite: a verificação inteira do '
+                                    'charter, não o filtro da slice'}
+            source, watched_only, tests = None, False, ()
         if source:
             result['tests'] = suite_from(source, piece['path'])
         elif watched_only:
             result['tests'] = {'skipped': 'só com teste assistido: nenhum teste escrito nem rodado'}
         else:
             argvs = verification_argv(tests) or record.get('verification_commands') or []
+            outside = scripts_outside(argvs, piece['path'], (root, piece['path'], own['path']))
+            if outside:
+                raise Stage6Refusal('verify_outside', f'script de verificação fora da raiz do projeto: '
+                                    f'{", ".join(outside[:5])}; nada foi rodado nem mesclado',
+                                    hint=f'versione-o em .frontlights/issues/{number}/verify/ e passe esse caminho')
             if not argvs:
                 raise Stage6Refusal('no_tests', 'sem testes para rerrodar: o coordenador rerroda os testes da slice '
                                     'antes do merge', hint="passe --test '<argv JSON>' (os testes dos seams), --from "
@@ -3419,13 +3662,16 @@ def build_parser():
     p = sub.add_parser('homolog', help='homolog.py: `sync`, `bundle` and `release-plan` of the local main, '
                                        'the homologation (issue 32), and `suite` and `suite-gate` (issue 52)')
     p.add_argument('homolog_args', nargs=argparse.REMAINDER, help='the operation and its options, e.g. sync --root .')
-    p = sub.add_parser('charter', help='stage 6: write the charter authorize reads (new), extend it (renew) or add '
-                                       'an issue to it (add); prints the announcement in Portuguese')
-    p.add_argument('action', choices=('new', 'renew', 'add'))
+    p = sub.add_parser('charter', help='stage 6: write the charter of each issue, .frontlights/authorization/<n>.json '
+                                       '(new; add takes the shared fields of the newest one), extend it (renew), widen '
+                                       'its ownership by amendment (own), compare the ownership of every live charter '
+                                       '(check) or print the map issue -> worktrees, ports and processes (map)')
+    p.add_argument('action', choices=('new', 'renew', 'add', 'own', 'check', 'map'))
     p.add_argument('--issue', action='append', default=[], help='an issue of the run; repeatable')
     p.add_argument('--direct', action='append', default=[], help='the slug of a work without an issue; repeatable')
     p.add_argument('--ownership', nargs='+', action='extend', default=[],
-                   help='required for new and add: the paths the issue edits, or <issue>=<path>[,<path>] in a batch')
+                   help='required for new, add and own: the paths the issue edits, or <issue>=<path>[,<path>] in a '
+                        'batch; own appends them')
     p.add_argument('--prefix', help='the branch prefix (default: branchPrefix of the config)')
     p.add_argument('--concurrency', type=int, help='default 2')
     p.add_argument('--protect', action='append', default=[], help='one more protected branch; repeatable')

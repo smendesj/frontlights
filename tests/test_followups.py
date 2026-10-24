@@ -173,7 +173,7 @@ class FollowUpsManifestTests(unittest.TestCase):
 
     def test_follow_ups_section_holds_the_ladder_decided_in_one_question(self):
         text = self.followups
-        positions = [text.find(step) for step in ('same PR', 'checklist', 'top-level issue')]
+        positions = [text.find(step) for step in ('same PR', 'A new slice of the source issue', 'top-level issue')]
         self.assertNotIn(-1, positions)
         self.assertEqual(positions, sorted(positions))
         self.assertIn('single `AskUserQuestion`', text)

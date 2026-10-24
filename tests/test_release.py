@@ -39,6 +39,15 @@ class ReleaseCase(HomologMergeTests):
         merged = self.homolog_merge()
         self.assertEqual(merged['exitCode'], 0, merged)
         self.gh = FakeGh({12: node(12)})
+        self.green_suite()
+
+    def green_suite(self):
+        """The whole suite of the release green at the tip of the local main (`homolog suite --release`)."""
+        fake = self.tmp / 'fake_suite.py'
+        fake.write_text('raise SystemExit(0)\n', encoding='utf-8')
+        done = homolog.op_suite(str(self.root), str(self.config), None, 'full', 'main', False,
+                                json.dumps([sys.executable, str(fake)]), release=True)
+        self.assertEqual(done['exitCode'], 0, done)
 
     def release(self, action, **options):
         options.setdefault('gh', self.gh)
@@ -71,6 +80,39 @@ class ReleasePlanTests(ReleaseCase):
             path.unlink()
         result = self.release('plan')
         self.assertEqual((result['exitCode'], result['reason'], result['missing']), (1, 'watched_run_missing', [12]))
+
+
+class ProtectedGh(FakeGh):
+    """FakeGh that also answers the read of the review rule of the base."""
+
+    def __init__(self, *args, reviews=1, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.reviews = reviews
+
+    def __call__(self, argv):
+        query = next((a for a in argv if a.startswith('query=')), '')
+        if 'branchProtectionRule' in query:
+            self.calls.append(list(argv))
+            rules = [{'type': 'PULL_REQUEST', 'parameters': {'requiredApprovingReviewCount': self.reviews}}]
+            return {'data': {'repository': {'ref': {'branchProtectionRule': None, 'rules': {'nodes': rules}}}}}
+        return super().__call__(argv)
+
+
+class BaseProtectionTests(ReleaseCase):
+    """Retro 1123/1124, item 8: o plano já diz quando a regra de revisão da base obriga o merge manual."""
+
+    def test_a_required_review_says_upfront_that_the_merge_is_manual(self):
+        result = self.release('plan', gh=ProtectedGh({12: node(12)}))
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual((result['baseProtection']['requiredReviews'], result['baseProtection']['manualMerge']),
+                         (1, True))
+        self.assertIn('merge será manual', result['message'])
+
+    def test_no_required_review_and_an_unread_rule(self):
+        result = self.release('plan', gh=ProtectedGh({12: node(12)}, reviews=0))
+        self.assertEqual(result['baseProtection']['manualMerge'], False)
+        result = self.release('plan')   # FakeGh does not answer the rule: unknown, never a refusal
+        self.assertEqual((result['exitCode'], result['baseProtection']['manualMerge']), (0, None))
 
 
 class BodyCheckTests(ReleaseCase):
@@ -108,6 +150,21 @@ class GoTests(ReleaseCase):
         self.assertEqual(git(self.root, 'ls-remote', 'origin', name), '')
         self.assertTrue((self.root / '.frontlights' / 'release' / 'pending.json').is_file())
         self.assertEqual(result['skillUpdate'], {'status': 'current'})
+
+    def test_go_refuses_without_the_whole_suite_green_at_the_tip_it_releases(self):
+        self.commit(self.root, 'src/depois.py', message='a main local andou depois da suíte')
+        result = self.release('go', body=self.body())
+        self.assertEqual((result['exitCode'], result['reason']), (1, 'full_suite'), result)
+        self.assertIn('--release', result['commands'][0])
+        self.assertFalse((self.root / '.frontlights' / 'release' / 'pending.json').exists())
+        self.assertEqual(result['options'], [homolog.SUITE_RUN, homolog.SUITE_WAIVE])
+
+    def test_the_user_may_waive_the_whole_suite_with_the_literal_answer(self):
+        self.commit(self.root, 'src/depois.py', message='a main local andou depois da suíte')
+        self.assertEqual(self.release('go', body=self.body(), without_suite='Sim')['exitCode'], 1)
+        result = self.release('go', body=self.body(), without_suite=homolog.SUITE_WAIVE)
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['release']['fullSuite']['waived'], 'Lançar sem a suíte inteira')
 
     def test_a_relative_root_becomes_absolute_in_the_returned_git_commands(self):
         # Reverificação real (23/10/2026): `release go --root .` imprimia `git -C .`, que depende da pasta.
@@ -240,6 +297,26 @@ class LandedTests(ReleaseCase):
         self.assertFalse((release / 'current.json').exists())
         self.assertEqual(len(list(release.glob('landed-*.json'))), 1)
 
+    def test_landed_updates_the_handoff_of_every_issue_and_lists_the_leftover_worktrees(self):
+        """Retro 1123/1124, item 8: depois do merge nenhum handoff ainda pede o closeout, e as worktrees de cada
+        issue que o plano não remove são listadas."""
+        handoff = self.records / 'handoff.md'
+        handoff.write_text('# Passagem\n\n- Release: aguardando\n- Próximo passo: closeout\n', encoding='utf-8')
+        leftover = self.tmp / 'base-12'
+        git(self.root, 'worktree', 'add', '-q', '-b', 'PREFIX/base-12', str(leftover), 'main')
+        self.go_and_record()
+        git(self.root, 'push', '-q', 'origin', 'main')
+        self.gh.pull_requests = {77: pr(77, state='MERGED')}
+        result = self.land()
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual(result['handoffs'], [str(handoff)])
+        text = handoff.read_text(encoding='utf-8')
+        self.assertIn('- Release: PR #77 mesclada em main', text)
+        self.assertNotIn('closeout', text)
+        paths = [Path(item['path']).name for item in result['leftoverWorktrees']]
+        self.assertIn('base-12', paths)
+        self.assertTrue(all(item['issue'] == 12 for item in result['leftoverWorktrees']))
+
     def test_landed_lists_the_delete_of_the_remote_release_branch_when_github_kept_it(self):
         recorded = self.go_and_record()
         name = recorded['release']['branch']
@@ -290,7 +367,7 @@ class MonitorTests(unittest.TestCase):
 
 
 for name in [n for n in dir(HomologMergeTests) if n.startswith('test_')]:
-    for case in (ReleaseCase, ReleasePlanTests, BodyCheckTests, GoTests, StatusTests, LandedTests):
+    for case in (ReleaseCase, ReleasePlanTests, BaseProtectionTests, BodyCheckTests, GoTests, StatusTests, LandedTests):
         if name not in case.__dict__:
             setattr(case, name, None)   # inherited only for its fixture, never run twice
 del ReleaseCase, HomologMergeTests   # loaded here only as bases

@@ -37,8 +37,8 @@ Operations (each prints one JSON object on stdout):
          `ready` is true (exit 0) when the local
          base is ahead, not behind, and at least one issue is in
          the release; otherwise exit 2 says what is missing (behind: sync first; nothing ahead; commits ahead with
-         no issue branch mapped). `fullSuite` is information only (the whole suite is not a requirement of the
-         release; the only gate of stage 6 is the watched run): it judges `.frontlights/release/suite.json` at the
+         no issue branch mapped). `fullSuite` never changes the plan's `ready`, but `release go` requires it
+         `current` (retro 1123/1124): it judges `.frontlights/release/suite.json` at the
          tip of the local base the way `suite-gate --release` does, `current`, `missing`, `stale`, `red`, or
          `elsewhere` when the main worktree is not on that tip, with `recordPath`, `recordedHead` and what changed,
          and never changes `ready` or the exit code. Work without an issue (an entry with a `direct` slug instead of `issue`) goes
@@ -54,12 +54,13 @@ Operations (each prints one JSON object on stdout):
          it never fetches, never creates the branch and never pushes. Without `<remote>/<base>` it refuses (exit 1) and asks for `homolog sync` first.
   merge  the issue into the local base in one command (references/development.md, "Into the local main"; only the
          coordinating session runs it): refuses (exit 1) a main worktree off the base, dirty or mid-merge, a slice of
-         the charter that is not an ancestor of the branch of the issue, an open box of the criteria (GitHub, read
-         only, or the local record), and a box without a screen without its walkthrough in format; runs
-         `browser-gate` on the worktree of the issue (not green: exit 2 with the `question` and `options`); cuts
-         `<prefix>issue-<n>-integra` from the branch of the issue (its own charter entry, local, never pushed) and
-         merges the branch of the issue and the local base into it (a conflict stays there for the session: exit 2
-         with `files`); writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
+         the charter that is not an ancestor of the branch of the issue and an open box of the criteria (GitHub, read
+         only, or the local record); cuts `<prefix>issue-<n>-integra` from the branch of the issue (its own charter
+         entry, local, never pushed) and merges the branch of the issue and the local base into it (a conflict stays
+         there for the session: exit 2 with `files`); runs `browser-gate` on that integration worktree, the branch it
+         merges, under the label of the issue branch (`--as`; not green: exit 2 with the `question`, the `options` and
+         `answerFlags`, the flags that record the answer on the same root); refuses a box without a screen, or one the watched run did
+         not walk (its `criterios`), without its walkthrough in format; writes the operation to `.frontlights/issues/<n>/merge-local-main-<YYYYmmdd-HHMMSS>.json`,
          runs `authorize`, `git merge --no-ff` of the integration branch into the local base (a conflict is
          aborted), `bundle` and the `update-check` of the skill, all kept in that record. `--free-test-fix` skips the
          gate only with the result.json answered and a previous merge record with `scope_check: pass`, and records
@@ -489,11 +490,9 @@ def read_record(path):
 
 
 def record_files(folder):
-    """The `.frontlights/authorization*.json` files under `folder`, sorted by name; [] when the folder is unreadable."""
-    try:
-        return sorted(Path(folder, '.frontlights').glob('authorization*.json'))
-    except OSError:
-        return []
+    """The authorization records under `folder` (`_cli.record_files`: `.frontlights/authorization*.json` by name, then
+    the per-issue charters of `.frontlights/authorization/`); [] when the folder is unreadable."""
+    return _cli.record_files(folder)
 
 
 def record_prefixes(folder):
@@ -731,16 +730,49 @@ def release_closes(root, config_path, base, release, issues, gh=None):
                           'As outras seguem a pergunta de fechamento da etapa 7.')
 
 
+def base_protection(root, config_path, base, gh=None):
+    """The review rule of `base` on GitHub, read only and failing soft: {'requiredReviews': n or None, 'manualMerge':
+    True, False or None, 'message'}. A required approval means a manual merge: the author never approves the own
+    pull request, so another reviewer (or the user on GitHub) approves or merges it."""
+    unknown = {'requiredReviews': None, 'manualMerge': None,
+               'message': ' A regra de revisão da base não foi lida (gh, conta ou acesso): o merge pode ser manual.'}
+    path = Path(config_path) if config_path else Path(root, '.frontlights', 'config.json')
+    try:
+        import closeout   # noqa: PLC0415
+        repository = load_config(path).get('repository')
+        owner, name = repository.split('/')
+        ref = f'refs/heads/{base}'
+        data = closeout.rs.graphql(gh or closeout.rs.gh_default, (
+            'query { repository(owner: "%s", name: "%s") { ref(qualifiedName: "%s") { branchProtectionRule { '
+            'requiredApprovingReviewCount } rules(first: 50) { nodes { type parameters { ... on '
+            'PullRequestParameters { requiredApprovingReviewCount } } } } } } }') % (owner, name, ref))
+        found = (data.get('repository') or {}).get('ref')
+    except Exception:   # noqa: BLE001  (no read only leaves the rule unknown)
+        return unknown
+    if not isinstance(found, dict):
+        return unknown
+    counts = [((found.get('branchProtectionRule') or {}).get('requiredApprovingReviewCount') or 0)]
+    for rule in ((found.get('rules') or {}).get('nodes') or []):
+        if isinstance(rule, dict) and rule.get('type') == 'PULL_REQUEST':
+            counts.append((rule.get('parameters') or {}).get('requiredApprovingReviewCount') or 0)
+    required = max(c for c in counts if isinstance(c, int))
+    if required <= 0:
+        return {'requiredReviews': 0, 'manualMerge': False, 'message': ''}
+    return {'requiredReviews': required, 'manualMerge': True,
+            'message': f' A base `{base}` exige {required} aprovação(ões) de revisão e o autor não aprova a própria '
+                       'PR: o merge será manual (outro revisor ou o usuário no GitHub).'}
+
+
 def suite_sentence(suite):
-    """What the release message says of the whole suite: information only, never a requirement of the release."""
+    """What the release message says of the whole suite: the plan stays ready, `release go` requires it."""
     if suite.get('status') == 'current':
         return skipped_sentence(suite.get('covered'))
-    return f' Suíte inteira (opcional, não exigida pela release): {suite.get("status")}.'
+    return f' Suíte inteira (exigida pelo `release go`): {suite.get("status")}.'
 
 
 def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=None):
     """What the release would carry. `ready` and the exit code depend only on the local base being ahead, not
-    behind, with an issue or a direct work in it; `fullSuite` is reported as information and never blocks."""
+    behind, with an issue or a direct work in it; `fullSuite` never blocks the plan (`release go` requires it); `baseProtection` reads the review rule."""
     worktree(root)
     base = plain_name(base, 'a branch base')
     remote = plain_name(remote, 'o remoto')
@@ -761,6 +793,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
               'prefixSource': source, 'skipped': skipped, 'fullSuite': release_suite(root, base), 'ready': False}
     closes, reason, closes_message = release_closes(root, config_path, base, release, issues, gh)
     result.update(closes=closes, closesReason=reason, closesMessage=closes_message)
+    result['baseProtection'] = base_protection(root, config_path, base, gh) if release or release_direct else None
     if remote_tip is None:
         result.update(exitCode=1, message=f'`{remote}/{base}` não existe neste repositório; rode `homolog sync` (um fetch) '
                                           'antes do release-plan.')
@@ -784,7 +817,7 @@ def op_release_plan(root, base, remote, prefix, records, config_path=None, gh=No
         result.update(ready=True, exitCode=0,
                       message=f'Release pronta: {" e ".join(parts)} em {ahead} commit(s) da {base} local '
                               f'ainda fora de {remote}/{base}; {named}'
-                              f'{suite_sentence(result["fullSuite"])}')
+                              f'{suite_sentence(result["fullSuite"])}{result["baseProtection"]["message"]}')
     return result
 
 
@@ -1415,7 +1448,7 @@ GATE_QUESTIONS = {
     'pending': ('O teste assistido da issue #{n} ainda não foi respondido. Rodar agora?',
                 ['Rodar o teste assistido agora', 'Parar']),
     'stale': ('O código da issue #{n} mudou depois do teste assistido. Assistir de novo?',
-              ['Assistir de novo', 'Parar']),
+              ['Assistir de novo', 'Manter a decisão anterior', 'Parar']),
     'contradiction': ('O diff da issue #{n} muda a tela, e o plano diz que não toca o frontend. Rodar o teste '
                       'assistido?', ['Rodar o teste assistido', 'Parar']),
     'unconfigured': ('A issue #{n} muda a tela e o projeto não tem browserTest. Como verificar?',
@@ -1423,12 +1456,13 @@ GATE_QUESTIONS = {
 }
 
 
-def charter_of(root):
-    path = Path(root) / '.frontlights' / 'authorization.json'
-    data = read_record(path) if path.is_file() else None
-    require(isinstance(data, dict), 'não há charter legível em .frontlights/authorization.json; rode `frontlights.py '
-                                    'charter new` antes')
-    return path, data
+def charter_of(root, number):
+    """(the path of the issue's own charter, its record): the legacy `authorization.json` narrowed to the issue when
+    it has no file of its own, so the write moves it there (`_cli.read_charter`)."""
+    data = _cli.read_charter(root, number)
+    require(isinstance(data, dict), f'não há charter legível da issue #{number} em .frontlights/authorization/; rode '
+                                    '`frontlights.py charter new` antes')
+    return _cli.charter_path(root, number), data
 
 
 def issue_body(root, repository, number, gh=None):
@@ -1481,7 +1515,7 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     worktree(root)
     root = Path(root)
     number = issue_number(str(issue))
-    charter_path, record = charter_of(root)
+    charter_path, record = charter_of(root, number)
     require(number in record.get('issue_ids', []), f'a issue #{number} não está no charter')
     prefix = _cli.branch_prefix(record=record)[0]
     require(is_prefix(prefix), 'o charter não tem branch_prefix válido')
@@ -1519,8 +1553,49 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
     folder = root / '.frontlights' / 'issues' / str(number)
     record_path = folder / 'browser' / 'result.json'
     result = {'issue': number, 'issueBranch': issue_branch, 'integration': integra, 'base': base}
+    import browser_gate   # noqa: PLC0415
+    present = rev(root, f'refs/heads/{integra}')
+    entry = next((e for e in entries if e.get('branch') == integra), None)
+    path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'
+
+    def measured(gate_root, labels):
+        """The gate over the root that is merged (the integration worktree, labelled as the issue branch)."""
+        try:
+            gate, code = browser_gate.run_cli([str(gate_root)], base, config_path, toca,
+                                              str(record_path) if record_path.is_file() else None, labels=labels)
+        except (ValueError, OSError, subprocess.SubprocessError) as error:
+            raise Refusal(f'o browser-gate não respondeu: {str(error)[:200]}')
+        if code == 0:
+            return gate, None
+        text, options = GATE_QUESTIONS.get(gate.get('status'), GATE_QUESTIONS['pending'])
+        flags = ['--root', str(gate_root), *(['--as', labels[0]] if labels else []), '--record', str(record_path)]
+        return gate, {'exitCode': 2, 'reason': 'gate', 'gate': gate, 'question': text.format(n=number),
+                      'options': options, 'answerFlags': flags,
+                      'message': f'o portão da issue #{number} não está verde ({gate.get("status")}): pergunte antes '
+                                 'do merge e grave a resposta literal com `browser-gate --answer` e `answerFlags`'}
+
+    def walkthroughs(gate):
+        # every slice has its evidence: the watched run that walked it, or its walkthrough (a box without a screen,
+        # and any box the run did not walk, as a migration slice or a slice born from a finding)
+        walked = closeout.watched_boxes(read_record(record_path)) if record_path.is_file() else None
+        need = [b['label'] for b in boxes
+                if gate['status'] == 'not_needed' or b['semTela'] or (walked is not None and b['label'] not in walked)]
+        walks, missing = {}, []
+        for label in need:
+            walk = folder / 'walkthroughs' / f'{label}.md'
+            problems = (closeout.walkthrough_problems(walk.read_text(encoding='utf-8-sig')) if walk.is_file()
+                        else ['ausente'])
+            walks[label] = {'path': str(walk), 'problems': problems}
+            if problems:
+                missing.append(label)
+        refusal = None if not missing else dict(
+            result, gate=gate, walkthroughs=walks, exitCode=1, reason='walkthroughs', missing=missing,
+            message=f'sem o roteiro no formato das caixas sem tela ou que o teste assistido não percorreu {", ".join(missing)}: rode o roteiro e grave '
+                    'walkthroughs/S<k>.md antes do merge na main local')
+        return walks, refusal
+
+    alias = [f'{integra}={issue_branch}']
     if free_test_fix:
-        import browser_gate   # noqa: PLC0415
         answered = read_record(record_path) if record_path.is_file() else None
         situation = browser_gate.situation(answered) if answered else None
         require(situation in browser_gate.ANSWERED, f'--free-test-fix exige o result.json da issue respondido (está '
@@ -1528,40 +1603,20 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
         previous = previous_merge_passed(folder)
         require(previous, '--free-test-fix exige um merge anterior desta issue na main local com o authorize em pass')
         gate = {'status': 'answered', 'evidence': 'teste livre', 'previous': str(previous)}
-    else:
-        import browser_gate   # noqa: PLC0415
-        try:
-            gate, code = browser_gate.run_cli([own['path']], base, config_path, toca,
-                                              str(record_path) if record_path.is_file() else None)
-        except (ValueError, OSError, subprocess.SubprocessError) as error:
-            raise Refusal(f'o browser-gate não respondeu: {str(error)[:200]}')
-        if code != 0:
-            text, options = GATE_QUESTIONS.get(gate.get('status'), GATE_QUESTIONS['pending'])
-            return {'exitCode': 2, 'reason': 'gate', 'gate': gate, 'question': text.format(n=number),
-                    'options': options, 'message': f'o portão da issue #{number} não está verde '
-                                                   f'({gate.get("status")}): pergunte antes do merge'}
-    result['gate'] = gate
-    need = [b['label'] for b in boxes if gate['status'] == 'not_needed' or b['semTela']]
-    walks, missing = {}, []
-    for label in need:
-        path = folder / 'walkthroughs' / f'{label}.md'
-        problems = closeout.walkthrough_problems(path.read_text(encoding='utf-8-sig')) if path.is_file() else ['ausente']
-        walks[label] = {'path': str(path), 'problems': problems}
-        if problems:
-            missing.append(label)
-    result['walkthroughs'] = walks
-    if missing:
-        return dict(result, exitCode=1, reason='walkthroughs', missing=missing,
-                    message=f'sem o roteiro no formato das caixas sem tela {", ".join(missing)}: rode o roteiro e '
-                            'grave walkthroughs/S<k>.md antes do merge na main local')
-    present = rev(root, f'refs/heads/{integra}')
-    entry = next((e for e in entries if e.get('branch') == integra), None)
-    path = Path(entry['path']) if entry else Path(own['path']).parent / f'issue-{number}-integra'
     if dry_run:
+        if not free_test_fix:
+            ready = present is not None and path.is_dir()
+            gate, refusal = measured(path if ready else own['path'], alias if ready else [])
+            if refusal:
+                return refusal
+        walks, refusal = walkthroughs(gate)
+        if refusal:
+            return refusal
         steps = ([f'git worktree add -b {integra} {path} {issue_branch}'] if present is None else
-                 [f'git merge {issue_branch} (em {path})']) + [f'git merge {base} (em {path})', 'authorize',
-                                                                 f'git merge --no-ff {integra} (na principal)', 'bundle']
-        return dict(result, exitCode=0, dryRun=True, steps=steps, written=False,
+                 [f'git merge {issue_branch} (em {path})']) + [f'git merge {base} (em {path})', 'browser-gate',
+                                                                 'authorize', f'git merge --no-ff {integra} (na principal)',
+                                                                 'bundle']
+        return dict(result, gate=gate, walkthroughs=walks, exitCode=0, dryRun=True, steps=steps, written=False,
                     message=f'Dry-run: a issue #{number} entra na main local por {integra}; nada foi gravado.')
     if present is None:
         require(not path.exists(), f'a pasta {path} já existe; a worktree de integração não é criada por cima')
@@ -1589,6 +1644,15 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
         return dict(result, exitCode=2, conflict=True, files=files, worktree=str(path),
                     message=f'conflito ao trazer a {base} local para {integra} em: {", ".join(files)}; resolva e '
                             'commite na worktree de integração e repita `homolog merge`')
+    if not free_test_fix:
+        gate, refusal = measured(path, alias)
+        if refusal:
+            return refusal
+    result['gate'] = gate
+    walks, refusal = walkthroughs(gate)
+    if refusal:
+        return refusal
+    result['walkthroughs'] = walks
     stamp = zoned_now().strftime('%Y%m%d-%H%M%S')
     operation = {'repository': record.get('repository'), 'issue': number, 'kind': 'merge_into_local_main',
                  'worktree': str(path), 'branch': integra, 'target': base,
@@ -1635,6 +1699,7 @@ def op_merge(root, config_path, issue, free_test_fix=False, dry_run=False, toca=
 # ---------------------------------------------------------------- release by command (redesign, issue 4)
 
 RELEASE_ACTIONS = ('plan', 'body-check', 'go', 'status', 'landed')
+SUITE_RUN, SUITE_WAIVE = 'Rodar a suíte inteira', 'Lançar sem a suíte inteira'
 UNCHANGED = 4                                    # `release status --since`: the state did not change
 GREEN_GATES = ('answered', 'not_needed')
 CLOSING_WORD = re.compile(r'\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s*(?:[\w.-]+/[\w.-]+)?#\d+', re.I)
@@ -1760,7 +1825,7 @@ def current_release(root):
 
 def op_release(action, root, base='main', remote='origin', config_path=None, prefix=None, records=None, body=None,
                closes=None, record=False, pr=None, legacy=False, answer=None, since=None, gh=None, update_check=None,
-               planner=None):
+               planner=None, without_suite=None):
     """`release plan|body-check|go|status|landed` (see the module's docstring)."""
     worktree(root)
     root = Path(os.path.abspath(root))   # the returned argv never depends on the folder it is run from
@@ -1806,6 +1871,21 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         require(not missing, f'sem teste assistido registrado para {", ".join(f"#{n}" for n in missing)}: a release '
                              'espera o portão de cada issue')
         require(plan.get('releaseBranch'), 'sem prefixo das branches, a release não tem nome: declare branchPrefix')
+        suite = dict(plan.get('fullSuite') or {})
+        # the release aims at the whole suite green; only the user's literal answer waives it
+        require(without_suite in (None, SUITE_WAIVE), f'--without-full-suite só com a resposta literal "{SUITE_WAIVE}"')
+        if without_suite:
+            suite['waived'] = without_suite
+        elif suite.get('status') != 'current':
+            return {'exitCode': 1, 'reason': 'full_suite', 'fullSuite': suite,
+                    'question': f'A suíte inteira não está verde na ponta da {base} local. Rodar antes da release?',
+                    'options': [SUITE_RUN, SUITE_WAIVE],
+                    'commands': [['python', str(HERE / 'homolog.py'), 'suite', '--release', '--mode', 'full',
+                                  '--root', str(root)]],
+                    'message': f'A suíte inteira não está verde na ponta da {base} local, a árvore que a release '
+                               f'leva ({suite.get("status")}): rode `homolog suite --release --mode full` nela e '
+                               'repita o `release go`, ou pergunte e passe `--without-full-suite` com a resposta literal; nada foi '
+                               'gravado.'}
         require(body and Path(body).is_file(), 'go precisa de --body <arquivo do corpo da PR> (templates/pr.md)')
         problems = body_problems(Path(body).read_text(encoding='utf-8-sig'), plan.get('closes', []))
         if problems:
@@ -1826,7 +1906,7 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
         pending = {'branch': name, 'base': base, 'remote': remote, 'issues': plan.get('release', []),
                    'directs': plan.get('releaseDirect', []), 'closes': plan.get('closes', []), 'title': title,
                    'body': str(body), 'legacy': bool(legacy), 'answer': answer if legacy else None,
-                   'localMain': plan.get('localMain'), 'at': zoned_now().isoformat(timespec='seconds')}
+                   'localMain': plan.get('localMain'), 'fullSuite': suite, 'at': zoned_now().isoformat(timespec='seconds')}
         write_json(folder / 'pending.json', pending)
         update = (update_check or __import__('frontlights').update_check)()
         return {'exitCode': 0, 'commands': commands, 'release': pending, 'skillUpdate': update,
@@ -1888,16 +1968,70 @@ def op_release(action, root, base='main', remote='origin', config_path=None, pre
     os.replace(path, release_folder(root) / f'current-{stamp}.json')
     verify = ['python', str(HERE / 'closeout.py'), 'verify', '--issues', ','.join(str(n) for n in current.get('closes', []))]
     commands = list((plan or {}).get('commands', []))
+    handoffs = landed_handoffs(root, issues, current['pr'], landing_base, stamp)
+    leftovers = leftover_worktrees(root, issues, commands)
     release_branch = current.get('branch')
     if pruned and release_branch and rev(root, f'refs/remotes/{remote}/{release_branch}'):
         # the repository does not delete the head branch on merge: its removal is covered cleanup of the release
         commands.append({'kind': 'delete_remote_branch', 'item': release_branch,
                          'argv': ['git', '-C', str(root), 'push', remote, '--delete', release_branch]})
     return {'exitCode': 0, 'pr': current['pr'], 'before': before, 'after': landed['after'], 'pruned': pruned,
-            'cleanup': plan, 'commands': commands,
+            'cleanup': plan, 'commands': commands, 'handoffs': handoffs, 'leftoverWorktrees': leftovers,
             'verify': verify if current.get('closes') else None,
             'message': f'A {landing_base} local avançou por fast-forward até o merge da PR #{current["pr"]}. Rode a '
-                       'limpeza de `commands` (sem pergunta, só o que o plano oferece) e depois o `verify`.'}
+                       'limpeza de `commands` (sem pergunta, só o que o plano oferece) e depois o `verify`; '
+                       f'{len(handoffs)} handoff(s) atualizado(s)'
+                       + (f'; {len(leftovers)} worktree(s) fora do plano em `leftoverWorktrees`: mostre ao usuário'
+                          if leftovers else '') + '.'}
+
+
+def landed_handoffs(root, issues, pr, base, stamp):
+    """Rewrite the `Release` and `Próximo passo` lines of `.frontlights/issues/<n>/handoff.md` of every issue of the
+    release (appended when missing), so no handoff still asks for a closeout the release session runs; the paths."""
+    done = []
+    for number in issues:
+        path = Path(root) / '.frontlights' / 'issues' / str(number) / 'handoff.md'
+        if not path.is_file():
+            continue
+        lines = {'- Release:': f'- Release: PR #{pr} mesclada em {base} (`release/landed-{stamp}.json`)',
+                 '- Próximo passo:': '- Próximo passo: nenhum nesta issue; a sessão da release roda o `verify` e a '
+                                     'limpeza de todas as issues da PR'}
+        text = path.read_text(encoding='utf-8-sig').splitlines()
+        for head, line in lines.items():
+            at = [i for i, item in enumerate(text) if item.startswith(head)]
+            if at:
+                text[at[0]] = line
+            else:
+                text.append(line)
+        path.write_text('\n'.join(text) + '\n', encoding='utf-8')
+        done.append(str(path))
+    return done
+
+
+def leftover_worktrees(root, issues, commands):
+    """The worktrees of `git worktree list` whose folder or branch names an issue of the release (the number not
+    inside a longer one) and that no command of the cleanup plan names: [{issue, path, branch}], listed, never
+    removed here."""
+    code, out, _ = git(root, 'worktree', 'list', '--porcelain')
+    if code != 0:
+        return []
+    planned = ' '.join(str(a) for c in commands for a in (c.get('argv', []) if isinstance(c, dict) else c))
+    folded = os.path.normcase(planned.replace('\\', '/'))
+    main = os.path.normcase(str(Path(root).resolve()).replace('\\', '/'))
+    found = []
+    for block in out.split('\n\n'):
+        fields = dict(line.split(' ', 1) for line in block.splitlines() if ' ' in line)
+        path = fields.get('worktree')
+        branch = fields.get('branch', '').removeprefix('refs/heads/')
+        if not path or os.path.normcase(str(Path(path).resolve()).replace('\\', '/')) == main:
+            continue
+        if os.path.normcase(path.replace('\\', '/')) in folded or (branch and branch in planned):
+            continue
+        for number in issues:
+            if re.search(rf'(?<!\d){number}(?!\d)', f'{Path(path).name} {branch}'):
+                found.append({'issue': number, 'path': path, 'branch': branch or None})
+                break
+    return found
 
 
 def default_cleanup_plan(root, config_path, issues, base):
@@ -1929,7 +2063,7 @@ def run(operation, root, base='main', remote='origin', config=None, prefix=None,
             result = op_release(release_args.get('action'), root, base, remote, config, prefix, records,
                                 release_args.get('body'), release_args.get('closes'), release_args.get('record'),
                                 release_args.get('pr'), release_args.get('legacy'), release_args.get('answer'),
-                                release_args.get('since'))
+                                release_args.get('since'), without_suite=release_args.get('without_suite'))
         else:
             raise Refusal(f'operação desconhecida: {str(operation)[:40]}')
     except (Refusal, OSError) as error:
@@ -1973,6 +2107,8 @@ def build_parser():
     release.add_argument('--legacy-branch', dest='legacy', action='store_true',
                          help='go: the old path with a local release branch, only with --answer "Sim"')
     release.add_argument('--answer', help='go --legacy-branch: the literal answer of the question')
+    release.add_argument('--without-full-suite', dest='without_suite',
+                         help=f'go: the literal answer "{SUITE_WAIVE}" that waives the whole suite')
     release.add_argument('--since', help='status: exit 0 only when the state is no longer this one (4 otherwise)')
     release.add_argument('--quiet', action='store_true', help='status --since: one line on a change, nothing otherwise')
     for name in ('sync', 'bundle', 'release-plan', 'suite', 'suite-gate'):

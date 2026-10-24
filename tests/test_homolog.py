@@ -262,7 +262,7 @@ class LocalMainTextTests(unittest.TestCase):
         # redesenho, issue 5: os passos viraram `homolog.py merge`; o texto diz o que o comando faz e o que é da
         # sessão, e o docstring do homolog.py traz a mecânica.
         for phrase in ('homologation bench', 'refuses `origin/main` as the remote main', '`homolog.py merge --issue <n>`',
-                       '**Record it.**', 'the branch of the issue never receives the local main',
+                       '**Record it.**', 'a conflict stays there, `files`: resolve, commit, rerun',
                        '`git merge main`', 'The watched run is the only gate of stage 6: no impact suite and no '
                        'review is required.', '**The gate, the watched run.**', '**The check and the merge.**',
                        'it never edits the gates to make them pass', '"Merge na main local"',
@@ -507,8 +507,7 @@ class LocalMainTextTests(unittest.TestCase):
                        '**`Closes #n` only from `closes`.**', '**Wait for the merge.**',
                        '**Offer the merge when the PR is ready.**', '**At the merge.**', '`release landed`',
                        'act only on `release status`',
-                       'No suite is required for the release (no whole check is: the watched run of each issue is its '
-                       'evidence)'):
+                       '`go` refuses (`full_suite`) until `homolog suite --release --mode full` is green'):
             with self.subTest(file='development.md', phrase=phrase):
                 self.assertIn(phrase, body)
         self.assertLess(body.index('**Plan it.**'), body.index('**Offer it.**'))
@@ -606,10 +605,11 @@ class LocalMainTextTests(unittest.TestCase):
         # redesenho, issue 5: o novo merge é `homolog.py merge --free-test-fix`, e `free-test start` cria o rascunho.
         for phrase in ('Fix it at once on the branch of the issue', 'TDD by default', 'push it (covered)',
                        '`homolog.py merge --issue <n> --free-test-fix`',
-                       'the free test itself is the evidence of the fix, and the watched run is not rerun',
-                       'the user reloads the page and the window stays open', 'Each fix is a box of `teste-livre-cas.md`',
-                       'a leftover box (`references/issues.md`, "A leftover as an acceptance criterion")',
-                       'ticked only when the user checked it', 'otherwise with `Evidência que fecha:`'):
+                       'the free test itself is the evidence of the merge, and the watched run is not rerun',
+                       'the user reloads the page and the window stays open',
+                       # retro de 23/10/2026: toda correção do teste livre entra como slice nova, nunca caixa P
+                       'Each fix is a new slice in `teste-livre-cas.md` (`references/issues.md`, "A finding as a new '
+                       'slice")', 'ticked by its walkthrough, never by a word in the chat'):
             with self.subTest(part='fix', phrase=phrase):
                 self.assertIn(phrase, fix)
         closed = body.split('- **Window closed, next step.**')[1]
@@ -917,6 +917,22 @@ class HomologBundleTests(HomologCli, unittest.TestCase):
 
     def written_files(self):
         return sorted(path.name for path in self.backup.iterdir())
+
+    def test_the_message_survives_a_console_that_is_not_utf8(self):
+        # retro de 23/10/2026: "n�o h�" no bundle. O stdout do homolog é JSON só em ASCII (os acentos vão como \u),
+        # então nenhum leitor, nem um console cp1252, quebra a mensagem; o registro do merge é UTF-8. O acento quebrado
+        # veio de um `python -c` da sessão que imprimiu a mensagem em cp1252, fora do Frontlights.
+        accented = self.base / 'Códigos'
+        accented.mkdir()
+        for block, expected in ((None, 'não há pasta de backup configurada'), ({'backupDir': str(accented)}, 'Códigos')):
+            with self.subTest(configured=block is not None):
+                config = self.config(**({'homolog': block} if block else {}), branchPrefix='claude/')
+                done = subprocess.run([sys.executable, str(HOMOLOG), 'bundle', '--root', str(self.work), '--config',
+                                       str(config)], capture_output=True, env=dict(self.env, PYTHONIOENCODING='cp1252',
+                                                                                   PYTHONUTF8='0'),
+                                      stdin=subprocess.DEVNULL, timeout=180)
+                self.assertTrue(done.stdout.isascii(), done.stdout[:200])
+                self.assertIn(expected, json.loads(done.stdout.decode('ascii'))['message'])
 
     def test_bundle_writes_a_verifiable_file_with_the_base_and_the_work_branches(self):
         # the real `homolog.py bundle` process
@@ -1251,7 +1267,7 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.assertEqual((code, result['ready'], result['release']), (0, True, [1]), result)
         self.assertEqual(result['fullSuite']['status'], 'missing')
         self.assertIn('Release pronta', result['message'])
-        self.assertIn('Suíte inteira (opcional, não exigida pela release): missing.', result['message'])
+        self.assertIn('Suíte inteira (exigida pelo `release go`): missing.', result['message'])
         self.assertNotIn('homolog suite --release --mode full', result['message'])
 
     def test_the_whole_suite_green_at_the_tip_makes_the_release_ready(self):
@@ -1296,7 +1312,7 @@ class HomologReleasePlanTests(HomologCli, unittest.TestCase):
         self.full_suite(fail=True)
         code, result = self.plan()
         self.assertEqual((code, result['ready'], result['fullSuite']['status']), (0, True, 'red'), result)
-        self.assertIn('Suíte inteira (opcional, não exigida pela release): red.', result['message'])
+        self.assertIn('Suíte inteira (exigida pelo `release go`): red.', result['message'])
 
     def test_a_delivery_after_the_whole_suite_makes_it_stale(self):
         self.deliver(1)

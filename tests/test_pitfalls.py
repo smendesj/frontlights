@@ -50,7 +50,7 @@ class ThePitfallLineIsBornAtTheNewCriterionRungTests(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.followups)
         # o degrau 2 aponta para a receita; a linha vem depois do degrau, antes do degrau 3
-        rung2 = self.followups.index('2. A new acceptance criterion')
+        rung2 = self.followups.index('2. A new slice of the source issue')
         rung3 = self.followups.index('3. A top-level issue')
         self.assertLess(rung2, self.followups.index('one line in the project\'s pitfalls'))
         self.assertLess(self.followups.index('one line in the project\'s pitfalls'), rung3)

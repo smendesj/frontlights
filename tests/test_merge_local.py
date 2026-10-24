@@ -50,7 +50,7 @@ class Stage6Case(unittest.TestCase):
         self.assertTrue(result['ok'], result)
 
     def charter(self):
-        return json.loads((self.root / '.frontlights' / 'authorization.json').read_text(encoding='utf-8'))
+        return json.loads((self.root / '.frontlights' / 'authorization' / '12.json').read_text(encoding='utf-8'))
 
     def open(self, *slices, **options):
         options.setdefault('directory', str(self.wt))
@@ -152,7 +152,7 @@ class SliceMergeTests(Stage6Case):
     def test_without_any_test_the_merge_is_refused_unless_watched_only(self):
         record = self.charter()
         record['verification_commands'] = []
-        (self.root / '.frontlights' / 'authorization.json').write_text(json.dumps(record), encoding='utf-8')
+        (self.root / '.frontlights' / 'authorization' / '12.json').write_text(json.dumps(record), encoding='utf-8')
         self.assertEqual(self.merge()['reason'], 'no_tests')
         result = self.merge(watched_only=True)
         self.assertTrue(result['ok'], result)
@@ -171,6 +171,52 @@ class SliceMergeTests(Stage6Case):
         result = self.merge()
         self.assertEqual((result['ok'], result['reason'], result['exitCode']), (False, 'local_main_commit', 3))
         self.assertEqual(result['commits'][0], git(self.root, 'rev-parse', 'main'))
+
+    def test_a_commit_already_on_another_remote_branch_is_not_of_the_local_main_only(self):
+        """Retro 1123/1124, item 8: commits of the local main already pushed in another issue's branch."""
+        self.commit(self.root, 'src/main_only.py', message='já na branch remota de outra issue')
+        git(self.root, 'push', '-q', 'origin', 'main:refs/heads/PREFIX/issue-99')
+        git(self.issue_wt, 'merge', '-q', '--no-edit', 'main')
+        result = self.merge()
+        self.assertTrue(result['ok'], result)
+
+    def broad(self, rule):
+        config = json.loads(self.config.read_text(encoding='utf-8'))
+        config['sliceMerge'] = rule
+        self.config.write_text(json.dumps(config), encoding='utf-8')
+
+    def test_a_migration_naming_a_listed_table_runs_the_whole_verification_not_the_filter(self):
+        """Retro 1123/1124, item 3: `sliceMerge.broadSuite` troca o `--test` da slice pelo `verification_commands`."""
+        self.broad({'broadSuite': {'paths': ['db/migrations/*'], 'contains': ['TABLE_A']}})
+        self.commit(self.s1, 'db/migrations/001.sql', 'ALTER TABLE table_a ADD c INT;\n', 'migration')
+        result = self.merge(tests=[json.dumps(RED)])
+        self.assertTrue(result['ok'], result)
+        self.assertEqual(result['broadSuite']['files'], ['db/migrations/001.sql'])
+        self.assertEqual([r['argv'] for r in result['tests']['ran']], [GREEN])
+
+    def test_a_migration_of_another_table_keeps_the_filter_of_the_slice(self):
+        self.broad({'broadSuite': {'paths': ['db/migrations/*'], 'contains': ['TABLE_A']}})
+        self.commit(self.s1, 'db/migrations/001.sql', 'ALTER TABLE table_ab ADD c INT;\n', 'migration')
+        result = self.merge(tests=[json.dumps(RED)])
+        self.assertEqual((result['ok'], result['reason']), (False, 'red'))
+        self.assertNotIn('broadSuite', result)
+
+    def test_a_malformed_slice_merge_block_is_refused(self):
+        self.broad({'broadSuite': {'paths': []}})
+        self.assertEqual(self.merge()['reason'], 'config_invalid')
+
+    def test_a_verification_script_outside_the_project_root_is_refused(self):
+        """Retro 1123/1124, item 9: o script vive versionado em .frontlights/issues/<n>/verify/, nunca num scratchpad."""
+        outside = self.tmp / 'scratchpad' / 's1-verify.py'
+        inside = self.root / '.frontlights' / 'issues' / '12' / 'verify' / 's1-verify.py'
+        for script in (outside, inside):
+            script.parent.mkdir(parents=True, exist_ok=True)
+            script.write_text('raise SystemExit(0)\n', encoding='utf-8')
+        result = self.merge(tests=[json.dumps([sys.executable, str(outside)])])
+        self.assertEqual((result['ok'], result['reason']), (False, 'verify_outside'))
+        self.assertIn('.frontlights/issues/12/verify/', result['hint'])
+        result = self.merge(tests=[json.dumps([sys.executable, str(inside)])])
+        self.assertTrue(result['ok'], result)
 
     def test_a_conflict_is_exit_2_with_the_files_and_the_rerun_goes_on(self):
         self.commit(self.issue_wt, 'src/feature.py', 'x = 2\n', 'na issue')
@@ -235,12 +281,15 @@ class TickGuardTests(unittest.TestCase):
         (folder / 'S2.md').write_text(self.WALK, encoding='utf-8')
         result, _ = self.tick()
         self.assertTrue(result['verified'], result)
-        self.assertEqual(result['evidence']['kind'], 'roteiro sem tela')
+        self.assertEqual(result['evidence']['kind'], 'roteiro')
 
     def test_a_line_on_a_slice_box_is_guarded_and_a_line_on_another_criterion_is_not(self):
         result, _ = self.tick(box=None, line='7')
         self.assertEqual(result['reason'], 'no_evidence')
-        result, _ = self.tick(box=None, line='9')
+        result, _ = self.tick(box=None, line='9')   # retro de 23/10/2026: sem evidência registrada, nenhum tick
+        self.assertEqual(result['reason'], 'no_evidence')
+        (self.records / 'suite.log').write_text('OK\n', encoding='utf-8')
+        result, _ = self.tick(box=None, line='9', evidence=str(self.records / 'suite.log'))
         self.assertTrue(result['verified'], result)
 
     def test_the_comment_goes_with_the_tick(self):
@@ -258,7 +307,10 @@ class TickGuardTests(unittest.TestCase):
         result = closeout.run('tick', str(self.config), str(self.root), gh=gh, edit=edit, issue='12', box='S2',
                               line=None, comment_file=str(note))
         self.assertTrue(result['commented'], result)
-        self.assertEqual(calls[-1], ['issue', 'comment', '12', '--repo', REPO, '--body-file', str(note)])
+        self.assertEqual(calls[-1][:6], ['issue', 'comment', '12', '--repo', REPO, '--body-file'])
+        posted = Path(calls[-1][6]).read_text(encoding='utf-8')   # the evidence first, made from the record
+        self.assertTrue(posted.startswith('Evidência registrada:\n- S2: roteiro da caixa rodado e gravado em '
+                                          'walkthroughs/S2.md\n\nS2 entregue'), posted)
         self.assertIn('- [x] S2.', gh.body)
 
 
@@ -314,6 +366,20 @@ class HomologMergeTests(Stage6Case):
         self.assertEqual(saved['skillUpdate'], {'status': 'current'})
         self.assertEqual(git(self.root, 'ls-remote', 'origin', 'PREFIX/issue-12-integra'), '')
 
+    def test_a_box_the_watched_run_did_not_walk_needs_its_walkthrough(self):
+        # GeoCloud #1123, 23/10/2026: walkthroughs/S6.md (a migration, no screen) was promised and never written
+        self.walk()
+        (self.records / 'browser').mkdir(parents=True)
+        (self.records / 'browser' / 'result.json').write_text(
+            json.dumps({'situacao': 'aprovado', 'criterios': ['S1']}), encoding='utf-8')
+        self.assertEqual(self.homolog_merge()['exitCode'], 0)
+        self.commit(self.issue_wt, 'src/fix.py', 'y = 1\n', 'correção do teste livre')
+        body = BODY + '- [x] S2 Migration (do teste livre)\n'
+        result = self.homolog_merge(body=body, free_test_fix=True)
+        self.assertEqual((result['exitCode'], result['reason'], result['missing']), (1, 'walkthroughs', ['S2']))
+        self.walk('S2')
+        self.assertEqual(self.homolog_merge(body=body, free_test_fix=True)['exitCode'], 0)
+
     def test_dry_run_writes_nothing(self):
         self.walk()
         before = git(self.root, 'rev-parse', 'main')
@@ -359,6 +425,30 @@ class HomologMergeTests(Stage6Case):
         self.assertEqual((result['exitCode'], result['reason'], result['gate']['status']), (2, 'gate', 'pending'))
         self.assertIn('#12', result['question'])
         self.assertEqual(len(result['options']), 2)
+
+    def test_the_gate_measures_the_integration_branch_and_a_moved_local_main_keeps_the_answer(self):
+        """Retro das issues 1123 e 1124: o portão mede a branch que vai ser mesclada (a integra), sob o rótulo da
+        branch da issue, e só o diff da issue; a main local que andou não pede o teste de novo."""
+        import browser_gate
+        self.walk()
+        self.config.write_text(json.dumps({'repository': REPO, 'branchPrefix': 'PREFIX/', 'browserTest': {}}),
+                               encoding='utf-8')
+        self.commit(self.issue_wt, 'src/page.html', '<p>nova</p>\n', 'tela')
+        record = self.records / 'browser' / 'result.json'
+        _, code = browser_gate.run_cli([self.issue_wt], 'main', str(self.config), 'sim', str(record), answer='Aprovado')
+        self.assertEqual(code, 0)
+        self.commit(self.root, 'src/other.py', 'z = 1\n', 'outra issue na main local')
+        result = self.homolog_merge(toca='sim')
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual((result['gate']['status'], list(result['gate']['roots']), result['gate']['base_moved']),
+                         ('answered', ['PREFIX/issue-12'], True))
+        self.commit(self.issue_wt, 'src/page.html', '<p>outra</p>\n', 'tela mudou')
+        stale = self.homolog_merge(toca='sim')
+        self.assertEqual((stale['exitCode'], stale['gate']['status']), (2, 'stale'))
+        self.assertIn('Manter a decisão anterior', stale['options'])
+        integra = self.charter()['worktrees'][-1]['path']
+        self.assertEqual(stale['answerFlags'], ['--root', integra, '--as', 'PREFIX/issue-12-integra=PREFIX/issue-12',
+                                                '--record', str(record)])
 
     def test_a_conflict_with_the_local_main_is_exit_2_in_the_integration_worktree(self):
         self.walk()
@@ -429,16 +519,17 @@ class FreeTestTests(unittest.TestCase):
             self.serve.free_test_start(str(self.config), str(self.root), 12)
         started.assert_called_once_with(str(self.config), str(self.root), 12)
         with self.draft.open('a', encoding='utf-8') as draft:
-            draft.write('- [x] Correção (do teste livre): a lista ordena. Evidência: abc1234\n'
-                        '- [ ] Correção (do teste livre): o filtro limpa. Evidência que fecha: teste livre\n')
+            draft.write('- [x] S3. A lista ordena (do teste livre)\n'
+                        '- [ ] S4. O filtro limpa (do teste livre)\n')
         with unittest.mock.patch.object(self.serve, 'stop', return_value={'ok': True}) as stopped:
             result = self.serve.free_test_stop(str(self.config), str(self.root), 12)
-        stopped.assert_called_once_with(str(self.root), 12)
+        stopped.assert_called_once_with(str(self.root), 12, str(self.config))   # the config carries the teardown
         self.assertEqual((result['batch']['total'], result['batch']['ticked'], result['batch']['open']), (2, 1, 1))
 
     def test_without_a_screen_the_commands_and_the_question_come_from_the_charter(self):
+        # o authorization.json antigo, único, segue lido para a issue sem charter próprio
         (self.root / '.frontlights' / 'authorization.json').write_text(
-            json.dumps({'verification_commands': [['python', '-m', 'unittest', 'discover', '-s', 'tests']]}),
+            json.dumps({'issue_ids': [12], 'verification_commands': [['python', '-m', 'unittest', 'discover', '-s', 'tests']]}),
             encoding='utf-8')
         done = subprocess.run([sys.executable, str(SCRIPTS / 'serve.py'), 'free-test', 'commands', '--issue', '12',
                                '--root', str(self.root)], capture_output=True, text=True, encoding='utf-8')
