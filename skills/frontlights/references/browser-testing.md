@@ -10,8 +10,7 @@ It applies whenever anything the session delivers changes what the user sees: th
 plan has the section `## Navegador e testes ligados` (`templates/issue.md`) with `Toca o frontend: sim`, or
 `browser-gate` finds a visible change in the diff (the browser step opens with the watched-run question below and,
 when the user watched, ends with the question of what to do next). **Portuguese.** Everything the user reads stays in Portuguese,
-including what the browser tools print. Never point a test at a real, staging or production environment. Installing Playwright or a browser in the target project is
-out of scope: `serve.py window` uses what the project already has. A run never stops or skips a case for lack of test
+including what the browser tools print. Never point a test at a real, staging or production environment. A run never stops or skips a case for lack of test
 data (section "Test data the run creates"). No script judges a pass: passed or failed is the session's and the
 user's, looking at the screen together.
 
@@ -35,9 +34,8 @@ read `browserTest` and `checks` from the project's `.frontlights/config.json`.
 
 ## One watched run per issue
 
-There is one watched run per issue, never one per slice, branch or worktree. Here a slice is a box of an issue's
-acceptance criteria, with its own worktree and branch cut from the branch of the issue, and each `--root` is the
-worktree of an issue or of one of its slices. A family that already exists keeps one run for the family, its
+There is one watched run per issue, never one per slice, branch or worktree. Here a slice is a box of the issue with its own worktree, and each `--root` is the worktree of an issue or of one
+of its slices. A family that already exists keeps one run for the family, its
 sub-issues being roots too. A slice that only changes tests or only the API does not hold the question back.
 
 **When the question comes out.** The question of DEPOIS (ANTES evidence never answers the gate) comes out only at
@@ -92,7 +90,11 @@ no `serve start`: the session itself brings up the API and the web of the tree u
 `sessao_sobe`), checks they answer, stops them before reporting, never asks the user to bring them up, and offers to
 declare those commands in `browserTest.processes`; it never stops a process it did not start. A dev server that pins its own ports keeps a fixed `port`, and then only one issue at a time can run it:
 say so when recommending parallelism. The preview is not part of the watched run (`development.md`, "The start of
-stage 6"). Stop what this session started before reporting the issue.
+stage 6").
+
+**Per-issue resources.** `serve.py --help` gives `{port:<name>}`, `runtimeConfig`, `setup` and `teardown`. When
+`browserTest.setup` clones the database per issue, the free test and the watched run write to that clone, never to the
+shared database: here, "the local development database" is that clone.
 
 ## Browser
 
@@ -122,7 +124,8 @@ one) on the same account and database; an ANTES window that is open but idle hol
 
 The pass is driven by whoever conducts it, a subagent or the session itself, from the brief the script fills:
 `python "${CLAUDE_SKILL_DIR}/scripts/serve.py" window brief --issue <n> --pass antes|depois --criteria S1,S2` prints the
-path of `brief-<pass>.md`; dispatch "read it and follow it", never its text. The brief opens the window (`window open`
+path of `brief-<pass>.md`; dispatch "read it and follow it", never its text. `--role <role>` picks the persona of
+`browserTest.users`. The brief opens the window (`window open`
 or `window attach`), starts the holder (`window hold`, in the background), takes the prints (`window shot`) and records
 each criterion (`browser-gate record`). What the window must be:
 
@@ -145,7 +148,7 @@ each criterion (`browser-gate record`). What the window must be:
   the delivered state, at the end; both on the local development database. The base server takes an `auto` port of
   its own; in a project with only fixed ports, the servers of the slices and of the issue wait for the ANTES window to
   close, and `serve stop --root <base-checkout> --issue <n>` ends ANTES before DEPOIS starts. A watched run never serves from the main worktree (the free test is the only exception, "The free test
-  window"). Stop the ANTES record once no ANTES capture is due, and in every case before reporting.
+  window").
 - **The ANTES window, from the grilling.** It opens at the problem round of the grilling, after the question above,
   with the strip "ANTES: <base>", and stays open: first it takes the prints of the screens for the before of the
   artifact; then, once the plan is approved, the same window runs the `Fluxo:` of each criterion on the base while

@@ -20,7 +20,13 @@
   close   stops only the Chrome this helper started (same pid and start time) and removes its profile.
   brief   `--pass antes|depois --criteria S1,S2`: fills the placeholders of `references/browser-conductor.md` (the
           window, the strip, the criteria, the folders, the commands) and writes it as `brief-<pass>.md` beside the
-          record; prints its path, so whoever conducts reads it there.
+          record; prints its path, so whoever conducts reads it there. The strip comes from `--pass`: `--strip` (of
+          that pass), the recorded window's only when it is of that pass, else "ANTES: origin/main" or
+          "DEPOIS: branch <branch of --tree>"; a window of the other pass lends neither strip, base URL nor cdpUrl.
+
+`open` and `brief` take `--role <role>` instead of `--account <n>`: the first user of `browserTest.users` whose `role`
+is that one (a persona of the project's test world, e.g. `dono-conta-1`, `convidado-restrito`); none is a `uso`
+refusal naming the declared roles.
 
 Before the issue has a number (a grilling that starts from a request), leave `--issue` out: the window record and the
 prints go to `.frontlights/evidencias-pendentes/` (`antes-pendente-<label>.png`), and the first window command with
@@ -239,6 +245,17 @@ def local_base_url(url):
             'A janela abre só um endereço local (127.0.0.1, localhost ou ::1), sem {port} por preencher: passe '
             '--base-url com a porta que o serve devolveu.', category=USAGE)
     return url
+
+
+def account_by_role(block, role):
+    """The number (1-based) of the first user of browserTest.users whose `role` is `role`; refused when none is."""
+    users = block.get('users') if isinstance(block, dict) else None
+    users = users if isinstance(users, list) else []
+    roles = [user.get('role') if isinstance(user, dict) else None for user in users]
+    require(role in roles, f'Nenhum usuário de browserTest.users tem o papel "{role}" (papéis declarados: '
+            f'{", ".join(sorted({r for r in roles if isinstance(r, str)})) or "nenhum"}). Acrescente o usuário com '
+            'esse papel ao mundo de teste do projeto e ao config, ou escolha outro papel.', category=USAGE)
+    return roles.index(role) + 1
 
 
 def account_of(block, account):
@@ -501,11 +518,22 @@ def op_close(root, issue):
                         'O pid registrado não é mais o Chrome que este script abriu: nada foi parado.')}
 
 
+def chosen_account(args, config_file):
+    """--account, or the number of the user with --role (open and brief); account 1 by default."""
+    if not args.role:
+        return args.account or 1
+    require(args.window_op in ('open', 'brief'), '--role só vale para window open e window brief.', category=USAGE)
+    require(args.account is None, 'Passe --account ou --role, não os dois.', category=USAGE)
+    block = read_config(config_file).get('browserTest')
+    return account_by_role(block if isinstance(block, dict) else {}, args.role)
+
+
 def run(args, root, tree, config_file):
     issue = resolve_issue(args.issue, tree, root)
+    account = chosen_account(args, config_file)
     if args.window_op == 'open':
         require(args.strip, 'window open precisa de --strip, como --strip "ANTES: origin/main".', category=USAGE)
-        return op_open(config_file, root, tree, issue, args.strip, args.base_url, args.account)
+        return op_open(config_file, root, tree, issue, args.strip, args.base_url, account)
     if args.window_op == 'attach':
         return op_attach(config_file, root, tree, issue)
     if args.window_op == 'hold':
@@ -513,7 +541,8 @@ def run(args, root, tree, config_file):
     if args.window_op == 'shot':
         return op_shot(root, issue, args.pass_, args.criterion, args.name, args.cover)
     if args.window_op == 'brief':
-        return op_brief(config_file, root, issue, args.pass_, args.criteria, args.strip, args.base_url, args.account)
+        return op_brief(config_file, root, tree, issue, args.pass_, args.criteria, args.strip, args.base_url, account,
+                        args.role)
     return op_close(root, issue)
 
 
@@ -529,7 +558,39 @@ ENDINGS = {
 }
 
 
-def op_brief(config_file, root, issue, pass_, criteria, strip, base_url, account):
+PASS_STRIPS = {'antes': 'ANTES: ', 'depois': 'DEPOIS: branch '}
+
+
+def tree_branch(tree):
+    """The branch checked out in the worktree of the pass, or None (detached HEAD, no Git)."""
+    try:
+        done = subprocess.run(['git', '-C', str(tree), 'rev-parse', '--abbrev-ref', 'HEAD'], capture_output=True,
+                              text=True, encoding='utf-8', errors='replace', timeout=30,
+                              env=_cli.git_environment())
+    except (OSError, subprocess.SubprocessError):
+        return None
+    name = done.stdout.strip()
+    return name if done.returncode == 0 and name and name != 'HEAD' else None
+
+
+def pass_strip(pass_, strip, state, tree):
+    """The strip of the pass: --strip (which must be of that pass), the recorded window's when it is of that pass,
+    else "ANTES: origin/main" or "DEPOIS: branch <branch of --tree>". Never the strip of the other pass's window."""
+    prefix = PASS_STRIPS[pass_]
+    if strip:
+        require(strip.startswith(prefix), f'--strip da passada {pass_.upper()} começa por "{prefix}".', category=USAGE)
+        return check_strip(strip)
+    if str(state.get('strip') or '').startswith(prefix):
+        return check_strip(state['strip'])
+    if pass_ == 'antes':
+        return 'ANTES: origin/main'
+    branch = tree_branch(tree)
+    require(branch, 'A worktree da passada (--tree) não está numa branch: passe --strip "DEPOIS: branch <nome>".',
+            category=USAGE)
+    return check_strip(prefix + branch)
+
+
+def op_brief(config_file, root, tree, issue, pass_, criteria, strip, base_url, account, role=None):
     """Fill references/browser-conductor.md for one pass and write it beside the record; print its path."""
     require(pass_ in PASSES, 'window brief precisa de --pass antes ou --pass depois.', category=USAGE)
     names = [name.strip() for name in (criteria or '').split(',') if name.strip()]
@@ -537,15 +598,19 @@ def op_brief(config_file, root, issue, pass_, criteria, strip, base_url, account
             'window brief precisa de --criteria com as caixas da passada, como S1,S2,S3.', category=USAGE)
     config = read_config(config_file)
     block = config.get('browserTest') if isinstance(config.get('browserTest'), dict) else {}
+    account_of(block, account)   # an account browserTest.users does not have is refused here, not at window open
     state = read_state(root, issue) or {}
-    strip = check_strip(strip or state.get('strip') or ('ANTES: origin/main' if pass_ == 'antes' else ''))
+    if not str(state.get('strip') or '').startswith(PASS_STRIPS[pass_]):
+        state = {}   # the window of the other pass: its strip, base URL and cdpUrl are not this pass's
+    strip = pass_strip(pass_, strip, state, tree)
     base_url = local_base_url(base_url or state.get('baseUrl') or block.get('baseUrl'))
     live = ours_alive(state) and cdp_alive(state.get('cdpUrl', ''))
     folder = evidence_dir(root, issue)
     record = issue_folder(root, issue) / 'result.json' if issue else Path(root) / PENDING / 'result.json'
     values = {
         'PASS_NAME': pass_.upper(), 'PASS': pass_, 'ISSUE': str(issue) if issue else '(sem número: omita --issue)',
-        'STRIP': strip, 'BASE_URL': base_url, 'ACCOUNT': f'conta {account}', 'ACCOUNT_NUMBER': str(account),
+        'STRIP': strip, 'BASE_URL': base_url, 'ACCOUNT_NUMBER': str(account),
+        'ACCOUNT': f'conta {account}' + (f' (papel {role})' if role else ''),
         'CRITERIA': ', '.join(names), 'EVIDENCE_DIR': folder, 'RECORD': str(record),
         'WINDOW': (f'open, cdpUrl {state["cdpUrl"]}' if live else 'not open: step 1 opens it'),
         'SCRIPTS': str(HERE), 'HOLD': 'none',
@@ -585,7 +650,9 @@ def parser():
     p.add_argument('--issue', help='número da issue; sem ele e sem charter, modo pendente (antes do número)')
     p.add_argument('--strip', help='open: "ANTES: origin/main", "DEPOIS: branch <nome>" ou "MAIN LOCAL: teste livre"')
     p.add_argument('--base-url', help='open: endereço local servido (padrão: browserTest.baseUrl)')
-    p.add_argument('--account', type=int, choices=(1, 2), default=1, help='open: conta de browserTest.users')
+    p.add_argument('--account', type=int, help='open e brief: número do usuário em browserTest.users (padrão 1)')
+    p.add_argument('--role', help='open e brief: o primeiro usuário de browserTest.users com esse role, como '
+                                  'dono-conta-1 ou convidado-restrito, em vez de --account')
     p.add_argument('--minutes', type=minutes_value, default=None, help='hold: none (padrão; a janela fecha pelo window close) ou minutos')
     p.add_argument('--pass', dest='pass_', choices=PASSES, help='shot e brief: antes ou depois')
     p.add_argument('--criterion', help='shot: S<n>, o critério cujo Fluxo a passada percorre')

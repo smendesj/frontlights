@@ -851,14 +851,15 @@ class NameCollisionScopeTest(PortsTestCase):
         done = self.serve('start')
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
-    def test_one_auto_and_one_fixed_with_colliding_names_start_and_only_the_auto_gets_the_variable(self):
+    def test_one_auto_and_one_fixed_with_colliding_names_start_and_only_the_auto_defines_the_variable(self):
+        # retro do GeoCloud #1123: todo processo recebe as portas de todos os auto, então o fixo também lê a do auto
         self.write_config([self.auto('web-api'), self.fixed('web_api')])
         done = self.serve('start')
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         by_name = {item['name']: item for item in self.payload(done)['processes']}
         auto_port = by_name['web-api']['port']
         self.assertEqual(fetch(by_name['web-api']['url']).split('|')[2], str(auto_port))
-        self.assertEqual(fetch(by_name['web_api']['url']).split('|')[2], '')
+        self.assertEqual(fetch(by_name['web_api']['url']).split('|')[1:], ['', str(auto_port)])
 
     def test_two_auto_processes_with_colliding_names_are_still_refused(self):
         self.write_config([self.auto('web-api'), self.auto('web_api')])
