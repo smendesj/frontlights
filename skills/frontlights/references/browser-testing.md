@@ -56,10 +56,9 @@ after the run and changes what a `Fluxo:` exercises makes the session ask again 
 `stale`; until then the report says "implementada, aguardando teste assistido", never "completa".
 
 **The gate.** `python "${CLAUDE_SKILL_DIR}/scripts/frontlights.py" browser-gate --base <base> --root <worktree> ...
---toca <sim|nao|ausente> --record <result.json>`; the flags and statuses are in its `--help`. A slice's worktree is
+--toca <sim|nao|ausente> --record <result.json>`; flags and statuses: its `--help`. A slice's worktree is
 named with `--stacked <its branch>=<the branch of its issue>`. `--toca` is `sim` when any issue's plan says so
-(`by_root` lists the visible files of each root). Exit 0 is `not_needed` or `answered`; 1 is an error to fix, never
-`answered`; 2 asks:
+(`by_root` lists the visible files of each root). Exit 0 is `not_needed` or `answered`, 1 an error, 2 asks:
 
 - `pending` (`ask`): for `alteracao` the change comes first and the run repeats with no new "pronto para assistir?";
   otherwise ask the question of the watched run, at the points above.
@@ -72,7 +71,8 @@ named with `--stacked <its branch>=<the branch of its issue>`. `--toca` is `sim`
 
 **The record.** The issue has one `result.json`, `.frontlights/issues/<n>/browser/result.json` (a family's lives in
 the folder of its lead issue). Record every answer in the same call of the gate, never by hand: `browser-gate ...
---answer "<the option, verbatim>"` writes `situacao`, `lote.roots` and `pergunta.resposta` and reads the gate again.
+--answer "<the option, verbatim>"` (a custom option adds `--option "<the gate's option>"`) writes
+`situacao`, `lote.roots` and `pergunta.resposta` and reads the gate again.
 "Ainda não" (`ainda-nao`) leaves the run owed as the `teste_assistido` pending of `checkpoint --pending` and `context --pending`,
 carried only once the question is due; while a screen slice is still in its loop the handoff lists the open screen
 slices instead. `answered` (`aprovado`, `prosseguir`, `sem-assistir` or `dispensado`) is what an independent review of

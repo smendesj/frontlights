@@ -144,21 +144,20 @@ assistir?": a ANTES, aberta no grilling, e no fim, só a DEPOIS. A pergunta de f
 O `frontlights.py browser-gate` lê o diff e devolve `not_needed`, `answered`, `pending`, `stale`, `contradiction` ou
 `unconfigured` (saída 0 nos dois primeiros, 2 nos demais). Três comandos gravam o registro, e nenhum julga: `serve.py
 window open|attach|hold|shot|close|brief` (o `shot` grava o `print` do critério e a janela guarda `cdpUrl`, `pid` e
-`profileDir` em `browser/window.json`); `browser-gate ... --answer "<literal>"` (`situacao`, `lote.roots`,
-`pergunta.resposta` e, para `aprovado`, `prosseguir` ou `alteracao`, `aprovacao`); `browser-gate record --pass
-antes|depois --criterion S<n> --head <sha>`. Antes de a issue ter número, janela e prints ficam em
+`profileDir` em `browser/window.json`); `browser-gate ... --answer "<literal>"` (`situacao`, `aprovacao`,
+`pergunta`, `lote`); `browser-gate record --pass antes|depois --criterion S<n> --head <sha>`. Antes de a issue ter número, janela e prints ficam em
 `evidencias-pendentes/` e vão para a pasta da issue no primeiro comando com `--issue <n>`. A pendência
 `teste_assistido` atravessa janelas por `checkpoint --pending` e `resume`.
 
-Campos do `result.json` (esta é a única descrição; `browser_gate.py` e `serve.py window` leem e gravam só estes, e um
-teste os compara com o código):
+Campos do `result.json` (esta é a única descrição; um teste os compara com o código):
 
 - no topo: `situacao`, `aprovacao`, `pergunta`, `lote`, `assistido`, `rodadas`, `pastaDosPrints`, `criterios`, `passadas`, `registradoEm`;
 - em cada passada (`passadas.antes`, `passadas.depois`): `branch`, `head`, `repeticoes`, `criterios`;
 - em cada critério (`passadas.<passada>.criterios.S<n>`): `head`, `print`, `casos`, `tipoDeFalha`, `conta`, `perfil`, `origem`, `registradoEm`.
 
 `situacao` é `pendente`, `ainda-nao`, `aprovado`, `prosseguir`, `sem-assistir`, `dispensado` ou `alteracao`;
-`pergunta` traz `resposta` (literal), `opcao` e `em`; `lote` traz `issues` e `roots`; `criterios` no topo lista as
+`pergunta` traz `resposta` (literal), `opcao` e `em`; `lote` traz `issues`, `roots` (`patch-id:` do diff da
+raiz; o formato antigo é remedido) e `bases` (a origem de cada medida); `criterios` no topo lista as
 caixas da rodada; `casos` mapeia cada caso a `ok` ou `falha: <o que aconteceu>`; `tipoDeFalha` é `infraestrutura`,
 `produto` ou `config`; `conta` é `conta 1` ou `conta 2` (nunca login nem senha); `perfil` é só `campo`, `antes` e
 `depois`; `origem` é `back real` ou `interceptada`; os instantes são de São Paulo, com o fuso. Os códigos de `checks`

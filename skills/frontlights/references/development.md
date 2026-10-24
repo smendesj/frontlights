@@ -228,7 +228,7 @@ it without a closing keyword, in its body and in the commit messages.
 
 Before each renewal, `templates/handoff.md` and `frontlights.py checkpoint` (`--pending teste_assistido` while a
 watched run is due, `--slice <id>`); `frontlights.py resume` lists those first. Check context with `context` by the
-thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home. If the host cannot enforce renewal, report
+thresholds of `docs/protocol.md`, "Contexto e conclusão", their only home, with the same `--pending`. If the host cannot enforce renewal, report
 that hard-cap AFK acceptance is unproven.
 
 The session ticks an acceptance criterion only with evidence for it; a criterion born from a finding is ticked the
@@ -246,18 +246,19 @@ is the only gate of stage 6: no impact suite and no review is required. Once the
 merge --issue <n>`:
 
 1. **The checks.** Refuses a dirty main worktree, a slice outside the branch of the issue, an open box.
-2. **The gate, the watched run.** `browser-gate` not green is exit code 2 with its question, never the merge.
+2. **The gate, the watched run.** Merges the branch of the issue and the local main into a local
+   `<branch_prefix>issue-<n>-integra` (the branch of the issue never receives the local main; a conflict stays there,
+   `files`: resolve, commit, rerun); `browser-gate` measures it, the branch merged, as the issue branch, by its
+   diff (a moved main keeps the answer). Not green is exit code 2 with its question and `answerFlags`.
 3. **Without a screen, the walkthroughs.** When `browser-gate` says `not_needed`, and for each `sem tela` box, running
    the walkthrough of each box (its `Roteiro:` lines, `references/issues.md`) is a condition of the merge into the
    local main, with no new question. It runs when its slice closes: `.frontlights/issues/<n>/walkthroughs/S<k>.md`,
    with a header (the issue, the box, the persona, the date, the steps, the base and the commit it ran on), `## Antes`
    and `## Depois`, the output masked in a code block, one row of the handoff table each. A `## Depois` that differs
    from the box's `depois:` sends the slice back; a box without its file keeps the issue out of the local main.
-4. **The check and the merge.** Merges the branch of the issue and the local main into a local
-   `<branch_prefix>issue-<n>-integra` (the branch of the issue never receives the local main; a conflict stays there,
-   `files`: resolve, commit, rerun), records the operation with `gates` `{"browser_gate": "answered"}` (or
-   `not_needed`), the only gate, runs `authorize` and merges into the local main. On a refusal the session asks the
-   user with `AskUserQuestion` instead of merging; it never edits the gates to make them pass.
+4. **The check and the merge.** Records the operation with `gates` `{"browser_gate": "answered"}` (or `not_needed`),
+   the only gate, runs `authorize` and merges into the local main. On a refusal the session asks the user with
+   `AskUserQuestion` instead of merging; it never edits the gates to make them pass.
 5. **Back it up.** `homolog bundle` and `update-check`; `configured: false` is one line, "sem backup configurado".
 6. **Record it.** The handoff's "Merge na main local" takes the watched run, or the walkthroughs run without a screen,
    the record and the bundle.

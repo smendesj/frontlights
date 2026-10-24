@@ -406,6 +406,30 @@ class HomologMergeTests(Stage6Case):
         self.assertIn('#12', result['question'])
         self.assertEqual(len(result['options']), 2)
 
+    def test_the_gate_measures_the_integration_branch_and_a_moved_local_main_keeps_the_answer(self):
+        """Retro das issues 1123 e 1124: o portão mede a branch que vai ser mesclada (a integra), sob o rótulo da
+        branch da issue, e só o diff da issue; a main local que andou não pede o teste de novo."""
+        import browser_gate
+        self.walk()
+        self.config.write_text(json.dumps({'repository': REPO, 'branchPrefix': 'PREFIX/', 'browserTest': {}}),
+                               encoding='utf-8')
+        self.commit(self.issue_wt, 'src/page.html', '<p>nova</p>\n', 'tela')
+        record = self.records / 'browser' / 'result.json'
+        _, code = browser_gate.run_cli([self.issue_wt], 'main', str(self.config), 'sim', str(record), answer='Aprovado')
+        self.assertEqual(code, 0)
+        self.commit(self.root, 'src/other.py', 'z = 1\n', 'outra issue na main local')
+        result = self.homolog_merge(toca='sim')
+        self.assertEqual(result['exitCode'], 0, result)
+        self.assertEqual((result['gate']['status'], list(result['gate']['roots']), result['gate']['base_moved']),
+                         ('answered', ['PREFIX/issue-12'], True))
+        self.commit(self.issue_wt, 'src/page.html', '<p>outra</p>\n', 'tela mudou')
+        stale = self.homolog_merge(toca='sim')
+        self.assertEqual((stale['exitCode'], stale['gate']['status']), (2, 'stale'))
+        self.assertIn('Manter a decisão anterior', stale['options'])
+        integra = self.charter()['worktrees'][-1]['path']
+        self.assertEqual(stale['answerFlags'], ['--root', integra, '--as', 'PREFIX/issue-12-integra=PREFIX/issue-12',
+                                                '--record', str(record)])
+
     def test_a_conflict_with_the_local_main_is_exit_2_in_the_integration_worktree(self):
         self.walk()
         self.commit(self.root, 'src/feature.py', 'x = 9\n', 'outra issue na main local')

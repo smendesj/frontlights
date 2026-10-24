@@ -57,9 +57,12 @@ that does not exist), with a `reason` and an `action`:
   unconfigured   something visible changed, nobody decided, and the project has no `browserTest`: there is
                  no way to run it, so the session asks how to verify (`ask-how`).
 
-`roots` in the output maps each visible root (its branch, or `detached:<folder name>`) to the hash of its
-own non-test, non-document changes; the session copies it into the record as `lote.roots` when it records
-the user's answer, and the gate compares it later. `by_root` lists the visible files of every root, so the
+`roots` in the output maps each visible root (its branch, or `detached:<folder name>`, or the label `--as` gives it)
+to the fingerprint of its own non-test, non-document changes, `patch-id:<git patch-id --stable of the diff from the
+commit it is measured from>` (`+new:<hash>` for new files): it measures only the issue's diff, so a base that moved
+under an unchanged diff keeps the decision, with `base_moved: true` (`bases` holds each root's measured-from commit).
+The session copies both into the record as `lote.roots` and `lote.bases` when it records the user's answer, and the
+gate compares them later; a value of the older format (a bare hash of the files) is measured again the old way. `by_root` lists the visible files of every root, so the
 session can compare each issue with its own plan, and `stacked_on` names the branch each stacked issue is
 measured from. Roots with no visible change are listed in `other_roots` and never make a record stale:
 when one of them changes behavior the `Fluxo:` exercises, the session asks again by hand.
@@ -67,7 +70,10 @@ when one of them changes behavior the `Fluxo:` exercises, the session asks again
 `--answer "<literal>"` (with `--record`, or `--issue <n>` for `.frontlights/issues/<n>/browser/result.json` of the main
 worktree) records the user's answer in the same call: `situacao` from the option the literal names, `lote.roots` from
 this run of the gate, `pergunta.resposta` verbatim; the output is the gate read again over the record just written.
-An option that is not a decision ("Assistir de novo", "Sim, pode rodar") is refused: it starts a run, it ends none.
+An option that is not a decision ("Assistir de novo", "Sim, pode rodar") is refused: it starts a run, it ends none. A
+literal of another question (a custom option) is recorded as typed with `--option "<the gate's option it means>"`.
+`--as <branch>=<label>` measures a root under another label: `homolog merge` measures the integration branch it will
+merge under the label of the issue branch.
 
 `record --pass antes|depois --criterion S<n> --head <sha> [--case id=ok|falha:<texto>] [--failure-kind ...]
 [--account conta1|conta2] [--profile-field "<campo>=<antes>-><depois>"] [--origin back-real|interceptada]` writes one
@@ -123,16 +129,19 @@ ORIGINS = {'back-real': 'back real', 'interceptada': 'interceptada'}
 CRITERION = re.compile(r'S[1-9][0-9]?')
 HEAD = re.compile(r'[0-9a-f]{7,64}')
 CASE_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,39}')
-# the literal of an option of the three questions (and of the gate's own) -> situacao; None keeps the decision
-ANSWERS = (('aprovado', 'aprovado'), ('pode prosseguir', 'prosseguir'), ('precisa de alteracao', 'alteracao'),
-           ('ainda nao', 'ainda-nao'), ('rodar sem assistir', 'sem-assistir'), ('dispensar o teste', 'dispensado'),
-           ('verificar a mao e dispensar', 'dispensado'), ('manter a decisao anterior', None))
+# the option of the three questions (and of the gate's own) -> situacao; None keeps the decision
+ANSWERS = (('Aprovado', 'aprovado'), ('Pode prosseguir', 'prosseguir'), ('Precisa de alteração', 'alteracao'),
+           ('Ainda não', 'ainda-nao'), ('Rodar sem assistir', 'sem-assistir'), ('Dispensar o teste', 'dispensado'),
+           ('Verificar à mão e dispensar', 'dispensado'), ('Manter a decisão anterior', None))
+FINGERPRINT = 'patch-id:'
+DIFF_CHUNK = 100              # paths per `git diff` call (the command line of Windows is short)
 NOT_DECISIONS = ('assistir de novo', 'sim, pode rodar', 'rodar o teste assistido', 'sem mudar perfil',
                  'configurar o browsertest agora', 'informar a issue', 'corrigir e testar de novo')
 
 
-def git(root, *args):
-    done = subprocess.run(['git', '-C', str(root), *args], capture_output=True, timeout=60, env=_cli.git_environment())
+def git(root, *args, data=None):
+    done = subprocess.run(['git', '-C', str(root), *args], input=data, capture_output=True, timeout=60,
+                          env=_cli.git_environment())
     if done.returncode != 0:
         raise ValueError(f'git {args[0]} failed in {root}: {done.stderr.decode("utf-8", "replace").strip()[:200]}')
     return done.stdout
@@ -263,31 +272,51 @@ def front_patterns(config):
     return [compile_glob(item) for item in validate_front_paths(paths)]
 
 
-def changed_files(top, reference):
-    """Files changed in the working tree against `reference` (committed, staged, edited and new), without the
-    control folder. `top` is the top of the repository, so every path is relative to it."""
-    names = git(top, 'diff', '--name-only', '-z', '--no-renames', reference).split(b'\0')
-    names += git(top, 'ls-files', '-z', '--others', '--exclude-standard').split(b'\0')
+def names_of(raw):
     found = set()
-    for raw in names:
-        name = raw.decode('utf-8', 'replace').replace('\\', '/')
+    for item in raw.split(b'\0'):
+        name = item.decode('utf-8', 'replace').replace('\\', '/')
         if name and '.frontlights' not in name.split('/'):
             found.add(name)
-    return sorted(found)
+    return found
+
+
+def changed_files(top, reference):
+    """(changed, new): files changed in the working tree against `reference` (committed, staged, edited and new)
+    and the new ones among them, without the control folder. `top` is the top of the repository, so every path is
+    relative to it."""
+    new = names_of(git(top, 'ls-files', '-z', '--others', '--exclude-standard'))
+    return sorted(names_of(git(top, 'diff', '--name-only', '-z', '--no-renames', reference)) | new), new
+
+
+def file_sha(path):
+    sha = hashlib.sha256()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b''):
+            sha.update(block)
+    return sha.hexdigest()
+
+
+def fingerprint(top, reference, names, new):
+    """`patch-id:<id>` of the diff of `names` from `reference` to the working tree (`+new:<hash>` of the new files):
+    line numbers and the rest of the base do not enter it, so a base that moved under the same diff gives the same
+    value. A binary file enters by its blob ids (`--full-index`)."""
+    tracked = [name for name in names if name not in new]
+    diff = b''.join(git(top, 'diff', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--full-index',
+                        reference, '--', *(f':(literal){name}' for name in tracked[start:start + DIFF_CHUNK]))
+                    for start in range(0, len(tracked), DIFF_CHUNK))
+    found = git(top, 'patch-id', '--stable', data=diff).split() if diff else []
+    value = FINGERPRINT + (found[0].decode() if found else 'none')
+    added = {name: file_sha(Path(top) / name) for name in names if name in new and (Path(top) / name).is_file()}
+    if added:
+        value += '+new:' + hashlib.sha256(json.dumps(added, sort_keys=True).encode()).hexdigest()[:16]
+    return value
 
 
 def digest(top, names):
-    hashes = {}
-    for name in names:
-        path = Path(top) / name
-        if path.is_file():
-            sha = hashlib.sha256()
-            with open(path, 'rb') as handle:
-                for block in iter(lambda: handle.read(1024 * 1024), b''):
-                    sha.update(block)
-            hashes[name] = sha.hexdigest()
-        else:
-            hashes[name] = 'deleted'
+    """The older value of `lote.roots` (before `patch-id:`): the hash of the files' contents, which moves with the
+    base; kept only to measure a record of that format again."""
+    hashes = {name: file_sha(Path(top) / name) if (Path(top) / name).is_file() else 'deleted' for name in names}
     return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
 
 
@@ -306,7 +335,7 @@ def reference_of(place, base, stacked):
 
 
 def root_report(place, reference, patterns):
-    changed = changed_files(place['top'], reference)
+    changed, new = changed_files(place['top'], reference)
     behavior = [name for name in changed if not is_test_or_doc(name)]
     deadline, front = time.monotonic() + MATCH_BUDGET_SECONDS, []
     for name in behavior:
@@ -315,8 +344,8 @@ def root_report(place, reference, patterns):
                              'shorten the patterns (the cost grows with their length and the length of the paths)')
         if is_front(name, patterns):
             front.append(name)
-    return {'label': place['label'], 'head': place['head'], 'behavior': behavior, 'front': front,
-            'behavior_sha256': digest(place['top'], behavior)}
+    return {'label': place['label'], 'head': place['head'], 'top': place['top'], 'reference': reference,
+            'behavior': behavior, 'front': front, 'fingerprint': fingerprint(place['top'], reference, behavior, new)}
 
 
 def situation(record):
@@ -331,7 +360,7 @@ def situation(record):
     return approval if approval in ('aprovado', 'prosseguir', 'alteracao') else 'pendente'
 
 
-def gate(roots, base, config=None, toca=None, record=None, stacked=None):
+def gate(roots, base, config=None, toca=None, record=None, stacked=None, labels=None):
     if not (isinstance(base, str) and base.strip()) or not roots:
         raise ValueError('browser-gate needs --base and at least one --root')
     if toca not in TOCA:
@@ -339,6 +368,12 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
     toca = TOCA[toca]
     patterns = front_patterns(config) if config is not None else None
     places = [locate(root) for root in roots]
+    labels, renamed = [place['label'] for place in places], dict(labels or {})
+    unknown = sorted(set(renamed) - set(labels))
+    if unknown:
+        raise ValueError(f'--as names {unknown}, which is not the branch of any --root ({labels})')
+    for place in places:
+        place['label'] = renamed.get(place['label'], place['label'])
     labels = [place['label'] for place in places]
     if len(set(labels)) != len(labels):
         raise ValueError('two --root entries are on the same branch (or the same worktree folder name when detached): a '
@@ -352,8 +387,9 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
     visible = [report for report in reports if report['front']]
     front_files = sorted({name for report in visible for name in report['front']})
     bound = visible or [report for report in reports if report['behavior']]
-    current = {report['label']: report['behavior_sha256'] for report in bound}
+    current = {report['label']: report['fingerprint'] for report in bound}
     result = {'toca': toca, 'front_files': front_files, 'roots': current,
+              'bases': {report['label']: report['reference'] for report in bound},
               'by_root': {report['label']: report['front'] for report in reports}, 'stacked_on': stacked_on,
               'other_roots': [report['label'] for report in reports if report not in bound], 'warnings': []}
     if not (front_files or toca == 'sim'):
@@ -383,21 +419,28 @@ def gate(roots, base, config=None, toca=None, record=None, stacked=None):
         result.update(status='stale', reason='sem-vinculo', action='ask-again',
                       message='the record carries no lote.roots: copy `roots` from this output into it, or run again')
         return result
-    changed = sorted(label for label, value in current.items() if recorded.get(label) != value)
+    older = {report['label']: report for report in bound if isinstance(recorded.get(report['label']), str) and
+             not recorded[report['label']].startswith(FINGERPRINT)}
+    changed = sorted(label for label, value in current.items() if recorded.get(label) != (
+        value if label not in older else digest(older[label]['top'], older[label]['behavior'])))
+    if older:
+        result['older_format'] = sorted(older)
     if changed:
         result.update(status='stale', reason='codigo-mudou', changed_roots=changed, action='ask-again')
         return result
-    result.update(status='answered', action='none')
+    bases = record['lote'].get('bases') if isinstance(record['lote'].get('bases'), dict) else {}
+    result.update(status='answered', action='none',
+                  base_moved=any(bases.get(label, value) != value for label, value in result['bases'].items()))
     return result
 
 
-def parse_stacked(entries):
-    """`<branch>=<the branch its PR targets>` entries as a dict."""
+def parse_stacked(entries, flag='--stacked', meaning='the branch its PR targets'):
+    """`<branch>=<the branch its PR targets>` entries (or `--as <branch>=<label>`) as a dict."""
     found = {}
     for entry in entries or ():
         label, separator, target = str(entry).partition('=')
         if not (separator and label.strip() and target.strip()):
-            raise ValueError(f'--stacked takes <branch>=<the branch its PR targets>, got {entry!r}')
+            raise ValueError(f'{flag} takes <branch>=<{meaning}>, got {entry!r}')
         found[label.strip()] = target.strip()
     return found
 
@@ -411,21 +454,29 @@ def plain(text):
     return ' '.join(folded.lower().replace('`', '').split())
 
 
-def answer_situation(literal):
-    """(label, situacao or None to keep the decision) of the option the literal names; ValueError otherwise."""
-    text = plain(literal)
-    if not text:
+def named_option(text):
+    return next(((label, state) for label, state in ANSWERS if plain(text).startswith(plain(label))), None)
+
+
+def answer_situation(literal, option=None):
+    """(option, situacao or None to keep the decision) of the option the literal names, or of `option` for a literal
+    of another question; ValueError otherwise."""
+    if not plain(literal):
         raise ValueError('--answer needs the literal answer of the user')
-    for label in NOT_DECISIONS:
-        if text.startswith(label):
-            raise ValueError(f'"{literal}" starts a run, it is not a decision of the gate: record the answer of the '
+    for text in (literal, option or ''):
+        if any(plain(text).startswith(label) for label in NOT_DECISIONS):
+            raise ValueError(f'"{text}" starts a run, it is not a decision of the gate: record the answer of the '
                              'question that ends the run')
-    for label, state in ANSWERS:
-        if text.startswith(label):
-            return label, state
+    named, meant = named_option(literal), named_option(option) if option else None
+    if option and not meant:
+        raise ValueError(f'--option "{option}" is not an option the gate records')
+    if named and meant and named != meant:
+        raise ValueError(f'"{literal}" names "{named[0]}", not --option "{option}"')
+    if named or meant:
+        return named or meant
     options = ', '.join(f'"{label}"' for label, _ in ANSWERS)
-    raise ValueError(f'"{literal}" names none of the options the gate records ({options}); pass the literal of the '
-                     'option the user chose')
+    raise ValueError(f'"{literal}" names none of the options the gate records ({options}); pass the literal as the '
+                     'user chose it and, for an option of another question, --option with the one it means')
 
 
 def now_text():
@@ -449,9 +500,10 @@ def save_record(path, record):
     os.replace(temporary, path)
 
 
-def record_answer(path, result, literal, issues=None):
-    """Write the user's answer into the record: situacao, lote.roots of this gate run, pergunta.resposta verbatim."""
-    label, state = answer_situation(literal)
+def record_answer(path, result, literal, issues=None, option=None):
+    """Write the user's answer into the record: situacao, lote.roots and lote.bases of this gate run,
+    pergunta.resposta verbatim."""
+    label, state = answer_situation(literal, option)
     record = load_record(path)
     if state is None:
         state = situation(record)
@@ -461,7 +513,7 @@ def record_answer(path, result, literal, issues=None):
     if state in ('aprovado', 'prosseguir', 'alteracao'):
         record['aprovacao'] = state
     lote = record.get('lote') if isinstance(record.get('lote'), dict) else {}
-    lote['roots'] = result['roots']
+    lote['roots'], lote['bases'] = result['roots'], result['bases']
     if issues:
         lote['issues'] = sorted(set(lote.get('issues') or []) | set(issues))
     record['lote'] = lote
@@ -577,17 +629,19 @@ def default_record(issue, root):
     return str(Path(main) / '.frontlights' / 'issues' / str(number) / 'browser' / 'result.json'), number
 
 
-def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=(), answer=None, issues=None):
+def run_cli(roots, base, config_path=None, toca=None, record_path=None, stacked=(), answer=None, issues=None,
+            labels=(), option=None):
     config = read_json(config_path) if config_path else None
     if config is not None and not isinstance(config, dict):
         raise ValueError('the config must be a JSON object')
     record = read_json(record_path) if record_path and Path(record_path).is_file() else None
-    result = gate(roots, base, config, toca, record, parse_stacked(stacked))
+    labels = parse_stacked(labels, '--as', 'the label it is measured under')
+    result = gate(roots, base, config, toca, record, parse_stacked(stacked), labels)
     if answer is not None:
         if not record_path:
             raise ValueError('--answer needs --record (or --issue) to write the answer into')
-        record = record_answer(record_path, result, answer, issues)
-        result = gate(roots, base, config, toca, record, parse_stacked(stacked))
+        record = record_answer(record_path, result, answer, issues, option)
+        result = gate(roots, base, config, toca, record, parse_stacked(stacked), labels)
         result['recorded'] = {'record': str(record_path), 'situacao': record['situacao'],
                               'resposta': record['pergunta']['resposta']}
     return result, (0 if result['status'] in ('not_needed', 'answered') else 2)
@@ -643,6 +697,9 @@ def main(argv=None):
                         help='the branch of a slice (or of a stacked issue) and the branch it is measured from: the branch '
                              'of its issue, or the one its PR targets; repeatable')
     parser.add_argument('--answer', help="the user's answer, verbatim: recorded in --record with this run's roots")
+    parser.add_argument('--option', help="with a literal of another question: the gate's option it means")
+    parser.add_argument('--as', dest='labels', action='append', default=[], metavar='BRANCH=LABEL',
+                        help='measure the root on BRANCH under LABEL (the integration branch as the issue branch)')
     parser.add_argument('--issue', help='the issue whose result.json (main worktree) is --record when it is left out')
     try:
         args = _cli.output_flags(parser).parse_args(argv)
@@ -657,7 +714,7 @@ def main(argv=None):
         return _cli.print_usage_error(error, 2)
     try:
         result, code = run_cli(args.root, args.base, args.config, args.toca, args.record, args.stacked, args.answer,
-                               issues)
+                               issues, args.labels, args.option)
     except (ValueError, OSError, subprocess.TimeoutExpired) as error:
         print(json.dumps({'error': str(error)}), file=sys.stderr)
         return 1
