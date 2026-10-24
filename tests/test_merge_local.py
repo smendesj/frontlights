@@ -433,7 +433,7 @@ class FreeTestTests(unittest.TestCase):
                         '- [ ] Correção (do teste livre): o filtro limpa. Evidência que fecha: teste livre\n')
         with unittest.mock.patch.object(self.serve, 'stop', return_value={'ok': True}) as stopped:
             result = self.serve.free_test_stop(str(self.config), str(self.root), 12)
-        stopped.assert_called_once_with(str(self.root), 12)
+        stopped.assert_called_once_with(str(self.root), 12, str(self.config))   # the config carries the teardown
         self.assertEqual((result['batch']['total'], result['batch']['ticked'], result['batch']['open']), (2, 1, 1))
 
     def test_without_a_screen_the_commands_and_the_question_come_from_the_charter(self):

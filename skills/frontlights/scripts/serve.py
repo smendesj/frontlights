@@ -16,7 +16,21 @@ Operations (each prints one JSON object on stdout):
           draft of the new criteria) and gives the argv of `serve.py window open|hold` with the strip
           "MAIN LOCAL: teste livre" and a holder without a time limit; `stop` stops only what `start` started and
           counts the boxes of the draft (the batch before the release); `commands`, for an issue without a screen,
-          gives the verification commands of the charter and the question "Terminou de testar a main local?".
+          gives the verification commands of the charter and the question "Terminou de testar a main local?";
+          `add --box "<text>"` (repeatable) appends a box to the draft unless one with the same text is there (and
+          `start` drops repeated boxes of a draft that already exists).
+
+Per-issue resources (GeoCloud #1123/#1124 retro): any process may use `{port:<name>}` in its argv or health, the
+reserved port of the `auto` process <name> (an unknown or non-auto name is refused as `uso` before anything runs);
+every port is reserved before the first spawn, and every process gets `FRONTLIGHTS_PORT_<NAME>` of every auto process
+(plus `PORT`, its own, when auto). `{issue}` is the issue number, in argv, health, setup, teardown and runtimeConfig.
+`browserTest.runtimeConfig` = {"path": <relative to the worktree, same rules as cwd; not tracked by Git>, "content":
+{...}}: its string values (recursively) take `{port:<name>}` and `{issue}`; start writes it as UTF-8 JSON before the
+first spawn, stop and a failed start remove it. `browserTest.setup` / `browserTest.teardown` are lists of argv lists
+(no shell, `HOOK_SECONDS` each, in the worktree, `{issue}` only): setup runs after the reservations and before the
+runtime config and the processes, teardown after stop (and after a failed start whose setup ran). The registry keeps
+the config path, so a stop without --config still runs the teardown. Projects use them to clone a disposable
+database per issue (e.g. `<name>_issue_{issue}`) for the free test and the watched run.
 
 Automatic ports: a process declares `"port": "auto"` (the only rule: omitting `port` keeps the #9 behaviour,
 where the port is read from the health URL). Its `argv` elements and `health` may use `{port}`; with "auto" the
@@ -62,7 +76,7 @@ that window and the server only starts listening after the 60 s, another start m
 listens sooner is seen by the bind/connect probe.
 The variable name is the process name upper-cased with non-alphanumerics as `_`, so two `auto` processes named
 `web-api` and `web_api` would get the same `FRONTLIGHTS_PORT_WEB_API`: such a config is refused (category `uso`).
-Processes with a fixed port or without `port` do not receive the variable, so their names may collide.
+Processes with a fixed port or without `port` define no variable, so their names may collide.
 The start output says whether the reservations are shared (`reservas_compartilhadas`).
 
 Preview (issue 34): `preview start|refresh|status|stop` is the long-running mode, one per project, read from the
@@ -163,6 +177,9 @@ BRANCH_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9/._-]*')
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
 PROTECTED_BRANCHES = ('main', 'master')
 MAX_AUTHORIZATION_BYTES = 2 * 1024 * 1024  # an authorization record past this is skipped, never read
+HOOK_SECONDS = 900  # deadline of each command of browserTest.setup and browserTest.teardown
+NAMED_PORT = re.compile(r'\{port:([^{}]*)\}')  # {port:<name>}: the reserved port of the auto process <name>
+ANY_PLACEHOLDER = re.compile(r'\{(?:port(?::[^{}]*)?|issue)\}')
 
 _SECRETS = []
 
@@ -283,6 +300,11 @@ def load_block(config_file, need_processes=True):
     """Read browserTest. `need_processes=False` is for a caller that only checks the accounts: a block that
     declares no `processes` (the project starts its own environment) then gives back an empty list, while one
     that declares them wrongly is still refused."""
+    return load_environment(config_file, need_processes)[0]
+
+
+def load_environment(config_file, need_processes=True):
+    """(processes, extras) of browserTest; extras holds the validated `setup`, `teardown` and `runtimeConfig`."""
     config = read_config(config_file)
     block = config.get('browserTest') if isinstance(config, dict) else None
     require(isinstance(block, dict), 'O config não tem o bloco browserTest.')
@@ -291,8 +313,80 @@ def load_block(config_file, need_processes=True):
         require(not need_processes,
                 'O config não declara browserTest.processes: o serve não tem o que subir. Suba o ambiente você mesmo '
                 '(as contas de teste continuam valendo) ou declare os processos em browserTest.processes.', category=USAGE)
-        return []
-    return validate_processes(block.get('processes'), 'browserTest.processes')
+        return [], {'setup': [], 'teardown': [], 'runtimeConfig': None}
+    processes = validate_processes(block.get('processes'), 'browserTest.processes')
+    autos = {item['name'] for item in processes if is_auto(item)}
+    return processes, {'setup': validate_hooks(block, 'setup'), 'teardown': validate_hooks(block, 'teardown'),
+                       'runtimeConfig': validate_runtime_config(block.get('runtimeConfig'), autos)}
+
+
+def validate_hooks(block, where):
+    """browserTest.setup / browserTest.teardown: a list of argv lists (no shell), with {issue} as the only
+    placeholder (the ports may already be released when the teardown runs)."""
+    hooks = block.get(where, [])
+    require(isinstance(hooks, list) and all(
+        isinstance(argv, list) and argv and all(isinstance(part, str) and part and '\0' not in part for part in argv)
+        for argv in hooks),
+        f'browserTest.{where} precisa ser uma lista de argv: cada comando uma lista de strings não vazias, sem NUL e '
+        'sem shell embutido.', category=USAGE)
+    require(not any(NAMED_PORT.search(part) or '{port}' in part for argv in hooks for part in argv),
+            f'browserTest.{where} aceita só o marcador {{issue}}, não {{port}} nem {{port:<nome>}}.', category=USAGE)
+    return hooks
+
+
+def placeholder_names(value):
+    """The names of every {port:<name>} in the strings of a JSON-like value."""
+    if isinstance(value, str):
+        return NAMED_PORT.findall(value)
+    if isinstance(value, list):
+        return [name for item in value for name in placeholder_names(item)]
+    if isinstance(value, dict):
+        return [name for item in value.values() for name in placeholder_names(item)]
+    return []
+
+
+def require_known_ports(names, autos, where, process=None):
+    unknown = sorted({name for name in names if name not in autos})
+    require(not unknown, f'{where} usa {{port:{unknown[0] if unknown else ""}}}, mas nenhum processo da mesma '
+            f'lista com port "{PORT_AUTO}" tem esse nome: o marcador nomeia um processo de porta '
+            f'automática ({", ".join(sorted(autos)) or "nenhum declarado"}).', process, USAGE)
+
+
+def validate_runtime_config(spec, autos):
+    """browserTest.runtimeConfig = {"path": <relative to the worktree>, "content": {...}}, or None."""
+    if spec is None:
+        return None
+    require(isinstance(spec, dict) and isinstance(spec.get('content'), dict),
+            'browserTest.runtimeConfig precisa ser {"path": "<relativo à worktree>", "content": {...}}.', category=USAGE)
+    path = spec.get('path')
+    require(isinstance(path, str) and path and '\0' not in path and not Path(path).is_absolute()
+            and not Path(path).drive and not path.startswith(('/', '\\')) and '..' not in Path(path).parts,
+            'browserTest.runtimeConfig.path precisa ser um caminho relativo à worktree, sem ".." e sem unidade ou '
+            'raiz.', category=USAGE)
+    require('{port}' not in json.dumps(spec['content'], ensure_ascii=False),
+            'browserTest.runtimeConfig.content não aceita {port} sem nome: use {port:<nome do processo>}.',
+            category=USAGE)
+    require_known_ports(placeholder_names(spec['content']), autos, 'browserTest.runtimeConfig.content')
+    return spec
+
+
+def fill(text, ports, issue, own=None):
+    """`text` with {port:<name>} (from `ports`), {port} (`own`, when given) and {issue} filled in."""
+    text = NAMED_PORT.sub(lambda found: str(ports[found.group(1)]), text)
+    if own is not None:
+        text = text.replace('{port}', str(own))
+    return text.replace('{issue}', str(issue)) if issue is not None else text
+
+
+def fill_value(value, ports, issue):
+    """Fill the string values of a JSON-like value (keys untouched)."""
+    if isinstance(value, str):
+        return fill(value, ports, issue)
+    if isinstance(value, list):
+        return [fill_value(item, ports, issue) for item in value]
+    if isinstance(value, dict):
+        return {key: fill_value(item, ports, issue) for key, item in value.items()}
+    return value
 
 
 def load_secrets(block):
@@ -332,8 +426,9 @@ def validate_processes(processes, where):
         require(isinstance(argv, list) and argv and all(isinstance(part, str) and part for part in argv),
                 f'O processo {name} precisa de argv como lista de strings (sem shell embutido).', name)
         health = item.get('health')
-        try:
-            parts = urllib.parse.urlsplit(health) if isinstance(health, str) else None
+        try:  # {port:<name>} and {issue} are filled in only at start: parsed here with a stand-in
+            parts = (urllib.parse.urlsplit(NAMED_PORT.sub('1', health).replace('{issue}', '0'))
+                     if isinstance(health, str) else None)
         except ValueError:  # e.g. an unterminated IPv6 literal
             parts = None
         require(parts and parts.scheme in ('http', 'https') and parts.hostname,
@@ -366,6 +461,10 @@ def validate_processes(processes, where):
                     'normalizar o nome (maiúsculas, e tudo que não é letra ou número vira "_"). Renomeie um deles.',
                     name, USAGE)
             variables[variable] = name
+    autos = {item['name'] for item in processes if is_auto(item)}
+    for item in processes:  # {port:<name>} names an auto process: its port is reserved before the first spawn
+        require_known_ports(placeholder_names([item['health']] + item['argv']), autos,
+                            f'O processo {item["name"]} de {where}', item['name'])
     return processes
 
 
@@ -427,9 +526,10 @@ def load_preview_block(config_file, root, need_processes=True):
         # a fixed process never gets {port} filled in: a leftover placeholder would reach the program as text, the
         # health would fail and the refresh would blame a slice for a configuration error
         for where, values in (('argv', item['argv']), ('cwd', [item.get('cwd') or ''])):
-            require(not any('{port}' in value for value in values),
-                    f'O processo {item["name"]} de preview.processes tem {{port}} no {where}, mas a prévia usa portas '
-                    'fixas e nunca o substitui: escreva a porta fixa no lugar.', item['name'], USAGE)
+            require(not any(ANY_PLACEHOLDER.search(value) for value in values),
+                    f'O processo {item["name"]} de preview.processes tem {{port}}, {{port:<nome>}} ou {{issue}} no '
+                    f'{where}, mas a prévia usa portas fixas, não tem issue e nunca os substitui: escreva o valor fixo '
+                    'no lugar.', item['name'], USAGE)
         host = urllib.parse.urlsplit(item['health']).hostname  # parsed by validate_processes
         require(host in LOCAL_HOSTS, f'O health do processo {item["name"]} precisa ficar em host local (127.0.0.1, '
                 'localhost ou ::1), como a preview.baseUrl.', item['name'], USAGE)
@@ -518,11 +618,13 @@ def env_name(name):
     return 'FRONTLIGHTS_PORT_' + re.sub(r'[^A-Z0-9]', '_', name.upper())
 
 
-def with_port(item, port):
-    """Copy of the process with {port} replaced in every argv element and in the health URL."""
-    token = str(port)
-    return dict(item, port=port, autoPort=True, argv=[part.replace('{port}', token) for part in item['argv']],
-                health=item['health'].replace('{port}', token))
+def filled_process(item, ports, issue):
+    """Copy of the process with {port} (its own reserved port, when auto), {port:<name>} and {issue} filled in
+    every argv element and in the health URL."""
+    own = ports.get(item['name']) if is_auto(item) else None
+    copy = dict(item, argv=[fill(part, ports, issue, own) for part in item['argv']],
+                health=fill(item['health'], ports, issue, own))
+    return dict(copy, port=own, autoPort=True) if own is not None else copy
 
 
 def process_port(item):
@@ -795,8 +897,10 @@ def release_lock(path):
     remove_file(path)
 
 
-def write_registry(root, issue, entries):
-    write_json_atomic({'issue': issue, 'root': str(Path(root).resolve()), 'processes': entries},
+def write_registry(root, issue, entries, extra=None):
+    """`extra`: `runtimeConfig` (the file start wrote, relative to the worktree) and `config` (whose teardown stop
+    runs), so a stop without --config still undoes them."""
+    write_json_atomic({'issue': issue, 'root': str(Path(root).resolve()), 'processes': entries, **(extra or {})},
                       registry_path(root, issue))
 
 
@@ -1404,32 +1508,101 @@ def attach_child(root, port, child_entry):
 
 
 def start(config_file, root, issue):
-    processes = load_block(config_file)
+    processes, extras = load_environment(config_file)
     lock = acquire_lock(root, issue)
     try:
-        return start_locked(processes, root, issue)
+        return start_locked(processes, root, issue, extras, config_file)
     finally:
         release_lock(lock)
 
 
-def start_locked(processes, root, issue):
+def runtime_config_target(root, spec):
+    """The file of browserTest.runtimeConfig inside the worktree, or None. Refused (`uso`) before anything runs
+    when it leaves the worktree, its folder does not exist, it is a folder, or Git tracks it (stop removes it)."""
+    if not spec:
+        return None
+    base = Path(root).resolve()
+    target = (base / spec['path']).resolve()
+    require(base in target.parents, 'browserTest.runtimeConfig.path precisa ficar dentro da worktree da issue.',
+            category=USAGE)
+    require(target.parent.is_dir() and not target.is_dir(),
+            f'browserTest.runtimeConfig.path ({spec["path"]}) precisa ser um arquivo numa pasta que já existe na '
+            'worktree.', category=USAGE)
+    try:
+        tracked = subprocess.run(['git', 'ls-files', '--error-unmatch', '--', str(target)], cwd=str(base),
+                                 capture_output=True, timeout=60, env=_cli.git_environment()).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        tracked = False
+    require(not tracked, f'browserTest.runtimeConfig.path ({spec["path"]}) é um arquivo versionado: o serve o grava '
+            'no start e o apaga no stop. Use um arquivo fora do Git (no .gitignore).', category=USAGE)
+    return target
+
+
+def run_hooks(root, hooks, issue, where):
+    """Run each argv of browserTest.<where> in the worktree, in order, no shell, with HOOK_SECONDS each; a non-zero
+    exit or a timeout is an infrastructure refusal with the last lines of its output (masked on output)."""
+    ran = []
+    for index, argv in enumerate(hooks):
+        label = f'browserTest.{where}[{index}]'
+        argv = [fill(part, {}, issue) for part in argv]
+        guard_batch(argv, label)
+        executable = shutil.which(argv[0])
+        require(executable, f'{label}: executável não encontrado ({argv[0]}).', label)
+        try:
+            done = subprocess.run([executable] + argv[1:], cwd=str(root), stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace',
+                                  timeout=HOOK_SECONDS)
+        except subprocess.TimeoutExpired:
+            raise Refusal(f'{label} não terminou em {HOOK_SECONDS} s.', label)
+        except (OSError, ValueError):
+            raise Refusal(f'Não foi possível rodar {label}.', label)
+        if done.returncode != 0:
+            tail = ((done.stderr or '') + (done.stdout or '')).strip().splitlines()[-TAIL_LINES:]
+            raise Refusal(f'{label} terminou com código {done.returncode}.', label, extra={'tail': tail})
+        ran.append(argv)
+    return ran
+
+
+def remove_runtime_config(root, relative_path):
+    """Remove the runtime config start wrote (a path inside the worktree only); True when it is gone."""
+    if not relative_path:
+        return True
+    base = Path(root).resolve()
+    target = (base / relative_path).resolve()
+    if base not in target.parents:
+        return False
+    return remove_file(target)
+
+
+def start_locked(processes, root, issue, extras=None, config_file=None):
+    extras = extras or {'setup': [], 'teardown': [], 'runtimeConfig': None}
     if registry_path(root, issue).is_file():
         previous = read_registry(root, issue)
         require(not any(same_process(entry) for entry in previous['processes']),
                 f'Já há processos em execução para a issue {issue}: rode stop antes de um novo start.',
                 category=USAGE)
     cwds = [process_cwd(root, item) for item in processes]  # a bad cwd is refused before anything is reserved
-    started = []
+    target = runtime_config_target(root, extras['runtimeConfig'])  # so is a bad runtimeConfig.path
+    record = {'config': str(Path(config_file).resolve())} if config_file else {}
+    started, set_up, written = [], False, None
     try:
         ports = reserve_ports(root, issue, [item['name'] for item in processes if is_auto(item)])
+        variables = {env_name(name): str(port) for name, port in ports.items()}  # every process sees every auto port
+        set_up = bool(extras['setup'])
+        setup = run_hooks(root, extras['setup'], issue, 'setup')
+        if target is not None:
+            written = relative(Path(root).resolve(), target)
+            record['runtimeConfig'] = written
+            write_registry(root, issue, started, record)  # a crash from here on leaves the file for stop to remove
+            with io_guard('gravar o browserTest.runtimeConfig'):
+                target.write_text(json.dumps(fill_value(extras['runtimeConfig']['content'], ports, issue), indent=2,
+                                             ensure_ascii=False) + '\n', encoding='utf-8')
         for item, cwd in zip(processes, cwds):
-            env = None
-            if is_auto(item):
-                port = ports[item['name']]
-                env = {'PORT': str(port), env_name(item['name']): str(port)}
-                item = with_port(item, port)
+            item = filled_process(item, ports, issue)
+            port = item['port'] if item.get('autoPort') else None
+            env = dict(variables, **({'PORT': str(port)} if port else {})) or None
             guard_batch(item['argv'], item['name'])
-            if env:
+            if port:
                 mark_spawning(root, port)
             try:
                 child = spawn(item['argv'], cwd, env)
@@ -1438,17 +1611,20 @@ def start_locked(processes, root, issue):
             started.append({'name': item['name'], 'pid': child.pid, 'port': process_port(item),
                             'url': item['health'], 'startedAt': now_iso(),
                             'identity': process_identity(child.pid) or UNKNOWN_IDENTITY})
-            if env:
+            if port:
                 attach_child(root, port, started[-1])
-            write_registry(root, issue, started)  # a crash from here on leaves something stop can tear down
+            write_registry(root, issue, started, record)  # a crash from here on leaves something stop can tear down
             wait_healthy(child, item)
     except BaseException as failure:
         left = kill_started(started)
         try:
             if left:
-                write_registry(root, issue, left)  # keep only what survived, so stop can retry
+                write_registry(root, issue, left, record)  # keep only what survived, so stop can retry
             else:
                 registry_path(root, issue).unlink(missing_ok=True)
+                remove_runtime_config(root, written)
+                if set_up and extras['teardown']:
+                    run_hooks(root, extras['teardown'], issue, 'teardown')
         except (OSError, Refusal):  # best effort: the original failure is what the user must see
             pass
         release_ports(root, issue, keep=[entry['port'] for entry in left])
@@ -1458,8 +1634,8 @@ def start_locked(processes, root, issue):
                           failure.process, failure.category,
                           {'left': [{'name': entry['name'], 'pid': entry['pid']} for entry in left]})
         raise
-    return {'ok': True, 'issue': issue, 'processes': started,
-            'reservas_compartilhadas': ports_location(root)[1]}
+    return {'ok': True, 'issue': issue, 'processes': started, 'ports': ports, 'setup': setup,
+            'runtimeConfig': written, 'reservas_compartilhadas': ports_location(root)[1]}
 
 
 def read_registry(root, issue):
@@ -1486,16 +1662,16 @@ def status(root, issue):
             'processes': processes}
 
 
-def stop(root, issue):
+def stop(root, issue, config_file=None):
     """Stop the issue's processes under the same lock as start: a start in progress makes stop refuse."""
     lock = acquire_lock(root, issue)
     try:
-        return stop_locked(root, issue)
+        return stop_locked(root, issue, config_file)
     finally:
         release_lock(lock)
 
 
-def stop_locked(root, issue):
+def stop_locked(root, issue, config_file=None):
     try:
         record = read_registry(root, issue)
     except Refusal as refusal:
@@ -1506,6 +1682,19 @@ def stop_locked(root, issue):
         raise
     result = stop_entries(root, record['processes'], registry_path(root, issue),
                           lambda: release_ports(root, issue), 'stop')
+    result = dict(result, runtimeConfigRemovido=remove_runtime_config(root, record.get('runtimeConfig')))
+    recorded = record.get('config')   # the start's config ran the setup, so its teardown is the one to run
+    if isinstance(recorded, str) and Path(recorded).is_file():
+        config_file = recorded
+    try:
+        teardown = load_environment(config_file, need_processes=False)[1]['teardown'] if config_file else []
+    except Refusal as refusal:
+        return {'ok': True, 'issue': issue, **result, 'teardown': {'skipped': str(refusal)}}
+    try:
+        result['teardown'] = run_hooks(root, teardown, issue, 'teardown')
+    except Refusal as refusal:
+        refusal.extra = dict(result, **refusal.extra)
+        raise
     return {'ok': True, 'issue': issue, **result}
 
 
@@ -1835,7 +2024,7 @@ def run(operation, config_file, root, issue, action=None, log=None, branches=Non
         return start(config_file, root, issue)
     if operation == 'status':
         return status(root, issue)
-    return stop(root, issue)
+    return stop(root, issue, config_file)
 
 
 def resolve_defaults(args):
@@ -1878,6 +2067,51 @@ def draft_boxes(draft):
     return {'total': len(marks), 'ticked': ticked, 'open': len(marks) - ticked}
 
 
+def box_key(line):
+    """The text of a draft box without its mark and spacing: two boxes with the same key are the same criterion."""
+    found = DRAFT_BOX.match(line)
+    return ' '.join(line[found.end():].split()).casefold() if found else None
+
+
+def dedupe_draft(draft):
+    """Drop every box line that repeats an earlier box (ticked or not), keeping the first; returns how many."""
+    lines = draft.read_text(encoding='utf-8').splitlines(keepends=True)
+    seen, kept = set(), []
+    for line in lines:
+        key = box_key(line)
+        if key and key in seen:
+            continue
+        seen.add(key)
+        kept.append(line)
+    if len(kept) != len(lines):
+        draft.write_text(''.join(kept), encoding='utf-8')
+    return len(lines) - len(kept)
+
+
+def free_test_add(config_file, root, issue, boxes):
+    """Append each `--box` text as an open box of the draft unless a box with the same text is already there."""
+    require(boxes and all(isinstance(text, str) and text.strip() and '\n' not in text for text in boxes),
+            'free-test add precisa de --box "<texto da caixa>" (uma linha, repetível).', category=USAGE)
+    _, draft = free_test_files(root, issue)
+    require(draft.is_file(), f'Não há rascunho do teste livre da issue #{issue}: rode `free-test start` antes.',
+            category=USAGE)
+    with io_guard('gravar o rascunho dos CAs do teste livre'):
+        dedupe_draft(draft)
+        text = draft.read_text(encoding='utf-8')
+        seen = {box_key(line) for line in text.splitlines()} - {None}
+        added = []
+        for box in boxes:
+            line = box.strip() if DRAFT_BOX.match(box) else f'- [ ] {box.strip()}'
+            if box_key(line) not in seen:
+                seen.add(box_key(line))
+                added.append(line)
+        if added:
+            draft.write_text(text + ('' if not text or text.endswith('\n') else '\n') + '\n'.join(added) + '\n',
+                             encoding='utf-8')
+    return {'ok': True, 'status': 'added', 'issue': issue, 'draft': str(draft), 'added': added,
+            'alreadyThere': len(boxes) - len(added), **draft_boxes(draft)}
+
+
 def free_test_start(config_file, root, issue):
     config = read_config(config_file)
     block = config.get('browserTest') if isinstance(config, dict) else None
@@ -1899,6 +2133,7 @@ def free_test_start(config_file, root, issue):
             draft.write_text(f'# CAs do teste livre da issue #{issue}\n\nUma caixa por correção pedida no teste livre, '
                              'na língua do usuário (references/development.md, "The free test on the local main").\n\n',
                              encoding='utf-8')
+        repeated = dedupe_draft(draft)
     base_url = block.get('baseUrl') if isinstance(block.get('baseUrl'), str) else None
     here = Path(__file__).resolve()
     window = {'strip': FREE_TEST_STRIP, 'baseUrl': base_url, 'holder': 'sem prazo: sai quando o usuário fecha a janela',
@@ -1908,7 +2143,7 @@ def free_test_start(config_file, root, issue):
     record = {'issue': issue, 'root': str(root), 'startedAt': now_iso(), 'started': started, 'endedAt': None}
     write_json_atomic(record, record_file)
     return {'ok': True, 'status': 'started', 'issue': issue, 'served': served, 'window': window, 'draft': str(draft),
-            'record': str(record_file),
+            'record': str(record_file), 'repetidasRemovidas': repeated,
             'message': (f'Teste livre da issue #{issue} na main local: o produto da worktree principal '
                         f'{"subiu" if started else "não subiu: a sessão o sobe (served.next)"}; abra a janela pelos '
                         f'comandos de `window` (faixa "{FREE_TEST_STRIP}", holder sem prazo). Fechar a janela encerra '
@@ -1922,7 +2157,7 @@ def free_test_stop(config_file, root, issue):
     except (OSError, ValueError):
         record = {}
     if record.get('started'):
-        stopped = stop(root, issue)
+        stopped = stop(root, issue, config_file)
     else:
         stopped = {'skipped': 'o free-test start não subiu processo: nada a parar'}
     boxes = draft_boxes(draft)
@@ -1959,7 +2194,9 @@ def free_test_commands(config_file, root, issue):
 
 def free_test_main(argv):
     parser = _cli.JsonParser(prog='serve.py free-test', description='o teste livre na main local (issue 4)')
-    parser.add_argument('action', choices=('start', 'stop', 'commands'))
+    parser.add_argument('action', choices=('start', 'stop', 'commands', 'add'))
+    parser.add_argument('--box', action='append', help='add: texto de uma caixa do rascunho (repetível); a que já '
+                                                       'está lá não entra de novo')
     parser.add_argument('--issue', type=int, help='a issue homologada (padrão: a do charter para a worktree)')
     parser.add_argument('--config', help='padrão: o .frontlights/config.json da worktree principal')
     parser.add_argument('--root', help='padrão: a worktree principal (a main local)')
@@ -1967,14 +2204,18 @@ def free_test_main(argv):
         args = _cli.output_flags(parser).parse_args(argv)
         main_tree = _cli.main_worktree()
         args.root = args.root or str(main_tree)
-        args.config = _cli.config_path(args.config, args.root, required=args.action != 'commands')
+        args.config = _cli.config_path(args.config, args.root, required=args.action in ('start', 'stop'))
         if args.issue is None:
             args.issue = _cli.issue_number(None, _cli.current_tree(), args.root)
     except _cli.UsageError as error:
         return _cli.print_usage_error(error, 1, error=str(error), category='uso')
     try:
-        action = {'start': free_test_start, 'stop': free_test_stop, 'commands': free_test_commands}[args.action]
-        result, code = action(args.config, args.root, args.issue), 0
+        if args.action == 'add':
+            result, code = free_test_add(args.config, args.root, args.issue, args.box), 0
+        else:
+            require(not args.box, '--box só vale para free-test add.', category=USAGE)
+            action = {'start': free_test_start, 'stop': free_test_stop, 'commands': free_test_commands}[args.action]
+            result, code = action(args.config, args.root, args.issue), 0
     except (Refusal, OSError) as failure:
         refusal = failure if isinstance(failure, Refusal) else io_failure('executar o teste livre', failure)
         result, code = {'ok': False, 'error': str(refusal), 'category': refusal.category}, 1
