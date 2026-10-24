@@ -357,6 +357,13 @@ class MonitorTests(unittest.TestCase):
             code = homolog.main(['release', 'status', '--root', '.', '--since', 'blocked', '--quiet'])
         return code, out.getvalue()
 
+    def test_the_cli_carries_the_waiver_of_the_whole_suite_to_the_release(self):
+        # Defeito real (24/10/2026): main() deixava without_suite fora das chaves e o go recusava com full_suite.
+        with mock.patch.object(homolog, 'op_release', return_value={'exitCode': 0}) as release,                 contextlib.redirect_stdout(io.StringIO()):
+            homolog.main(['release', 'go', '--root', '.', '--body', 'corpo.md',
+                          '--without-full-suite', homolog.SUITE_WAIVE])
+        self.assertEqual(release.call_args.kwargs.get('without_suite'), 'Lançar sem a suíte inteira')
+
     def test_the_monitor_is_silent_until_the_state_changes(self):
         code, text = self.run_main({'exitCode': homolog.UNCHANGED, 'pr': 77, 'state': 'blocked'})
         self.assertEqual((code, text), (homolog.UNCHANGED, ''))

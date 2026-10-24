@@ -2200,7 +2200,7 @@ def main(argv=None):
                      getattr(args, 'head', None), getattr(args, 'source', None),
                      getattr(args, 'free_test_fix', False), getattr(args, 'dry_run', False), getattr(args, 'toca', None),
                      {key: getattr(args, key, None) for key in ('action', 'body', 'closes', 'record', 'pr', 'legacy',
-                                                                 'answer', 'since')})
+                                                                 'answer', 'since', 'without_suite')})
     except Refusal as error:
         result = {'ok': False, 'exitCode': 1, 'message': str(error)}
     if getattr(args, 'quiet', False) and getattr(args, 'since', None) is not None:
